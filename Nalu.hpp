@@ -35,8 +35,10 @@ class Nalu {
   char nal_ref_idc;
   char nal_unit_type;
 
-  int extractSSPparameters(RBSP &rbsp);
-  int extractIDRparameters(RBSP &rbsp);
+  int extractSPSparameters(RBSP &sps);
+  int extractPPSparameters(RBSP &pps);
+  int extractSEIparameters(RBSP &sei);
+  int extractIDRparameters(RBSP &idr);
 
   int GetNaluType();
 
@@ -49,6 +51,21 @@ class Nalu {
   void vui_parameters(BitStream &bitStream);
 
   void hrd_parameters(BitStream &bitStream);
+
+  /* SPS 参数 */
+  uint32_t chroma_format_idc;
+  bool separate_colour_plane_flag;
+  uint32_t bit_depth_luma_minus8;
+  uint32_t bit_depth_chroma_minus8;
+
+  /* PPS 参数 */
+  bool more_rbsp_data();
+  void rbsp_trailing_bits();
+
+  /* SEI */
+  void sei_message(BitStream &bitStream);
+  void sei_payload(BitStream &bitStream, long payloadType, long payloadSize);
+  bool byte_aligned(BitStream &bitStream);
 };
 
 #endif /* end of include guard: NALU_HPP_YDI8RPRP */

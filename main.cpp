@@ -28,13 +28,15 @@ int main() {
 
       /* 4. 从NAL中解析出EBSP */
       nalu.parseEBSP(ebsp);
-      printf("\tEBSP[%d]{%d %d %d %d},Buffer len[%d] \n", number, ebsp._buf[0],
-             ebsp._buf[1], ebsp._buf[2], ebsp._buf[3], ebsp._len);
+      // printf("\tEBSP[%d]{%d %d %d %d},Buffer len[%d] \n", number,
+      // ebsp._buf[0],
+      //        ebsp._buf[1], ebsp._buf[2], ebsp._buf[3], ebsp._len);
 
       /* 5. 从EBSP中解析出RBSP */
       nalu.parseRBSP(ebsp, rbsp);
-      printf("\tRBSP[%d]{%d %d %d %d},Buffer len[%d]\n", number, rbsp._buf[0],
-             rbsp._buf[1], rbsp._buf[2], rbsp._buf[3], rbsp._len);
+      // printf("\tRBSP[%d]{%d %d %d %d},Buffer len[%d]\n", number,
+      // rbsp._buf[0],
+      //        rbsp._buf[1], rbsp._buf[2], rbsp._buf[3], rbsp._len);
 
       /* 6. 从RBSP中解析出SODB */
       // nalu.parseSODB(rbsp, SODB);
@@ -44,23 +46,35 @@ int main() {
       // printf("\tforbidden_zero_bit:%d,nal_ref_idc:%d,nal_unit_type:%d\n",
       //        nalu.forbidden_zero_bit, nalu.nal_ref_idc, nalu.nal_unit_type);
 
+      /* 见T-REC-H.264-202108-I!!PDF-E.pdf 87页 */
       switch (nalu.nal_unit_type) {
       case 1: /* Slice */
-        /* TODO YangJing decode slice and slice head <24-04-02 22:08:03> */
         break;
       case 2: /* DPA */
         break;
-      case 5: /* IDR 立即刷新帧 GOP[0] */
+      case 5: /* IDR */
+        /* 11. 解码立即刷新帧 GOP[0] */
+        std::cout << "IDR -> {" << std::endl;
         nalu.extractIDRparameters(rbsp);
+        std::cout << " }" << std::endl;
         break;
       case 6: /* SEI */
+        /* 10. 解码SEI补充增强信息 */
+        std::cout << "SEI -> {" << std::endl;
+        nalu.extractSEIparameters(rbsp);
+        std::cout << " }" << std::endl;
         break;
       case 7: /* SPS */
         /* 8. 解码SPS中信息 */
-        nalu.extractSSPparameters(rbsp);
+        std::cout << "SPS -> {" << std::endl;
+        nalu.extractSPSparameters(rbsp);
+        std::cout << " }" << std::endl;
         break;
       case 8: /* PPS */
-        std::cout << "PPS" << std::endl;
+        /* 9. 解码PPS中信息 */
+        std::cout << "PPS -> {" << std::endl;
+        nalu.extractPPSparameters(rbsp);
+        std::cout << " }" << std::endl;
         break;
       }
 

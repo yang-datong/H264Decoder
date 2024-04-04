@@ -35,8 +35,19 @@ uint32_t BitStream::readUE() {
   while ((readU1() == 0) && zero_count < 32) {
     zero_count++;
   }
-  r = readUn(zero_count + 1); // read zero_count + 1 bits
-  r = r + (1 << zero_count) - 1; /* 防止负溢出，如果r = 0,再去-1就会负溢出 */
+  r = readUn(zero_count);
+  /* read zero_count + 1 bits，
+   * 因为上面while循环中以及读取了一个非0字节，故这里不需要
+   * 对zero_count + 1 */
+  r += (1 << zero_count);
+  r--;
+
+  /* 上述的步骤可以考虑 0b00101001 (1 byte)
+   * 1. 得到zero_count = 2
+   * 2. 二进制数据：01
+   * 3. 给第一位+1：01 + (1 << 2) = 01 + 100 = 101
+   * 4. 给最低位-1：101 - 1 = 100 = 4
+   */
   return r;
 }
 
@@ -49,3 +60,5 @@ uint32_t BitStream::readSE() {
     r *= -1; // 去绝对值
   return r;
 }
+
+bool BitStream::endOfBit() { return _bitsLeft % 8 == 0; }

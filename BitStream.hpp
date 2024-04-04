@@ -21,6 +21,10 @@ class BitStream {
   /* 读取有符号指数哥伦布编码 */
   uint32_t readSE();
 
+  /* 用于计算是否以及字节对齐，比如_bitsLeft % 8 == 0 */
+  // int getBitsLeft() { return _bitsLeft; }
+  bool endOfBit();
+
  private:
   // buffer length
   int _size = 0;
