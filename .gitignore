@@ -1,8 +1,12 @@
-
+# Mac OS
 *.DS_Store
+
+# CMakeFiles
+/CMakeFiles
+CMakeCache.txt
 Session.vim
 cmake_install.cmake
-/CMakeFiles
+Makefile
 
 # Prerequisites
 *.d
