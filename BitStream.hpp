@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+#define ARCH_32_BIT_COUNT 4
+#define ARCH_64_BIT_COUNT 8
+
 class BitStream {
  public:
   BitStream(uint8_t *buf, int size);
@@ -31,7 +34,7 @@ class BitStream {
   // curent byte
   uint8_t *_p = nullptr;
   // curent byte in the bit
-  int _bitsLeft = 8;
+  int _bitsLeft = ARCH_64_BIT_COUNT;
 };
 
 #endif /* end of include guard: BITSTREAM_HPP_AUHM38NB */

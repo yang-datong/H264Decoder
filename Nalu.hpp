@@ -38,12 +38,13 @@ class Nalu {
   int extractSPSparameters(RBSP &sps);
   int extractPPSparameters(RBSP &pps);
   int extractSEIparameters(RBSP &sei);
+  int extractSliceparameters(RBSP &rbsp);
   int extractIDRparameters(RBSP &idr);
 
   int GetNaluType();
 
  private:
-  int parseHeader(EBSP &rbsp);
+  int parseNALHeader(EBSP &rbsp);
   void scaling_list(BitStream &bitStream, uint32_t *scalingList,
                     uint32_t sizeOfScalingList,
                     uint32_t &useDefaultScalingMatrixFlag);
@@ -66,6 +67,11 @@ class Nalu {
   void sei_message(BitStream &bitStream);
   void sei_payload(BitStream &bitStream, long payloadType, long payloadSize);
   bool byte_aligned(BitStream &bitStream);
+
+  /* Slice */
+  int parseSliceHeader(BitStream bitStream, RBSP &rbsp);
+
+  /* IDR */
 };
 
 #endif /* end of include guard: NALU_HPP_YDI8RPRP */

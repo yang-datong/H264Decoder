@@ -48,29 +48,32 @@ int main() {
 
       /* 见T-REC-H.264-202108-I!!PDF-E.pdf 87页 */
       switch (nalu.nal_unit_type) {
-      case 1: /* Slice */
+      case 1: /* Slice(non-VCL) */
+        std::cout << "Original Slice -> {" << std::endl;
+        nalu.extractSliceparameters(rbsp);
+        std::cout << " }" << std::endl;
         break;
-      case 2: /* DPA */
+      case 2: /* DPA(non-VCL) */
         break;
-      case 5: /* IDR */
+      case 5: /* IDR(VCL) */
         /* 11. 解码立即刷新帧 GOP[0] */
         std::cout << "IDR -> {" << std::endl;
         nalu.extractIDRparameters(rbsp);
         std::cout << " }" << std::endl;
         break;
-      case 6: /* SEI */
+      case 6: /* SEI(VCL) */
         /* 10. 解码SEI补充增强信息 */
         std::cout << "SEI -> {" << std::endl;
         nalu.extractSEIparameters(rbsp);
         std::cout << " }" << std::endl;
         break;
-      case 7: /* SPS */
+      case 7: /* SPS(VCL) */
         /* 8. 解码SPS中信息 */
         std::cout << "SPS -> {" << std::endl;
         nalu.extractSPSparameters(rbsp);
         std::cout << " }" << std::endl;
         break;
-      case 8: /* PPS */
+      case 8: /* PPS(VCL) */
         /* 9. 解码PPS中信息 */
         std::cout << "PPS -> {" << std::endl;
         nalu.extractPPSparameters(rbsp);

@@ -34,7 +34,7 @@ int Nalu::parseEBSP(EBSP &ebsp) {
 
 /* 注意，这里解析出来的RBSP是不包括RBSP head的一个字节的 */
 int Nalu::parseRBSP(EBSP &ebsp, RBSP &rbsp) {
-  parseHeader(ebsp); // RBSP的头也是EBSP的头
+  parseNALHeader(ebsp); // RBSP的头也是EBSP的头
 
   bool NumBytesInRBSP = 0;
   bool nalUnitHeaderBytes = 1; // nalUnitHeaderBytes的默认head大小为1字节
@@ -83,7 +83,7 @@ int Nalu::parseRBSP(EBSP &ebsp, RBSP &rbsp) {
   return 0;
 }
 
-int Nalu::parseHeader(EBSP &ebsp) {
+int Nalu::parseNALHeader(EBSP &ebsp) {
   uint8_t firstByte = ebsp._buf[0];
   nal_unit_type = firstByte & 0b00011111;
   /* 取低5bit，即0-4 bytes */
@@ -431,13 +431,39 @@ bool Nalu::byte_aligned(BitStream &bitStream) {
   return bitStream.endOfBit();
 }
 
+int Nalu::extractSliceparameters(RBSP &rbsp) {
+  /* 初始化bit处理器，填充idr的数据 */
+  BitStream bitStream(rbsp._buf, rbsp._len);
+  parseSliceHeader(bitStream, rbsp);
+
+  return 0;
+}
+
 int Nalu::extractIDRparameters(RBSP &idr) {
   /* 初始化bit处理器，填充idr的数据 */
   BitStream bitStream(idr._buf, idr._len);
+  parseSliceHeader(bitStream, idr);
+
+  return 0;
+}
+
+int Nalu::parseSliceHeader(BitStream bitStream, RBSP &rbsp) {
   uint32_t first_mb_in_slice = bitStream.readUE();
   uint32_t slice_type = bitStream.readUE();
   uint32_t pic_parametter_set_id = bitStream.readUE();
-  std::cout << "\tpic_parametter_set_id:" << pic_parametter_set_id << std::endl;
+  if (separate_colour_plane_flag == 1)
+    uint8_t colour_plane_id = bitStream.readUn(2);
+  frame_num
+      /* TODO YangJing 不懂u(v) 是什么 <24-04-07 00:24:54> */
+      if (!frame_mbs_only_flag) {
+    field_pic_flag if (field_pic_flag) bottom_field_flag
+  }
+  if (IdrPicFlag)
+    idr_pic_id if (pic_order_cnt_type = = 0) {
+      pic_order_cnt_lsb if (bottom_field_pic_order_in_frame_present_flag &&
+                            !field_pic_flag) delta_pic_order_cnt_bottom
+    }
+
   int index = 0;
   switch (slice_type % 5) {
   case 0:
@@ -456,7 +482,6 @@ int Nalu::extractIDRparameters(RBSP &idr) {
     std::cout << "\tSI Slice" << std::endl;
     break;
   }
-
   return 0;
 }
 

@@ -2,11 +2,7 @@
 #include <cstdint>
 #include <stdio.h>
 
-BitStream::BitStream(uint8_t *buf, int size) {
-  _size = size;
-  _p = buf;
-  _bitsLeft = 8;
-}
+BitStream::BitStream(uint8_t *buf, int size) : _size(size), _p(buf) {}
 
 BitStream::~BitStream() {}
 
