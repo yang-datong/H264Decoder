@@ -1,60 +1,38 @@
-armv7_perf
 
+*.DS_Store
 Session.vim
 cmake_install.cmake
 /CMakeFiles
-*.out
+
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
 *.o
-*.DS_Store
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
 *.so
-*.so.6
-*.so.2
-*.so.2.4.3
+*.dylib
+*.dll
 
-*.zip
-*.h264
-*.h265
+# Fortran module files
+*.mod
+*.smod
 
-*.mp4
-*.mov
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
 
-*.png
-
-*.pdf
-*.doc
-*.docx
-
-*.xml
-
-*.tty
-
-
-## Core latex/pdflatex auxiliary files:
-*.aux
-*.lof
-*.log
-*.lot
-*.fls
+# Executables
+*.exe
 *.out
-*.toc
-*.fmt
-*.fot
-*.cb
-*.cb2
-.*.lb
-*.toc
-
-## Intermediate documents:
-*.dvi
-*.xdv
-*-converted-to.*
-
-## Build tool auxiliary files:
-*.fdb_latexmk
-*.synctex
-*.synctex(busy)
-*.synctex.gz
-*.synctex.gz(busy)
-*.pdfsync
-
-
+*.app
