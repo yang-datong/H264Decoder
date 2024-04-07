@@ -1,5 +1,8 @@
 #include "Nalu.hpp"
 #include "BitStream.hpp"
+#include "RBSP.hpp"
+#include <cmath>
+#include <cstdint>
 
 #define Extended_SAR 255
 
@@ -171,14 +174,14 @@ int Nalu::extractSPSparameters(RBSP &sps) {
   }
 
   uint32_t log2_max_frame_num_minus4 = bitStream.readUE();
-  uint32_t pic_order_cnt_type = bitStream.readUE();
+  pic_order_cnt_type = bitStream.readUE();
 
   int32_t *offset_for_ref_frame = nullptr;
 
   if (pic_order_cnt_type == 0) {
     uint32_t log2_max_pic_order_cnt_lsb_minus4 = bitStream.readUE();
   } else if (pic_order_cnt_type == 1) {
-    bool delta_pic_order_always_zero_flag = bitStream.readU1();
+    delta_pic_order_always_zero_flag = bitStream.readU1();
     int32_t offset_for_non_ref_pic = bitStream.readSE();
     int32_t offset_for_top_to_bottom_field = bitStream.readSE();
     uint32_t num_ref_frames_in_pic_order_cnt_cycle = bitStream.readUE();
@@ -195,9 +198,9 @@ int Nalu::extractSPSparameters(RBSP &sps) {
   uint32_t pic_width_in_mbs_minus1 = bitStream.readUE();
   uint32_t pic_height_in_map_units_minus1 = bitStream.readUE();
 
-  bool frame_mbs_only_flag = bitStream.readU1();
+  frame_mbs_only_flag = bitStream.readU1();
   if (!frame_mbs_only_flag)
-    bool mb_adaptive_frame_field_flag = bitStream.readU1();
+    mb_adaptive_frame_field_flag = bitStream.readU1();
   bool direct_8x8_inference_flag = bitStream.readU1();
   bool frame_cropping_flag = bitStream.readU1();
   if (frame_cropping_flag) {
@@ -222,6 +225,7 @@ int Nalu::extractSPSparameters(RBSP &sps) {
   // frame_mbs_only_flag 为1，则图像仅包含帧，并且帧高度等于图像高度。
   // frame_mbs_only_flag 为0，则图像包含场，并且帧高度等于图像高度的一半。
 
+  //----------- 下面都是一些需要进行额外计算的（文档都有需要自己找）------------
   int width = (pic_width_in_mbs_minus1 + 1) * 16;
   int height = (pic_height_in_map_units_minus1 + 1) * 16;
   printf("\tprediction width:%d, prediction height:%d\n", width, height);
@@ -232,8 +236,11 @@ int Nalu::extractSPSparameters(RBSP &sps) {
   /* 获取B帧是否配置 */
   /* TODO YangJing  <24-04-05 00:30:03> */
 
-  /* 确定色度数组类型 */
-  /* TODO YangJing  <24-04-05 00:34:16> */
+  /* 确定色度数组类型 74 page */
+  if (separate_colour_plane_flag == 0)
+    ChromaArrayType = chroma_format_idc;
+  else
+    ChromaArrayType = 0;
 
   /* 计算位深度 */
   uint32_t bitDepthY = bit_depth_luma_minus8 + 8;
@@ -274,8 +281,17 @@ int Nalu::extractSPSparameters(RBSP &sps) {
   //  //色度分量的采样宽度，等于宏块宽度乘以 MbWidthC。
   //  RawMbBits = 256 * BitDepthY + 2 * MbWidthC * MbHeightC * BitDepthC;
 
-  /* 计算最大帧号和最大图像顺序计数 LSB */
-  //  maxFrameNum = h264_power2(log2_max_frame_num_minus4 + 4);
+  /* 计算最大帧号和最大图像顺序计数 LSB  in 77 page*/
+  /*
+   *log2_max_frame_num_minus4 specifies the value of the variable MaxFrameNum
+that is used in frame_num related derivations as follows:
+$$
+    MaxFrameNum = 2^{( log2_max_frame_num_minus4 + 4 )}
+$$
+The value of log2_max_frame_num_minus4 shall be in the range of 0 to
+12,inclusive.
+   * */
+  maxFrameNum = std::pow(log2_max_frame_num_minus4 + 4, 2);
   //  maxPicOrderCntLsb = h264_power2(log2_max_pic_order_cnt_lsb_minus4 + 4);
 
   /* 计算预期图像顺序计数周期增量 */
@@ -299,7 +315,7 @@ int Nalu::extractPPSparameters(RBSP &pps) {
   uint32_t seq_parameter_set_id = bitStream.readUE();
   std::cout << "\tseq_parameter_set_id:" << seq_parameter_set_id << std::endl;
 
-  bool entropy_coding_mode_flag = bitStream.readUE();
+  entropy_coding_mode_flag = bitStream.readUE();
   if (entropy_coding_mode_flag == 0)
     std::cout << "\tentropy_coding_mode_flag:CAVLC" << std::endl;
   else if (entropy_coding_mode_flag == 1)
@@ -307,10 +323,10 @@ int Nalu::extractPPSparameters(RBSP &pps) {
   else
     std::cout << "\tentropy_coding_mode_flag:?????" << std::endl;
 
-  bool bottom_field_pic_order_in_frame_present_flag = bitStream.readUE();
-  uint32_t num_slice_groups_minus1 = bitStream.readUE();
+  bottom_field_pic_order_in_frame_present_flag = bitStream.readUE();
+  num_slice_groups_minus1 = bitStream.readUE();
   if (num_slice_groups_minus1 > 0) {
-    uint32_t slice_group_map_type = bitStream.readUE();
+    slice_group_map_type = bitStream.readUE();
     std::cout << "\tslice_group_map_type:" << slice_group_map_type << std::endl;
     if (slice_group_map_type == 0) {
       uint32_t run_length_minus1[num_slice_groups_minus1 + 1];
@@ -339,16 +355,16 @@ int Nalu::extractPPSparameters(RBSP &pps) {
 
   uint32_t num_ref_idx_l0_default_active_minus1 = bitStream.readUE();
   uint32_t num_ref_idx_l1_default_active_minus1 = bitStream.readUE();
-  bool weighted_pred_flag = bitStream.readU1();
-  uint32_t weighted_bipred_idc = bitStream.readUn(2);
+  weighted_pred_flag = bitStream.readU1();
+  weighted_bipred_idc = bitStream.readUn(2);
   int32_t pic_init_qp_minus26 = bitStream.readSE();
   std::cout << "\tpic_init_qp:" << pic_init_qp_minus26 + 26 << std::endl;
   int32_t pic_init_qs_minus26 = bitStream.readSE();
   std::cout << "\tpic_init_qs:" << pic_init_qs_minus26 + 26 << std::endl;
   int32_t chroma_qp_index_offset = bitStream.readSE();
-  bool deblocking_filter_control_present_flag = bitStream.readU1();
+  deblocking_filter_control_present_flag = bitStream.readU1();
   bool constrained_intra_pred_flag = bitStream.readU1();
-  bool redundant_pic_cnt_present_flag = bitStream.readU1();
+  redundant_pic_cnt_present_flag = bitStream.readU1();
   if (more_rbsp_data()) {
     bool transform_8x8_mode_flag = bitStream.readU1();
     bool pic_scaling_matrix_present_flag = bitStream.readU1();
@@ -443,46 +459,219 @@ int Nalu::extractIDRparameters(RBSP &idr) {
   /* 初始化bit处理器，填充idr的数据 */
   BitStream bitStream(idr._buf, idr._len);
   parseSliceHeader(bitStream, idr);
+  // parseSliceData(bitStream, idr);
 
   return 0;
 }
 
-int Nalu::parseSliceHeader(BitStream bitStream, RBSP &rbsp) {
-  uint32_t first_mb_in_slice = bitStream.readUE();
+/* Slice header syntax -> 51 page */
+int Nalu::parseSliceHeader(BitStream &bitStream, RBSP &rbsp) {
+  first_mb_in_slice = bitStream.readUE();
   uint32_t slice_type = bitStream.readUE();
   uint32_t pic_parametter_set_id = bitStream.readUE();
   if (separate_colour_plane_flag == 1)
     uint8_t colour_plane_id = bitStream.readUn(2);
-  frame_num
-      /* TODO YangJing 不懂u(v) 是什么 <24-04-07 00:24:54> */
-      if (!frame_mbs_only_flag) {
-    field_pic_flag if (field_pic_flag) bottom_field_flag
-  }
-  if (IdrPicFlag)
-    idr_pic_id if (pic_order_cnt_type = = 0) {
-      pic_order_cnt_lsb if (bottom_field_pic_order_in_frame_present_flag &&
-                            !field_pic_flag) delta_pic_order_cnt_bottom
-    }
 
-  int index = 0;
+  uint32_t frame_num = bitStream.readUn(std::log2(maxFrameNum)); // u(v)
+  if (!frame_mbs_only_flag) {
+    field_pic_flag = bitStream.readU1();
+    if (field_pic_flag)
+      bool bottom_field_flag = bitStream.readU1();
+  }
+  IdrPicFlag = ((nal_unit_type == 5) ? 1 : 0);
+  if (IdrPicFlag)
+    uint32_t idr_pic_id = bitStream.readUE();
+  if (pic_order_cnt_type == 0) {
+    uint32_t pic_order_cnt_lsb = bitStream.readUn(std::log2(maxFrameNum));
+    if (bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
+      int32_t delta_pic_order_cnt_bottom = bitStream.readSE();
+  }
+
+  int32_t delta_pic_order_cnt[2] = {0};
+  if (pic_order_cnt_type == 1 && !delta_pic_order_always_zero_flag) {
+    delta_pic_order_cnt[0] = bitStream.readSE();
+    if (bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
+      delta_pic_order_cnt[1] = bitStream.readSE();
+  }
+
+  if (redundant_pic_cnt_present_flag)
+    uint32_t redundant_pic_cnt = bitStream.readUE();
+  if (slice_type % 5 == SLICE_B)
+    bool direct_spatial_mv_pred_flag = bitStream.readU1();
+  if (slice_type % 5 == SLICE_P || slice_type % 5 == SLICE_SP ||
+      slice_type % 5 == SLICE_B) {
+    bool num_ref_idx_active_override_flag = bitStream.readU1();
+    if (num_ref_idx_active_override_flag) {
+      num_ref_idx_l0_active_minus1 = bitStream.readUE();
+      if (slice_type % 5 == SLICE_B)
+        num_ref_idx_l1_active_minus1 = bitStream.readUE();
+    }
+  }
+  if (nal_unit_type == 20 || nal_unit_type == 21)
+    ref_pic_list_mvc_modification(bitStream); /* specified in Annex H */
+  else
+    ref_pic_list_modification(bitStream);
+  if ((weighted_pred_flag &&
+       (slice_type % 5 == SLICE_P || slice_type % 5 == SLICE_SP)) ||
+      (weighted_bipred_idc == 1 && slice_type % 5 == SLICE_B))
+    pred_weight_table(bitStream);
+  if (nal_ref_idc != 0)
+    dec_ref_pic_marking(bitStream);
+  if (entropy_coding_mode_flag && slice_type % 5 != SLICE_I &&
+      slice_type % 5 != SLICE_SI)
+    uint32_t cabac_init_idc = bitStream.readUE();
+  int32_t slice_qp_delta = bitStream.readSE();
+  if (slice_type % 5 == SLICE_SP || slice_type % 5 == SLICE_SI) {
+    if (slice_type % 5 == SLICE_SP)
+      bool sp_for_switch_flag = bitStream.readU1();
+    int32_t slice_qs_delta = bitStream.readSE();
+  }
+  if (deblocking_filter_control_present_flag) {
+    uint32_t disable_deblocking_filter_idc = bitStream.readUE();
+    if (disable_deblocking_filter_idc != 1) {
+      int32_t slice_alpha_c0_offset_div2 = bitStream.readSE();
+      int32_t slice_beta_offset_div2 = bitStream.readSE();
+    }
+  }
+  if (num_slice_groups_minus1 > 0 && slice_group_map_type >= 3 &&
+      slice_group_map_type <= 5)
+    uint32_t slice_group_change_cycle = bitStream.readUE();
+
   switch (slice_type % 5) {
-  case 0:
+  case SLICE_P:
     std::cout << "\tP Slice" << std::endl;
     break;
-  case 1:
+  case SLICE_B:
     std::cout << "\tB Slice" << std::endl;
     break;
-  case 2:
+  case SLICE_I:
     std::cout << "\tI Slice" << std::endl;
     break;
-  case 3:
+  case SLICE_SP:
     std::cout << "\tSP Slice" << std::endl;
     break;
-  case 4:
+  case SLICE_SI:
     std::cout << "\tSI Slice" << std::endl;
     break;
   }
+
+  //----------- 下面都是一些需要进行额外计算的（文档都有需要自己找）------------
+  MbaffFrameFlag = (mb_adaptive_frame_field_flag && !field_pic_flag);
+
   return 0;
+}
+
+void Nalu::ref_pic_list_mvc_modification(BitStream &bitStream) {}
+
+void Nalu::ref_pic_list_modification(BitStream &bitStream) {
+  uint32_t modification_of_pic_nums_idc;
+  if (slice_type % 5 != SLICE_I && slice_type % 5 != SLICE_SI) {
+    bool ref_pic_list_modification_flag_l0 = bitStream.readU1();
+    if (ref_pic_list_modification_flag_l0) {
+      do {
+        modification_of_pic_nums_idc = bitStream.readUE();
+        if (modification_of_pic_nums_idc == 0 ||
+            modification_of_pic_nums_idc == 1)
+          uint32_t abs_diff_pic_num_minus1 = bitStream.readUE();
+        else if (modification_of_pic_nums_idc == 2)
+          uint32_t long_term_pic_num = bitStream.readUE();
+      } while (modification_of_pic_nums_idc != 3);
+    }
+  }
+  if (slice_type % 5 == SLICE_B) {
+    bool ref_pic_list_modification_flag_l1 = bitStream.readU1();
+    if (ref_pic_list_modification_flag_l1)
+      do {
+        modification_of_pic_nums_idc = bitStream.readUE();
+        if (modification_of_pic_nums_idc == 0 ||
+            modification_of_pic_nums_idc == 1)
+          uint32_t abs_diff_pic_num_minus1 = bitStream.readUE();
+        else if (modification_of_pic_nums_idc == 2)
+          uint32_t long_term_pic_num = bitStream.readUE();
+      } while (modification_of_pic_nums_idc != 3);
+  }
+}
+
+void Nalu::pred_weight_table(BitStream &bitStream) {
+  uint32_t luma_log2_weight_denom = bitStream.readUE();
+  if (ChromaArrayType != 0) {
+    uint32_t chroma_log2_weight_denom = bitStream.readUE();
+  }
+
+  int32_t luma_weight_l0[num_ref_idx_l0_active_minus1 + 1];
+  int32_t luma_offset_l0[num_ref_idx_l0_active_minus1 + 1];
+
+  int32_t chroma_weight_l0[num_ref_idx_l0_active_minus1 + 1][2];
+  int32_t chroma_offset_l0[num_ref_idx_l0_active_minus1 + 1][2];
+
+  for (int i = 0; i <= num_ref_idx_l0_active_minus1; i++) {
+    bool luma_weight_l0_flag = bitStream.readU1();
+    if (luma_weight_l0_flag) {
+      luma_weight_l0[i] = bitStream.readSE();
+      luma_offset_l0[i] = bitStream.readSE();
+    }
+    if (ChromaArrayType != 0) {
+      bool chroma_weight_l0_flag = bitStream.readU1();
+      if (chroma_weight_l0_flag) {
+        for (int j = 0; j < 2; j++) {
+          chroma_weight_l0[i][j] = bitStream.readSE();
+          chroma_offset_l0[i][j] = bitStream.readSE();
+        }
+      }
+    }
+  }
+
+  if (slice_type % 5 == SLICE_B) {
+    int32_t luma_weight_l1[num_ref_idx_l1_active_minus1 + 1];
+    int32_t luma_offset_l1[num_ref_idx_l1_active_minus1 + 1];
+
+    int32_t chroma_weight_l1[num_ref_idx_l1_active_minus1 + 1][2];
+    int32_t chroma_offset_l1[num_ref_idx_l1_active_minus1 + 1][2];
+
+    for (int i = 0; i <= num_ref_idx_l1_active_minus1; i++) {
+      bool luma_weight_l1_flag = bitStream.readU1();
+      if (luma_weight_l1_flag) {
+        luma_weight_l1[i] = bitStream.readSE();
+        luma_offset_l1[i] = bitStream.readSE();
+      }
+
+      if (ChromaArrayType != 0) {
+        bool chroma_weight_l1_flag = bitStream.readU1();
+        if (chroma_weight_l1_flag) {
+          for (int j = 0; j < 2; j++) {
+            chroma_weight_l1[i][j] = bitStream.readSE();
+            chroma_offset_l1[i][j] = bitStream.readSE();
+          }
+        }
+      }
+    }
+  }
+}
+
+void Nalu::dec_ref_pic_marking(BitStream &bitStream) {
+  if (IdrPicFlag) {
+    bool no_output_of_prior_pics_flag = bitStream.readU1();
+    bool long_term_reference_flag = bitStream.readU1();
+  } else {
+    bool adaptive_ref_pic_marking_mode_flag = bitStream.readU1();
+
+    uint32_t memory_management_control_operation;
+    if (adaptive_ref_pic_marking_mode_flag) {
+      do {
+        memory_management_control_operation = bitStream.readUE();
+        if (memory_management_control_operation == 1 ||
+            memory_management_control_operation == 3)
+          uint32_t difference_of_pic_nums_minus1 = bitStream.readUE();
+        if (memory_management_control_operation == 2)
+          uint32_t long_term_pic_num = bitStream.readUE();
+        if (memory_management_control_operation == 3 ||
+            memory_management_control_operation == 6)
+          uint32_t long_term_frame_idx = bitStream.readUE();
+        if (memory_management_control_operation == 4)
+          uint32_t max_long_term_frame_idx_plus1 = bitStream.readUE();
+      } while (memory_management_control_operation != 0);
+    }
+  }
 }
 
 void Nalu::scaling_list(BitStream &bitStream, uint32_t *scalingList,
@@ -586,4 +775,59 @@ void Nalu::hrd_parameters(BitStream &bitStream) {
 
 bool Nalu::more_rbsp_data() { return false; }
 
-void Nalu::rbsp_trailing_bits() {}
+void Nalu::rbsp_trailing_bits() { /* TODO YangJing  <24-04-07 21:55:36> */
+}
+
+int Nalu::decode(RBSP &rbsp) {
+  /* 初始化bit处理器，填充sps的数据 */
+  BitStream bitStream(rbsp._buf, rbsp._len);
+  parseSliceData(bitStream, rbsp);
+  return 0;
+}
+
+int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp) {
+  if (entropy_coding_mode_flag) {
+    while (!byte_aligned(bitStream))
+      int32_t cabac_alignment_one_bit = bitStream.readU1();
+  }
+  uint32_t CurrMbAddr = first_mb_in_slice * (1 + MbaffFrameFlag);
+  bool moreDataFlag = 1;
+  uint32_t prevMbSkipped = 0;
+  /*
+  do {
+    if (slice_type != SLICE_I && slice_type != SLICE_SI)
+      if (!entropy_coding_mode_flag) {
+        uint32_t mb_skip_run = bitStream.readUE();
+        prevMbSkipped = (mb_skip_run > 0);
+        for (int i = 0; i < mb_skip_run; i++)
+          CurrMbAddr = NextMbAddress(CurrMbAddr);
+        if (mb_skip_run > 0)
+          moreDataFlag = more_rbsp_data();
+      } else {
+        mb_skip_flag; // ae(v)
+                      // TODO 感觉来到真正的解码模块了，过了这里下面就是
+                      // 解码量化-DCT环节了 嘻嘻 <24-04-07 22:45:36, YangJing>
+        moreDataFlag = !mb_skip_flag;
+      }
+    if (moreDataFlag) {
+      if (MbaffFrameFlag &&
+          (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
+        mb_field_decoding_flag;
+      macroblock_layer();
+    }
+    if (!entropy_coding_mode_flag)
+      moreDataFlag = more_rbsp_data();
+    else {
+      if (slice_type != SLICE_I && slice_type != SLICE_SI)
+        prevMbSkipped = mb_skip_flag;
+      if (MbaffFrameFlag && CurrMbAddr % 2 == 0)
+        moreDataFlag = 1;
+      else {
+        end_of_slice_flag moreDataFlag = !end_of_slice_flag;
+      }
+    }
+    CurrMbAddr = NextMbAddress(CurrMbAddr);
+  } while (moreDataFlag);
+ */
+  return 0;
+}

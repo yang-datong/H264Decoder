@@ -49,6 +49,7 @@ int main() {
       /* 见T-REC-H.264-202108-I!!PDF-E.pdf 87页 */
       switch (nalu.nal_unit_type) {
       case 1: /* Slice(non-VCL) */
+        /* 11-2. 解码普通帧 */
         std::cout << "Original Slice -> {" << std::endl;
         nalu.extractSliceparameters(rbsp);
         std::cout << " }" << std::endl;
@@ -56,9 +57,10 @@ int main() {
       case 2: /* DPA(non-VCL) */
         break;
       case 5: /* IDR(VCL) */
-        /* 11. 解码立即刷新帧 GOP[0] */
+        /* 11-1. 解码立即刷新帧 GOP[0] */
         std::cout << "IDR -> {" << std::endl;
         nalu.extractIDRparameters(rbsp);
+        nalu.decode(rbsp);
         std::cout << " }" << std::endl;
         break;
       case 6: /* SEI(VCL) */
@@ -81,8 +83,8 @@ int main() {
         break;
       }
 
+      /* 已读取完成所有NAL */
       if (result == 0)
-        /* 已读取完成所有NAL */
         break;
     } else {
       std::cerr << "\033[31mReading error\033[0m" << std::endl;

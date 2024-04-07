@@ -1,6 +1,7 @@
 #ifndef BITSTREAM_HPP_AUHM38NB
 #define BITSTREAM_HPP_AUHM38NB
 
+#include <math.h>
 #include <stdint.h>
 
 #define ARCH_32_BIT_COUNT 4
