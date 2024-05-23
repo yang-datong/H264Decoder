@@ -1,8 +1,13 @@
 #ifndef NALU_HPP_YDI8RPRP
 #define NALU_HPP_YDI8RPRP
 
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
 #include "BitStream.hpp"
+#include "Cabac.hpp"
 #include "EBSP.hpp"
+#include "PictureBase.hpp"
 #include "RBSP.hpp"
 #include <cstdint>
 #include <cstdio>
@@ -69,6 +74,17 @@ class Nalu {
   bool delta_pic_order_always_zero_flag;
   uint32_t ChromaArrayType;
   bool mb_adaptive_frame_field_flag;
+  uint32_t PicWidthInMbs;
+  uint32_t PicHeightInMapUnits;
+  uint32_t PicSizeInMapUnits;
+  uint32_t frameHeightInMbs;
+  bool qpprime_y_zero_transform_bypass_flag;
+  bool seq_scaling_matrix_present_flag;
+  bool seq_scaling_list_present_flag[12] = {false};
+  uint32_t bitDepthY;
+  uint32_t qpBitDepthY;
+  uint32_t bitDepthUV;
+  uint32_t qpBitDepthUV;
 
   /* PPS 参数 */
   bool more_rbsp_data();
@@ -81,6 +97,20 @@ class Nalu {
   bool deblocking_filter_control_present_flag;
   uint32_t num_slice_groups_minus1;
   uint32_t slice_group_map_type;
+  uint32_t *run_length_minus1;
+  uint32_t *top_left;
+  uint32_t *bottom_right;
+  bool slice_group_change_direction_flag;
+  uint32_t slice_group_change_rate_minus1;
+  uint32_t *slice_group_id;
+  bool pic_scaling_matrix_present_flag;
+
+  uint32_t ScalingList4x4[6][16];
+  uint32_t ScalingList8x8[6][64];
+  uint32_t UseDefaultScalingMatrix4x4Flag[6];
+  uint32_t UseDefaultScalingMatrix8x8Flag[6];
+
+  uint32_t *pic_scaling_list_present_flag;
 
   /* SEI */
   void sei_message(BitStream &bitStream);
@@ -102,8 +132,38 @@ class Nalu {
   bool IdrPicFlag;
   uint32_t first_mb_in_slice;
   bool MbaffFrameFlag;
+  int32_t *mapUnitToSliceGroupMap;
+  int32_t *MbToSliceGroupMap;
+  uint32_t slice_group_change_cycle;
+  int MapUnitsInSliceGroup0;
+
+  int setMapUnitToSliceGroupMap();
+  int setMbToSliceGroupMap();
+  int set_scaling_lists_values();
+  int set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
+                       BitStream &bitStream);
+
+  uint32_t cabac_alignment_one_bit = 0;
+  uint32_t mb_skip_run = 0;
+  int32_t mb_skip_flag = 0;
+  int32_t end_of_slice_flag = 0;
+  uint32_t mb_field_decoding_flag = 0;
+  uint32_t slice_id = 0;
+  uint32_t slice_number = -1;
+  uint32_t CurrMbAddr = 0;
+  uint32_t syntax_element_categories = 0;
+  bool moreDataFlag = 1;
+  uint32_t prevMbSkipped = 0;
+  int32_t mb_skip_flag_next_mb = 0;
 
   /* IDR */
+  int NextMbAddress(int n);
+  int32_t PicHeightInMbs;
+  int32_t PicSizeInMbs;
+  int macroblock_layer(BitStream &bs);
+
+  PictureBase picture;
+  Cabac cabac;
 };
 
 #endif /* end of include guard: NALU_HPP_YDI8RPRP */

@@ -1,5 +1,6 @@
 #include "Nalu.hpp"
 #include "BitStream.hpp"
+#include "PictureBase.hpp"
 #include "RBSP.hpp"
 #include <cmath>
 #include <cstdint>
@@ -148,8 +149,8 @@ int Nalu::extractSPSparameters(RBSP &sps) {
     }
     bit_depth_luma_minus8 = bitStream.readUE();
     bit_depth_chroma_minus8 = bitStream.readUE();
-    bool qpprime_y_zero_transform_bypass_flag = bitStream.readU1();
-    bool seq_scaling_matrix_present_flag = bitStream.readU1();
+    qpprime_y_zero_transform_bypass_flag = bitStream.readU1();
+    seq_scaling_matrix_present_flag = bitStream.readU1();
 
     uint32_t ScalingList4x4[6][16];
     uint32_t ScalingList8x8[6][64];
@@ -158,7 +159,6 @@ int Nalu::extractSPSparameters(RBSP &sps) {
     uint32_t UseDefaultScalingMatrix8x8Flag[6];
 
     if (seq_scaling_matrix_present_flag) {
-      bool seq_scaling_list_present_flag[12] = {false};
       for (int i = 0; i < ((chroma_format_idc != 3) ? 8 : 12); i++) {
         seq_scaling_list_present_flag[i] = bitStream.readU1();
         if (seq_scaling_list_present_flag[i]) {
@@ -214,13 +214,13 @@ int Nalu::extractSPSparameters(RBSP &sps) {
     vui_parameters(bitStream);
 
   /* 计算宏块大小以及图像宽、高 */
-  uint32_t PicWidthInMbs = pic_width_in_mbs_minus1 + 1;
+  PicWidthInMbs = pic_width_in_mbs_minus1 + 1;
   // 宏块单位的图像宽度 = pic_width_in_mbs_minus1 + 1
-  uint32_t PicHeightInMapUnits = pic_height_in_map_units_minus1 + 1;
+  PicHeightInMapUnits = pic_height_in_map_units_minus1 + 1;
   // 宏块单位的图像高度 = pic_height_in_map_units_minus1 + 1
-  uint32_t PicSizeInMapUnits = PicWidthInMbs * PicHeightInMapUnits;
+  PicSizeInMapUnits = PicWidthInMbs * PicHeightInMapUnits;
   // 宏块单位的图像大小 = 宽 * 高
-  uint32_t frameHeightInMbs = (2 - frame_mbs_only_flag) * PicHeightInMapUnits;
+  frameHeightInMbs = (2 - frame_mbs_only_flag) * PicHeightInMapUnits;
   // 指示图像是否仅包含帧（而不是场）。
   // frame_mbs_only_flag 为1，则图像仅包含帧，并且帧高度等于图像高度。
   // frame_mbs_only_flag 为0，则图像包含场，并且帧高度等于图像高度的一半。
@@ -243,36 +243,36 @@ int Nalu::extractSPSparameters(RBSP &sps) {
     ChromaArrayType = 0;
 
   /* 计算位深度 */
-  uint32_t bitDepthY = bit_depth_luma_minus8 + 8;
+  bitDepthY = bit_depth_luma_minus8 + 8;
   // 亮度分量的位深度
-  uint32_t qpBitDepthY = bit_depth_luma_minus8 * 6;
+  qpBitDepthY = bit_depth_luma_minus8 * 6;
   // 亮度分量的量化参数步长偏移
-  uint32_t bitDepthUV = bit_depth_chroma_minus8 + 8;
+  bitDepthUV = bit_depth_chroma_minus8 + 8;
   // 色度分量的位深度
-  uint32_t qpBitDepthUV = bit_depth_chroma_minus8 * 6;
+  qpBitDepthUV = bit_depth_chroma_minus8 * 6;
   // 色度分量的量化参数步长偏移
 
   /* 计算色度子采样参数 */
   /* TODO YangJing  <24-04-05 00:44:15> */
-  //  uint32_t MbWidthC; //色度宏块宽度
-  //  uint32_t MbHeightC; //色度宏块高度
-  //  if (chroma_format_idc == 0 || separate_colour_plane_flag == 1) {
-  //    // 色度子采样宽度和高度均为 0。
-  //    MbWidthC = 0;
-  //    MbHeightC = 0;
-  //  } else {
-  //    int32_t index = chroma_format_idc;
-  //    if (chroma_format_idc == 3 && separate_colour_plane_flag == 1) {
-  //      index = 4;
-  //    }
-  //    Chroma_Format = g_chroma_format_idcs[index].Chroma_Format;
-  //    SubWidthC = g_chroma_format_idcs[index].SubWidthC;
-  //    SubHeightC = g_chroma_format_idcs[index].SubHeightC;
-  //    // 根据 chroma_format_idc 查找色度格式、色度子采样宽度和色度子采样高度。
-  //
-  //    MbWidthC = 16 / SubWidthC;
-  //    MbHeightC = 16 / SubHeightC;
-  //  }
+  uint32_t MbWidthC;  //色度宏块宽度
+  uint32_t MbHeightC; //色度宏块高度
+  if (chroma_format_idc == 0 || separate_colour_plane_flag == 1) {
+    // 色度子采样宽度和高度均为 0。
+    MbWidthC = 0;
+    MbHeightC = 0;
+  } else {
+    int32_t index = chroma_format_idc;
+    if (chroma_format_idc == 3 && separate_colour_plane_flag == 1) {
+      index = 4;
+    }
+    int Chroma_Format = g_chroma_format_idcs[index].Chroma_Format;
+    int SubWidthC = g_chroma_format_idcs[index].SubWidthC;
+    int SubHeightC = g_chroma_format_idcs[index].SubHeightC;
+    // 根据 chroma_format_idc 查找色度格式、色度子采样宽度和色度子采样高度。
+
+    MbWidthC = 16 / SubWidthC;
+    MbHeightC = 16 / SubHeightC;
+  }
 
   /* 计算采样宽度和比特深度 */
   //  uint32_t picWidthInSamplesL = PicWidthInMbs * 16;
@@ -329,25 +329,25 @@ int Nalu::extractPPSparameters(RBSP &pps) {
     slice_group_map_type = bitStream.readUE();
     std::cout << "\tslice_group_map_type:" << slice_group_map_type << std::endl;
     if (slice_group_map_type == 0) {
-      uint32_t run_length_minus1[num_slice_groups_minus1 + 1];
+      run_length_minus1 = new uint32_t[num_slice_groups_minus1 + 1];
       for (int iGroup = 0; iGroup <= num_slice_groups_minus1; iGroup++)
         run_length_minus1[iGroup] = bitStream.readUE();
     } else if (slice_group_map_type == 2) {
-      uint32_t top_left[num_slice_groups_minus1];
-      uint32_t bottom_right[num_slice_groups_minus1];
+      top_left = new uint32_t[num_slice_groups_minus1];
+      bottom_right = new uint32_t[num_slice_groups_minus1];
       for (int iGroup = 0; iGroup < num_slice_groups_minus1; iGroup++) {
         top_left[iGroup] = bitStream.readUE();
         bottom_right[iGroup] = bitStream.readUE();
       }
     } else if (slice_group_map_type == 3 || slice_group_map_type == 4 ||
                slice_group_map_type == 5) {
-      bool slice_group_change_direction_flag = bitStream.readU1();
-      uint32_t slice_group_change_rate_minus1 = bitStream.readUE();
+      slice_group_change_direction_flag = bitStream.readU1();
+      slice_group_change_rate_minus1 = bitStream.readUE();
     } else if (slice_group_map_type == 6) {
       uint32_t pic_size_in_map_units_minus1 = bitStream.readUE();
       std::cout << "\tpic_size_in_map_units_minus1:"
                 << pic_size_in_map_units_minus1 << std::endl;
-      uint32_t slice_group_id[pic_size_in_map_units_minus1 + 1];
+      slice_group_id = new uint32_t[pic_size_in_map_units_minus1 + 1];
       for (int i = 0; i <= pic_size_in_map_units_minus1; i++)
         slice_group_id[i] = bitStream.readUE();
     }
@@ -367,18 +367,14 @@ int Nalu::extractPPSparameters(RBSP &pps) {
   redundant_pic_cnt_present_flag = bitStream.readU1();
   if (more_rbsp_data()) {
     bool transform_8x8_mode_flag = bitStream.readU1();
-    bool pic_scaling_matrix_present_flag = bitStream.readU1();
+    pic_scaling_matrix_present_flag = bitStream.readU1();
     if (pic_scaling_matrix_present_flag) {
       uint32_t maxPICScalingList =
           6 + ((chroma_format_idc != 3) ? 2 : 6) * transform_8x8_mode_flag;
-      uint32_t pic_scaling_list_present_flag[maxPICScalingList];
+      pic_scaling_list_present_flag = new uint32_t[maxPICScalingList]{0};
       for (int i = 0; i < maxPICScalingList; i++) {
         pic_scaling_list_present_flag[i] = bitStream.readU1();
         if (pic_scaling_list_present_flag[i]) {
-          uint32_t ScalingList4x4[6][16];
-          uint32_t ScalingList8x8[6][64];
-          uint32_t UseDefaultScalingMatrix4x4Flag[6];
-          uint32_t UseDefaultScalingMatrix8x8Flag[6];
           if (i < 6) {
             scaling_list(bitStream, ScalingList4x4[i], 16,
                          UseDefaultScalingMatrix4x4Flag[i]);
@@ -535,7 +531,7 @@ int Nalu::parseSliceHeader(BitStream &bitStream, RBSP &rbsp) {
   }
   if (num_slice_groups_minus1 > 0 && slice_group_map_type >= 3 &&
       slice_group_map_type <= 5)
-    uint32_t slice_group_change_cycle = bitStream.readUE();
+    slice_group_change_cycle = bitStream.readUE();
 
   switch (slice_type % 5) {
   case SLICE_P:
@@ -556,9 +552,405 @@ int Nalu::parseSliceHeader(BitStream &bitStream, RBSP &rbsp) {
   }
 
   //----------- 下面都是一些需要进行额外计算的（文档都有需要自己找）------------
+  int SliceGroupChangeRate = slice_group_change_rate_minus1 + 1;
   MbaffFrameFlag = (mb_adaptive_frame_field_flag && !field_pic_flag);
+  PicHeightInMbs = frameHeightInMbs / (1 + field_pic_flag);
+  PicSizeInMbs = PicWidthInMbs * PicHeightInMbs;
+  MapUnitsInSliceGroup0 = std::min(
+      slice_group_change_cycle * SliceGroupChangeRate, PicSizeInMapUnits);
+
+  if (!mapUnitToSliceGroupMap) {
+    mapUnitToSliceGroupMap = new int32_t[PicSizeInMapUnits]{0};
+  }
+
+  if (!MbToSliceGroupMap) {
+    MbToSliceGroupMap = new int32_t[PicSizeInMbs]{0};
+  }
+
+  setMapUnitToSliceGroupMap();
+
+  setMbToSliceGroupMap();
+
+  set_scaling_lists_values();
+
+  // m_is_malloc_mem_self = 1;
+  return 0;
+}
+
+int Nalu::setMapUnitToSliceGroupMap() {
+  int32_t i = 0;
+  int32_t j = 0;
+  int32_t k = 0;
+  int32_t x = 0;
+  int32_t y = 0;
+  int32_t iGroup = 0;
+
+  if (num_slice_groups_minus1 == 0) {
+    for (i = 0; i < PicSizeInMapUnits; i++) {
+      mapUnitToSliceGroupMap[i] = 0;
+    }
+    return 0;
+  }
+
+  if (slice_group_map_type == 0) // 8.2.2.1 Specification for interleaved slice
+                                 // group map type 交叉型 slice组映射类型的描述
+  {
+    i = 0;
+    do {
+      for (iGroup = 0;
+           iGroup <= num_slice_groups_minus1 && i < PicSizeInMapUnits;
+           i += run_length_minus1[iGroup++] + 1) {
+        for (j = 0; j <= run_length_minus1[iGroup] && i + j < PicSizeInMapUnits;
+             j++) {
+          mapUnitToSliceGroupMap[i + j] = iGroup;
+        }
+      }
+    } while (i < PicSizeInMapUnits);
+  } else if (slice_group_map_type ==
+             1) // 8.2.2.2 Specification for dispersed slice group map type
+                // 分散型 slice 组映射类型的描述
+  {
+    for (i = 0; i < PicSizeInMapUnits; i++) {
+      mapUnitToSliceGroupMap[i] =
+          ((i % PicWidthInMbs) +
+           (((i / PicWidthInMbs) * (num_slice_groups_minus1 + 1)) / 2)) %
+          (num_slice_groups_minus1 + 1);
+    }
+  } else if (slice_group_map_type ==
+             2) // 8.2.2.3 Specification for foreground with left-over slice
+                // group map type 前景加剩余型 slice 组映射类型的描述
+  {
+    for (i = 0; i < PicSizeInMapUnits; i++) {
+      mapUnitToSliceGroupMap[i] = num_slice_groups_minus1;
+    }
+    for (iGroup = num_slice_groups_minus1 - 1; iGroup >= 0; iGroup--) {
+      int32_t yTopLeft = top_left[iGroup] / PicWidthInMbs;
+      int32_t xTopLeft = top_left[iGroup] % PicWidthInMbs;
+      int32_t yBottomRight = bottom_right[iGroup] / PicWidthInMbs;
+      int32_t xBottomRight = bottom_right[iGroup] % PicWidthInMbs;
+      for (y = yTopLeft; y <= yBottomRight; y++) {
+        for (x = xTopLeft; x <= xBottomRight; x++) {
+          mapUnitToSliceGroupMap[y * PicWidthInMbs + x] = iGroup;
+        }
+      }
+    }
+  } else if (slice_group_map_type == 3) {
+    // 8.2.2.4 Specification for box-out slice group map types
+    // 外旋盒子型 slice 组映射类型的描述
+    for (i = 0; i < PicSizeInMapUnits; i++) {
+      mapUnitToSliceGroupMap[i] = 1;
+    }
+    x = (PicWidthInMbs - slice_group_change_direction_flag) / 2;
+    y = (PicHeightInMapUnits - slice_group_change_direction_flag) / 2;
+
+    int32_t leftBound = x;
+    int32_t topBound = y;
+    int32_t rightBound = x;
+    int32_t bottomBound = y;
+    int32_t xDir = slice_group_change_direction_flag - 1;
+    int32_t yDir = slice_group_change_direction_flag;
+    int32_t mapUnitVacant = 0;
+
+    for (k = 0; k < MapUnitsInSliceGroup0; k += mapUnitVacant) {
+      mapUnitVacant = (mapUnitToSliceGroupMap[y * PicWidthInMbs + x] == 1);
+      if (mapUnitVacant) {
+        mapUnitToSliceGroupMap[y * PicWidthInMbs + x] = 0;
+      }
+      if (xDir == -1 && x == leftBound) {
+        leftBound = std::max(leftBound - 1, 0);
+        x = leftBound;
+        xDir = 0;
+        yDir = 2 * slice_group_change_direction_flag - 1;
+      } else if (xDir == 1 && x == rightBound) {
+        rightBound = MIN(rightBound + 1, PicWidthInMbs - 1);
+        x = rightBound;
+        xDir = 0;
+        yDir = 1 - 2 * slice_group_change_direction_flag;
+      } else if (yDir == -1 && y == topBound) {
+        topBound = MAX(topBound - 1, 0);
+        y = topBound;
+        xDir = 1 - 2 * slice_group_change_direction_flag;
+        yDir = 0;
+      } else if (yDir == 1 && y == bottomBound) {
+        bottomBound = MIN(bottomBound + 1, PicHeightInMapUnits - 1);
+        y = bottomBound;
+        xDir = 2 * slice_group_change_direction_flag - 1;
+        yDir = 0;
+      } else {
+        (x, y) = (x + xDir, y + yDir);
+      }
+    }
+  } else if (slice_group_map_type ==
+             4) // 8.2.2.5 Specification for raster scan slice group map types
+                // 栅格扫描型 slice 组映射类型的描述
+  {
+    int32_t sizeOfUpperLeftGroup = 0;
+    if (num_slice_groups_minus1 == 1) {
+      sizeOfUpperLeftGroup = (slice_group_change_direction_flag
+                                  ? (PicSizeInMapUnits - MapUnitsInSliceGroup0)
+                                  : MapUnitsInSliceGroup0);
+    }
+
+    for (i = 0; i < PicSizeInMapUnits; i++) {
+      if (i < sizeOfUpperLeftGroup) {
+        mapUnitToSliceGroupMap[i] = slice_group_change_direction_flag;
+      } else {
+        mapUnitToSliceGroupMap[i] = 1 - slice_group_change_direction_flag;
+      }
+    }
+  } else if (slice_group_map_type ==
+             5) // 8.2.2.6 Specification for wipe slice group map types 擦除型
+                // slice 组映射类型的描述
+  {
+    int32_t sizeOfUpperLeftGroup = 0;
+    if (num_slice_groups_minus1 == 1) {
+      sizeOfUpperLeftGroup = (slice_group_change_direction_flag
+                                  ? (PicSizeInMapUnits - MapUnitsInSliceGroup0)
+                                  : MapUnitsInSliceGroup0);
+    }
+
+    k = 0;
+    for (j = 0; j < PicWidthInMbs; j++) {
+      for (i = 0; i < PicHeightInMapUnits; i++) {
+        if (k++ < sizeOfUpperLeftGroup) {
+          mapUnitToSliceGroupMap[i * PicWidthInMbs + j] =
+              slice_group_change_direction_flag;
+        } else {
+          mapUnitToSliceGroupMap[i * PicWidthInMbs + j] =
+              1 - slice_group_change_direction_flag;
+        }
+      }
+    }
+  } else if (slice_group_map_type ==
+             6) // 8.2.2.7 Specification for explicit slice group map type
+                // 显式型 slice 组映射类型的描述
+  {
+    for (i = 0; i < PicSizeInMapUnits; i++) {
+      mapUnitToSliceGroupMap[i] = slice_group_id[i];
+    }
+  } else {
+    printf("slice_group_map_type=%d, must be in [0..6];\n",
+           slice_group_map_type);
+    return -1;
+  }
 
   return 0;
+}
+
+int Nalu::setMbToSliceGroupMap() {
+  for (int i = 0; i < PicSizeInMbs; i++) {
+    if (frame_mbs_only_flag == 1 || field_pic_flag == 1) {
+      MbToSliceGroupMap[i] = mapUnitToSliceGroupMap[i];
+    } else if (MbaffFrameFlag == 1) {
+      MbToSliceGroupMap[i] = mapUnitToSliceGroupMap[i / 2];
+    } else // if (frame_mbs_only_flag == 0 &&
+           // mb_adaptive_frame_field_flag == 0 && field_pic_flag == 0)
+    {
+      MbToSliceGroupMap[i] =
+          mapUnitToSliceGroupMap[(i / (2 * PicWidthInMbs)) * PicWidthInMbs +
+                                 (i % PicWidthInMbs)];
+    }
+  }
+
+  return 0;
+}
+
+int Nalu::set_scaling_lists_values() {
+  int ret = 0;
+
+  //--------------------------------
+  static int32_t Flat_4x4_16[16] = {16, 16, 16, 16, 16, 16, 16, 16,
+                                    16, 16, 16, 16, 16, 16, 16, 16};
+  static int32_t Flat_8x8_16[64] = {
+      16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
+      16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
+      16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
+      16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
+  };
+
+  //--------------------------------
+  // Table 7-3 – Specification of default scaling lists Default_4x4_Intra and
+  // Default_4x4_Inter
+  static int32_t Default_4x4_Intra[16] = {6,  13, 13, 20, 20, 20, 28, 28,
+                                          28, 28, 32, 32, 32, 37, 37, 42};
+  static int32_t Default_4x4_Inter[16] = {10, 14, 14, 20, 20, 20, 24, 24,
+                                          24, 24, 27, 27, 27, 30, 30, 34};
+
+  // Table 7-4 – Specification of default scaling lists Default_8x8_Intra and
+  // Default_8x8_Inter
+  static int32_t Default_8x8_Intra[64] = {
+      6,  10, 10, 13, 11, 13, 16, 16, 16, 16, 18, 18, 18, 18, 18, 23,
+      23, 23, 23, 23, 23, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27,
+      27, 27, 27, 27, 29, 29, 29, 29, 29, 29, 29, 31, 31, 31, 31, 31,
+      31, 33, 33, 33, 33, 33, 36, 36, 36, 36, 38, 38, 38, 40, 40, 42,
+  };
+
+  static int32_t Default_8x8_Inter[64] = {
+      9,  13, 13, 15, 13, 15, 17, 17, 17, 17, 19, 19, 19, 19, 19, 21,
+      21, 21, 21, 21, 21, 22, 22, 22, 22, 22, 22, 22, 24, 24, 24, 24,
+      24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27, 27,
+      27, 28, 28, 28, 28, 28, 30, 30, 30, 30, 32, 32, 32, 33, 33, 35,
+  };
+
+  //--------------------------------
+  int32_t i = 0;
+  int32_t scaling_list_size = (chroma_format_idc != 3) ? 8 : 12;
+
+  if (seq_scaling_matrix_present_flag == 0 &&
+      pic_scaling_matrix_present_flag == 0) {
+    // 如果编码器未给出缩放矩阵值，则缩放矩阵值全部默认为16
+    for (i = 0; i < scaling_list_size; i++) {
+      if (i < 6) {
+        memcpy(ScalingList4x4[i], Flat_4x4_16, sizeof(int32_t) * 16);
+      } else // if (i >= 6)
+      {
+        memcpy(ScalingList8x8[i - 6], Flat_8x8_16, sizeof(int32_t) * 64);
+      }
+    }
+  } else {
+    if (seq_scaling_matrix_present_flag == 1) {
+      for (i = 0; i < scaling_list_size; i++) {
+        if (i < 6) {
+          if (seq_scaling_list_present_flag[i] ==
+              0) // 参照 Table 7-2 Scaling list fall-back rule A
+          {
+            if (i == 0) {
+              memcpy(ScalingList4x4[i], Default_4x4_Intra,
+                     sizeof(int32_t) * 16);
+            } else if (i == 3) {
+              memcpy(ScalingList4x4[i], Default_4x4_Inter,
+                     sizeof(int32_t) * 16);
+            } else {
+              memcpy(ScalingList4x4[i], ScalingList4x4[i - 1],
+                     sizeof(int32_t) * 16);
+            }
+          } else {
+            if (UseDefaultScalingMatrix4x4Flag[i] == 1) {
+              if (i < 3) {
+                memcpy(ScalingList4x4[i], Default_4x4_Intra,
+                       sizeof(int32_t) * 16);
+              } else // if (i >= 3)
+              {
+                memcpy(ScalingList4x4[i], Default_4x4_Inter,
+                       sizeof(int32_t) * 16);
+              }
+            } else {
+              memcpy(ScalingList4x4[i], ScalingList4x4[i],
+                     sizeof(int32_t) *
+                         16); // 采用编码器传送过来的量化系数的缩放值
+            }
+          }
+        } else // if (i >= 6)
+        {
+          if (seq_scaling_list_present_flag[i] ==
+              0) // 参照 Table 7-2 Scaling list fall-back rule A
+          {
+            if (i == 6) {
+              memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
+                     sizeof(int32_t) * 64);
+            } else if (i == 7) {
+              memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
+                     sizeof(int32_t) * 64);
+            } else {
+              memcpy(ScalingList8x8[i - 6], ScalingList8x8[i - 8],
+                     sizeof(int32_t) * 64);
+            }
+          } else {
+            if (UseDefaultScalingMatrix8x8Flag[i - 6] == 1) {
+              if (i == 6 || i == 8 || i == 10) {
+                memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
+                       sizeof(int32_t) * 64);
+              } else {
+                memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
+                       sizeof(int32_t) * 64);
+              }
+            } else {
+              memcpy(ScalingList8x8[i - 6], ScalingList8x8[i - 6],
+                     sizeof(int32_t) *
+                         64); // 采用编码器传送过来的量化系数的缩放值
+            }
+          }
+        }
+      }
+    }
+
+    // 注意：此处不是"else if"，意即面的值，可能会覆盖之前到的值
+    if (pic_scaling_matrix_present_flag == 1) {
+      for (i = 0; i < scaling_list_size; i++) {
+        if (i < 6) {
+          if (pic_scaling_list_present_flag[i] ==
+              0) // 参照 Table 7-2 Scaling list fall-back rule B
+          {
+            if (i == 0) {
+              if (seq_scaling_matrix_present_flag == 0) {
+                memcpy(ScalingList4x4[i], Default_4x4_Intra,
+                       sizeof(int32_t) * 16);
+              }
+            } else if (i == 3) {
+              if (seq_scaling_matrix_present_flag == 0) {
+                memcpy(ScalingList4x4[i], Default_4x4_Inter,
+                       sizeof(int32_t) * 16);
+              }
+            } else {
+              memcpy(ScalingList4x4[i], ScalingList4x4[i - 1],
+                     sizeof(int32_t) * 16);
+            }
+          } else {
+            if (UseDefaultScalingMatrix4x4Flag[i] == 1) {
+              if (i < 3) {
+                memcpy(ScalingList4x4[i], Default_4x4_Intra,
+                       sizeof(int32_t) * 16);
+              } else // if (i >= 3)
+              {
+                memcpy(ScalingList4x4[i], Default_4x4_Inter,
+                       sizeof(int32_t) * 16);
+              }
+            } else {
+              memcpy(ScalingList4x4[i], ScalingList4x4[i],
+                     sizeof(int32_t) *
+                         16); // 采用编码器传送过来的量化系数的缩放值
+            }
+          }
+        } else // if (i >= 6)
+        {
+          if (pic_scaling_list_present_flag[i] ==
+              0) // 参照 Table 7-2 Scaling list fall-back rule B
+          {
+            if (i == 6) {
+              if (seq_scaling_matrix_present_flag == 0) {
+                memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
+                       sizeof(int32_t) * 64);
+              }
+            } else if (i == 7) {
+              if (seq_scaling_matrix_present_flag == 0) {
+                memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
+                       sizeof(int32_t) * 64);
+              }
+            } else {
+              memcpy(ScalingList8x8[i - 6], ScalingList8x8[i - 8],
+                     sizeof(int32_t) * 64);
+            }
+          } else {
+            if (UseDefaultScalingMatrix8x8Flag[i - 6] == 1) {
+              if (i == 6 || i == 8 || i == 10) {
+                memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
+                       sizeof(int32_t) * 64);
+              } else {
+                memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
+                       sizeof(int32_t) * 64);
+              }
+            } else {
+              memcpy(ScalingList8x8[i - 6], ScalingList8x8[i - 6],
+                     sizeof(int32_t) *
+                         64); // 采用编码器传送过来的量化系数的缩放值
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
 }
 
 void Nalu::ref_pic_list_mvc_modification(BitStream &bitStream) {}
@@ -785,15 +1177,15 @@ int Nalu::decode(RBSP &rbsp) {
   return 0;
 }
 
+/* Rec. ITU-T H.264 (08/2021) 56 */
 int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp) {
   if (entropy_coding_mode_flag) {
     while (!byte_aligned(bitStream))
-      int32_t cabac_alignment_one_bit = bitStream.readU1();
+      cabac_alignment_one_bit = bitStream.readU1();
   }
-  uint32_t CurrMbAddr = first_mb_in_slice * (1 + MbaffFrameFlag);
-  bool moreDataFlag = 1;
-  uint32_t prevMbSkipped = 0;
-  /*
+  CurrMbAddr = first_mb_in_slice * (1 + MbaffFrameFlag);
+  picture.CurrMbAddr = CurrMbAddr;
+
   do {
     if (slice_type != SLICE_I && slice_type != SLICE_SI)
       if (!entropy_coding_mode_flag) {
@@ -804,16 +1196,14 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp) {
         if (mb_skip_run > 0)
           moreDataFlag = more_rbsp_data();
       } else {
-        mb_skip_flag; // ae(v)
-                      // TODO 感觉来到真正的解码模块了，过了这里下面就是
-                      // 解码量化-DCT环节了 嘻嘻 <24-04-07 22:45:36, YangJing>
+        set_mb_skip_flag(mb_skip_flag, picture, bitStream);
         moreDataFlag = !mb_skip_flag;
       }
     if (moreDataFlag) {
       if (MbaffFrameFlag &&
           (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
         mb_field_decoding_flag;
-      macroblock_layer();
+      macroblock_layer(bitStream);
     }
     if (!entropy_coding_mode_flag)
       moreDataFlag = more_rbsp_data();
@@ -823,11 +1213,203 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp) {
       if (MbaffFrameFlag && CurrMbAddr % 2 == 0)
         moreDataFlag = 1;
       else {
-        end_of_slice_flag moreDataFlag = !end_of_slice_flag;
+        cabac.CABAC_decode_end_of_slice_flag(picture,
+                                             end_of_slice_flag); // 2 ae(v)
+        moreDataFlag = !end_of_slice_flag;
       }
     }
     CurrMbAddr = NextMbAddress(CurrMbAddr);
   } while (moreDataFlag);
- */
   return 0;
+}
+
+int Nalu::set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
+                           BitStream &bs) {
+  picture.mb_x = (CurrMbAddr % (picture.PicWidthInMbs * (1 + MbaffFrameFlag))) /
+                 (1 + MbaffFrameFlag);
+  picture.mb_y =
+      (CurrMbAddr / (picture.PicWidthInMbs * (1 + MbaffFrameFlag)) *
+       (1 + MbaffFrameFlag)) +
+      ((CurrMbAddr % (picture.PicWidthInMbs * (1 + MbaffFrameFlag))) %
+       (1 + MbaffFrameFlag));
+  picture.CurrMbAddr = CurrMbAddr;
+
+  // picture.m_mbs[picture.CurrMbAddr].MbaffFrameFlag =
+  // MbaffFrameFlag;
+  // //因为解码mb_skip_flag需要事先知道MbaffFrameFlag的值
+  picture.m_mbs[picture.CurrMbAddr].slice_number =
+      slice_number; // 因为解码mb_skip_flag需要事先知道slice_id的值
+
+  if (MbaffFrameFlag) {
+    if (CurrMbAddr % 2 == 0) // 顶场宏块
+    {
+      if (picture.mb_x == 0 &&
+          picture.mb_y >=
+              2) // 注意：此处在T-REC-H.264-201704-S!!PDF-E.pdf文档中，并没有明确写出来，所以这是一个坑
+      {
+        // When MbaffFrameFlag is equal to 1 and mb_field_decoding_flag is
+        // not present for both the top and the bottom macroblock of a
+        // macroblock pair
+        if (picture.mb_x > 0 &&
+            picture.m_mbs[CurrMbAddr - 2].slice_number ==
+                slice_number) // the left of the current macroblock pair
+                              // in the same slice
+        {
+          mb_field_decoding_flag =
+              picture.m_mbs[CurrMbAddr - 2].mb_field_decoding_flag;
+        } else if (picture.mb_y > 0 &&
+                   picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs]
+                           .slice_number ==
+                       slice_number) // above the current macroblock pair
+                                     // in the same slice
+        {
+          mb_field_decoding_flag =
+              picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs]
+                  .mb_field_decoding_flag;
+        } else {
+          mb_field_decoding_flag = 0; // is inferred to be equal to 0
+        }
+      }
+    }
+
+    picture.m_mbs[picture.CurrMbAddr].mb_field_decoding_flag =
+        mb_field_decoding_flag; // 因为解码mb_skip_flag需要事先知道mb_field_decoding_flag的值
+  }
+
+  //-------------解码mb_skip_flag-----------------------
+  if (MbaffFrameFlag && CurrMbAddr % 2 == 1 &&
+      prevMbSkipped) // 如果是bottom field macroblock
+  {
+    mb_skip_flag = mb_skip_flag_next_mb;
+  } else {
+    cabac.CABAC_decode_mb_skip_flag(picture, bs, CurrMbAddr,
+                                    mb_skip_flag); // 2 ae(v)
+  }
+
+  //------------------------------------
+  if (mb_skip_flag ==
+      1) // 表示本宏块没有残差数据，相应的像素值只需要利用之前已经解码的I/P帧来预测获得
+  {
+    picture.mb_cnt++;
+
+    if (MbaffFrameFlag) {
+      if (CurrMbAddr % 2 == 0) // 只需要处理top field macroblock
+      {
+        picture.m_mbs[picture.CurrMbAddr].mb_skip_flag =
+            mb_skip_flag; // 因为解码mb_skip_flag_next_mb需要事先知道前面顶场宏块的mb_skip_flag值
+        picture.m_mbs[picture.CurrMbAddr + 1].slice_number =
+            slice_number; // 因为解码mb_skip_flag需要事先知道slice_id的值
+        picture.m_mbs[picture.CurrMbAddr + 1].mb_field_decoding_flag =
+            mb_field_decoding_flag; // 特别注意：底场宏块和顶场宏块的mb_field_decoding_flag值是相同的
+
+        cabac.CABAC_decode_mb_skip_flag(
+            picture, bs, CurrMbAddr + 1,
+            mb_skip_flag_next_mb); // 2 ae(v) 先读取底场宏块的mb_skip_flag
+
+        if (mb_skip_flag_next_mb == 0) // 如果底场宏块mb_skip_flag=0
+        {
+          cabac.CABAC_decode_mb_field_decoding_flag(
+              picture, bs,
+              mb_field_decoding_flag); // 2 u(1) | ae(v)
+                                       // 再读取底场宏块的mb_field_decoding_flag
+
+          is_need_skip_read_mb_field_decoding_flag = true;
+        } else // if (mb_skip_flag_next_mb == 1)
+        {
+          // When MbaffFrameFlag is equal to 1 and mb_field_decoding_flag
+          // is not present for both the top and the bottom macroblock of
+          // a macroblock pair
+          if (picture.mb_x > 0 &&
+              picture.m_mbs[CurrMbAddr - 2].slice_number ==
+                  slice_number) // the left of the current macroblock pair
+                                // in the same slice
+          {
+            mb_field_decoding_flag =
+                picture.m_mbs[CurrMbAddr - 2].mb_field_decoding_flag;
+          } else if (picture.mb_y > 0 &&
+                     picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs]
+                             .slice_number ==
+                         slice_number) // above the current macroblock
+                                       // pair in the same slice
+          {
+            mb_field_decoding_flag =
+                picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs]
+                    .mb_field_decoding_flag;
+          } else {
+            mb_field_decoding_flag = 0; // is inferred to be equal to 0
+          }
+        }
+      }
+    }
+
+    //-----------------------------------------------------------------
+    //    picture.m_mbs[picture.CurrMbAddr].macroblock_layer_mb_skip(picture,
+    //    cabac); // 2 | 3 | 4
+
+    // The inter prediction process for P and B macroblocks is specified
+    // in clause 8.4 with inter prediction samples being the output.
+    picture.Inter_prediction_process(); // 帧间预测
+  }
+  return 0;
+}
+
+int Nalu::NextMbAddress(int n) {
+  int i = n + 1;
+  while (i < PicSizeInMbs && MbToSliceGroupMap[i] != MbToSliceGroupMap[n])
+    i++;
+  return i;
+}
+
+int Nalu::macroblock_layer(BitStream &bs) {
+  int is_ae = entropy_coding_mode_flag; // ae(v)表示CABAC编码
+  int mb_type = 0;
+
+  if (is_ae) // ae(v) 表示CABAC编码
+  {
+    cabac.CABAC_decode_mb_type(picture, bs, mb_type); // 2 ue(v) | ae(v)
+  } else                                              // ue(v) 表示CAVLC编码
+  {
+    mb_type = bs.readUE();
+  }
+  const int I_PCM = 25;
+  if (mb_type == I_PCM) {
+    while (!byte_aligned(bs))
+      uint8_t pcm_alignment_zero_bit = bs.readU1();
+    int32_t pcm_sample_luma[256]; // 3 u(v)
+    for (int i = 0; i < 256; i++) {
+      int32_t v = bitDepthY;
+      pcm_sample_luma[i] = bs.readUn(v); // 3 u(v)
+    }
+    for (int i = 0; i < 2 * MbWidthC * MbHeightC; i++)
+      pcm_sample_chroma[i];
+  } else {
+    noSubMbPartSizeLessThan8x8Flag = 1;
+    if (mb_type != I_NxN && MbPartPredMode(mb_type, 0) != Intra_16x16 &&
+            NumMbPart(mb_type) = = 4) {
+      sub_mb_pred(mb_type)
+
+          for (mbPartIdx = 0; mbPartIdx < 4;
+               mbPartIdx++) if (sub_mb_type[mbPartIdx] != B_Direct_8x8) {
+        if (NumSubMbPart(sub_mb_type[mbPartIdx]) > 1)
+          noSubMbPartSizeLessThan8x8Flag = 0;
+      }
+      else if (!direct_8x8_inference_flag) noSubMbPartSizeLessThan8x8Flag = 0;
+    } else {
+      if (transform_8x8_mode_flag &&mb_type = = I_NxN)
+        transform_size_8x8_flag;
+      mb_pred(mb_type);
+    }
+    if (MbPartPredMode(mb_type, 0) != Intra_16x16) {
+      coded_block_pattern;
+      if (CodedBlockPatternLuma > 0 && transform_8x8_mode_flag &&
+          mb_type != I_NxN && noSubMbPartSizeLessThan8x8Flag &&
+          (mb_type != B_Direct_16x16 | | direct_8x8_inference_flag))
+        transform_size_8x8_flag;
+    }
+    if (CodedBlockPatternLuma > 0 | | CodedBlockPatternChroma > 0 | |
+            MbPartPredMode(mb_type, 0) = = Intra_16x16) {
+      // mb_qp_delta;
+      residual(0, 15);
+    }
+  }
 }
