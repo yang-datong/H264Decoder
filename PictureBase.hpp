@@ -1,6 +1,7 @@
 #ifndef PICTUREBASE_HPP_ZGHBMJIH
 #define PICTUREBASE_HPP_ZGHBMJIH
 #include "MacroBlock.hpp"
+#include "Nalu.hpp"
 #include "Type.hpp"
 
 class Picture;
@@ -55,6 +56,7 @@ class PictureBase {
   int32_t memory_management_control_operation_6_flag;
   H264_PICTURE_MARKED_AS reference_marked_type; // I,P作为参考帧的mark状态
 
+  Nalu nalu;
   // SliceHeader m_h264_slice_header;
   // SliceData m_h264_slice_data; // 注意：一个picture中可能有多个slice data
   MacroBlock *m_mbs; // 存储当前图像的所有宏块 m_mbs[PicSizeInMbs] =
@@ -77,11 +79,7 @@ class PictureBase {
   int32_t m_PicNumCnt;         // 图片递增计数
 
  public:
-  PictureBase();
-  ~PictureBase();
-
   int printInfo();
-
   int reset();
   //  int init(SliceHeader &slice_header);
   int unInit();

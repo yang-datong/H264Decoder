@@ -1,6 +1,26 @@
 #ifndef TYPE_HPP_TPOWA9WD
 #define TYPE_HPP_TPOWA9WD
 
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
+// Ceil( x ) the smallest integer greater than or equal to x.
+#define CEIL(x) (int(x))
+
+#define CLIP(x, low, high)                                                     \
+  (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
+#define CLIP3(x, y, z) (((z) < (x)) ? (x) : (((z) > (y)) ? (y) : (z)))
+#define ROUND(x) ((int)((x) + 0.5))
+#define ABS(x) ((int)(((x) >= (0)) ? (x) : (-(x))))
+#define RETURN_IF_FAILED(condition, ret)                                       \
+  do {                                                                         \
+    if (condition) {                                                           \
+      printf("%s(%d): %s: Error: ret=%d;\n", __FILE__, __LINE__, __FUNCTION__, \
+             ret);                                                             \
+      return ret;                                                              \
+    }                                                                          \
+  } while (0)
+
 #include <array>
 #include <bitset>
 #include <cctype>
@@ -281,5 +301,28 @@ typedef enum _H264_SLIECE_TYPE_ {
   H264_SLIECE_TYPE_SP2 = 8,
   H264_SLIECE_TYPE_SI2 = 9,
 } H264_SLIECE_TYPE;
+
+//宏块残差幅值类型
+typedef enum _MB_RESIDUAL_LEVEL_ {
+  MB_RESIDUAL_UNKOWN = -1,
+  MB_RESIDUAL_Intra16x16DCLevel = 0,
+  MB_RESIDUAL_Intra16x16ACLevel = 1,
+  MB_RESIDUAL_LumaLevel4x4 = 2,
+  MB_RESIDUAL_ChromaDCLevel = 3,
+  MB_RESIDUAL_ChromaACLevel = 4,
+  MB_RESIDUAL_LumaLevel8x8 = 5,
+  MB_RESIDUAL_CbIntra16x16DCLevel = 6,
+  MB_RESIDUAL_CbIntra16x16ACLevel = 7,
+  MB_RESIDUAL_CbLevel4x4 = 8,
+  MB_RESIDUAL_CbLevel8x8 = 9,
+  MB_RESIDUAL_CrIntra16x16DCLevel = 10,
+  MB_RESIDUAL_CrIntra16x16ACLevel = 11,
+  MB_RESIDUAL_CrLevel4x4 = 12,
+  MB_RESIDUAL_CrLevel8x8 = 13,
+  MB_RESIDUAL_ChromaDCLevelCb = 14,
+  MB_RESIDUAL_ChromaDCLevelCr = 15,
+  MB_RESIDUAL_ChromaACLevelCb = 16,
+  MB_RESIDUAL_ChromaACLevelCr = 17,
+} MB_RESIDUAL_LEVEL;
 
 #endif /* end of include guard: TYPE_HPP_TPOWA9WD */

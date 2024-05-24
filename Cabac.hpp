@@ -1,10 +1,20 @@
 #ifndef CABAC_HPP_HDEGT4YP
 #define CABAC_HPP_HDEGT4YP
 #include "BitStream.hpp"
+#include "Common.hpp"
 #include "PictureBase.hpp"
 #include "Type.hpp"
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-class Cabac {
+class PictureBase;
+
+//------------------------------------------------------------
+// Context-Based Adaptive Binary Arithmetic Coding (CABAC)
+//基于上下文自适应二进制算术熵编码
+class CH264Cabac {
  public:
   int32_t m_codIRange;
   int32_t m_codIOffset;
@@ -13,8 +23,8 @@ class Cabac {
   int32_t m_valMPSs[1024];
 
  public:
-  Cabac();
-  ~Cabac();
+  CH264Cabac();
+  ~CH264Cabac();
 
   int get_m_and_n(int32_t ctxIdx, H264_SLIECE_TYPE slice_type,
                   int32_t cabac_init_idc, int32_t &m, int32_t &n);
@@ -22,8 +32,8 @@ class Cabac {
   int Initialisation_process_for_context_variables(H264_SLIECE_TYPE slice_type,
                                                    int32_t cabac_init_idc,
                                                    int32_t SliceQPY); // 9.3.1.1
-  //  int Initialisation_process_for_the_arithmetic_decoding_engine(
-  //      BitStream &bs); // 9.3.1.2
+  int Initialisation_process_for_the_arithmetic_decoding_engine(
+      BitStream &bs); // 9.3.1.2
 
   int Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_skip_flag(
       PictureBase &picture, int32_t _CurrMbAddr,
@@ -101,37 +111,32 @@ class Cabac {
                                           int32_t &synElVal);
   int CABAC_decode_coded_block_pattern(PictureBase &picture, BitStream &bs,
                                        int32_t &synElVal);
-  // int CABAC_decode_coded_block_flag(PictureBase &picture, BitStream &bs,
-  //                                   MB_RESIDUAL_LEVEL mb_block_level,
-  //                                   int32_t BlkIdx, int32_t iCbCr,
-  //                                   int32_t &synElVal);
-  // int CABAC_decode_significant_coeff_flag(PictureBase &picture, BitStream
-  // &bs,
-  //                                         MB_RESIDUAL_LEVEL mb_block_level,
-  //                                         int32_t levelListIdx,
-  //                                         int32_t last_flag, int32_t
-  //                                         &synElVal);
-  // int CABAC_decode_coeff_abs_level_minus1(PictureBase &picture, BitStream
-  // &bs,
-  //                                         MB_RESIDUAL_LEVEL mb_block_level,
-  //                                         int32_t numDecodAbsLevelEq1,
-  //                                         int32_t numDecodAbsLevelGt1,
-  //                                         int32_t &synElVal);
+  int CABAC_decode_coded_block_flag(PictureBase &picture, BitStream &bs,
+                                    MB_RESIDUAL_LEVEL mb_block_level,
+                                    int32_t BlkIdx, int32_t iCbCr,
+                                    int32_t &synElVal);
+  int CABAC_decode_significant_coeff_flag(PictureBase &picture, BitStream &bs,
+                                          MB_RESIDUAL_LEVEL mb_block_level,
+                                          int32_t levelListIdx,
+                                          int32_t last_flag, int32_t &synElVal);
+  int CABAC_decode_coeff_abs_level_minus1(PictureBase &picture, BitStream &bs,
+                                          MB_RESIDUAL_LEVEL mb_block_level,
+                                          int32_t numDecodAbsLevelEq1,
+                                          int32_t numDecodAbsLevelGt1,
+                                          int32_t &synElVal);
   int CABAC_decode_coeff_sign_flag(PictureBase &picture, BitStream &bs,
                                    int32_t &synElVal);
   int CABAC_decode_end_of_slice_flag(PictureBase &picture, BitStream &bs,
                                      int32_t &synElVal);
-  int CABAC_decode_end_of_slice_flag(PictureBase &picture, int32_t &synElVal);
-  //  int CABAC_decode_transform_size_8x8_flag(PictureBase &picture,
-  //  BitStream &bs,
-  //                                           int32_t &synElVal);
-  //
-  //  //------------------------------------
-  //  int residual_block_cabac(PictureBase &picture, BitStream &bs,
-  //                           int32_t coeffLevel[], int32_t startIdx,
-  //                           int32_t endIdx, int32_t maxNumCoeff,
-  //                           MB_RESIDUAL_LEVEL mb_block_level, int32_t
-  //                           BlkIdx, int32_t iCbCr, int32_t &TotalCoeff);
+  int CABAC_decode_transform_size_8x8_flag(PictureBase &picture, BitStream &bs,
+                                           int32_t &synElVal);
+
+  //------------------------------------
+  int residual_block_cabac(PictureBase &picture, BitStream &bs,
+                           int32_t coeffLevel[], int32_t startIdx,
+                           int32_t endIdx, int32_t maxNumCoeff,
+                           MB_RESIDUAL_LEVEL mb_block_level, int32_t BlkIdx,
+                           int32_t iCbCr, int32_t &TotalCoeff);
 };
 
 #endif /* end of include guard: CABAC_HPP_HDEGT4YP */

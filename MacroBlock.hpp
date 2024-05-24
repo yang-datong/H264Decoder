@@ -4,7 +4,9 @@
 #include "PictureBase.hpp"
 #include "Type.hpp"
 
-class MacroBlock {
+class CH264PictureBase;
+
+class CH264MacroBlock {
  public:
   int32_t mb_type;                 // 2 ue(v) | ae(v)
   int32_t pcm_alignment_zero_bit;  // 3 f(1)
@@ -140,8 +142,8 @@ class MacroBlock {
   int32_t m_mb_position_y; //本宏块的左上角像素，相对于整张图片左上角像素的y坐标
 
  public:
-  MacroBlock();
-  ~MacroBlock();
+  CH264MacroBlock();
+  ~CH264MacroBlock();
 
   int printInfo();
 
@@ -172,26 +174,25 @@ class MacroBlock {
 
   inline int set_mb_type_X_slice_info();
 
-  //  int macroblock_layer(PictureBase &picture, const SliceData &slice_data,
-  //                       Cabac &cabac);
-  //  int macroblock_layer_mb_skip(PictureBase &picture,
-  //                               const SliceData &slice_data, Cabac &cabac);
-  //  int macroblock_layer_mb_skip(PictureBase &picture, Cabac &cabac);
-  //  int mb_pred(CBitstream &bs, PictureBase &picture, const SliceData
-  //  &slice_data,
-  //              Cabac &cabac);
-  //  int sub_mb_pred(CBitstream &bs, PictureBase &picture,
-  //                  const SliceData &slice_data, Cabac &cabac);
-  //
-  //  int residual(CBitstream &bs, PictureBase &picture, int32_t startIdx,
-  //               int32_t endIdx, Cabac &cabac);
-  //  int residual_luma(CBitstream &bs, PictureBase &picture,
-  //                    int32_t (&i16x16DClevel)[16],
-  //                    int32_t (&i16x16AClevel)[16][16],
-  //                    int32_t (&level4x4)[16][16], int32_t (&level8x8)[4][64],
-  //                    int32_t startIdx, int32_t endIdx,
-  //                    MB_RESIDUAL_LEVEL mb_residual_level_dc,
-  //                    MB_RESIDUAL_LEVEL mb_residual_level_ac, Cabac &cabac);
+  // int macroblock_layer(BitStream &bs, CH264PictureBase &picture,
+  //                      const CH264SliceData &slice_data, CH264Cabac &cabac);
+  // int macroblock_layer_mb_skip(CH264PictureBase &picture,
+  //                              const CH264SliceData &slice_data,
+  //                              CH264Cabac &cabac);
+  // int mb_pred(BitStream &bs, CH264PictureBase &picture,
+  //             const CH264SliceData &slice_data, CH264Cabac &cabac);
+  // int sub_mb_pred(BitStream &bs, CH264PictureBase &picture,
+  //                 const CH264SliceData &slice_data, CH264Cabac &cabac);
+
+  int residual(BitStream &bs, CH264PictureBase &picture, int32_t startIdx,
+               int32_t endIdx, CH264Cabac &cabac);
+  int residual_luma(BitStream &bs, CH264PictureBase &picture,
+                    int32_t (&i16x16DClevel)[16],
+                    int32_t (&i16x16AClevel)[16][16],
+                    int32_t (&level4x4)[16][16], int32_t (&level8x8)[4][64],
+                    int32_t startIdx, int32_t endIdx,
+                    MB_RESIDUAL_LEVEL mb_residual_level_dc,
+                    MB_RESIDUAL_LEVEL mb_residual_level_ac, CH264Cabac &cabac);
 };
 
 #endif /* end of include guard: MACROBLOCK_HPP_FBNXLFQV */

@@ -179,12 +179,12 @@ int Nalu::extractSPSparameters(RBSP &sps) {
   int32_t *offset_for_ref_frame = nullptr;
 
   if (pic_order_cnt_type == 0) {
-    uint32_t log2_max_pic_order_cnt_lsb_minus4 = bitStream.readUE();
+    log2_max_pic_order_cnt_lsb_minus4 = bitStream.readUE();
   } else if (pic_order_cnt_type == 1) {
     delta_pic_order_always_zero_flag = bitStream.readU1();
-    int32_t offset_for_non_ref_pic = bitStream.readSE();
-    int32_t offset_for_top_to_bottom_field = bitStream.readSE();
-    uint32_t num_ref_frames_in_pic_order_cnt_cycle = bitStream.readUE();
+    offset_for_non_ref_pic = bitStream.readSE();
+    offset_for_top_to_bottom_field = bitStream.readSE();
+    num_ref_frames_in_pic_order_cnt_cycle = bitStream.readUE();
     if (num_ref_frames_in_pic_order_cnt_cycle != 0)
       offset_for_ref_frame = new int32_t[num_ref_frames_in_pic_order_cnt_cycle];
     /* TODO YangJing [offset_for_ref_frame -> delete] <24-04-04 01:24:42> */
@@ -243,19 +243,16 @@ int Nalu::extractSPSparameters(RBSP &sps) {
     ChromaArrayType = 0;
 
   /* 计算位深度 */
-  bitDepthY = bit_depth_luma_minus8 + 8;
+  BitDepthY = bit_depth_luma_minus8 + 8;
   // 亮度分量的位深度
-  qpBitDepthY = bit_depth_luma_minus8 * 6;
+  QpBitDepthY = bit_depth_luma_minus8 * 6;
   // 亮度分量的量化参数步长偏移
-  bitDepthUV = bit_depth_chroma_minus8 + 8;
+  BitDepthUV = bit_depth_chroma_minus8 + 8;
   // 色度分量的位深度
-  qpBitDepthUV = bit_depth_chroma_minus8 * 6;
+  QpBitDepthUV = bit_depth_chroma_minus8 * 6;
   // 色度分量的量化参数步长偏移
 
   /* 计算色度子采样参数 */
-  /* TODO YangJing  <24-04-05 00:44:15> */
-  uint32_t MbWidthC;  //色度宏块宽度
-  uint32_t MbHeightC; //色度宏块高度
   if (chroma_format_idc == 0 || separate_colour_plane_flag == 1) {
     // 色度子采样宽度和高度均为 0。
     MbWidthC = 0;
@@ -265,21 +262,21 @@ int Nalu::extractSPSparameters(RBSP &sps) {
     if (chroma_format_idc == 3 && separate_colour_plane_flag == 1) {
       index = 4;
     }
-    int Chroma_Format = g_chroma_format_idcs[index].Chroma_Format;
-    int SubWidthC = g_chroma_format_idcs[index].SubWidthC;
-    int SubHeightC = g_chroma_format_idcs[index].SubHeightC;
-    // 根据 chroma_format_idc 查找色度格式、色度子采样宽度和色度子采样高度。
+    Chroma_Format = g_chroma_format_idcs[index].Chroma_Format;
+    SubWidthC = g_chroma_format_idcs[index].SubWidthC;
+    SubHeightC = g_chroma_format_idcs[index].SubHeightC;
+    //  根据 chroma_format_idc 查找色度格式、色度子采样宽度和色度子采样高度。
 
     MbWidthC = 16 / SubWidthC;
     MbHeightC = 16 / SubHeightC;
   }
 
   /* 计算采样宽度和比特深度 */
-  //  uint32_t picWidthInSamplesL = PicWidthInMbs * 16;
-  //  //亮度分量的采样宽度，等于宏块宽度乘以 16
-  //  uint32_t picWidthInSamplesC = PicWidthInMbs * MbWidthC;
-  //  //色度分量的采样宽度，等于宏块宽度乘以 MbWidthC。
-  //  RawMbBits = 256 * BitDepthY + 2 * MbWidthC * MbHeightC * BitDepthC;
+  uint32_t picWidthInSamplesL = PicWidthInMbs * 16;
+  //亮度分量的采样宽度，等于宏块宽度乘以 16
+  uint32_t picWidthInSamplesC = PicWidthInMbs * MbWidthC;
+  //色度分量的采样宽度，等于宏块宽度乘以 MbWidthC。
+  uint32_t RawMbBits = 256 * BitDepthY + 2 * MbWidthC * MbHeightC * BitDepthY;
 
   /* 计算最大帧号和最大图像顺序计数 LSB  in 77 page*/
   /*
@@ -292,15 +289,15 @@ The value of log2_max_frame_num_minus4 shall be in the range of 0 to
 12,inclusive.
    * */
   maxFrameNum = std::pow(log2_max_frame_num_minus4 + 4, 2);
-  //  maxPicOrderCntLsb = h264_power2(log2_max_pic_order_cnt_lsb_minus4 + 4);
+  maxPicOrderCntLsb = std::pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
 
   /* 计算预期图像顺序计数周期增量 */
-  //  if (pic_order_cnt_type == 1) {
-  //    expectedDeltaPerPicOrderCntCycle = 0;
-  //    for (i = 0; i < (int32_t)num_ref_frames_in_pic_order_cnt_cycle; i++) {
-  //      expectedDeltaPerPicOrderCntCycle += offset_for_ref_frame[i];
-  //    }
-  //  }
+  if (pic_order_cnt_type == 1) {
+    int expectedDeltaPerPicOrderCntCycle = 0;
+    for (int i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++) {
+      expectedDeltaPerPicOrderCntCycle += offset_for_ref_frame[i];
+    }
+  }
 
   return 0;
 }
@@ -1202,7 +1199,7 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp) {
     if (moreDataFlag) {
       if (MbaffFrameFlag &&
           (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
-        mb_field_decoding_flag;
+        mb_field_decoding_flag; // u(1) | ae(v)
       macroblock_layer(bitStream);
     }
     if (!entropy_coding_mode_flag)
@@ -1213,8 +1210,8 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp) {
       if (MbaffFrameFlag && CurrMbAddr % 2 == 0)
         moreDataFlag = 1;
       else {
-        cabac.CABAC_decode_end_of_slice_flag(picture,
-                                             end_of_slice_flag); // 2 ae(v)
+        cabac.CABAC_decode_end_of_slice_flag(picture, end_of_slice_flag); // 2
+        //                                             ae(v)
         moreDataFlag = !end_of_slice_flag;
       }
     }
@@ -1308,12 +1305,13 @@ int Nalu::set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
 
         if (mb_skip_flag_next_mb == 0) // 如果底场宏块mb_skip_flag=0
         {
-          cabac.CABAC_decode_mb_field_decoding_flag(
-              picture, bs,
-              mb_field_decoding_flag); // 2 u(1) | ae(v)
-                                       // 再读取底场宏块的mb_field_decoding_flag
-
-          is_need_skip_read_mb_field_decoding_flag = true;
+          //          cabac.CABAC_decode_mb_field_decoding_flag(
+          //              picture, bs,
+          //              mb_field_decoding_flag); // 2 u(1) | ae(v)
+          //                                       //
+          //                                       再读取底场宏块的mb_field_decoding_flag
+          //
+          //          is_need_skip_read_mb_field_decoding_flag = true;
         } else // if (mb_skip_flag_next_mb == 1)
         {
           // When MbaffFrameFlag is equal to 1 and mb_field_decoding_flag
@@ -1377,39 +1375,39 @@ int Nalu::macroblock_layer(BitStream &bs) {
       uint8_t pcm_alignment_zero_bit = bs.readU1();
     int32_t pcm_sample_luma[256]; // 3 u(v)
     for (int i = 0; i < 256; i++) {
-      int32_t v = bitDepthY;
+      int32_t v = BitDepthY;
       pcm_sample_luma[i] = bs.readUn(v); // 3 u(v)
     }
     for (int i = 0; i < 2 * MbWidthC * MbHeightC; i++)
-      pcm_sample_chroma[i];
+      pcm_sample_chroma[i] = bs.readUn(BitDepthUV);
   } else {
-    noSubMbPartSizeLessThan8x8Flag = 1;
-    if (mb_type != I_NxN && MbPartPredMode(mb_type, 0) != Intra_16x16 &&
-            NumMbPart(mb_type) = = 4) {
-      sub_mb_pred(mb_type)
-
-          for (mbPartIdx = 0; mbPartIdx < 4;
-               mbPartIdx++) if (sub_mb_type[mbPartIdx] != B_Direct_8x8) {
-        if (NumSubMbPart(sub_mb_type[mbPartIdx]) > 1)
-          noSubMbPartSizeLessThan8x8Flag = 0;
-      }
-      else if (!direct_8x8_inference_flag) noSubMbPartSizeLessThan8x8Flag = 0;
-    } else {
-      if (transform_8x8_mode_flag &&mb_type = = I_NxN)
-        transform_size_8x8_flag;
-      mb_pred(mb_type);
-    }
-    if (MbPartPredMode(mb_type, 0) != Intra_16x16) {
-      coded_block_pattern;
-      if (CodedBlockPatternLuma > 0 && transform_8x8_mode_flag &&
-          mb_type != I_NxN && noSubMbPartSizeLessThan8x8Flag &&
-          (mb_type != B_Direct_16x16 | | direct_8x8_inference_flag))
-        transform_size_8x8_flag;
-    }
-    if (CodedBlockPatternLuma > 0 | | CodedBlockPatternChroma > 0 | |
-            MbPartPredMode(mb_type, 0) = = Intra_16x16) {
-      // mb_qp_delta;
-      residual(0, 15);
-    }
+    bool noSubMbPartSizeLessThan8x8Flag = 1;
+    //    if (mb_type != I_NxN && MbPartPredMode(mb_type, 0) != Intra_16x16 &&
+    //        NumMbPart(mb_type) == 4) {
+    //      sub_mb_pred(mb_type);
+    //
+    //      for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++)
+    //        if (sub_mb_type[mbPartIdx] != B_Direct_8x8) {
+    //          if (NumSubMbPart(sub_mb_type[mbPartIdx]) > 1)
+    //            noSubMbPartSizeLessThan8x8Flag = 0;
+    //        } else if (!direct_8x8_inference_flag)
+    //          noSubMbPartSizeLessThan8x8Flag = 0;
+    //    } else {
+    //      if (transform_8x8_mode_flag &&mb_type = = I_NxN)
+    //        transform_size_8x8_flag;
+    //      mb_pred(mb_type);
+    //    }
+    //    if (MbPartPredMode(mb_type, 0) != Intra_16x16) {
+    //      coded_block_pattern;
+    //      if (CodedBlockPatternLuma > 0 && transform_8x8_mode_flag &&
+    //          mb_type != I_NxN && noSubMbPartSizeLessThan8x8Flag &&
+    //          (mb_type != B_Direct_16x16 | | direct_8x8_inference_flag))
+    //        transform_size_8x8_flag;
+    //    }
+    //    if (CodedBlockPatternLuma > 0 | | CodedBlockPatternChroma > 0 | |
+    //            MbPartPredMode(mb_type, 0) = = Intra_16x16) {
+    //      // mb_qp_delta;
+    //      residual(0, 15);
+    //    }
   }
 }
