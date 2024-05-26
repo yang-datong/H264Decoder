@@ -8,8 +8,10 @@ project(project_name)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w -g -O0 -ggdb")
 
-
-include_directories(./include)
+ 
+# Specify header file directory
+include_directories(include)
+ 
 
 # Find all source files in the current directory
 aux_source_directory(. SOURCES)

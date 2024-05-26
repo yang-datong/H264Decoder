@@ -417,6 +417,7 @@ int CH264SliceHeader::slice_header(CBitstream &bs, const CH264NalUnit &nal_unit,
     }
   }
 
+  //----------- 下面都是一些需要进行额外计算的（文档都有需要自己找）------------
   SliceGroupChangeRate = m_pps.slice_group_change_rate_minus1 + 1;
 
   if (m_pps.num_slice_groups_minus1 > 0 && m_pps.slice_group_map_type >= 3 &&

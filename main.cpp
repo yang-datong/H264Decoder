@@ -60,7 +60,7 @@ int main() {
         /* 11-1. 解码立即刷新帧 GOP[0] */
         std::cout << "IDR -> {" << std::endl;
         nalu.extractIDRparameters(rbsp);
-        nalu.decode(rbsp);
+        // nalu.decode(rbsp);
         std::cout << " }" << std::endl;
         break;
       case 6: /* SEI(VCL) */

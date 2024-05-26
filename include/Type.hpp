@@ -325,4 +325,23 @@ typedef enum _MB_RESIDUAL_LEVEL_ {
   MB_RESIDUAL_ChromaACLevelCr = 17,
 } MB_RESIDUAL_LEVEL;
 
+enum H264_SLICE_TYPE { SLICE_P = 0, SLICE_B, SLICE_I, SLICE_SP, SLICE_SI };
+
+struct CHROMA_FORMAT_IDC_T {
+  int32_t chroma_format_idc;
+  int32_t separate_colour_plane_flag;
+  int32_t Chroma_Format;
+  int32_t SubWidthC;
+  int32_t SubHeightC;
+};
+
+#define NA -1
+#define MB_WIDTH 16
+#define MB_HEIGHT 16
+
+#define MONOCHROME 0 //黑白图像
+#define CHROMA_FORMAT_IDC_420 1
+#define CHROMA_FORMAT_IDC_422 2
+#define CHROMA_FORMAT_IDC_444 3
+
 #endif /* end of include guard: TYPE_HPP_TPOWA9WD */

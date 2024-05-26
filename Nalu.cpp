@@ -1,5 +1,6 @@
 #include "Nalu.hpp"
 #include "BitStream.hpp"
+#include "MacroBlock.hpp"
 #include "PictureBase.hpp"
 #include "RBSP.hpp"
 #include <cmath>
@@ -251,6 +252,15 @@ int Nalu::extractSPSparameters(RBSP &sps) {
   // 色度分量的位深度
   QpBitDepthUV = bit_depth_chroma_minus8 * 6;
   // 色度分量的量化参数步长偏移
+  //
+
+  CHROMA_FORMAT_IDC_T g_chroma_format_idcs[5] = {
+      {0, 0, MONOCHROME, NA, NA},
+      {1, 0, CHROMA_FORMAT_IDC_420, 2, 2},
+      {2, 0, CHROMA_FORMAT_IDC_422, 2, 1},
+      {3, 0, CHROMA_FORMAT_IDC_444, 1, 1},
+      {3, 1, CHROMA_FORMAT_IDC_444, NA, NA},
+  };
 
   /* 计算色度子采样参数 */
   if (chroma_format_idc == 0 || separate_colour_plane_flag == 1) {
@@ -288,7 +298,7 @@ $$
 The value of log2_max_frame_num_minus4 shall be in the range of 0 to
 12,inclusive.
    * */
-  maxFrameNum = std::pow(log2_max_frame_num_minus4 + 4, 2);
+  MaxFrameNum = std::pow(log2_max_frame_num_minus4 + 4, 2);
   maxPicOrderCntLsb = std::pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
 
   /* 计算预期图像顺序计数周期增量 */
@@ -307,9 +317,9 @@ int Nalu::extractPPSparameters(RBSP &pps) {
   /* 初始化bit处理器，填充pps的数据 */
   BitStream bitStream(pps._buf, pps._len);
 
-  uint32_t pic_parameter_set_id = bitStream.readUE();
+  pic_parameter_set_id = bitStream.readUE();
   std::cout << "\tpic_parameter_set_id:" << pic_parameter_set_id << std::endl;
-  uint32_t seq_parameter_set_id = bitStream.readUE();
+  seq_parameter_set_id = bitStream.readUE();
   std::cout << "\tseq_parameter_set_id:" << seq_parameter_set_id << std::endl;
 
   entropy_coding_mode_flag = bitStream.readUE();
@@ -341,7 +351,7 @@ int Nalu::extractPPSparameters(RBSP &pps) {
       slice_group_change_direction_flag = bitStream.readU1();
       slice_group_change_rate_minus1 = bitStream.readUE();
     } else if (slice_group_map_type == 6) {
-      uint32_t pic_size_in_map_units_minus1 = bitStream.readUE();
+      pic_size_in_map_units_minus1 = bitStream.readUE();
       std::cout << "\tpic_size_in_map_units_minus1:"
                 << pic_size_in_map_units_minus1 << std::endl;
       slice_group_id = new uint32_t[pic_size_in_map_units_minus1 + 1];
@@ -350,23 +360,23 @@ int Nalu::extractPPSparameters(RBSP &pps) {
     }
   }
 
-  uint32_t num_ref_idx_l0_default_active_minus1 = bitStream.readUE();
-  uint32_t num_ref_idx_l1_default_active_minus1 = bitStream.readUE();
+  num_ref_idx_l0_default_active_minus1 = bitStream.readUE();
+  num_ref_idx_l1_default_active_minus1 = bitStream.readUE();
   weighted_pred_flag = bitStream.readU1();
   weighted_bipred_idc = bitStream.readUn(2);
-  int32_t pic_init_qp_minus26 = bitStream.readSE();
+  pic_init_qp_minus26 = bitStream.readSE();
   std::cout << "\tpic_init_qp:" << pic_init_qp_minus26 + 26 << std::endl;
-  int32_t pic_init_qs_minus26 = bitStream.readSE();
+  pic_init_qs_minus26 = bitStream.readSE();
   std::cout << "\tpic_init_qs:" << pic_init_qs_minus26 + 26 << std::endl;
-  int32_t chroma_qp_index_offset = bitStream.readSE();
+  chroma_qp_index_offset = bitStream.readSE();
   deblocking_filter_control_present_flag = bitStream.readU1();
-  bool constrained_intra_pred_flag = bitStream.readU1();
+  constrained_intra_pred_flag = bitStream.readU1();
   redundant_pic_cnt_present_flag = bitStream.readU1();
   if (more_rbsp_data()) {
-    bool transform_8x8_mode_flag = bitStream.readU1();
+    transform_8x8_mode_flag = bitStream.readU1();
     pic_scaling_matrix_present_flag = bitStream.readU1();
     if (pic_scaling_matrix_present_flag) {
-      uint32_t maxPICScalingList =
+      maxPICScalingList =
           6 + ((chroma_format_idc != 3) ? 2 : 6) * transform_8x8_mode_flag;
       pic_scaling_list_present_flag = new uint32_t[maxPICScalingList]{0};
       for (int i = 0; i < maxPICScalingList; i++) {
@@ -381,7 +391,7 @@ int Nalu::extractPPSparameters(RBSP &pps) {
         }
       }
     }
-    int32_t second_chroma_qp_index_offset = bitStream.readSE();
+    second_chroma_qp_index_offset = bitStream.readSE();
   }
   rbsp_trailing_bits();
 
@@ -452,35 +462,33 @@ int Nalu::extractIDRparameters(RBSP &idr) {
   /* 初始化bit处理器，填充idr的数据 */
   BitStream bitStream(idr._buf, idr._len);
   parseSliceHeader(bitStream, idr);
-  // parseSliceData(bitStream, idr);
-
+  parseSliceData(bitStream, idr);
   return 0;
 }
 
 /* Slice header syntax -> 51 page */
 int Nalu::parseSliceHeader(BitStream &bitStream, RBSP &rbsp) {
   first_mb_in_slice = bitStream.readUE();
-  uint32_t slice_type = bitStream.readUE();
-  uint32_t pic_parametter_set_id = bitStream.readUE();
+  slice_type = bitStream.readUE();
+  pic_parametter_set_id = bitStream.readUE();
   if (separate_colour_plane_flag == 1)
-    uint8_t colour_plane_id = bitStream.readUn(2);
+    colour_plane_id = bitStream.readUn(2);
 
-  uint32_t frame_num = bitStream.readUn(std::log2(maxFrameNum)); // u(v)
+  frame_num = bitStream.readUn(std::log2(MaxFrameNum)); // u(v)
   if (!frame_mbs_only_flag) {
     field_pic_flag = bitStream.readU1();
     if (field_pic_flag)
-      bool bottom_field_flag = bitStream.readU1();
+      bottom_field_flag = bitStream.readU1();
   }
   IdrPicFlag = ((nal_unit_type == 5) ? 1 : 0);
   if (IdrPicFlag)
-    uint32_t idr_pic_id = bitStream.readUE();
+    idr_pic_id = bitStream.readUE();
   if (pic_order_cnt_type == 0) {
-    uint32_t pic_order_cnt_lsb = bitStream.readUn(std::log2(maxFrameNum));
+    pic_order_cnt_lsb = bitStream.readUn(std::log2(MaxFrameNum));
     if (bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
-      int32_t delta_pic_order_cnt_bottom = bitStream.readSE();
+      delta_pic_order_cnt_bottom = bitStream.readSE();
   }
 
-  int32_t delta_pic_order_cnt[2] = {0};
   if (pic_order_cnt_type == 1 && !delta_pic_order_always_zero_flag) {
     delta_pic_order_cnt[0] = bitStream.readSE();
     if (bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
@@ -488,12 +496,12 @@ int Nalu::parseSliceHeader(BitStream &bitStream, RBSP &rbsp) {
   }
 
   if (redundant_pic_cnt_present_flag)
-    uint32_t redundant_pic_cnt = bitStream.readUE();
+    redundant_pic_cnt = bitStream.readUE();
   if (slice_type % 5 == SLICE_B)
-    bool direct_spatial_mv_pred_flag = bitStream.readU1();
+    direct_spatial_mv_pred_flag = bitStream.readU1();
   if (slice_type % 5 == SLICE_P || slice_type % 5 == SLICE_SP ||
       slice_type % 5 == SLICE_B) {
-    bool num_ref_idx_active_override_flag = bitStream.readU1();
+    num_ref_idx_active_override_flag = bitStream.readU1();
     if (num_ref_idx_active_override_flag) {
       num_ref_idx_l0_active_minus1 = bitStream.readUE();
       if (slice_type % 5 == SLICE_B)
@@ -512,18 +520,18 @@ int Nalu::parseSliceHeader(BitStream &bitStream, RBSP &rbsp) {
     dec_ref_pic_marking(bitStream);
   if (entropy_coding_mode_flag && slice_type % 5 != SLICE_I &&
       slice_type % 5 != SLICE_SI)
-    uint32_t cabac_init_idc = bitStream.readUE();
-  int32_t slice_qp_delta = bitStream.readSE();
+    cabac_init_idc = bitStream.readUE();
+  slice_qp_delta = bitStream.readSE();
   if (slice_type % 5 == SLICE_SP || slice_type % 5 == SLICE_SI) {
     if (slice_type % 5 == SLICE_SP)
-      bool sp_for_switch_flag = bitStream.readU1();
-    int32_t slice_qs_delta = bitStream.readSE();
+      sp_for_switch_flag = bitStream.readU1();
+    slice_qs_delta = bitStream.readSE();
   }
   if (deblocking_filter_control_present_flag) {
-    uint32_t disable_deblocking_filter_idc = bitStream.readUE();
+    disable_deblocking_filter_idc = bitStream.readUE();
     if (disable_deblocking_filter_idc != 1) {
-      int32_t slice_alpha_c0_offset_div2 = bitStream.readSE();
-      int32_t slice_beta_offset_div2 = bitStream.readSE();
+      slice_alpha_c0_offset_div2 = bitStream.readSE();
+      slice_beta_offset_div2 = bitStream.readSE();
     }
   }
   if (num_slice_groups_minus1 > 0 && slice_group_map_type >= 3 &&
@@ -550,11 +558,28 @@ int Nalu::parseSliceHeader(BitStream &bitStream, RBSP &rbsp) {
 
   //----------- 下面都是一些需要进行额外计算的（文档都有需要自己找）------------
   int SliceGroupChangeRate = slice_group_change_rate_minus1 + 1;
+  if (num_slice_groups_minus1 > 0 && slice_group_map_type >= 3 &&
+      slice_group_map_type <= 5) {
+    int32_t temp = PicSizeInMapUnits / SliceGroupChangeRate + 1;
+    int32_t v = h264_log2(
+        temp); // Ceil( Log2( PicSizeInMapUnits ÷ SliceGroupChangeRate + 1 ) );
+    slice_group_change_cycle = bitStream.readUn(v); // 2 u(v)
+  }
+
+  SliceQPY = 26 + pic_init_qp_minus26 + slice_qp_delta;
+  QPY_prev = SliceQPY;
   MbaffFrameFlag = (mb_adaptive_frame_field_flag && !field_pic_flag);
   PicHeightInMbs = frameHeightInMbs / (1 + field_pic_flag);
+  PicHeightInSamplesL = PicHeightInMbs * 16;
+  PicHeightInSamplesC = PicHeightInMbs * MbHeightC;
   PicSizeInMbs = PicWidthInMbs * PicHeightInMbs;
-  MapUnitsInSliceGroup0 = std::min(
-      slice_group_change_cycle * SliceGroupChangeRate, PicSizeInMapUnits);
+  MaxPicNum = (field_pic_flag == 0) ? MaxFrameNum : (2 * MaxFrameNum);
+  CurrPicNum = (field_pic_flag == 0) ? frame_num : (2 * frame_num + 1);
+  MapUnitsInSliceGroup0 =
+      MIN(slice_group_change_cycle * SliceGroupChangeRate, PicSizeInMapUnits);
+  QSY = 26 + pic_init_qs_minus26 + slice_qs_delta;
+  FilterOffsetA = slice_alpha_c0_offset_div2 << 1;
+  FilterOffsetB = slice_beta_offset_div2 << 1;
 
   if (!mapUnitToSliceGroupMap) {
     mapUnitToSliceGroupMap = new int32_t[PicSizeInMapUnits]{0};
@@ -570,7 +595,7 @@ int Nalu::parseSliceHeader(BitStream &bitStream, RBSP &rbsp) {
 
   set_scaling_lists_values();
 
-  // m_is_malloc_mem_self = 1;
+  m_is_malloc_mem_self = 1;
   return 0;
 }
 
@@ -1170,53 +1195,155 @@ void Nalu::rbsp_trailing_bits() { /* TODO YangJing  <24-04-07 21:55:36> */
 int Nalu::decode(RBSP &rbsp) {
   /* 初始化bit处理器，填充sps的数据 */
   BitStream bitStream(rbsp._buf, rbsp._len);
-  parseSliceData(bitStream, rbsp);
+
+  // m_picture_frame.m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
+  //   m_picture_frame.m_parent = this;
+
+  //  memcpy(m_picture_frame.m_dpb, dpb, sizeof(Picture *) * size_pdb);
+  //
+  //  m_current_picture_ptr = &m_picture_frame;
+  //
+  //  ret = m_picture_frame.init(slice_header);
+  //  parseSliceData(bitStream, rbsp, rbsp);
   return 0;
 }
 
 /* Rec. ITU-T H.264 (08/2021) 56 */
 int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp) {
+
+  /* CABAC编码 */
   if (entropy_coding_mode_flag) {
+    std::cout << "CABAC编码" << std::endl;
     while (!byte_aligned(bitStream))
       cabac_alignment_one_bit = bitStream.readU1();
+
+    //    ret = cabac.Initialisation_process_for_context_variables(
+    //        (H264_SLIECE_TYPE)slice_header.slice_type,
+    //        slice_header.cabac_init_idc, slice_header.SliceQPY); //
+    //        cabac初始化环境变量
+    //
+    //    ret = cabac.Initialisation_process_for_the_arithmetic_decoding_engine(
+    //        bs); // cabac初始化解码引擎
   }
+
+  if (MbaffFrameFlag == 0) {
+    mb_field_decoding_flag = field_pic_flag;
+  }
+
   CurrMbAddr = first_mb_in_slice * (1 + MbaffFrameFlag);
+  PictureBase picture;
   picture.CurrMbAddr = CurrMbAddr;
+
+  if (picture.m_slice_cnt == 0) {
+    std::cout << "hi~" << std::endl;
+    exit(0);
+    /* TODO YangJing 解码POC <24-05-26 15:36:41> */
+    /* TODO YangJing 场帧或场宏块 <24-05-26 15:36:41> */
+    /* TODO YangJing 暂时没有进 <24-05-26 15:36:41> */
+  }
+
+  picture.m_slice_cnt++;
+
+  //-------------------------------
+  bool is_need_skip_read_mb_field_decoding_flag = false;
 
   do {
     if (slice_type != SLICE_I && slice_type != SLICE_SI)
       if (!entropy_coding_mode_flag) {
         uint32_t mb_skip_run = bitStream.readUE();
         prevMbSkipped = (mb_skip_run > 0);
-        for (int i = 0; i < mb_skip_run; i++)
-          CurrMbAddr = NextMbAddress(CurrMbAddr);
-        if (mb_skip_run > 0)
+        for (int i = 0; i < mb_skip_run; i++) {
+          // CurrMbAddr = NextMbAddress(CurrMbAddr);
+          /* TODO 没进YangJing  <24-05-26 15:45:56> */
+        }
+        if (mb_skip_run > 0) {
+          /* TODO YangJing 没进 <24-05-26 15:46:35> */
           moreDataFlag = more_rbsp_data();
+        }
       } else {
-        set_mb_skip_flag(mb_skip_flag, picture, bitStream);
-        moreDataFlag = !mb_skip_flag;
+        /* CABAC编码 */
+        /* TODO YangJing 没进 <24-05-26 15:41:57> */
+        // set_mb_skip_flag(mb_skip_flag, picture, bitStream);
+        // moreDataFlag = !mb_skip_flag;
       }
+
     if (moreDataFlag) {
       if (MbaffFrameFlag &&
-          (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
-        mb_field_decoding_flag; // u(1) | ae(v)
-      macroblock_layer(bitStream);
-    }
-    if (!entropy_coding_mode_flag)
-      moreDataFlag = more_rbsp_data();
-    else {
-      if (slice_type != SLICE_I && slice_type != SLICE_SI)
-        prevMbSkipped = mb_skip_flag;
-      if (MbaffFrameFlag && CurrMbAddr % 2 == 0)
-        moreDataFlag = 1;
-      else {
-        cabac.CABAC_decode_end_of_slice_flag(picture, end_of_slice_flag); // 2
-        //                                             ae(v)
-        moreDataFlag = !end_of_slice_flag;
+          (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped))) {
+        /* 表示本宏块是属于一个宏块对中的一 */
+        /* TODO YangJing 没进 <24-05-26 15:49:00> */
       }
+
+      /* TODO YangJing 这里是我自己偷懒写的 <24-05-26 15:56:31> */
+      picture.PicWidthInMbs = PicWidthInMbs;
+      //----------
+
+      //----------------------------
+      picture.mb_x =
+          (CurrMbAddr % (picture.PicWidthInMbs * (1 + MbaffFrameFlag))) /
+          (1 + MbaffFrameFlag);
+      picture.mb_y =
+          (CurrMbAddr / (picture.PicWidthInMbs * (1 + MbaffFrameFlag)) *
+           (1 + MbaffFrameFlag)) +
+          ((CurrMbAddr % (picture.PicWidthInMbs * (1 + MbaffFrameFlag))) %
+           (1 + MbaffFrameFlag));
+      picture.CurrMbAddr =
+          CurrMbAddr; // picture.mb_x + picture.mb_y * picture.PicWidthInMbs;
+
+      picture.mb_cnt++;
+
+      //--------熵解码------------
+      macroblock_layer(bitStream);
+      /* TODO YangJing 这个函数还未实现 <24-05-26 15:57:54> */
+
+      //--------帧内/间预测------------
+      //--------反量化------------
+      //--------反变换------------
+
+      /* TODO YangJing 做到这里来了，需要明白picture.m_mbs是怎么填充数据的
+       * <24-05-26 16:05:29> */
+      //      if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode == Intra_4x4)
+      //      {
+      //        // 帧内预测
+      //        std::cout << 1 << std::endl;
+      //      } else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
+      //                 Intra_8x8) {
+      //        // 帧内预测
+      //        std::cout << 2 << std::endl;
+      //      } else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
+      //                 Intra_16x16) // 帧内预测
+      //      {
+      //        std::cout << 3 << std::endl;
+      //      } else if (
+      //          picture.m_mbs[picture.CurrMbAddr].m_name_of_mb_type ==
+      //          I_PCM)
+      //          //说明该宏块没有残差，也没有预测值，码流中的数据直接为原始像素值
+      //      {
+      //        std::cout << 4 << std::endl;
+      //      } else {
+      //        std::cout << 5 << std::endl;
+      //        //-------残差-----------
+      //      }
+    }
+
+    if (!entropy_coding_mode_flag) {
+      moreDataFlag = more_rbsp_data();
+    } else {
+      /* TODO YangJing 没进 <24-05-26 16:01:53> */
+      // if (slice_type != SLICE_I && slice_type != SLICE_SI)
+      //   prevMbSkipped = mb_skip_flag;
+      // if (MbaffFrameFlag && CurrMbAddr % 2 == 0)
+      //   moreDataFlag = 1;
+      // else {
+      //   moreDataFlag = !end_of_slice_flag;
+      // }
     }
     CurrMbAddr = NextMbAddress(CurrMbAddr);
   } while (moreDataFlag);
+
+  if (picture.mb_cnt == picture.PicSizeInMbs) {
+    picture.m_is_decode_finished = 1;
+  }
   return 0;
 }
 
@@ -1274,24 +1401,21 @@ int Nalu::set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
   }
 
   //-------------解码mb_skip_flag-----------------------
-  if (MbaffFrameFlag && CurrMbAddr % 2 == 1 &&
-      prevMbSkipped) // 如果是bottom field macroblock
-  {
+  if (MbaffFrameFlag && CurrMbAddr % 2 == 1 && prevMbSkipped) {
+    // 如果是bottom field macroblock
     mb_skip_flag = mb_skip_flag_next_mb;
   } else {
-    cabac.CABAC_decode_mb_skip_flag(picture, bs, CurrMbAddr,
-                                    mb_skip_flag); // 2 ae(v)
+    // cabac.CABAC_decode_mb_skip_flag(picture, bs, CurrMbAddr,
+    //                                 mb_skip_flag); // 2 ae(v)
   }
 
   //------------------------------------
-  if (mb_skip_flag ==
-      1) // 表示本宏块没有残差数据，相应的像素值只需要利用之前已经解码的I/P帧来预测获得
-  {
+  if (mb_skip_flag == 1) {
+    // 表示本宏块没有残差数据，相应的像素值只需要利用之前已经解码的I/P帧来预测获得
     picture.mb_cnt++;
-
     if (MbaffFrameFlag) {
-      if (CurrMbAddr % 2 == 0) // 只需要处理top field macroblock
-      {
+      if (CurrMbAddr % 2 == 0) {
+        // 只需要处理top field macroblock
         picture.m_mbs[picture.CurrMbAddr].mb_skip_flag =
             mb_skip_flag; // 因为解码mb_skip_flag_next_mb需要事先知道前面顶场宏块的mb_skip_flag值
         picture.m_mbs[picture.CurrMbAddr + 1].slice_number =
@@ -1299,9 +1423,9 @@ int Nalu::set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
         picture.m_mbs[picture.CurrMbAddr + 1].mb_field_decoding_flag =
             mb_field_decoding_flag; // 特别注意：底场宏块和顶场宏块的mb_field_decoding_flag值是相同的
 
-        cabac.CABAC_decode_mb_skip_flag(
-            picture, bs, CurrMbAddr + 1,
-            mb_skip_flag_next_mb); // 2 ae(v) 先读取底场宏块的mb_skip_flag
+        // cabac.CABAC_decode_mb_skip_flag(
+        //     picture, bs, CurrMbAddr + 1,
+        //     mb_skip_flag_next_mb); // 2 ae(v) 先读取底场宏块的mb_skip_flag
 
         if (mb_skip_flag_next_mb == 0) // 如果底场宏块mb_skip_flag=0
         {
@@ -1346,7 +1470,7 @@ int Nalu::set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
 
     // The inter prediction process for P and B macroblocks is specified
     // in clause 8.4 with inter prediction samples being the output.
-    picture.Inter_prediction_process(); // 帧间预测
+    // picture.Inter_prediction_process(); // 帧间预测
   }
   return 0;
 }
@@ -1364,8 +1488,8 @@ int Nalu::macroblock_layer(BitStream &bs) {
 
   if (is_ae) // ae(v) 表示CABAC编码
   {
-    cabac.CABAC_decode_mb_type(picture, bs, mb_type); // 2 ue(v) | ae(v)
-  } else                                              // ue(v) 表示CAVLC编码
+    // cabac.CABAC_decode_mb_type(picture, bs, mb_type); // 2 ue(v) | ae(v)
+  } else // ue(v) 表示CAVLC编码
   {
     mb_type = bs.readUE();
   }

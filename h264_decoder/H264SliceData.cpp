@@ -6,7 +6,8 @@
 // Date: 2019.09.01 - 2021.02.14
 //
 
-#include "H264SliceData.h"
+#include <iostream>
+
 #include "Bitstream.h"
 #include "CommonFunction.h"
 #include "H264Cabac.h"
@@ -14,6 +15,7 @@
 #include "H264Golomb.h"
 #include "H264MacroBlock.h"
 #include "H264Picture.h"
+#include "H264SliceData.h"
 
 CH264SliceData::CH264SliceData() { int ret = init(); }
 
@@ -403,10 +405,11 @@ int CH264SliceData::slice_data(CBitstream &bs, CH264PictureBase &picture,
     if (moreDataFlag) {
       // NOTE – When MbaffFrameFlag is equal to 1 and mb_field_decoding_flag is
       // not present for the top macroblock of a macroblock pair (because the
-      //top macroblock is skipped), a decoder must wait until
-      //mb_field_decoding_flag for the bottom macroblock is read (when the
-      //bottom macroblock is not skipped) or the value of mb_field_decoding_flag
-      //is inferred as specified above (when the bottom macroblock is also
+      // top macroblock is skipped), a decoder must wait until
+      // mb_field_decoding_flag for the bottom macroblock is read (when the
+      // bottom macroblock is not skipped) or the value of
+      // mb_field_decoding_flag is inferred as specified above (when the bottom
+      // macroblock is also
       // skipped) before it starts the decoding process for the top macroblock.
       if (slice_header.MbaffFrameFlag &&
           (CurrMbAddr % 2 == 0 ||
