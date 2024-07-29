@@ -2,19 +2,19 @@
 #define NALU_HPP_YDI8RPRP
 
 #include "BitStream.hpp"
-#include "Cabac.hpp"
 #include "Common.hpp"
 #include "EBSP.hpp"
+#include "IDR.hpp"
+#include "PPS.hpp"
 #include "PictureBase.hpp"
 #include "RBSP.hpp"
-#include "Type.hpp"
+#include "SPS.hpp"
+#include "Slice.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <iostream>
 #include <stdint.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/types.h>
 
 // 用于存放264中每一个单个Nalu数据
@@ -40,11 +40,11 @@ class Nalu {
   char nal_ref_idc = 0;
   char nal_unit_type = 0;
 
-  int extractSPSparameters(RBSP &sps);
-  int extractPPSparameters(RBSP &pps);
-  int extractSEIparameters(RBSP &sei);
+  int extractSPSparameters(RBSP &rbsp);
+  int extractPPSparameters(RBSP &rbsp);
+  int extractSEIparameters(RBSP &rbsp);
   int extractSliceparameters(RBSP &rbsp);
-  int extractIDRparameters(RBSP &idr);
+  int extractIDRparameters(RBSP &rbsp);
 
   int GetNaluType();
 
@@ -62,100 +62,10 @@ class Nalu {
   void hrd_parameters(BitStream &bitStream);
 
   /* SPS 参数 */
-  uint32_t chroma_format_idc = 0;
-  bool separate_colour_plane_flag = 0;
-  uint32_t bit_depth_luma_minus8 = 0;
-  uint32_t bit_depth_chroma_minus8 = 0;
-  bool frame_mbs_only_flag = 0;
-  uint32_t pic_order_cnt_type = 0;
-  bool delta_pic_order_always_zero_flag = 0;
-  uint32_t ChromaArrayType = 0;
-  bool mb_adaptive_frame_field_flag = 0;
-  uint32_t PicWidthInMbs = 0;
-  uint32_t PicHeightInMapUnits = 0;
-  uint32_t PicSizeInMapUnits = 0;
-  uint32_t frameHeightInMbs = 0;
-  bool qpprime_y_zero_transform_bypass_flag = 0;
-  bool seq_scaling_matrix_present_flag = 0;
-  bool seq_scaling_list_present_flag[12] = {false};
-  uint32_t BitDepthY = 0;
-  uint32_t QpBitDepthY = 0;
-  uint32_t BitDepthUV = 0;
-  uint32_t QpBitDepthUV = 0;
-  uint32_t MbWidthC = 0;          //色度宏块宽度
-  uint32_t MbHeightC = 0;         //色度宏块高度
-  int32_t pcm_sample_chroma[256]; // 3 u(v)
-  uint32_t log2_max_pic_order_cnt_lsb_minus4 = 0;
-  int32_t offset_for_non_ref_pic = 0;
-  int32_t offset_for_top_to_bottom_field = 0;
-  uint32_t num_ref_frames_in_pic_order_cnt_cycle = 0;
-  int Chroma_Format = 0;
-  int SubWidthC = 0;
-  int SubHeightC = 0;
-  uint32_t pic_parametter_set_id = 0;
-  uint8_t colour_plane_id = 0;
-  uint32_t frame_num = 0; // u(v)
-  bool bottom_field_flag = 0;
-  uint32_t idr_pic_id = 0;
-  uint32_t pic_order_cnt_lsb = 0;
-  int32_t delta_pic_order_cnt_bottom = 0;
-  int32_t delta_pic_order_cnt[2] = {0};
-  uint32_t redundant_pic_cnt = 0;
-  bool direct_spatial_mv_pred_flag = 0;
-  bool num_ref_idx_active_override_flag = 0;
-  uint32_t cabac_init_idc = 0;
-  int32_t slice_qp_delta = 0;
-  bool sp_for_switch_flag = 0;
-  uint32_t disable_deblocking_filter_idc = 0;
-
-  int SliceQPY = 0;
-  int QPY_prev = 0;
-  int PicHeightInSamplesL = 0;
-  int PicHeightInSamplesC = 0;
-  int MaxPicNum = 0;
-  int CurrPicNum = 0;
-  int QSY = 0;
-  int FilterOffsetA = 0;
-  int FilterOffsetB = 0;
+  SPS sps;
 
   /* PPS 参数 */
-  bool more_rbsp_data();
-  void rbsp_trailing_bits();
-  bool bottom_field_pic_order_in_frame_present_flag = 0;
-  bool redundant_pic_cnt_present_flag = 0;
-  bool weighted_pred_flag = 0;
-  uint32_t weighted_bipred_idc = 0;
-  bool entropy_coding_mode_flag = 0;
-  bool deblocking_filter_control_present_flag = 0;
-  uint32_t num_slice_groups_minus1 = 0;
-  uint32_t slice_group_map_type = 0;
-  uint32_t *run_length_minus1 = 0;
-  uint32_t *top_left = 0;
-  uint32_t *bottom_right = 0;
-  bool slice_group_change_direction_flag = 0;
-  uint32_t slice_group_change_rate_minus1 = 0;
-  uint32_t *slice_group_id = 0;
-  bool pic_scaling_matrix_present_flag = 0;
-
-  uint32_t ScalingList4x4[6][16];
-  uint32_t ScalingList8x8[6][64];
-  uint32_t UseDefaultScalingMatrix4x4Flag[6] = {0};
-  uint32_t UseDefaultScalingMatrix8x8Flag[6] = {0};
-
-  uint32_t *pic_scaling_list_present_flag = 0;
-  int32_t pic_init_qp_minus26 = 0;
-  int32_t pic_init_qs_minus26 = 0;
-
-  uint32_t pic_parameter_set_id = 0;
-  uint32_t seq_parameter_set_id = 0;
-  uint32_t pic_size_in_map_units_minus1 = 0;
-  uint32_t num_ref_idx_l0_default_active_minus1 = 0;
-  uint32_t num_ref_idx_l1_default_active_minus1 = 0;
-  int32_t chroma_qp_index_offset = 0;
-  bool constrained_intra_pred_flag = 0;
-  bool transform_8x8_mode_flag = 0;
-  uint32_t maxPICScalingList = 0;
-  int32_t second_chroma_qp_index_offset = 0;
+  PPS pps;
 
   /* SEI */
   void sei_message(BitStream &bitStream);
@@ -163,26 +73,15 @@ class Nalu {
   bool byte_aligned(BitStream &bitStream);
 
   /* Slice */
+  Slice slice;
   int parseSliceHeader(BitStream &bitStream, RBSP &rbsp);
-  int parseSliceData(BitStream &bitStream, RBSP &rbsp);
+  int parseSliceData(BitStream &bitStream, RBSP &rbsp, PictureBase &picture);
+
   void ref_pic_list_mvc_modification(BitStream &bitStream);
   void ref_pic_list_modification(BitStream &bitStream);
+
   void pred_weight_table(BitStream &bitStream);
   void dec_ref_pic_marking(BitStream &bitStream);
-  int m_is_malloc_mem_self = 0;
-  uint32_t MaxFrameNum = 0;
-  uint32_t maxPicOrderCntLsb = 0;
-  bool field_pic_flag = 0;
-  uint32_t slice_type = 0;
-  uint32_t num_ref_idx_l0_active_minus1 = 0;
-  uint32_t num_ref_idx_l1_active_minus1 = 0;
-  bool IdrPicFlag = 0;
-  uint32_t first_mb_in_slice = 0;
-  bool MbaffFrameFlag = 0;
-  int32_t *mapUnitToSliceGroupMap = nullptr;
-  int32_t *MbToSliceGroupMap = nullptr;
-  uint32_t slice_group_change_cycle = 0;
-  int MapUnitsInSliceGroup0 = 0;
 
   int setMapUnitToSliceGroupMap();
   int setMbToSliceGroupMap();
@@ -190,27 +89,40 @@ class Nalu {
   int set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
                        BitStream &bitStream);
 
-  uint32_t cabac_alignment_one_bit = 0;
-  uint32_t mb_skip_run = 0;
-  int32_t mb_skip_flag = 0;
-  int32_t end_of_slice_flag = 0;
-  uint32_t mb_field_decoding_flag = 0;
-  uint32_t slice_id = 0;
-  uint32_t slice_number = -1;
-  uint32_t CurrMbAddr = 0;
-  uint32_t syntax_element_categories = 0;
-  bool moreDataFlag = 1;
-  uint32_t prevMbSkipped = 0;
-  int32_t mb_skip_flag_next_mb = 0;
-  int32_t slice_qs_delta = 0;
-  int32_t slice_alpha_c0_offset_div2 = 0;
-  int32_t slice_beta_offset_div2 = 0;
-
   /* IDR */
+  IDR idr;
   int NextMbAddress(int n);
-  int32_t PicHeightInMbs = 0;
-  int32_t PicSizeInMbs = 0;
-  int macroblock_layer(BitStream &bs);
+  int macroblock_layer(BitStream &bs, PictureBase &picture);
+
+ public:
+  /* NOTE 以下均来自Picture */
+  PictureBase m_picture_frame;
+  PictureBase m_picture_top_filed;
+  PictureBase m_picture_bottom_filed;
+  PictureBase *
+      m_current_picture_ptr; // 指向m_picture_frame或者m_picture_top_filed或者m_picture_bottom_filed
+  PictureBase *m_picture_previous_ref; // 前一个已解码的参考图像
+  PictureBase *m_picture_previous;     // 前一个已解码的图像
+  H264_PICTURE_CODED_TYPE m_picture_coded_type; // H264_PICTURE_CODED_TYPE_FRAME
+  H264_PICTURE_CODED_TYPE
+  m_picture_coded_type_marked_as_refrence; // 整个帧或哪一场被标记为参考帧或参考场
+
+  int32_t TopFieldOrderCnt;
+  int32_t BottomFieldOrderCnt;
+  int32_t PicOrderCntMsb;
+  int32_t PicOrderCntLsb;
+  int32_t FrameNumOffset;
+  int32_t absFrameNum;
+  int32_t picOrderCntCycleCnt;
+  int32_t frameNumInPicOrderCntCycle;
+  int32_t expectedPicOrderCnt;
+  int32_t PicOrderCnt;
+  int32_t PicNum; // To each short-term reference picture 短期参考图像
+  int32_t LongTermPicNum; // To each long-term reference picture 长期参考图像
+  H264_PICTURE_MARKED_AS reference_marked_type; // I,P作为参考帧的mark状态
+  int32_t m_is_decode_finished;                 // 本帧是否解码完毕;
+                                // 0-未解码完毕，1-已经解码完毕
+  int32_t m_is_in_use; // 本帧数据是否正在使用; 0-未使用，1-正在使用
 };
 
 #endif /* end of include guard: NALU_HPP_YDI8RPRP */

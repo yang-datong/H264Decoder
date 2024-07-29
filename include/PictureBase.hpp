@@ -1,10 +1,12 @@
 #ifndef PICTUREBASE_HPP_ZGHBMJIH
 #define PICTUREBASE_HPP_ZGHBMJIH
+#include "Common.hpp"
+#include "H264SliceData.hpp"
+#include "H264SliceHeader.hpp"
 #include "MacroBlock.hpp"
-#include "Nalu.hpp"
 #include "Type.hpp"
 
-class Picture;
+class Nalu;
 
 class PictureBase {
  public:
@@ -56,8 +58,8 @@ class PictureBase {
   int32_t memory_management_control_operation_6_flag;
   H264_PICTURE_MARKED_AS reference_marked_type; // I,P作为参考帧的mark状态
 
-  // SliceHeader m_h264_slice_header;
-  // SliceData m_h264_slice_data; // 注意：一个picture中可能有多个slice data
+  CH264SliceHeader m_h264_slice_header;
+  CH264SliceData m_h264_slice_data; // 注意：一个picture中可能有多个slice data
   MacroBlock *m_mbs; // 存储当前图像的所有宏块 m_mbs[PicSizeInMbs] =
                      // m_mbs[PicWidthInMbs * PicHeightInMbs];
   int32_t LevelScale4x4[6][4][4];
@@ -69,18 +71,20 @@ class PictureBase {
   int32_t m_is_decode_finished;      // 本帧/场是否解码完毕
   int32_t m_slice_cnt; // 一个picture中可能有多个slice data
 
-  Picture *m_dpb[16]; //[16] decoded picture buffer
-  Picture *m_parent;
-  Picture *m_RefPicList0[16];  //[16] decoding a P or SP slice;
-  Picture *m_RefPicList1[16];  //[16] decoding a B slice;
+  Nalu *m_dpb[16]; //[16] decoded picture buffer
+  Nalu *m_parent;
+  Nalu *m_RefPicList0[16];     //[16] decoding a P or SP slice;
+  Nalu *m_RefPicList1[16];     //[16] decoding a B slice;
   int32_t m_RefPicList0Length; // RefPicList0排序后的参考图像数目
   int32_t m_RefPicList1Length; // RefPicList1排序后的参考图像数目
   int32_t m_PicNumCnt;         // 图片递增计数
 
  public:
+  PictureBase();
+  ~PictureBase();
   int printInfo();
   int reset();
-  //  int init(SliceHeader &slice_header);
+  int init(CH264SliceHeader &slice_header);
   int unInit();
   PictureBase &operator=(const PictureBase &src); // 重载等号运算符
   int copyData(const PictureBase &src, bool isMallocAndCopyData);
@@ -99,9 +103,9 @@ class PictureBase {
   int saveToBmpFile(const char *filename);
   int saveBmp(const char *filename, MY_BITMAP *pBitmap);
   int writeYUV(const char *filename);
-  int getOneEmptyPicture(Picture *&pic);
+  int getOneEmptyPicture(Nalu *&pic);
   int end_decode_the_picture_and_get_a_new_empty_picture(
-      Picture *&newEmptyPicture);
+      Nalu *&newEmptyPicture);
 
   //--------------参考帧列表重排序------------------------
   int Decoding_process_for_picture_order_count();
@@ -113,55 +117,54 @@ class PictureBase {
       const PictureBase *picture_previous); // 8.2.1.3
 
   int Decoding_process_for_reference_picture_lists_construction(
-      Picture *(&dpb)[16], Picture *(&RefPicList0)[16],
-      Picture *(&RefPicList1)[16]); // 8.2.4 参考图像列表的重排序过程
-  int Decoding_process_for_picture_numbers(Picture *(&dpb)[16]); // 8.2.4.1
+      Nalu *(&dpb)[16], Nalu *(&RefPicList0)[16],
+      Nalu *(&RefPicList1)[16]); // 8.2.4 参考图像列表的重排序过程
+  int Decoding_process_for_picture_numbers(Nalu *(&dpb)[16]); // 8.2.4.1
 
   int Initialisation_process_for_reference_picture_lists(
-      Picture *(&dpb)[16], Picture *(&RefPicList0)[16],
-      Picture *(&RefPicList1)[16]); // 8.2.4.2
+      Nalu *(&dpb)[16], Nalu *(&RefPicList0)[16],
+      Nalu *(&RefPicList1)[16]); // 8.2.4.2
   int Initialisation_process_for_the_reference_picture_list_for_P_and_SP_slices_in_frames(
-      Picture *(&dpb)[16], Picture *(&RefPicList0)[16],
+      Nalu *(&dpb)[16], Nalu *(&RefPicList0)[16],
       int32_t &RefPicList0Length); // 8.2.4.2.1
   int Initialisation_process_for_the_reference_picture_list_for_P_and_SP_slices_in_fields(
-      Picture *(&dpb)[16], Picture *(&RefPicList0)[16],
+      Nalu *(&dpb)[16], Nalu *(&RefPicList0)[16],
       int32_t &RefPicList0Length); // 8.2.4.2.2
   int Initialisation_process_for_reference_picture_lists_for_B_slices_in_frames(
-      Picture *(&dpb)[16], Picture *(&RefPicList0)[16],
-      Picture *(&RefPicList1)[16], int32_t &RefPicList0Length,
+      Nalu *(&dpb)[16], Nalu *(&RefPicList0)[16], Nalu *(&RefPicList1)[16],
+      int32_t &RefPicList0Length,
       int32_t &RefPicList1Length); // 8.2.4.2.3
   int Initialisation_process_for_reference_picture_lists_for_B_slices_in_fields(
-      Picture *(&dpb)[16], Picture *(&RefPicList0)[16],
-      Picture *(&RefPicList1)[16], int32_t &RefPicList0Length,
+      Nalu *(&dpb)[16], Nalu *(&RefPicList0)[16], Nalu *(&RefPicList1)[16],
+      int32_t &RefPicList0Length,
       int32_t &RefPicList1Length); // 8.2.4.2.4
   int Initialisation_process_for_reference_picture_lists_in_fields(
-      Picture *(&refFrameListXShortTerm)[16],
-      Picture *(&refFrameListXLongTerm)[16], Picture *(&RefPicListX)[16],
-      int32_t &RefPicListXLength,
+      Nalu *(&refFrameListXShortTerm)[16], Nalu *(&refFrameListXLongTerm)[16],
+      Nalu *(&RefPicListX)[16], int32_t &RefPicListXLength,
       int32_t listX); // 8.2.4.2.5
 
   int Modification_process_for_reference_picture_lists(
-      Picture *(&RefPicList0)[16],
-      Picture *(&RefPicList1)[16]); // 8.2.4.3 参考图像列表的重排序过程
+      Nalu *(&RefPicList0)[16],
+      Nalu *(&RefPicList1)[16]); // 8.2.4.3 参考图像列表的重排序过程
   int Modification_process_of_reference_picture_lists_for_short_term_reference_pictures(
       int32_t &refIdxLX, int32_t &picNumLXPred,
       int32_t modification_of_pic_nums_idc, int32_t abs_diff_pic_num_minus1,
       int32_t num_ref_idx_lX_active_minus1,
-      Picture *(&RefPicListX)[16]); // 8.2.4.3.1
+      Nalu *(&RefPicListX)[16]); // 8.2.4.3.1
   int Modification_process_of_reference_picture_lists_for_long_term_reference_pictures(
       int32_t &refIdxLX, int32_t picNumLXPred,
       int32_t num_ref_idx_lX_active_minus1, int32_t long_term_pic_num,
-      Picture *(&RefPicListX)[16]); // 8.2.4.3.2
+      Nalu *(&RefPicListX)[16]); // 8.2.4.3.2
 
-  int Decoded_reference_picture_marking_process(Picture *(
+  int Decoded_reference_picture_marking_process(Nalu *(
       &dpb)[16]); // 8.2.5 每一张图片解码完成后，都需要标记一次图像参考列表
   int Sequence_of_operations_for_decoded_reference_picture_marking_process(
-      Picture *(&dpb)[16]);                     // 8.2.5.1
+      Nalu *(&dpb)[16]);                        // 8.2.5.1
   int Decoding_process_for_gaps_in_frame_num(); // 8.2.5.2
   int Sliding_window_decoded_reference_picture_marking_process(
-      Picture *(&dpb)[16]); // 8.2.5.3
+      Nalu *(&dpb)[16]); // 8.2.5.3
   int Adaptive_memory_control_decoded_reference_picture_marking_process(
-      Picture *(&dpb)[16]); // 8.2.5.4
+      Nalu *(&dpb)[16]); // 8.2.5.4
 
   //--------------帧内预测------------------------
   int getIntra4x4PredMode(int32_t luma4x4BlkIdx,
@@ -189,11 +192,11 @@ class PictureBase {
       uint8_t *pic_buff_chroma_pred, int32_t PicWidthInSamples); // 8.3.4.5
   int Sample_construction_process_for_I_PCM_macroblocks();       // 8.3.5
 
-  inline int Inverse_macroblock_scanning_process(int32_t MbaffFrameFlag,
-                                                 int32_t mbAddr,
-                                                 int32_t mb_field_decoding_flag,
-                                                 int32_t &x,
-                                                 int32_t &y); // 6.4.1
+  int Inverse_macroblock_scanning_process(int32_t MbaffFrameFlag,
+                                          int32_t mbAddr,
+                                          int32_t mb_field_decoding_flag,
+                                          int32_t &x,
+                                          int32_t &y); // 6.4.1
   int Inverse_sub_macroblock_partition_scanning_process(
       H264_MB_TYPE m_name_of_mb_type, int32_t mbPartIdx, int32_t subMbPartIdx,
       int32_t &x, int32_t &y); // 6.4.2.2
@@ -345,7 +348,7 @@ class PictureBase {
       uint8_t *predPartCb,  // predPartCb[partHeightC][partWidthC]
       uint8_t *predPartCr); // predPartCr[partHeightC][partWidthC] //8.4.2
   int Reference_picture_selection_process(int32_t refIdxLX,
-                                          Picture *RefPicListX[16],
+                                          Nalu *RefPicListX[16],
                                           int32_t RefPicListXLength,
                                           PictureBase *&refPic); // 8.4.2.1
   int Fractional_sample_interpolation_process(

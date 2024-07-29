@@ -1,7 +1,7 @@
 #ifndef MACROBLOCK_HPP_FBNXLFQV
 #define MACROBLOCK_HPP_FBNXLFQV
-#include "Cabac.hpp"
-#include "PictureBase.hpp"
+#include "BitStream.hpp"
+#include "H264SliceData.hpp"
 #include "Type.hpp"
 
 class PictureBase;
@@ -78,17 +78,17 @@ class MacroBlock {
   int32_t ChromaACLevel[2][16][16];
 
   uint8_t mb_luma_4x4_non_zero_count_coeff
-      [16]; //存储当前亮度宏块的16个4x4子宏块非零系数，范围[0,16]
+      [16]; // 存储当前亮度宏块的16个4x4子宏块非零系数，范围[0,16]
   uint8_t mb_chroma_4x4_non_zero_count_coeff
-      [2][16]; //存储当前两个色度宏块的16个4x4子宏块非零系数，范围[0,16]
+      [2][16]; // 存储当前两个色度宏块的16个4x4子宏块非零系数，范围[0,16]
   uint8_t mb_luma_8x8_non_zero_count_coeff
-      [4]; //存储当前亮度宏块的4个8x8子宏块非零系数，范围[0,64]
+      [4]; // 存储当前亮度宏块的4个8x8子宏块非零系数，范围[0,64]
+  uint8_t Intra4x4PredMode
+      [16]; // 存储当前宏块的16个4x4子宏块预测模式的值，范围[0,8]
   uint8_t
-      Intra4x4PredMode[16]; //存储当前宏块的16个4x4子宏块预测模式的值，范围[0,8]
-  uint8_t
-      Intra8x8PredMode[4]; //存储当前宏块的4个8x8子宏块预测模式的值，范围[0,8]
+      Intra8x8PredMode[4]; // 存储当前宏块的4个8x8子宏块预测模式的值，范围[0,8]
   int32_t
-      Intra16x16PredMode; //存储当前宏块的1个16x16宏块预测模式的值，范围[0,4]
+      Intra16x16PredMode; // 存储当前宏块的1个16x16宏块预测模式的值，范围[0,4]
   int32_t field_pic_flag;
   int32_t bottom_field_flag;
   int32_t mb_skip_flag;
@@ -124,7 +124,7 @@ class MacroBlock {
 
   int32_t m_slice_type_fixed;
   int32_t
-      m_mb_type_fixed; //码流解码出来的原始mb_type值，需要修正一次才行，原因是有的P帧里面含有帧内编码的I宏块
+      m_mb_type_fixed; // 码流解码出来的原始mb_type值，需要修正一次才行，原因是有的P帧里面含有帧内编码的I宏块
   H264_MB_TYPE m_name_of_mb_type;
   H264_MB_PART_PRED_MODE m_mb_pred_mode;
   H264_MB_TYPE m_name_of_sub_mb_type[4];
@@ -138,8 +138,10 @@ class MacroBlock {
   int32_t m_PredFlagL1[4];
   uint8_t m_isDecoded[4][4]; // the partition given by mbPartIdxN and
                              // subMbPartIdxN is not yet decoded,
-  int32_t m_mb_position_x; //本宏块的左上角像素，相对于整张图片左上角像素的x坐标
-  int32_t m_mb_position_y; //本宏块的左上角像素，相对于整张图片左上角像素的y坐标
+  int32_t
+      m_mb_position_x; // 本宏块的左上角像素，相对于整张图片左上角像素的x坐标
+  int32_t
+      m_mb_position_y; // 本宏块的左上角像素，相对于整张图片左上角像素的y坐标
 
  public:
   MacroBlock();
@@ -174,26 +176,25 @@ class MacroBlock {
 
   inline int set_mb_type_X_slice_info();
 
-  // int macroblock_layer(BitStream &bs, PictureBase &picture,
-  //                      const CH264SliceData &slice_data, CH264Cabac &cabac);
-  // int macroblock_layer_mb_skip(PictureBase &picture,
-  //                              const CH264SliceData &slice_data,
-  //                              CH264Cabac &cabac);
-  // int mb_pred(BitStream &bs, PictureBase &picture,
-  //             const CH264SliceData &slice_data, CH264Cabac &cabac);
-  // int sub_mb_pred(BitStream &bs, PictureBase &picture,
-  //                 const CH264SliceData &slice_data, CH264Cabac &cabac);
+  int macroblock_layer(BitStream &bs, PictureBase &picture,
+                       const CH264SliceData &slice_data, CH264Cabac &cabac);
+  int macroblock_layer_mb_skip(PictureBase &picture,
+                               const CH264SliceData &slice_data,
+                               CH264Cabac &cabac);
+  int mb_pred(BitStream &bs, PictureBase &picture,
+              const CH264SliceData &slice_data, CH264Cabac &cabac);
+  int sub_mb_pred(BitStream &bs, PictureBase &picture,
+                  const CH264SliceData &slice_data, CH264Cabac &cabac);
 
-  // int residual(BitStream &bs, PictureBase &picture, int32_t startIdx,
-  //              int32_t endIdx, CH264Cabac &cabac);
-  // int residual_luma(BitStream &bs, PictureBase &picture,
-  //                   int32_t (&i16x16DClevel)[16],
-  //                   int32_t (&i16x16AClevel)[16][16],
-  //                   int32_t (&level4x4)[16][16], int32_t (&level8x8)[4][64],
-  //                   int32_t startIdx, int32_t endIdx,
-  //                   MB_RESIDUAL_LEVEL mb_residual_level_dc,
-  //                   MB_RESIDUAL_LEVEL mb_residual_level_ac, CH264Cabac
-  //                   &cabac);
+  int residual(BitStream &bs, PictureBase &picture, int32_t startIdx,
+               int32_t endIdx, CH264Cabac &cabac);
+  int residual_luma(BitStream &bs, PictureBase &picture,
+                    int32_t (&i16x16DClevel)[16],
+                    int32_t (&i16x16AClevel)[16][16],
+                    int32_t (&level4x4)[16][16], int32_t (&level8x8)[4][64],
+                    int32_t startIdx, int32_t endIdx,
+                    MB_RESIDUAL_LEVEL mb_residual_level_dc,
+                    MB_RESIDUAL_LEVEL mb_residual_level_ac, CH264Cabac &cabac);
 };
 
 #endif /* end of include guard: MACROBLOCK_HPP_FBNXLFQV */

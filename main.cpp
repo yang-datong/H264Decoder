@@ -1,9 +1,8 @@
 #include "AnnexBReader.hpp"
-#include "BitStream.hpp"
 #include "NaluPPS.hpp"
-#include "NaluSPS.hpp"
 
 int main() {
+  // std::string filePath = "./source_cut_10_frames.h264";
   std::string filePath = "./demo_10_frames.h264";
   /* 1. 用类封装h264文件的打开文件、读取NUL、存储NUL的操作 */
   AnnexBReader reader(filePath);
@@ -60,7 +59,7 @@ int main() {
         /* 11-1. 解码立即刷新帧 GOP[0] */
         std::cout << "IDR -> {" << std::endl;
         nalu.extractIDRparameters(rbsp);
-        // nalu.decode(rbsp);
+        nalu.decode(rbsp);
         std::cout << " }" << std::endl;
         break;
       case 6: /* SEI(VCL) */

@@ -56,11 +56,11 @@ typedef enum _H264_PICTURE_MARKED_AS_ {
 
 typedef enum _H264_PICTURE_CODED_TYPE_ {
   H264_PICTURE_CODED_TYPE_UNKNOWN = 0,
-  H264_PICTURE_CODED_TYPE_FRAME = 1,                    //帧
-  H264_PICTURE_CODED_TYPE_FIELD = 2,                    //场
-  H264_PICTURE_CODED_TYPE_TOP_FIELD = 3,                //顶场
-  H264_PICTURE_CODED_TYPE_BOTTOM_FIELD = 4,             //底场
-  H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR = 5, //互补场对
+  H264_PICTURE_CODED_TYPE_FRAME = 1,                    // 帧
+  H264_PICTURE_CODED_TYPE_FIELD = 2,                    // 场
+  H264_PICTURE_CODED_TYPE_TOP_FIELD = 3,                // 顶场
+  H264_PICTURE_CODED_TYPE_BOTTOM_FIELD = 4,             // 底场
+  H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR = 5, // 互补场对
 } H264_PICTURE_CODED_TYPE;
 
 typedef enum _H264_PICTURE_TYPE_ {
@@ -302,7 +302,7 @@ typedef enum _H264_SLIECE_TYPE_ {
   H264_SLIECE_TYPE_SI2 = 9,
 } H264_SLIECE_TYPE;
 
-//宏块残差幅值类型
+// 宏块残差幅值类型
 typedef enum _MB_RESIDUAL_LEVEL_ {
   MB_RESIDUAL_UNKOWN = -1,
   MB_RESIDUAL_Intra16x16DCLevel = 0,
@@ -327,21 +327,92 @@ typedef enum _MB_RESIDUAL_LEVEL_ {
 
 enum H264_SLICE_TYPE { SLICE_P = 0, SLICE_B, SLICE_I, SLICE_SP, SLICE_SI };
 
-struct CHROMA_FORMAT_IDC_T {
-  int32_t chroma_format_idc;
-  int32_t separate_colour_plane_flag;
-  int32_t Chroma_Format;
-  int32_t SubWidthC;
-  int32_t SubHeightC;
-};
-
 #define NA -1
 #define MB_WIDTH 16
 #define MB_HEIGHT 16
 
-#define MONOCHROME 0 //黑白图像
+#define MONOCHROME 0 // 黑白图像
 #define CHROMA_FORMAT_IDC_420 1
 #define CHROMA_FORMAT_IDC_422 2
 #define CHROMA_FORMAT_IDC_444 3
+
+//--------------------------
+// Table 8-2 – Specification of Intra4x4PredMode[ luma4x4BlkIdx ] and associated
+// names
+#define Prediction_Mode_Intra_4x4_Vertical 0
+#define Prediction_Mode_Intra_4x4_Horizontal 1
+#define Prediction_Mode_Intra_4x4_DC 2
+#define Prediction_Mode_Intra_4x4_Diagonal_Down_Left 3
+#define Prediction_Mode_Intra_4x4_Diagonal_Down_Right 4
+#define Prediction_Mode_Intra_4x4_Vertical_Right 5
+#define Prediction_Mode_Intra_4x4_Horizontal_Down 6
+#define Prediction_Mode_Intra_4x4_Vertical_Left 7
+#define Prediction_Mode_Intra_4x4_Horizontal_Up 8
+
+//--------------------------
+// Table 8-3 – Specification of Intra8x8PredMode[ luma8x8BlkIdx ] and associated
+// names
+#define Prediction_Mode_Intra_8x8_Vertical 0
+#define Prediction_Mode_Intra_8x8_Horizontal 1
+#define Prediction_Mode_Intra_8x8_DC 2
+#define Prediction_Mode_Intra_8x8_Diagonal_Down_Left 3
+#define Prediction_Mode_Intra_8x8_Diagonal_Down_Right 4
+#define Prediction_Mode_Intra_8x8_Vertical_Right 5
+#define Prediction_Mode_Intra_8x8_Horizontal_Down 6
+#define Prediction_Mode_Intra_8x8_Vertical_Left 7
+#define Prediction_Mode_Intra_8x8_Horizontal_Up 8
+
+//--------------------------
+// Table 8-4 – Specification of Intra16x16PredMode and associated names
+#define Prediction_Mode_Intra_16x16_Vertical 0
+#define Prediction_Mode_Intra_16x16_Horizontal 1
+#define Prediction_Mode_Intra_16x16_DC 2
+#define Prediction_Mode_Intra_16x16_Plane 3
+
+//--------------------------
+// Table 8-5 – Specification of Intra chroma prediction modes and associated
+// names
+#define Prediction_Mode_Intra_Chroma_DC 0
+#define Prediction_Mode_Intra_Chroma_Horizontal 1
+#define Prediction_Mode_Intra_Chroma_Vertical 2
+#define Prediction_Mode_Intra_Chroma_Plane 3
+
+#define H264_SLIECE_TYPE_TO_STR(slice_type)                                    \
+  (slice_type == H264_SLIECE_TYPE_P)     ? "P"                                 \
+  : (slice_type == H264_SLIECE_TYPE_B)   ? "B"                                 \
+  : (slice_type == H264_SLIECE_TYPE_I)   ? "I"                                 \
+  : (slice_type == H264_SLIECE_TYPE_SP)  ? "SP"                                \
+  : (slice_type == H264_SLIECE_TYPE_SI)  ? "SI"                                \
+  : (slice_type == H264_SLIECE_TYPE_P2)  ? "P2"                                \
+  : (slice_type == H264_SLIECE_TYPE_B2)  ? "B2"                                \
+  : (slice_type == H264_SLIECE_TYPE_I2)  ? "I2"                                \
+  : (slice_type == H264_SLIECE_TYPE_SP2) ? "SP2"                               \
+  : (slice_type == H264_SLIECE_TYPE_SI2) ? "SI2"                               \
+                                         : "UNKNOWN"
+
+#define H264_MB_PART_PRED_MODE_TO_STR(pred_mode)                               \
+  (pred_mode == MB_PRED_MODE_NA) ? "MB_PRED_MODE_NA"                           \
+  : (pred_mode == Intra_NA)      ? "Intra_NA"                                  \
+  : (pred_mode == Intra_4x4)     ? "Intra_4x4"                                 \
+  : (pred_mode == Intra_8x8)     ? "Intra_8x8"                                 \
+  : (pred_mode == Intra_16x16)   ? "Intra_16x16"                               \
+  : (pred_mode == Pred_NA)       ? "Pred_NA"                                   \
+  : (pred_mode == Pred_L0)       ? "Pred_L0"                                   \
+  : (pred_mode == Pred_L1)       ? "Pred_L1"                                   \
+  : (pred_mode == BiPred)        ? "BiPred"                                    \
+  : (pred_mode == BiPred)        ? "BiPred"                                    \
+  : (pred_mode == Direct)        ? "Direct"                                    \
+                                 : "UNKNOWN"
+
+//Table 8-8 – Specification of mbAddrCol, yM, and vertMvScale
+typedef enum _H264_VERT_MV_SCALE_
+{
+    H264_VERT_MV_SCALE_UNKNOWN = 0,
+    H264_VERT_MV_SCALE_One_To_One = 1,
+    H264_VERT_MV_SCALE_Frm_To_Fld = 2,
+    H264_VERT_MV_SCALE_Fld_To_Frm = 3,
+}H264_VERT_MV_SCALE;
+
+#define    H264_MAX_REF_PIC_LIST_COUNT    16    // RefPicList0[16]
 
 #endif /* end of include guard: TYPE_HPP_TPOWA9WD */

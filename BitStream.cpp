@@ -1,6 +1,5 @@
 #include "./BitStream.hpp"
 #include <cstdint>
-#include <stdio.h>
 
 BitStream::BitStream(uint8_t *buf, int size) : _size(size), _p(buf) {}
 

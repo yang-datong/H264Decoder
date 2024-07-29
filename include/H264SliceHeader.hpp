@@ -1,15 +1,12 @@
 #ifndef H264SLICEHEADER_HPP_DRKQIVHX
 #define H264SLICEHEADER_HPP_DRKQIVHX
 
-#include "Bitstream.h"
-#include "H264CommonFunc.h"
-#include "H264NalUnit.h"
-#include "H264PPS.h"
-#include "H264SPS.h"
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "BitStream.hpp"
+#include "H264NalUnit.hpp"
+#include "H264PPS.hpp"
+#include "H264SPS.hpp"
+#include "Type.hpp"
+#include <cstdint>
 
 typedef struct _DEC_REF_PIC_MARKING_ {
   int32_t memory_management_control_operation; // 2 | 5 ue(v)
@@ -94,7 +91,7 @@ class CH264SliceHeader {
   int32_t slice_id;
   int32_t syntax_element_categories; // 2 | 3 | 4
   int32_t slice_type_fixed;
-  int32_t mb_cnt; //用于计数已经解码了多少个宏块，范围[0, PicSizeInMbs-1]
+  int32_t mb_cnt; // 用于计数已经解码了多少个宏块，范围[0, PicSizeInMbs-1]
   int32_t
       QPY_prev; // QPY,PREV 是当前 slice 中前一宏块的量化参数 QPY 的值，在每个
                 // slice 的开始处，对于 slice 中的第一个宏块，QPY,PREV
@@ -109,12 +106,12 @@ class CH264SliceHeader {
   int32_t
       PicHeightInSamplesC; // PicHeightInSamplesC = PicHeightInMbs * MbHeightC;
   int32_t PicSizeInMbs;    // PicSizeInMbs = PicWidthInMbs * PicHeightInMbs;
-  int32_t MaxPicNum; // MaxPicNum = (field_pic_flag == 0) ? MaxFrameNum : (2 *
-                     // MaxFrameNum);
+  int32_t MaxPicNum;  // MaxPicNum = (field_pic_flag == 0) ? MaxFrameNum : (2 *
+                      // MaxFrameNum);
   int32_t CurrPicNum; // CurrPicNum = (field_pic_flag == 0) ? frame_num : (2 *
                       // frame_num + 1);
-  int32_t SliceGroupChangeRate; // SliceGroupChangeRate =
-                                // slice_group_change_rate_minus1 + 1;
+  int32_t SliceGroupChangeRate;  // SliceGroupChangeRate =
+                                 // slice_group_change_rate_minus1 + 1;
   int32_t MapUnitsInSliceGroup0; // MapUnitsInSliceGroup0 = Min(
                                  // slice_group_change_cycle *
                                  // SliceGroupChangeRate, PicSizeInMapUnits );
@@ -134,22 +131,22 @@ class CH264SliceHeader {
   int32_t ScalingList4x4[6][16];
   int32_t ScalingList8x8[6][64];
   H264_PICTURE_CODED_TYPE m_picture_coded_type;
-  int32_t m_is_malloc_mem_self; //是否已经初始化
+  int32_t m_is_malloc_mem_self; // 是否已经初始化
 
  public:
   CH264SliceHeader();
   ~CH264SliceHeader();
 
-  CH264SliceHeader &operator=(const CH264SliceHeader &src); //重载等号运算符
+  CH264SliceHeader &operator=(const CH264SliceHeader &src); // 重载等号运算符
   int copyData(const CH264SliceHeader &src, bool isCopyYuvData);
 
   int printInfo();
 
-  int slice_header(CBitstream &bs, const CH264NalUnit &nal_unit,
+  int slice_header(BitStream &bs, const CH264NalUnit &nal_unit,
                    const CH264SPS spss[32], const CH264PPS ppss[256]);
-  int ref_pic_list_modification(CBitstream &bs);
-  int pred_weight_table(CBitstream &bs);
-  int dec_ref_pic_marking(CBitstream &bs);
+  int ref_pic_list_modification(BitStream &bs);
+  int pred_weight_table(BitStream &bs);
+  int dec_ref_pic_marking(BitStream &bs);
   int setMbToSliceGroupMap();
   int setMapUnitToSliceGroupMap();
   int set_scaling_lists_values(const CH264SPS &sps, const CH264PPS &pps);
