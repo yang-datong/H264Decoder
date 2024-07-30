@@ -63,7 +63,6 @@ int PPS::extractParameters() {
   constrained_intra_pred_flag = bitStream.readU1();
   redundant_pic_cnt_present_flag = bitStream.readU1();
   if (more_rbsp_data(bitStream)) {
-    /* TODO YangJing 这里应该进来，我这里没进来 <24-07-30 19:50:26> */
     transform_8x8_mode_flag = bitStream.readU1();
     pic_scaling_matrix_present_flag = bitStream.readU1();
     if (pic_scaling_matrix_present_flag) {
@@ -81,10 +80,10 @@ int PPS::extractParameters() {
                          UseDefaultScalingMatrix8x8Flag[i - 6]);
         }
       }
+      second_chroma_qp_index_offset = bitStream.readSE();
     }
-    second_chroma_qp_index_offset = bitStream.readSE();
   }
-  rbsp_trailing_bits();
+  rbsp_trailing_bits(bitStream);
   return 0;
 }
 
@@ -123,4 +122,11 @@ bool PPS::more_rbsp_data(BitStream &bs) {
   return 0;
 }
 
-void PPS::rbsp_trailing_bits() { /* TODO YangJing  <24-04-07 21:55:36> */ }
+int PPS::rbsp_trailing_bits(BitStream &bs) {
+  if (bs.getP() >= bs.getEndBuf())
+    return 0;
+  int32_t rbsp_stop_one_bit = bs.readU1(); // /* equal to 1 */ All f(1)
+  while (!bs.byte_aligned())
+    int32_t rbsp_alignment_zero_bit = bs.readU1();
+  return 0;
+}

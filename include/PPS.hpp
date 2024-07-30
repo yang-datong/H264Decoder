@@ -15,7 +15,7 @@ class PPS : public RBSP {
  public:
   int extractParameters();
   bool more_rbsp_data(BitStream &bs);
-  void rbsp_trailing_bits();
+  int rbsp_trailing_bits(BitStream &bs);
 
   bool bottom_field_pic_order_in_frame_present_flag = 0;
   bool redundant_pic_cnt_present_flag = 0;
