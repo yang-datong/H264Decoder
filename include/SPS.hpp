@@ -4,6 +4,8 @@
 #include "Common.hpp"
 #include "RBSP.hpp"
 
+#define Extended_SAR 255
+
 #define H264_MAX_OFFSET_REF_FRAME_COUNT                                        \
   256 // 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle shall be in the range
       // of 0 to 255, inclusive.
@@ -85,9 +87,11 @@ class SPS : public RBSP {
 
   uint32_t ScalingList4x4[6][16];
   uint32_t ScalingList8x8[6][64];
-
   uint32_t UseDefaultScalingMatrix4x4Flag[6];
   uint32_t UseDefaultScalingMatrix8x8Flag[6];
+
+  void vui_parameters(BitStream &bitStream);
+  void hrd_parameters(BitStream &bitStream);
 };
 
 #endif /* end of include guard: SPS_CPP_F6QSULFM */

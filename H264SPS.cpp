@@ -262,11 +262,11 @@ int CH264SPS::seq_parameter_set_data(BitStream &bs) {
             bs.readUn(1); // seq_scaling_list_present_flag[ i ] 0 u(1)
         if (this->seq_scaling_list_present_flag[i] == 1) {
           if (i < 6) {
-            ret = scaling_list(bs, ScalingList4x4[i], 16,
+            scaling_list(bs, ScalingList4x4[i], 16,
                                UseDefaultScalingMatrix4x4Flag[i]);
             RETURN_IF_FAILED(ret != 0, ret);
           } else {
-            ret = scaling_list(bs, ScalingList8x8[i - 6], 64,
+            scaling_list(bs, ScalingList8x8[i - 6], 64,
                                UseDefaultScalingMatrix8x8Flag[i - 6]);
             RETURN_IF_FAILED(ret != 0, ret);
           }

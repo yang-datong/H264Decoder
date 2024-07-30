@@ -81,10 +81,10 @@ class CH264SPS {
   int32_t frame_crop_bottom_offset;             // 0 ue(v)
   int32_t vui_parameters_present_flag;          // 0 u(1)
 
-  int32_t ScalingList4x4[6][16];
-  int32_t ScalingList8x8[6][64];
-  int32_t UseDefaultScalingMatrix4x4Flag[6];
-  int32_t UseDefaultScalingMatrix8x8Flag[6];
+  uint32_t ScalingList4x4[6][16];
+  uint32_t ScalingList8x8[6][64];
+  uint32_t UseDefaultScalingMatrix4x4Flag[6];
+  uint32_t UseDefaultScalingMatrix8x8Flag[6];
 
   CH264VUI m_vui;
 

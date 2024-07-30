@@ -55,13 +55,6 @@ class Nalu {
 
  private:
   int parseNALHeader(EBSP &rbsp);
-  void scaling_list(BitStream &bitStream, uint32_t *scalingList,
-                    uint32_t sizeOfScalingList,
-                    uint32_t &useDefaultScalingMatrixFlag);
-
-  void vui_parameters(BitStream &bitStream);
-
-  void hrd_parameters(BitStream &bitStream);
 
   /* SPS 参数 */
   SPS sps;
@@ -75,14 +68,9 @@ class Nalu {
   /* Slice */
   SliceHeader slice_header;
   SliceBody slice_body;
-  int parseSliceData(BitStream &bitStream, RBSP &rbsp, PictureBase &picture);
-  int set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
-                       BitStream &bitStream);
 
   /* IDR */
   IDR idr;
-  int NextMbAddress(int n);
-  int macroblock_layer(BitStream &bs, PictureBase &picture);
 
  public:
   /* NOTE 以下均来自Picture */

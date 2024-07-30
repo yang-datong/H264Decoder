@@ -49,8 +49,9 @@ int32_t h264_power2(int32_t value) {
  * Page 44/66/812
  * 7.3.2.1.1.1 Scaling list syntax
  */
-int scaling_list(BitStream &bs, int32_t *scalingList, int sizeOfScalingList,
-                 int32_t &useDefaultScalingMatrixFlag) {
+void scaling_list(BitStream &bs, uint32_t *scalingList,
+                  uint32_t sizeOfScalingList,
+                  uint32_t &useDefaultScalingMatrixFlag) {
   int32_t lastScale = 8;
   int32_t nextScale = 8;
   CH264Golomb gb;
@@ -67,5 +68,4 @@ int scaling_list(BitStream &bs, int32_t *scalingList, int sizeOfScalingList,
     scalingList[j] = (nextScale == 0) ? lastScale : nextScale;
     lastScale = scalingList[j];
   }
-  return 0;
 }

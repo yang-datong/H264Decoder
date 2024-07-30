@@ -34,5 +34,6 @@ int32_t h264_power2(int32_t value);
   printf("[WARN] %s:(%d) %s: " pszFormat, __FILE__, __LINE__, __FUNCTION__,    \
          ##__VA_ARGS__)
 
-int scaling_list(BitStream &bs, int32_t *scalingList, int sizeOfScalingList,
-                 int32_t &useDefaultScalingMatrixFlag);
+void scaling_list(BitStream &bitStream, uint32_t *scalingList,
+                  uint32_t sizeOfScalingList,
+                  uint32_t &useDefaultScalingMatrixFlag);
