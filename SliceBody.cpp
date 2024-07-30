@@ -3,24 +3,21 @@
 #include "Nalu.hpp"
 
 /* Rec. ITU-T H.264 (08/2021) 56 */
-int SliceBody::parseSliceData(BitStream &bitStream, PictureBase &picture) {
+int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
   CH264Cabac cabac;
   /* CABAC编码 */
   if (m_pps.entropy_coding_mode_flag) {
     std::cout << "CABAC编码" << std::endl;
-    while (!bitStream.byte_aligned()) {
-      std::cout << "hi~" << std::endl;
-      cabac_alignment_one_bit = bitStream.readU1(); // 2 f(1)
-    }
+    while (!bs.byte_aligned())
+      cabac_alignment_one_bit = bs.readU1(); // 2 f(1)
 
-    int ret = cabac.Initialisation_process_for_context_variables(
+    cabac.Initialisation_process_for_context_variables(
         (H264_SLIECE_TYPE)slice_header.slice_type, slice_header.cabac_init_idc,
-        slice_header.SliceQPY); // cabac初始化环境变量
-    RETURN_IF_FAILED(ret != 0, -1);
+        slice_header.SliceQPY);
+    // cabac初始化环境变量
 
-    ret = cabac.Initialisation_process_for_the_arithmetic_decoding_engine(
-        bitStream); // cabac初始化解码引擎
-    RETURN_IF_FAILED(ret != 0, -1);
+    cabac.Initialisation_process_for_the_arithmetic_decoding_engine(bs);
+    // cabac初始化解码引擎
   }
 
   if (slice_header.MbaffFrameFlag == 0)
@@ -35,15 +32,12 @@ int SliceBody::parseSliceData(BitStream &bitStream, PictureBase &picture) {
   slice_header.picNumL1Pred = slice_header.CurrPicNum;
 
   if (picture.m_slice_cnt == 0) {
-    int ret = picture.Decoding_process_for_picture_order_count(); // 解码POC
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    if (m_sps.frame_mbs_only_flag == 0) // 有可能出现场帧或场宏块
-    {
+    picture.Decoding_process_for_picture_order_count(); // 解码POC
+    if (m_sps.frame_mbs_only_flag == 0) {
+      // 有可能出现场帧或场宏块
+      std::cout << "hi~" << std::endl;
+      exit(0);
       /* TODO YangJing 没进 <24-07-30 16:51:53> */
-      // picture.m_parent->m_picture_top_filed.copyDataPicOrderCnt(picture); //
-      //  顶（底）场帧有可能被选为参考帧，在解码P/B帧时，会用到PicOrderCnt字段，所以需要在此处复制一份
-      // picture.m_parent->m_picture_bottom_filed.copyDataPicOrderCnt(picture);
     }
 
     //--------参考帧重排序------------
@@ -51,13 +45,11 @@ int SliceBody::parseSliceData(BitStream &bitStream, PictureBase &picture) {
     if (slice_header.slice_type == H264_SLIECE_TYPE_P ||
         slice_header.slice_type == H264_SLIECE_TYPE_SP ||
         slice_header.slice_type == H264_SLIECE_TYPE_B) {
+      std::cout << "hi~" << std::endl;
+      exit(0);
       /* TODO YangJing 没进 <24-07-30 16:53:52> */
-      // 8.2.4 Decoding process for reference picture lists construction
-      // This process is invoked at the beginning of the decoding process for
-      // each P, SP, or B slice.
-      ret = picture.Decoding_process_for_reference_picture_lists_construction(
+      picture.Decoding_process_for_reference_picture_lists_construction(
           picture.m_dpb, picture.m_RefPicList0, picture.m_RefPicList1);
-      RETURN_IF_FAILED(ret != 0, ret);
 
       //--------------
       for (int i = 0; i < picture.m_RefPicList0Length; ++i) {
@@ -114,103 +106,146 @@ int SliceBody::parseSliceData(BitStream &bitStream, PictureBase &picture) {
     if (slice_header.slice_type != SLICE_I &&
         slice_header.slice_type != SLICE_SI) {
       if (!m_pps.entropy_coding_mode_flag) {
-        uint32_t mb_skip_run = bitStream.readUE();
-        prevMbSkipped = (mb_skip_run > 0);
-        for (int i = 0; i < mb_skip_run; i++) {
-          // CurrMbAddr = NextMbAddress(CurrMbAddr);
-        }
-        if (mb_skip_run > 0) {
-          moreDataFlag = bitStream.more_rbsp_data();
-        }
+        std::cout << "hi~" << std::endl;
+        exit(0);
+        /* TODO YangJing 没进 <24-07-30 22:56:07> */
       } else {
-        /* CABAC编码 */
-        /* TODO YangJing 没进 <24-05-26 15:41:57> */
-        // set_mb_skip_flag(mb_skip_flag, picture, bitStream);
-        // moreDataFlag = !mb_skip_flag;
+        /* CABAC编码开始 */
+        picture.mb_x = (CurrMbAddr % (picture.PicWidthInMbs *
+                                      (1 + slice_header.MbaffFrameFlag))) /
+                       (1 + slice_header.MbaffFrameFlag);
+
+        picture.mb_y =
+            (CurrMbAddr /
+             (picture.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag)) *
+             (1 + slice_header.MbaffFrameFlag)) +
+            ((CurrMbAddr %
+              (picture.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag))) %
+             (1 + slice_header.MbaffFrameFlag));
+        picture.CurrMbAddr = CurrMbAddr;
+
+        // //因为解码mb_skip_flag需要事先知道MbaffFrameFlag的值
+        picture.m_mbs[picture.CurrMbAddr].slice_number = slice_number;
+        // 因为解码mb_skip_flag需要事先知道slice_id的值（从0开始）
+
+        if (slice_header.MbaffFrameFlag) {
+          std::cout << "hi~" << std::endl;
+          exit(0);
+          /* TODO YangJing 没进 <24-07-30 23:30:50> */
+        }
+
+        //-------------解码mb_skip_flag-----------------------
+        if (slice_header.MbaffFrameFlag && CurrMbAddr % 2 == 1 &&
+            prevMbSkipped) {
+          // 如果是bottom field macroblock
+          std::cout << "hi~" << std::endl;
+          exit(0);
+          /* TODO YangJing 没进 <24-07-30 23:31:22> */
+          // mb_skip_flag = mb_skip_flag_next_mb;
+        } else
+          cabac.CABAC_decode_mb_skip_flag(picture, bs, CurrMbAddr,
+                                          mb_skip_flag);
+
+        //------------------------------------
+        if (mb_skip_flag == 1) {
+          picture.mb_cnt++;
+          std::cout << "hi~" << std::endl;
+          exit(0);
+          /* TODO YangJing 没进 <24-07-30 23:32:32> */
+        }
+        moreDataFlag = !mb_skip_flag;
+        /* CABAC编码结束 */
       }
     }
-
     if (moreDataFlag) {
       if (slice_header.MbaffFrameFlag &&
           (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped))) {
         /* 表示本宏块是属于一个宏块对中的一个 */
+        std::cout << "hi~" << std::endl;
         /* TODO YangJing 没进 <24-05-26 15:49:00> */
-        std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m"
-                  << std::endl;
       }
 
-      /* TODO YangJing 这里是我自己偷懒写的 <24-05-26 15:56:31> */
-      m_sps.PicWidthInMbs = m_sps.PicWidthInMbs;
-      //----------
-
-      //----------------------------
-      picture.mb_x = (CurrMbAddr % (m_sps.PicWidthInMbs *
+      picture.mb_x = (CurrMbAddr % (picture.PicWidthInMbs *
                                     (1 + slice_header.MbaffFrameFlag))) /
                      (1 + slice_header.MbaffFrameFlag);
       picture.mb_y =
           (CurrMbAddr /
-           (m_sps.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag)) *
+           (picture.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag)) *
            (1 + slice_header.MbaffFrameFlag)) +
           ((CurrMbAddr %
-            (m_sps.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag))) %
+            (picture.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag))) %
            (1 + slice_header.MbaffFrameFlag));
       picture.CurrMbAddr =
-          CurrMbAddr; // picture.mb_x + picture.mb_y * m_sps.PicWidthInMbs;
-
+          CurrMbAddr; // picture.mb_x + picture.mb_y * picture.PicWidthInMbs;
       picture.mb_cnt++;
 
       //--------熵解码------------
-      // macroblock_layer(bitStream, picture);
-      /* TODO YangJing 这个函数还未实现 <24-05-26 15:57:54> */
+      picture.m_mbs[picture.CurrMbAddr].macroblock_layer(bs, picture, *this,
+                                                         cabac);
+      // 2 | 3 | 4
 
       //--------帧内/间预测------------
       //--------反量化------------
       //--------反变换------------
 
-      /* TODO YangJing 做到这里来了，需要明白picture.m_mbs是怎么填充数据的
-       * <24-05-26 16:05:29> */
-      //      if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode == Intra_4x4)
-      //      {
-      //        // 帧内预测
-      //        std::cout << 1 << std::endl;
-      //      } else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
-      //                 Intra_8x8) {
-      //        // 帧内预测
-      //        std::cout << 2 << std::endl;
-      //      } else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
-      //                 Intra_16x16) // 帧内预测
-      //      {
-      //        std::cout << 3 << std::endl;
-      //      } else if (
-      //          picture.m_mbs[picture.CurrMbAddr].m_name_of_mb_type ==
-      //          I_PCM)
-      //          //说明该宏块没有残差，也没有预测值，码流中的数据直接为原始像素值
-      //      {
-      //        std::cout << 4 << std::endl;
-      //      } else {
-      //        std::cout << 5 << std::endl;
-      //        //-------残差-----------
-      //      }
+      int32_t isChroma = 0;
+      int32_t isChromaCb = 0;
+      int32_t BitDepth = 0;
+
+      int32_t picWidthInSamplesL = picture.PicWidthInSamplesL;
+      int32_t picWidthInSamplesC = picture.PicWidthInSamplesC;
+
+      uint8_t *pic_buff_luma = picture.m_pic_buff_luma;
+      uint8_t *pic_buff_cb = picture.m_pic_buff_cb;
+      uint8_t *pic_buff_cr = picture.m_pic_buff_cr;
+      if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
+          Intra_4x4) // 帧内预测
+        std::cout << "hi1~" << std::endl;
+      /* TODO YangJing  <24-07-30 23:47:00> */
+      else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
+               Intra_8x8) // 帧内预测
+        std::cout << "hi2~" << std::endl;
+      /* TODO YangJing  <24-07-30 23:47:00> */
+      else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
+               Intra_16x16) // 帧内预测
+        std::cout << "hi3~" << std::endl;
+      /* TODO YangJing  <24-07-30 23:47:00> */
+      else if (
+          picture.m_mbs[picture.CurrMbAddr].m_name_of_mb_type ==
+          I_PCM) // 说明该宏块没有残差，也没有预测值，码流中的数据直接为原始像素值
+        std::cout << "hi4~" << std::endl;
+      /* TODO YangJing  <24-07-30 23:47:00> */
+      else {
+        /* TODO YangJing 这里没进 <24-07-30 23:46:43> */
+        exit(0);
+      }
     }
 
     if (!m_pps.entropy_coding_mode_flag) {
-      moreDataFlag = bitStream.more_rbsp_data();
+      moreDataFlag = bs.more_rbsp_data();
+      std::cout << "hi~" << std::endl;
+      /* TODO YangJing 没进 <24-07-30 23:47:38> */
     } else {
-      /* TODO YangJing 没进 <24-05-26 16:01:53> */
-      // if (slice.slice_type != SLICE_I && slice_type != SLICE_SI)
-      //   prevMbSkipped = mb_skip_flag;
-      // if (slice.MbaffFrameFlag && CurrMbAddr % 2 == 0)
-      //   moreDataFlag = 1;
-      // else {
-      //   moreDataFlag = !end_of_slice_flag;
-      // }
+      if (slice_header.slice_type != H264_SLIECE_TYPE_I &&
+          slice_header.slice_type != H264_SLIECE_TYPE_SI) {
+        prevMbSkipped = mb_skip_flag;
+      }
+
+      if (slice_header.MbaffFrameFlag && CurrMbAddr % 2 == 0) {
+        moreDataFlag = 1;
+      } else {
+        cabac.CABAC_decode_end_of_slice_flag(picture, bs, end_of_slice_flag);
+        moreDataFlag = !end_of_slice_flag;
+      }
     }
     CurrMbAddr = NextMbAddress(CurrMbAddr);
   } while (moreDataFlag);
 
-  if (picture.mb_cnt == picture.PicSizeInMbs) {
+  if (picture.mb_cnt == picture.PicSizeInMbs)
     picture.m_is_decode_finished = 1;
-  }
+
+  slice_id++;
+  slice_number++;
   return 0;
 }
 

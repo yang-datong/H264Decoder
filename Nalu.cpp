@@ -140,25 +140,32 @@ int Nalu::extractIDRparameters(RBSP &rbsp) {
   slice_header.m_pps = pps;
   slice_header.m_idr = idr;
   slice_header.parseSliceHeader(bitStream, this);
-  // decode(bitStream);
+  decode(bitStream);
   return 0;
 }
 
 int Nalu::decode(BitStream &bitStream) {
-  PictureBase picture;
 
-  picture.m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
-  picture.m_parent = this;
-  /* TODO YangJing 这里先放置一下，这里是在处理前一帧的数据 <24-07-30 10:39:24>
-   */
-  // memcpy(picture.m_dpb, dpb, sizeof(Picture *) * size_pdb);
+  //----------------帧----------------------------------
+  m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
+  m_picture_frame.m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
+  m_picture_frame.m_parent = this;
+
+  /* TODO YangJing 处理前一帧内存 <24-07-30 23:25:01> */
+  // memcpy(m_picture_frame.m_dpb, dpb, sizeof(CH264Picture *) * size_pdb);
+
   m_current_picture_ptr = &m_picture_frame;
   m_picture_frame.init(slice_header);
+
+  if (slice_header.field_pic_flag == 0) // 帧
+    std::cout << "帧编码" << std::endl;
+  else // 场编码->顶场，底场
+    std::cout << "场编码" << std::endl;
 
   slice_body.slice_header = this->slice_header;
   slice_body.m_sps = this->sps;
   slice_body.m_pps = this->pps;
   slice_body.m_idr = this->idr;
-  slice_body.parseSliceData(bitStream, picture);
+  slice_body.parseSliceData(bitStream, m_picture_frame);
   return 0;
 }

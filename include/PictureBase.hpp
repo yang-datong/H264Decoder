@@ -5,6 +5,7 @@
 #include "MacroBlock.hpp"
 #include "Type.hpp"
 #include "SliceHeader.hpp"
+#include "SliceBody.hpp"
 
 
 class Nalu;
@@ -60,7 +61,7 @@ class PictureBase {
   H264_PICTURE_MARKED_AS reference_marked_type; // I,P作为参考帧的mark状态
 
   SliceHeader m_h264_slice_header;
-  CH264SliceData m_h264_slice_data; // 注意：一个picture中可能有多个slice data
+  SliceBody m_h264_slice_data; // 注意：一个picture中可能有多个slice data
   MacroBlock *m_mbs; // 存储当前图像的所有宏块 m_mbs[PicSizeInMbs] =
                      // m_mbs[PicWidthInMbs * PicHeightInMbs];
   int32_t LevelScale4x4[6][4][4];

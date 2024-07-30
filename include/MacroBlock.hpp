@@ -4,7 +4,9 @@
 #include "H264SliceData.hpp"
 #include "Type.hpp"
 
+
 class PictureBase;
+class SliceBody;
 
 class MacroBlock {
  public:
@@ -177,14 +179,13 @@ class MacroBlock {
   inline int set_mb_type_X_slice_info();
 
   int macroblock_layer(BitStream &bs, PictureBase &picture,
-                       const CH264SliceData &slice_data, CH264Cabac &cabac);
+                       const SliceBody &slice_data, CH264Cabac &cabac);
   int macroblock_layer_mb_skip(PictureBase &picture,
-                               const CH264SliceData &slice_data,
-                               CH264Cabac &cabac);
-  int mb_pred(BitStream &bs, PictureBase &picture,
-              const CH264SliceData &slice_data, CH264Cabac &cabac);
+                               const SliceBody &slice_data, CH264Cabac &cabac);
+  int mb_pred(BitStream &bs, PictureBase &picture, const SliceBody &slice_data,
+              CH264Cabac &cabac);
   int sub_mb_pred(BitStream &bs, PictureBase &picture,
-                  const CH264SliceData &slice_data, CH264Cabac &cabac);
+                  const SliceBody &slice_data, CH264Cabac &cabac);
 
   int residual(BitStream &bs, PictureBase &picture, int32_t startIdx,
                int32_t endIdx, CH264Cabac &cabac);

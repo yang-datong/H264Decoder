@@ -42,11 +42,11 @@ class SliceHeader {
   bool field_pic_flag = 0;
   uint32_t mb_skip_run = 0;
   int32_t mb_skip_flag = 0;
+  int32_t mb_skip_flag_next_mb = 0;
   int32_t end_of_slice_flag = 0;
   uint32_t slice_id = 0;
   uint32_t slice_number = 0;
   uint32_t syntax_element_categories = 0;
-  int32_t mb_skip_flag_next_mb = 0;
   int32_t slice_qs_delta = 0;
   uint32_t first_mb_in_slice = 0;
   int32_t slice_alpha_c0_offset_div2 = 0;

@@ -3837,7 +3837,7 @@ int CH264Cabac::CABAC_decode_mb_skip_flag(PictureBase &picture, BitStream &bs,
 
   H264_SLIECE_TYPE slice_type =
       (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
-  // int32_t maxBinIdxCtx = 0;
+  int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
   int32_t binIdx = -1;

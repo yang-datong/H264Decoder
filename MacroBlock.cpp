@@ -1,6 +1,8 @@
 #include "MacroBlock.hpp"
 #include "CH264Golomb.hpp"
 #include "H264ResidualBlockCavlc.hpp"
+#include "SliceBody.hpp"
+
 #include "PictureBase.hpp"
 
 /*
@@ -1007,7 +1009,7 @@ int MacroBlock::set_mb_type_X_slice_info() {
 
 // 7.3.5 Macroblock layer syntax
 int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
-                                 const CH264SliceData &slice_data,
+                                 const SliceBody &slice_data,
                                  CH264Cabac &cabac) {
   int ret = 0;
   int32_t i = 0;
@@ -1256,7 +1258,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
 }
 
 int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
-                                         const CH264SliceData &slice_data,
+                                         const SliceBody &slice_data,
                                          CH264Cabac &cabac) {
   int ret = 0;
   int32_t i = 0;
@@ -1337,7 +1339,7 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
  * 7.3.5.1 Macroblock prediction syntax
  */
 int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
-                        const CH264SliceData &slice_data, CH264Cabac &cabac) {
+                        const SliceBody &slice_data, CH264Cabac &cabac) {
   int ret = 0;
 
   CH264Golomb gb;
@@ -1575,8 +1577,7 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
  * 7.3.5.2 Sub-macroblock prediction syntax
  */
 int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
-                            const CH264SliceData &slice_data,
-                            CH264Cabac &cabac) {
+                            const SliceBody &slice_data, CH264Cabac &cabac) {
   int ret = 0;
   int i = 0;
   CH264Golomb gb;

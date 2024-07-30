@@ -1,5 +1,6 @@
 #include "PictureBase.hpp"
 #include "Common.hpp"
+#include "Nalu.hpp"
 #include <cstdio>
 
 extern int32_t g_PicNumCnt;
@@ -96,22 +97,21 @@ int PictureBase::reset() {
   m_RefPicList1Length = 0;
   m_PicNumCnt = 0;
 
-  m_h264_slice_data.init();
+  // m_h264_slice_data.init();
 
   return 0;
 }
 
 int PictureBase::init(SliceHeader &slice_header) {
-
   m_h264_slice_header = slice_header;
 
   MbWidthL = MB_WIDTH;   // 16
   MbHeightL = MB_HEIGHT; // 16
-  // MbWidthC = slice_header.m_sps.MbWidthC;
-  // MbHeightC = slice_header.m_sps.MbHeightC;
-  // Chroma_Format = slice_header.m_sps.Chroma_Format;
+  MbWidthC = slice_header.m_sps.MbWidthC;
+  MbHeightC = slice_header.m_sps.MbHeightC;
+  Chroma_Format = slice_header.m_sps.Chroma_Format;
 
-  // PicWidthInMbs = slice_header.m_sps.PicWidthInMbs;
+  PicWidthInMbs = slice_header.m_sps.PicWidthInMbs;
   PicHeightInMbs = slice_header.PicHeightInMbs;
   PicSizeInMbs = PicWidthInMbs * PicHeightInMbs;
 
@@ -155,31 +155,23 @@ int PictureBase::init(SliceHeader &slice_header) {
     m_pic_buff_cr = m_pic_buff_cb + sizeU;
 
     m_is_malloc_mem_by_myself = 1;
-  } else // if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD ||
-         // m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
-  {
+  } else {
     // 因为top_filed顶场帧和bottom底场帧，都是共享frame帧的大部分数据信息，所以frame帧必须先初始化过了才行
-    // RETURN_IF_FAILED(
-    // this->m_parent->m_picture_frame.m_is_malloc_mem_by_myself != 1, -1);
-
     H264_PICTURE_CODED_TYPE picture_coded_type = m_picture_coded_type;
 
-    // memcpy(this, &(this->m_parent->m_picture_frame),
-    // sizeof(PictureBase)); //先整体拷贝一份
-
-    //int32_t copyMbsDataFlag = 0;
-    // copyData2(this->m_parent->m_picture_frame, copyMbsDataFlag);
+    int32_t copyMbsDataFlag = 0;
+    copyData2(this->m_parent->m_picture_frame, copyMbsDataFlag);
 
     m_picture_coded_type = picture_coded_type;
 
     //----------重新计算filed帧的高度--------------------
     MbWidthL = MB_WIDTH;   // 16
     MbHeightL = MB_HEIGHT; // 16
-    // MbWidthC = slice_header.m_sps.MbWidthC;
-    // MbHeightC = slice_header.m_sps.MbHeightC;
-    // Chroma_Format = slice_header.m_sps.Chroma_Format;
+    MbWidthC = slice_header.m_sps.MbWidthC;
+    MbHeightC = slice_header.m_sps.MbHeightC;
+    Chroma_Format = slice_header.m_sps.Chroma_Format;
 
-    // PicWidthInMbs = slice_header.m_sps.PicWidthInMbs;
+    PicWidthInMbs = slice_header.m_sps.PicWidthInMbs;
     PicHeightInMbs =
         slice_header.PicHeightInMbs / 2; // filed场帧的高度是frame帧高度的一半
     PicSizeInMbs = PicWidthInMbs * PicHeightInMbs;
@@ -260,8 +252,7 @@ int PictureBase::copyData(const PictureBase &src, bool isMallocAndCopyData) {
     memcpy(m_pic_buff_cr, src.m_pic_buff_cr,
            sizeof(uint8_t) * PicWidthInSamplesC * PicHeightInSamplesC);
   } else {
-    SliceHeader &slice_header =
-        (SliceHeader &)src.m_h264_slice_header;
+    SliceHeader &slice_header = (SliceHeader &)src.m_h264_slice_header;
 
     MbWidthL = MB_WIDTH;   // 16
     MbHeightL = MB_HEIGHT; // 16
@@ -3752,8 +3743,8 @@ int PictureBase::transform_decoding_process_for_chroma_samples(
         dcC[2][0], dcC[2][1], dcC[3][0], dcC[3][1],
     };
 
-    int32_t rMb[16][16] = {
-        {0}}; // 本应该是rMb[MbHeightC][MbWidthC], 此处按最大的16x16尺寸来申请数组
+    int32_t rMb[16][16] = {{0}}; // 本应该是rMb[MbHeightC][MbWidthC],
+                                 // 此处按最大的16x16尺寸来申请数组
 
     int32_t isMbAff = (m_h264_slice_header.MbaffFrameFlag == 1 &&
                        m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
@@ -3803,7 +3794,8 @@ int PictureBase::transform_decoding_process_for_chroma_samples(
     if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1 &&
         (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_4x4 ||
          m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_8x8 ||
-         ((m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_16x16 && m_mbs[CurrMbAddr].intra_chroma_pred_mode == 1) ||
+         ((m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_16x16 &&
+           m_mbs[CurrMbAddr].intra_chroma_pred_mode == 1) ||
           m_mbs[CurrMbAddr].intra_chroma_pred_mode == 2))) {
       // 8.5.15 Intra residual transform-bypass decoding process
       int32_t nW = MbWidthC;
@@ -3938,13 +3930,13 @@ int PictureBase::
         int32_t isChromaCb, int32_t c[4][2], int32_t nW, int32_t nH,
         int32_t (&dcC)[4][2]) {
   int ret = 0;
-  //SliceHeader &slice_header = m_h264_slice_header;
+  // SliceHeader &slice_header = m_h264_slice_header;
 
   // 8.5.8 Derivation process for chroma quantisation parameters
   ret = get_chroma_quantisation_parameters(isChromaCb);
   RETURN_IF_FAILED(ret != 0, ret);
 
-  //int32_t bitDepth = slice_header.m_sps.BitDepthC;
+  // int32_t bitDepth = slice_header.m_sps.BitDepthC;
   int32_t qP =
       (isChromaCb == 1) ? m_mbs[CurrMbAddr].QP1Cb : m_mbs[CurrMbAddr].QP1Cr;
 
@@ -4059,14 +4051,14 @@ int PictureBase::
 int PictureBase::Scaling_and_transformation_process_for_residual_4x4_blocks(
     int32_t c[4][4], int32_t (&r)[4][4], int32_t isChroma, int32_t isChromaCb) {
   int ret = 0;
-  //int32_t bitDepth = 0;
+  // int32_t bitDepth = 0;
 
   SliceHeader &slice_header = m_h264_slice_header;
 
   if (isChroma == 0) {
-    //bitDepth = slice_header.m_sps.BitDepthY;
+    // bitDepth = slice_header.m_sps.BitDepthY;
   } else if (isChroma == 1) {
-    //bitDepth = slice_header.m_sps.BitDepthC;
+    // bitDepth = slice_header.m_sps.BitDepthC;
   }
 
   int32_t sMbFlag = 0;
@@ -4196,19 +4188,19 @@ int PictureBase::Scaling_and_transformation_process_for_residual_4x4_blocks(
 // 8.5.13 Scaling and transformation process for residual 8x8 blocks
 int PictureBase::Scaling_and_transformation_process_for_residual_8x8_blocks(
     int32_t c[8][8], int32_t (&r)[8][8], int32_t isChroma, int32_t isChromaCb) {
-  //SliceHeader &slice_header = m_h264_slice_header;
+  // SliceHeader &slice_header = m_h264_slice_header;
 
-  //int32_t bitDepth = 0;
+  // int32_t bitDepth = 0;
   int32_t qP = 0;
 
   if (isChroma == 0) // If the input array c relates to a luma residual block
   {
-    //bitDepth = slice_header.m_sps.BitDepthY;
+    // bitDepth = slice_header.m_sps.BitDepthY;
     qP = m_mbs[CurrMbAddr].QP1Y;
   } else // if (isChroma == 1) //the input array c relates to a chroma residual
          // block
   {
-    //bitDepth = slice_header.m_sps.BitDepthC;
+    // bitDepth = slice_header.m_sps.BitDepthC;
     if (isChromaCb == 1) {
       qP = m_mbs[CurrMbAddr].QP1Cb;
     } else if (isChromaCb == 0) {
@@ -4695,8 +4687,8 @@ int PictureBase::get_chroma_quantisation_parameters(int32_t isChromaCb) {
   if (qPI < 30) {
     QPC = qPI;
   } else {
-    //int32_t qPIs[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-                      //41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
+    // int32_t qPIs[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    // 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
     int32_t QPCs[] = {29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36,
                       36, 37, 37, 37, 38, 38, 38, 39, 39, 39, 39};
 
@@ -4760,8 +4752,8 @@ int PictureBase::get_chroma_quantisation_parameters2(int32_t QPY,
   if (qPI < 30) {
     QPC = qPI;
   } else {
-    //int32_t qPIs[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-                      //41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
+    // int32_t qPIs[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    // 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
     int32_t QPCs[] = {29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36,
                       36, 37, 37, 37, 38, 38, 38, 39, 39, 39, 39};
 
@@ -4896,7 +4888,7 @@ int PictureBase::scaling_functions(int32_t isChroma, int32_t isChromaCb) {
 int PictureBase::
     Scaling_and_transformation_process_for_DC_transform_coefficients_for_Intra_16x16_macroblock_type(
         int32_t bitDepth, int32_t qP, int32_t c[4][4], int32_t (&dcY)[4][4]) {
-  //SliceHeader &slice_header = m_h264_slice_header;
+  // SliceHeader &slice_header = m_h264_slice_header;
 
   if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1) {
     for (int32_t i = 0; i <= 3; i++) {

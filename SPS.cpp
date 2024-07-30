@@ -218,10 +218,9 @@ int SPS::extractParameters() {
   // frame_mbs_only_flag 为0，则图像包含场，并且帧高度等于图像高度的一半。
 
   //----------- 下面都是一些需要进行额外计算的（文档都有需要自己找）------------
-  int width = (pic_width_in_mbs_minus1 + 1) * 16;
-  int height = (pic_height_in_map_units_minus1 + 1) * 16;
+  int width = PicWidthInMbs * 16;
+  int height = PicHeightInMapUnits * 16;
   printf("\tprediction width:%d, prediction height:%d\n", width, height);
-  /* TODO YangJing 这里的高为什么是1088？ <24-07-30 20:18:36> */
 
   /* 获取帧率 */
   /* TODO YangJing  <24-04-05 00:22:50> */
