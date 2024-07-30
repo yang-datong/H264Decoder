@@ -6,7 +6,7 @@ int PictureBase::Derivation_process_for_neighbouring_macroblocks(
     int32_t &mbAddrB, int32_t isChroma) {
   int ret = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   int32_t xW = 0;
   int32_t yW = 0;
@@ -71,7 +71,7 @@ int PictureBase::Derivation_process_for_8x8_luma_block_indices(
 int PictureBase::Deblocking_filter_process() {
   int ret = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   int32_t i = 0;
   int32_t k = 0;
@@ -697,7 +697,7 @@ int PictureBase::Filtering_process_for_block_edges(
     int32_t leftMbEdgeFlag, int32_t (&E)[16][2]) {
   int ret = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   //-----------------------
   uint8_t *pic_buff = NULL;
@@ -893,7 +893,7 @@ int PictureBase::
         uint8_t (&qq)[3]) {
   int ret = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   int32_t bS = 0;
   int32_t mbAddr_p0 = mbAddrN;
@@ -1418,7 +1418,7 @@ int PictureBase::Derivation_process_for_the_thresholds_for_each_block_edge(
     int32_t &beta) {
   int ret = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   int32_t qPav = (qPp + qPq + 1) >> 1;
 
@@ -1466,7 +1466,7 @@ int PictureBase::Filtering_process_for_edges_with_bS_less_than_4(
     uint8_t (&pp)[3], uint8_t (&qq)[3]) {
   int ret = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   //-----------------
   // Table 8-17 – Value of variable t´C0 as a function of indexA and bS

@@ -101,7 +101,7 @@ int PictureBase::reset() {
   return 0;
 }
 
-int PictureBase::init(CH264SliceHeader &slice_header) {
+int PictureBase::init(SliceHeader &slice_header) {
 
   m_h264_slice_header = slice_header;
 
@@ -248,7 +248,7 @@ int PictureBase::copyData(const PictureBase &src, bool isMallocAndCopyData) {
   m_is_malloc_mem_by_myself = 0;
 
   if (isMallocAndCopyData) {
-    ret = init((CH264SliceHeader &)src.m_h264_slice_header);
+    ret = init((SliceHeader &)src.m_h264_slice_header);
     RETURN_IF_FAILED(ret, -1);
 
     memcpy(m_mbs, src.m_mbs, sizeof(MacroBlock) * PicSizeInMbs);
@@ -260,8 +260,8 @@ int PictureBase::copyData(const PictureBase &src, bool isMallocAndCopyData) {
     memcpy(m_pic_buff_cr, src.m_pic_buff_cr,
            sizeof(uint8_t) * PicWidthInSamplesC * PicHeightInSamplesC);
   } else {
-    CH264SliceHeader &slice_header =
-        (CH264SliceHeader &)src.m_h264_slice_header;
+    SliceHeader &slice_header =
+        (SliceHeader &)src.m_h264_slice_header;
 
     MbWidthL = MB_WIDTH;   // 16
     MbHeightL = MB_HEIGHT; // 16
@@ -663,7 +663,7 @@ int PictureBase::getIntra4x4PredMode(
   int32_t luma8x8BlkIdxN_A = 0;
   int32_t luma8x8BlkIdxN_B = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   // 6.4.11.4 Derivation process for neighbouring 4x4 luma blocks
 
@@ -808,7 +808,7 @@ int PictureBase::getIntra8x8PredMode(
   int32_t luma8x8BlkIdxN_A = 0;
   int32_t luma8x8BlkIdxN_B = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   // 6.4.11.2 Derivation process for neighbouring 8x8 luma block
 
@@ -953,7 +953,7 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
   int32_t luma4x4BlkIdxN = 0;
   int32_t luma8x8BlkIdxN = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   // The 13 neighbouring samples p[ x, y ] that are constructed luma samples
   // prior to the deblocking filter process,
@@ -1347,7 +1347,7 @@ int PictureBase::Intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
   memset(p, -1, sizeof(int32_t) * 9 * 17);
   memset(p1, -1, sizeof(int32_t) * 9 * 17);
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   // 6.4.5 Inverse 8x8 luma block scanning process
   // InverseRasterScan = (a % (d / b) ) * b;    if e == 0;
@@ -1782,7 +1782,7 @@ int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
                          PicWidthInSamples +                                   \
                      (m_mbs[CurrMbAddr].m_mb_position_x + (x))]
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   for (int32_t i = 0; i < 33; i++) {
     // 6.4.12 Derivation process for neighbouring locations
@@ -2028,7 +2028,7 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
   int32_t luma4x4BlkIdxN = 0;
   int32_t luma8x8BlkIdxN = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   // int32_t SubWidthC = slice_header.m_sps.SubWidthC;
   // int32_t SubHeightC = slice_header.m_sps.SubHeightC;
@@ -2419,7 +2419,7 @@ int PictureBase::Sample_construction_process_for_I_PCM_macroblocks() {
   int32_t i = 0;
   int32_t dy = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (slice_header.MbaffFrameFlag == 1 &&
       m_mbs[CurrMbAddr].mb_field_decoding_flag == 1) {
@@ -3693,7 +3693,7 @@ int PictureBase::transform_decoding_process_for_8x8_luma_residual_blocks(
 int PictureBase::transform_decoding_process_for_chroma_samples(
     int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (slice_header.m_sps.ChromaArrayType == 0) {
     LOG_ERROR("This process is invoked for each chroma component Cb and Cr "
@@ -3883,7 +3883,7 @@ int PictureBase::
         int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
   int ret = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   int32_t isChroma = 1;
   int32_t BitDepth = slice_header.m_sps.BitDepthC;
@@ -3938,7 +3938,7 @@ int PictureBase::
         int32_t isChromaCb, int32_t c[4][2], int32_t nW, int32_t nH,
         int32_t (&dcC)[4][2]) {
   int ret = 0;
-  //CH264SliceHeader &slice_header = m_h264_slice_header;
+  //SliceHeader &slice_header = m_h264_slice_header;
 
   // 8.5.8 Derivation process for chroma quantisation parameters
   ret = get_chroma_quantisation_parameters(isChromaCb);
@@ -4061,7 +4061,7 @@ int PictureBase::Scaling_and_transformation_process_for_residual_4x4_blocks(
   int ret = 0;
   //int32_t bitDepth = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (isChroma == 0) {
     //bitDepth = slice_header.m_sps.BitDepthY;
@@ -4196,7 +4196,7 @@ int PictureBase::Scaling_and_transformation_process_for_residual_4x4_blocks(
 // 8.5.13 Scaling and transformation process for residual 8x8 blocks
 int PictureBase::Scaling_and_transformation_process_for_residual_8x8_blocks(
     int32_t c[8][8], int32_t (&r)[8][8], int32_t isChroma, int32_t isChromaCb) {
-  //CH264SliceHeader &slice_header = m_h264_slice_header;
+  //SliceHeader &slice_header = m_h264_slice_header;
 
   //int32_t bitDepth = 0;
   int32_t qP = 0;
@@ -4324,7 +4324,7 @@ int PictureBase::
         int32_t *u, int32_t nW, int32_t nH, int32_t BlkIdx, int32_t isChroma,
         int32_t PicWidthInSamples, uint8_t *pic_buff) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   int32_t xP = 0;
   int32_t yP = 0;
@@ -4677,7 +4677,7 @@ int PictureBase::
 int PictureBase::get_chroma_quantisation_parameters(int32_t isChromaCb) {
   int32_t qPOffset = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (isChromaCb == 1) // If the chroma component is the Cb component
   {
@@ -4742,7 +4742,7 @@ int PictureBase::get_chroma_quantisation_parameters2(int32_t QPY,
                                                      int32_t &QPC) {
   int32_t qPOffset = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (isChromaCb == 1) // If the chroma component is the Cb component
   {
@@ -4777,7 +4777,7 @@ int PictureBase::scaling_functions(int32_t isChroma, int32_t isChromaCb) {
   int ret = 0;
   int32_t mbIsInterFlag = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (IS_INTRA_Prediction_Mode(m_mbs[CurrMbAddr].m_mb_pred_mode)) {
     mbIsInterFlag = 0;
@@ -4896,7 +4896,7 @@ int PictureBase::scaling_functions(int32_t isChroma, int32_t isChromaCb) {
 int PictureBase::
     Scaling_and_transformation_process_for_DC_transform_coefficients_for_Intra_16x16_macroblock_type(
         int32_t bitDepth, int32_t qP, int32_t c[4][4], int32_t (&dcY)[4][4]) {
-  //CH264SliceHeader &slice_header = m_h264_slice_header;
+  //SliceHeader &slice_header = m_h264_slice_header;
 
   if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1) {
     for (int32_t i = 0; i <= 3; i++) {

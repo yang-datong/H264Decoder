@@ -33,40 +33,43 @@ int PictureBase::Decoding_process_for_picture_order_count_type_0(
   int32_t prevPicOrderCntMsb = 0;
   int32_t prevPicOrderCntLsb = 0;
 
-  if (m_h264_slice_header.m_nal_unit.IdrPicFlag == 1) // IDR picture
-  {
-    prevPicOrderCntMsb = 0;
-    prevPicOrderCntLsb = 0;
-  } else // if (m_h264_slice_header.m_nal_unit.IdrPicFlag != 1)
-  {
-    RETURN_IF_FAILED(picture_previous_ref == NULL, -1);
-
-    if (picture_previous_ref->memory_management_control_operation_5_flag ==
-        1) // If the previous reference picture in decoding order included a
-           // memory_management_control_operation equal to 5
-    {
-      if (picture_previous_ref->m_picture_coded_type !=
-          H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) // If the previous reference
-                                                // picture in decoding order is
-                                                // not a bottom field
-      {
-        prevPicOrderCntMsb = 0;
-        prevPicOrderCntLsb = picture_previous_ref->TopFieldOrderCnt;
-      } else // if (picture_previous_ref.m_picture_coded_type ==
-             // H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) //the previous reference
-             // picture in decoding order is a bottom field
-      {
-        prevPicOrderCntMsb = 0;
-        prevPicOrderCntLsb = 0;
-      }
-    } else // the previous reference picture in decoding order did not include a
-           // memory_management_control_operation equal to 5
-    {
-      prevPicOrderCntMsb = picture_previous_ref->PicOrderCntMsb;
-      prevPicOrderCntLsb =
-          picture_previous_ref->m_h264_slice_header.pic_order_cnt_lsb;
-    }
-  }
+  //  if (m_h264_slice_header.m_nal_unit.IdrPicFlag == 1) // IDR picture
+  //  {
+  //    prevPicOrderCntMsb = 0;
+  //    prevPicOrderCntLsb = 0;
+  //  } else // if (m_h264_slice_header.m_nal_unit.IdrPicFlag != 1)
+  //  {
+  //    RETURN_IF_FAILED(picture_previous_ref == NULL, -1);
+  //
+  //    if (picture_previous_ref->memory_management_control_operation_5_flag ==
+  //        1) // If the previous reference picture in decoding order included a
+  //           // memory_management_control_operation equal to 5
+  //    {
+  //      if (picture_previous_ref->m_picture_coded_type !=
+  //          H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) // If the previous reference
+  //                                                // picture in decoding order
+  //                                                is
+  //                                                // not a bottom field
+  //      {
+  //        prevPicOrderCntMsb = 0;
+  //        prevPicOrderCntLsb = picture_previous_ref->TopFieldOrderCnt;
+  //      } else // if (picture_previous_ref.m_picture_coded_type ==
+  //             // H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) //the previous
+  //             reference
+  //             // picture in decoding order is a bottom field
+  //      {
+  //        prevPicOrderCntMsb = 0;
+  //        prevPicOrderCntLsb = 0;
+  //      }
+  //    } else // the previous reference picture in decoding order did not
+  //    include a
+  //           // memory_management_control_operation equal to 5
+  //    {
+  //      prevPicOrderCntMsb = picture_previous_ref->PicOrderCntMsb;
+  //      prevPicOrderCntLsb =
+  //          picture_previous_ref->m_h264_slice_header.pic_order_cnt_lsb;
+  //    }
+  //  }
 
   //--------------------------
   if ((m_h264_slice_header.pic_order_cnt_lsb < prevPicOrderCntLsb) &&
@@ -113,37 +116,38 @@ int PictureBase::Decoding_process_for_picture_order_count_type_0(
 // This process is invoked when pic_order_cnt_type is equal to 1.
 int PictureBase::Decoding_process_for_picture_order_count_type_1(
     const PictureBase *picture_previous) {
-  RETURN_IF_FAILED(m_h264_slice_header.m_nal_unit.IdrPicFlag != 1 &&
-                       picture_previous == NULL,
-                   -1);
+  // RETURN_IF_FAILED(m_h264_slice_header.m_nal_unit.IdrPicFlag != 1 &&
+  // picture_previous == NULL,
+  //-1);
 
   int ret = 0;
   int32_t prevFrameNumOffset = 0;
 
   //--------------prevFrameNumOffset----------------
-  if (m_h264_slice_header.m_nal_unit.IdrPicFlag != 1) // not IDR picture
-  {
-    if (picture_previous->memory_management_control_operation_5_flag ==
-        1) // If the previous picture in decoding order included a
-           // memory_management_control_operation equal to 5
-    {
-      prevFrameNumOffset = 0;
-    } else {
-      prevFrameNumOffset = picture_previous->FrameNumOffset;
-    }
-  }
+  // if (m_h264_slice_header.m_nal_unit.IdrPicFlag != 1) // not IDR picture
+  // {
+  //   if (picture_previous->memory_management_control_operation_5_flag ==
+  //       1) // If the previous picture in decoding order included a
+  //          // memory_management_control_operation equal to 5
+  //   {
+  //     prevFrameNumOffset = 0;
+  //   } else {
+  //     prevFrameNumOffset = picture_previous->FrameNumOffset;
+  //   }
+  // }
 
   //--------------FrameNumOffset----------------
-  if (m_h264_slice_header.m_nal_unit.IdrPicFlag == 1) // IDR图像
-  {
-    FrameNumOffset = 0;
-  } else if (picture_previous->m_h264_slice_header.frame_num >
-             m_h264_slice_header.frame_num) // 前一图像的帧号比当前图像大
-  {
-    FrameNumOffset = prevFrameNumOffset + m_h264_slice_header.m_sps.MaxFrameNum;
-  } else {
-    FrameNumOffset = prevFrameNumOffset;
-  }
+  //  if (m_h264_slice_header.m_nal_unit.IdrPicFlag == 1) // IDR图像
+  //  {
+  //    FrameNumOffset = 0;
+  //  } else if (picture_previous->m_h264_slice_header.frame_num >
+  //             m_h264_slice_header.frame_num) // 前一图像的帧号比当前图像大
+  //  {
+  //    FrameNumOffset = prevFrameNumOffset +
+  //    m_h264_slice_header.m_sps.MaxFrameNum;
+  //  } else {
+  //    FrameNumOffset = prevFrameNumOffset;
+  //  }
 
   //--------------absFrameNum----------------
   if (m_h264_slice_header.m_sps.num_ref_frames_in_pic_order_cnt_cycle != 0) {
@@ -152,9 +156,9 @@ int PictureBase::Decoding_process_for_picture_order_count_type_1(
     absFrameNum = 0;
   }
 
-  if (m_h264_slice_header.m_nal_unit.nal_ref_idc == 0 && absFrameNum > 0) {
-    absFrameNum = absFrameNum - 1;
-  }
+  // if (m_h264_slice_header.m_nal_unit.nal_ref_idc == 0 && absFrameNum > 0) {
+  // absFrameNum = absFrameNum - 1;
+  //}
 
   if (absFrameNum > 0) {
     picOrderCntCycleCnt =
@@ -178,10 +182,10 @@ int PictureBase::Decoding_process_for_picture_order_count_type_1(
     expectedPicOrderCnt = 0;
   }
 
-  if (m_h264_slice_header.m_nal_unit.nal_ref_idc == 0) {
-    expectedPicOrderCnt =
-        expectedPicOrderCnt + m_h264_slice_header.m_sps.offset_for_non_ref_pic;
-  }
+  // if (m_h264_slice_header.m_nal_unit.nal_ref_idc == 0) {
+  // expectedPicOrderCnt =
+  // expectedPicOrderCnt + m_h264_slice_header.m_sps.offset_for_non_ref_pic;
+  //}
 
   //--------------TopFieldOrderCnt or BottomFieldOrderCnt----------------
   if (!m_h264_slice_header.field_pic_flag) // 当前图像为帧
@@ -211,48 +215,50 @@ int PictureBase::Decoding_process_for_picture_order_count_type_1(
 // This process is invoked when pic_order_cnt_type is equal to 2.
 int PictureBase::Decoding_process_for_picture_order_count_type_2(
     const PictureBase *picture_previous) {
-  RETURN_IF_FAILED(m_h264_slice_header.m_nal_unit.IdrPicFlag != 1 &&
-                       picture_previous == NULL,
-                   -1);
+  // RETURN_IF_FAILED(m_h264_slice_header.m_nal_unit.IdrPicFlag != 1 &&
+  // picture_previous == NULL,
+  //-1);
 
   int ret = 0;
   int32_t prevFrameNumOffset = 0;
 
   //--------------prevFrameNumOffset----------------
-  if (m_h264_slice_header.m_nal_unit.IdrPicFlag != 1) // not IDR picture
-  {
-    if (picture_previous->memory_management_control_operation_5_flag ==
-        1) // If the previous picture in decoding order included a
-           // memory_management_control_operation equal to 5
-    {
-      prevFrameNumOffset = 0;
-    } else {
-      prevFrameNumOffset = picture_previous->FrameNumOffset;
-    }
-  }
+  //  if (m_h264_slice_header.m_nal_unit.IdrPicFlag != 1) // not IDR picture
+  //  {
+  //    if (picture_previous->memory_management_control_operation_5_flag ==
+  //        1) // If the previous picture in decoding order included a
+  //           // memory_management_control_operation equal to 5
+  //    {
+  //      prevFrameNumOffset = 0;
+  //    } else {
+  //      prevFrameNumOffset = picture_previous->FrameNumOffset;
+  //    }
+  //  }
 
   //--------------FrameNumOffset----------------
-  if (m_h264_slice_header.m_nal_unit.IdrPicFlag == 1) {
-    FrameNumOffset = 0;
-  } else if (picture_previous->m_h264_slice_header.frame_num >
-             m_h264_slice_header.frame_num) {
-    FrameNumOffset = prevFrameNumOffset + m_h264_slice_header.m_sps.MaxFrameNum;
-  } else {
-    FrameNumOffset = prevFrameNumOffset;
-  }
+  //  if (m_h264_slice_header.m_nal_unit.IdrPicFlag == 1) {
+  //    FrameNumOffset = 0;
+  //  } else if (picture_previous->m_h264_slice_header.frame_num >
+  //             m_h264_slice_header.frame_num) {
+  //    FrameNumOffset = prevFrameNumOffset +
+  //    m_h264_slice_header.m_sps.MaxFrameNum;
+  //  } else {
+  //    FrameNumOffset = prevFrameNumOffset;
+  //  }
 
   //--------------tempPicOrderCnt----------------
   int32_t tempPicOrderCnt = 0;
 
-  if (m_h264_slice_header.m_nal_unit.IdrPicFlag == 1) {
-    tempPicOrderCnt = 0;
-  } else if (m_h264_slice_header.m_nal_unit.nal_ref_idc ==
-             0) // 当前图像为非参考图像
-  {
-    tempPicOrderCnt = 2 * (FrameNumOffset + m_h264_slice_header.frame_num) - 1;
-  } else {
-    tempPicOrderCnt = 2 * (FrameNumOffset + m_h264_slice_header.frame_num);
-  }
+  //  if (m_h264_slice_header.m_nal_unit.IdrPicFlag == 1) {
+  //    tempPicOrderCnt = 0;
+  //  } else if (m_h264_slice_header.m_nal_unit.nal_ref_idc ==
+  //             0) // 当前图像为非参考图像
+  //  {
+  //    tempPicOrderCnt = 2 * (FrameNumOffset + m_h264_slice_header.frame_num) -
+  //    1;
+  //  } else {
+  //    tempPicOrderCnt = 2 * (FrameNumOffset + m_h264_slice_header.frame_num);
+  //  }
 
   //--------------TopFieldOrderCnt or BottomFieldOrderCnt----------------
   if (!m_h264_slice_header.field_pic_flag) // 当前图像为帧
@@ -276,7 +282,7 @@ int PictureBase::Decoding_process_for_picture_order_count_type_2(
 int PictureBase::Decoding_process_for_reference_picture_lists_construction(
     Nalu *(&dpb)[16], Nalu *(&RefPicList0)[16], Nalu *(&RefPicList1)[16]) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   // Decoded reference pictures are marked as "used for short-term reference" or
   // "used for long-term reference" as specified by the bitstream and specified
@@ -327,7 +333,7 @@ int PictureBase::Decoding_process_for_reference_picture_lists_construction(
 // 8.2.4.1 Decoding process for picture numbers
 int PictureBase::Decoding_process_for_picture_numbers(Nalu *(&dpb)[16]) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
   int32_t size_dpb = 16;
   int32_t i = 0;
 
@@ -540,7 +546,7 @@ int PictureBase::Decoding_process_for_picture_numbers(Nalu *(&dpb)[16]) {
 int PictureBase::Initialisation_process_for_reference_picture_lists(
     Nalu *(&dpb)[16], Nalu *(&RefPicList0)[16], Nalu *(&RefPicList1)[16]) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   int32_t i = 0;
 
@@ -640,7 +646,7 @@ int PictureBase::
   int32_t indexTemp_long[16] = {0};
   int32_t indexTemp3[16] = {0};
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   // 1.
   // 先把所有的短期参考帧放到数组的前半部分，把所有的长期参考帧放到数组的后半部分
@@ -873,7 +879,7 @@ int PictureBase::
   int32_t indexTemp_long[16] = {0};
   int32_t indexTemp3[16] = {0};
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   // For B slices, the order of short-term reference entries in the reference
   // picture lists RefPicList0 and RefPicList1 depends on output order, as given
@@ -1453,7 +1459,7 @@ int PictureBase::Initialisation_process_for_reference_picture_lists_in_fields(
 int PictureBase::Modification_process_for_reference_picture_lists(
     Nalu *(&RefPicList0)[16], Nalu *(&RefPicList1)[16]) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (slice_header.ref_pic_list_modification_flag_l0 == 1) {
     slice_header.refIdxL0 = 0;
@@ -1527,7 +1533,7 @@ int PictureBase::
   int32_t cIdx = 0;
   int32_t nIdx = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (modification_of_pic_nums_idc == 0) {
     if (picNumLXPred - (abs_diff_pic_num_minus1 + 1) < 0) {
@@ -1608,7 +1614,7 @@ int PictureBase::
   int32_t cIdx = 0;
   int32_t nIdx = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   for (cIdx = num_ref_idx_lX_active_minus1 + 1; cIdx > refIdxLX; cIdx--) {
     RefPicListX[cIdx] = RefPicListX[cIdx - 1];
@@ -1655,7 +1661,7 @@ int PictureBase::
     Sequence_of_operations_for_decoded_reference_picture_marking_process(
         Nalu *(&dpb)[16]) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
   int32_t size_dpb = 16;
 
   // 1. All slices of the current picture are decoded.
@@ -1663,90 +1669,95 @@ int PictureBase::
 
   // 2. Depending on whether the current picture is an IDR picture, the
   // following applies:
-  if (slice_header.m_nal_unit.IdrPicFlag == 1) // IDR picture
-  {
-    // All reference pictures are marked as "unused for reference"
-    for (int i = 0; i < size_dpb; i++) {
-      dpb[i]->reference_marked_type =
-          H264_PICTURE_MARKED_AS_unused_for_reference;
-      dpb[i]->m_picture_coded_type_marked_as_refrence =
-          H264_PICTURE_CODED_TYPE_UNKNOWN;
-      if (dpb[i] != this->m_parent) {
-        dpb[i]->m_picture_coded_type =
-            H264_PICTURE_CODED_TYPE_UNKNOWN; // FIXME:
-                                             // 需要先将之前解码的所有帧输出去
-      }
-    }
-
-    if (slice_header.long_term_reference_flag == 0) // 标记自己为哪一种参考帧
-    {
-      reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference;
-      MaxLongTermFrameIdx = NA; //"no long-term frame indices".
-      m_parent->reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference;
-
-      if (m_parent->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
-        m_parent->m_picture_coded_type_marked_as_refrence =
-            H264_PICTURE_CODED_TYPE_FRAME;
-      } else {
-        m_parent->m_picture_coded_type_marked_as_refrence =
-            H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
-      }
-    } else // if (slice_header.long_term_reference_flag == 1)
-    {
-      reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference;
-      LongTermFrameIdx = 0;
-      MaxLongTermFrameIdx = 0;
-      m_parent->reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference;
-
-      if (m_parent->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
-        m_parent->m_picture_coded_type_marked_as_refrence =
-            H264_PICTURE_CODED_TYPE_FRAME;
-      } else {
-        m_parent->m_picture_coded_type_marked_as_refrence =
-            H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
-      }
-    }
-  } else // the current picture is not an IDR picture
-  {
-    if (slice_header.adaptive_ref_pic_marking_mode_flag == 0) {
-      // 8.2.5.3 Sliding window decoded reference picture marking process
-      // 滑动窗口解码参考图像的标识过程
-      ret = Sliding_window_decoded_reference_picture_marking_process(dpb);
-      RETURN_IF_FAILED(ret != 0, ret);
-    } else // if (slice_header.adaptive_ref_pic_marking_mode_flag == 1)
-    {
-      // 8.2.5.4 Adaptive memory control decoded reference picture marking
-      // process
-      ret = Adaptive_memory_control_decoded_reference_picture_marking_process(
-          dpb);
-      RETURN_IF_FAILED(ret != 0, ret);
-    }
-  }
-
-  // 3. When the current picture is not an IDR picture and it was not marked as
-  // "used for long-term reference" by memory_management_control_operation equal
-  // to 6, it is marked as "used for short-term reference".
-  if (slice_header.m_nal_unit.IdrPicFlag !=
-          1 // the current picture is not an IDR picture
-      && memory_management_control_operation_6_flag != 6) {
-    reference_marked_type =
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference;
-    MaxLongTermFrameIdx = NA; //"no long-term frame indices".
-    m_parent->reference_marked_type =
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference;
-
-    if (m_parent->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
-      m_parent->m_picture_coded_type_marked_as_refrence =
-          H264_PICTURE_CODED_TYPE_FRAME;
-    } else {
-      m_parent->m_picture_coded_type_marked_as_refrence =
-          H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
-    }
-  }
+  //  if (slice_header.m_nal_unit.IdrPicFlag == 1) // IDR picture
+  //  {
+  //    // All reference pictures are marked as "unused for reference"
+  //    for (int i = 0; i < size_dpb; i++) {
+  //      dpb[i]->reference_marked_type =
+  //          H264_PICTURE_MARKED_AS_unused_for_reference;
+  //      dpb[i]->m_picture_coded_type_marked_as_refrence =
+  //          H264_PICTURE_CODED_TYPE_UNKNOWN;
+  //      if (dpb[i] != this->m_parent) {
+  //        dpb[i]->m_picture_coded_type =
+  //            H264_PICTURE_CODED_TYPE_UNKNOWN; // FIXME:
+  //                                             //
+  //                                             需要先将之前解码的所有帧输出去
+  //      }
+  //    }
+  //
+  //    if (slice_header.long_term_reference_flag == 0) //
+  //    标记自己为哪一种参考帧
+  //    {
+  //      reference_marked_type =
+  //          H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+  //      MaxLongTermFrameIdx = NA; //"no long-term frame indices".
+  //      m_parent->reference_marked_type =
+  //          H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+  //
+  //      if (m_parent->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
+  //        m_parent->m_picture_coded_type_marked_as_refrence =
+  //            H264_PICTURE_CODED_TYPE_FRAME;
+  //      } else {
+  //        m_parent->m_picture_coded_type_marked_as_refrence =
+  //            H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
+  //      }
+  //    } else // if (slice_header.long_term_reference_flag == 1)
+  //    {
+  //      reference_marked_type =
+  //          H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+  //      LongTermFrameIdx = 0;
+  //      MaxLongTermFrameIdx = 0;
+  //      m_parent->reference_marked_type =
+  //          H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+  //
+  //      if (m_parent->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
+  //        m_parent->m_picture_coded_type_marked_as_refrence =
+  //            H264_PICTURE_CODED_TYPE_FRAME;
+  //      } else {
+  //        m_parent->m_picture_coded_type_marked_as_refrence =
+  //            H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
+  //      }
+  //    }
+  //  } else // the current picture is not an IDR picture
+  //  {
+  //    if (slice_header.adaptive_ref_pic_marking_mode_flag == 0) {
+  //      // 8.2.5.3 Sliding window decoded reference picture marking process
+  //      // 滑动窗口解码参考图像的标识过程
+  //      ret = Sliding_window_decoded_reference_picture_marking_process(dpb);
+  //      RETURN_IF_FAILED(ret != 0, ret);
+  //    } else // if (slice_header.adaptive_ref_pic_marking_mode_flag == 1)
+  //    {
+  //      // 8.2.5.4 Adaptive memory control decoded reference picture marking
+  //      // process
+  //      ret =
+  //      Adaptive_memory_control_decoded_reference_picture_marking_process(
+  //          dpb);
+  //      RETURN_IF_FAILED(ret != 0, ret);
+  //    }
+  //  }
+  //
+  //  // 3. When the current picture is not an IDR picture and it was not marked
+  //  as
+  //  // "used for long-term reference" by memory_management_control_operation
+  //  equal
+  //  // to 6, it is marked as "used for short-term reference".
+  //  if (slice_header.m_nal_unit.IdrPicFlag !=
+  //          1 // the current picture is not an IDR picture
+  //      && memory_management_control_operation_6_flag != 6) {
+  //    reference_marked_type =
+  //        H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+  //    MaxLongTermFrameIdx = NA; //"no long-term frame indices".
+  //    m_parent->reference_marked_type =
+  //        H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+  //
+  //    if (m_parent->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
+  //      m_parent->m_picture_coded_type_marked_as_refrence =
+  //          H264_PICTURE_CODED_TYPE_FRAME;
+  //    } else {
+  //      m_parent->m_picture_coded_type_marked_as_refrence =
+  //          H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
+  //    }
+  //  }
 
   return 0;
 }
@@ -1773,7 +1784,7 @@ int PictureBase::Decoding_process_for_gaps_in_frame_num() { return 0; }
 // adaptive_ref_pic_marking_mode_flag is equal to 0.
 int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
     Nalu *(&dpb)[16]) {
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (m_picture_coded_type ==
           H264_PICTURE_CODED_TYPE_BOTTOM_FIELD // If the current picture is a
@@ -1925,7 +1936,7 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
 int PictureBase::
     Adaptive_memory_control_decoded_reference_picture_marking_process(
         Nalu *(&dpb)[16]) {
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   int32_t size_dpb = 16;
   int32_t i = 0;

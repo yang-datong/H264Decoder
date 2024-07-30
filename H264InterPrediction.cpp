@@ -230,7 +230,7 @@ int PictureBase::transform_decoding_process_for_8x8_luma_residual_blocks_inter(
 int PictureBase::transform_decoding_process_for_chroma_samples_inter(
     int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (slice_header.m_sps.ChromaArrayType == 0) {
     LOG_ERROR("This process is invoked for each chroma component Cb and Cr "
@@ -418,7 +418,7 @@ int PictureBase::Inter_prediction_process() {
   int ret = 0;
   int32_t MvCnt = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   int32_t refIdxL0 = -1;
   int32_t refIdxL1 = -1;
@@ -706,7 +706,7 @@ int PictureBase::
         PictureBase *&refPicL1) {
   int ret = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   int32_t mvpL0[2] = {0};
   int32_t mvpL1[2] = {0};
@@ -926,7 +926,7 @@ int PictureBase::
         int32_t &subMvCnt, int32_t &predFlagL0, int32_t &predFlagL1) {
   int ret = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   //-----------------------------------
   if (slice_header.direct_spatial_mv_pred_flag ==
@@ -970,7 +970,7 @@ int PictureBase::
         int32_t &vertMvScale) {
   int ret = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   PictureBase *firstRefPicL1Top = NULL;
   PictureBase *firstRefPicL1Bottom = NULL;
@@ -1468,7 +1468,7 @@ int PictureBase::
       vertMvScale);
   RETURN_IF_FAILED(ret != 0, ret);
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   //---------------------------------
   int32_t refIdxL0_temp = 0;
@@ -1786,7 +1786,7 @@ int PictureBase::Derivation_process_for_motion_data_of_neighbouring_partitions(
     int32_t &refIdxLXN_C) {
   int ret = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   //    int32_t mbAddrN_A= 0;
   int32_t mbPartIdxN_A = 0;
@@ -2151,7 +2151,7 @@ int PictureBase::Reference_picture_selection_process(int32_t refIdxLX,
                                                      int32_t RefPicListXLength,
                                                      PictureBase *&refPic) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   RETURN_IF_FAILED(refIdxLX < 0 || refIdxLX >= 32, -1);
 
@@ -2245,7 +2245,7 @@ int PictureBase::Fractional_sample_interpolation_process(
     uint8_t *predPartLXCr) // predPartCr[partHeightC][partWidthC]
 {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   //    int32_t xAL = mb_x * 16;
   //    int32_t yAL = mb_y * 16;
@@ -2355,7 +2355,7 @@ int PictureBase::Luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
   int ret = 0;
 
   int32_t refPicHeightEffectiveL = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (slice_header.MbaffFrameFlag == 0 ||
       m_h264_slice_data.mb_field_decoding_flag == 0) {
@@ -2502,7 +2502,7 @@ int PictureBase::Chroma_sample_interpolation_process(
   int ret = 0;
 
   int32_t refPicHeightEffectiveC = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (slice_header.MbaffFrameFlag == 0 ||
       m_h264_slice_data.mb_field_decoding_flag == 0) {
@@ -2559,7 +2559,7 @@ int PictureBase::Weighted_sample_prediction_process(
     uint8_t *predPartCr    // out: predPartLXCr[partHeightC][partWidthC]
 ) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (predFlagL0 == 1 && (slice_header.slice_type % 5 == H264_SLIECE_TYPE_P ||
                           slice_header.slice_type % 5 == H264_SLIECE_TYPE_SP)) {
@@ -2633,7 +2633,7 @@ int PictureBase::Default_weighted_sample_prediction_process(
     uint8_t *predPartL1L, uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
     uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (predFlagL0 == 1 && predFlagL1 == 0) {
     for (int y = 0; y <= partHeight - 1; y++) {
@@ -2706,7 +2706,7 @@ int PictureBase::Weighted_sample_prediction_process_2(
     uint8_t *predPartL1Cb, uint8_t *predPartL1Cr, uint8_t *predPartL,
     uint8_t *predPartCb, uint8_t *predPartCr) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (predFlagL0 == 1 && predFlagL1 == 0) {
     for (int y = 0; y <= partHeight - 1; y++) {
@@ -2867,7 +2867,7 @@ int PictureBase::Derivation_process_for_prediction_weights(
     int32_t &o0Cr, int32_t &o1Cr) {
   int ret = 0;
 
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   //-----------------------------
   int32_t implicitModeFlag = 0;
@@ -3086,7 +3086,7 @@ int PictureBase::Inverse_sub_macroblock_partition_scanning_process(
     MacroBlock *mb, int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &x,
     int32_t &y) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   int32_t MbPartWidth = mb->MbPartWidth;
   int32_t MbPartHeight = mb->MbPartHeight;
@@ -3111,7 +3111,7 @@ int PictureBase::Derivation_process_for_neighbouring_partitions(
     int32_t subMbPartIdx, int32_t isChroma, int32_t &mbAddrN,
     int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   //---------------------------------------
   // 1. The inverse macroblock partition scanning process as described in
@@ -3224,7 +3224,7 @@ int PictureBase::
         H264_MB_TYPE mb_type_, H264_MB_TYPE subMbType_[4], int32_t xP,
         int32_t yP, int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
   int ret = 0;
-  CH264SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_h264_slice_header;
 
   if (mb_type_ == MB_TYPE_NA) {
     LOG_ERROR("mb_type_ == MB_TYPE_NA\n");

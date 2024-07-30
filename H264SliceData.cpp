@@ -1,7 +1,7 @@
 #include "H264SliceData.hpp"
-#include "PictureBase.hpp"
+#include "CH264Golomb.hpp"
 #include "Nalu.hpp"
-
+#include "PictureBase.hpp"
 
 CH264SliceData::CH264SliceData() { init(); }
 
@@ -43,7 +43,7 @@ int CH264SliceData::slice_data(BitStream &bs, PictureBase &picture,
   CH264Golomb gb;
   CH264Cabac cabac;
 
-  CH264SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_h264_slice_header;
 
   slice_id = _slice_id;
   slice_number++;
@@ -237,7 +237,7 @@ int CH264SliceData::slice_data(BitStream &bs, PictureBase &picture,
           ret = picture.Inter_prediction_process(); // 帧间预测
           RETURN_IF_FAILED(ret != 0, ret);
 
-          //CurrMbAddr = NextMbAddress(slice_header, CurrMbAddr);
+          // CurrMbAddr = NextMbAddress(slice_header, CurrMbAddr);
           if (CurrMbAddr < 0) {
             printf("CurrMbAddr(%d) < 0\n", CurrMbAddr);
             break;
@@ -245,7 +245,7 @@ int CH264SliceData::slice_data(BitStream &bs, PictureBase &picture,
         }
 
         if (mb_skip_run > 0) {
-          //moreDataFlag = more_rbsp_data(bs);
+          // moreDataFlag = more_rbsp_data(bs);
         }
       } else // ae(v)表示CABAC编码
       {
@@ -309,8 +309,8 @@ int CH264SliceData::slice_data(BitStream &bs, PictureBase &picture,
         {
           mb_skip_flag = mb_skip_flag_next_mb;
         } else {
-          //ret = cabac.CABAC_decode_mb_skip_flag(picture, bs, CurrMbAddr,
-                                                //mb_skip_flag); // 2 ae(v)
+          // ret = cabac.CABAC_decode_mb_skip_flag(picture, bs, CurrMbAddr,
+          // mb_skip_flag); // 2 ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
         }
 
@@ -330,17 +330,17 @@ int CH264SliceData::slice_data(BitStream &bs, PictureBase &picture,
               picture.m_mbs[picture.CurrMbAddr + 1].mb_field_decoding_flag =
                   mb_field_decoding_flag; // 特别注意：底场宏块和顶场宏块的mb_field_decoding_flag值是相同的
 
-              //ret = cabac.CABAC_decode_mb_skip_flag(
-                  //picture, bs, CurrMbAddr + 1,
-                  //mb_skip_flag_next_mb); // 2 ae(v) 先读取底场宏块的mb_skip_flag
+              // ret = cabac.CABAC_decode_mb_skip_flag(
+              // picture, bs, CurrMbAddr + 1,
+              // mb_skip_flag_next_mb); // 2 ae(v) 先读取底场宏块的mb_skip_flag
               RETURN_IF_FAILED(ret != 0, ret);
 
               if (mb_skip_flag_next_mb == 0) // 如果底场宏块mb_skip_flag=0
               {
-                //ret = cabac.CABAC_decode_mb_field_decoding_flag(
-                    //picture, bs,
-                    //mb_field_decoding_flag); // 2 u(1) | ae(v)
-                                             // 再读取底场宏块的mb_field_decoding_flag
+                // ret = cabac.CABAC_decode_mb_field_decoding_flag(
+                // picture, bs,
+                // mb_field_decoding_flag); // 2 u(1) | ae(v)
+                //  再读取底场宏块的mb_field_decoding_flag
                 RETURN_IF_FAILED(ret != 0, ret);
 
                 is_need_skip_read_mb_field_decoding_flag = true;
@@ -405,14 +405,16 @@ int CH264SliceData::slice_data(BitStream &bs, PictureBase &picture,
         if (is_need_skip_read_mb_field_decoding_flag == false) {
           if (is_ae) // ae(v)表示CABAC编码
           {
-            //ret = cabac.CABAC_decode_mb_field_decoding_flag(
-                //picture, bs,
-                //mb_field_decoding_flag); // 2 u(1) | ae(v)
-                                         // 表示本宏块对是帧宏块对，还是场宏块对
+            // ret = cabac.CABAC_decode_mb_field_decoding_flag(
+            // picture, bs,
+            // mb_field_decoding_flag); // 2 u(1) | ae(v)
+            //  表示本宏块对是帧宏块对，还是场宏块对
             RETURN_IF_FAILED(ret != 0, ret);
           } else // ue(v) 表示CAVLC编码
           {
-            mb_field_decoding_flag = bs.readU1(); // 2 u(1) | ae(v) 表示本宏块对是帧宏块对，还是场宏块对
+            mb_field_decoding_flag =
+                bs.readU1(); // 2 u(1) | ae(v)
+                             // 表示本宏块对是帧宏块对，还是场宏块对
           }
         } else {
           is_need_skip_read_mb_field_decoding_flag = false;
@@ -574,7 +576,7 @@ int CH264SliceData::slice_data(BitStream &bs, PictureBase &picture,
     }
 
     if (!slice_header.m_pps.entropy_coding_mode_flag) {
-      //moreDataFlag = more_rbsp_data(bs);
+      // moreDataFlag = more_rbsp_data(bs);
     } else {
       if (slice_header.slice_type != H264_SLIECE_TYPE_I &&
           slice_header.slice_type != H264_SLIECE_TYPE_SI) {
@@ -584,15 +586,15 @@ int CH264SliceData::slice_data(BitStream &bs, PictureBase &picture,
       if (slice_header.MbaffFrameFlag && CurrMbAddr % 2 == 0) {
         moreDataFlag = 1;
       } else {
-        //ret = cabac.CABAC_decode_end_of_slice_flag(
-            //picture, bs, end_of_slice_flag); // 2 ae(v)
+        // ret = cabac.CABAC_decode_end_of_slice_flag(
+        // picture, bs, end_of_slice_flag); // 2 ae(v)
         RETURN_IF_FAILED(ret != 0, ret);
 
         moreDataFlag = !end_of_slice_flag;
       }
     }
 
-    //CurrMbAddr = NextMbAddress(slice_header, CurrMbAddr);
+    // CurrMbAddr = NextMbAddress(slice_header, CurrMbAddr);
 
     if (CurrMbAddr < 0) {
       printf("CurrMbAddr(%d) < 0\n", CurrMbAddr);
@@ -612,31 +614,31 @@ int CH264SliceData::slice_data(BitStream &bs, PictureBase &picture,
 }
 
 // 8.2.2 Decoding process for macroblock to slice group map
-//int CH264SliceData::NextMbAddress(const CH264SliceHeader &slice_header,
-                                  //int32_t n) {
-  //int32_t i = n + 1;
+// int CH264SliceData::NextMbAddress(const CH264SliceHeader &slice_header,
+// int32_t n) {
+// int32_t i = n + 1;
 
-  //if (slice_header.MbToSliceGroupMap == NULL) {
-    //printf("slice_header.MbToSliceGroupMap == NULL\n");
-    //return -1;
-  //}
+// if (slice_header.MbToSliceGroupMap == NULL) {
+// printf("slice_header.MbToSliceGroupMap == NULL\n");
+// return -1;
+//}
 
-  //if (i >= slice_header.PicSizeInMbs) {
-    //printf("i(%d) >= slice_header.PicSizeInMbs(%d);\n", i,
-           //slice_header.PicSizeInMbs);
-    //return -2;
-  //}
+// if (i >= slice_header.PicSizeInMbs) {
+// printf("i(%d) >= slice_header.PicSizeInMbs(%d);\n", i,
+// slice_header.PicSizeInMbs);
+// return -2;
+//}
 
-  //while (i < slice_header.PicSizeInMbs &&
-         //slice_header.MbToSliceGroupMap[i] !=
-             //slice_header.MbToSliceGroupMap[n]) {
-    //i++;
-    //if (i >= slice_header.PicSizeInMbs) {
-      //printf("i(%d) >= slice_header.PicSizeInMbs(%d);\n", i,
-             //slice_header.PicSizeInMbs);
-      //return -3;
-    //}
-  //}
+// while (i < slice_header.PicSizeInMbs &&
+// slice_header.MbToSliceGroupMap[i] !=
+// slice_header.MbToSliceGroupMap[n]) {
+// i++;
+// if (i >= slice_header.PicSizeInMbs) {
+// printf("i(%d) >= slice_header.PicSizeInMbs(%d);\n", i,
+// slice_header.PicSizeInMbs);
+// return -3;
+//}
+//}
 
-  //return i;
+// return i;
 //}

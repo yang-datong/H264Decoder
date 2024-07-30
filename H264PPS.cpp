@@ -1,4 +1,5 @@
 #include "H264PPS.hpp"
+#include "CH264Golomb.hpp"
 #include "PictureBase.hpp"
 #include <cstring>
 

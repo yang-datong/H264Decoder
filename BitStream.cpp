@@ -57,3 +57,13 @@ uint32_t BitStream::readSE() {
 }
 
 bool BitStream::endOfBit() { return _bitsLeft % 8 == 0; }
+
+bool BitStream::byte_aligned() {
+  /*
+   * 1. If the current position in the bitstream is on a byte boundary, i.e.,
+   * the next bit in the bitstream is the first bit in a byte, the return value
+   * of byte_aligned( ) is equal to TRUE.
+   * 2. Otherwise, the return value of byte_aligned( ) is equal to FALSE.
+   */
+  return endOfBit();
+}

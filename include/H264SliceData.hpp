@@ -2,9 +2,7 @@
 #define __H264_SLICE_DATA_H__
 
 #include "BitStream.hpp"
-#include "CH264Golomb.hpp"
 #include "H264Cabac.hpp"
-#include "H264SliceHeader.hpp"
 #include <cstdint>
 
 class PictureBase;

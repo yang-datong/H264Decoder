@@ -1,6 +1,7 @@
 #include "MacroBlock.hpp"
-#include "PictureBase.hpp"
+#include "CH264Golomb.hpp"
 #include "H264ResidualBlockCavlc.hpp"
+#include "PictureBase.hpp"
 
 /*
 //Table 7-11 – Macroblock types for I slices
@@ -1014,7 +1015,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
   int32_t mbPartIdx = 0;
   int32_t transform_size_8x8_flag_temp = 0;
 
-  CH264SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_h264_slice_header;
 
   field_pic_flag = slice_header.field_pic_flag;
   bottom_field_flag = slice_header.bottom_field_flag;
@@ -1262,7 +1263,7 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
   CH264Golomb gb;
   int32_t mbPartIdx = 0;
 
-  CH264SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_h264_slice_header;
 
   field_pic_flag = slice_header.field_pic_flag;
   bottom_field_flag = slice_header.bottom_field_flag;
@@ -1346,7 +1347,7 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
   int32_t mbPartIdx = 0;
   int32_t compIdx = 0;
 
-  CH264SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_h264_slice_header;
 
   int is_ae = slice_header.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
 
@@ -1583,7 +1584,7 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
   int32_t subMbPartIdx = 0;
   int32_t compIdx = 0;
 
-  CH264SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_h264_slice_header;
 
   int is_ae = slice_header.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
 
@@ -1776,7 +1777,7 @@ int MacroBlock::residual(BitStream &bs, PictureBase &picture, int32_t startIdx,
   int32_t TotalCoeff = 0; // 该 4x4 block的残差中，总共有多少个非零系数
   CH264ResidualBlockCavlc cavlc;
 
-  CH264SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_h264_slice_header;
 
   int is_ae = slice_header.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
 
@@ -1923,7 +1924,7 @@ int MacroBlock::residual_luma(
   H264_MB_TYPE name_of_mb_type2 = MB_TYPE_NA;
   CH264ResidualBlockCavlc cavlc;
 
-  CH264SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_h264_slice_header;
 
   int is_ae = slice_header.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
 

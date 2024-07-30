@@ -2,9 +2,10 @@
 #define PICTUREBASE_HPP_ZGHBMJIH
 #include "Common.hpp"
 #include "H264SliceData.hpp"
-#include "H264SliceHeader.hpp"
 #include "MacroBlock.hpp"
 #include "Type.hpp"
+#include "SliceHeader.hpp"
+
 
 class Nalu;
 
@@ -58,7 +59,7 @@ class PictureBase {
   int32_t memory_management_control_operation_6_flag;
   H264_PICTURE_MARKED_AS reference_marked_type; // I,P作为参考帧的mark状态
 
-  CH264SliceHeader m_h264_slice_header;
+  SliceHeader m_h264_slice_header;
   CH264SliceData m_h264_slice_data; // 注意：一个picture中可能有多个slice data
   MacroBlock *m_mbs; // 存储当前图像的所有宏块 m_mbs[PicSizeInMbs] =
                      // m_mbs[PicWidthInMbs * PicHeightInMbs];
@@ -84,7 +85,7 @@ class PictureBase {
   ~PictureBase();
   int printInfo();
   int reset();
-  int init(CH264SliceHeader &slice_header);
+  int init(SliceHeader &slice_header);
   int unInit();
   PictureBase &operator=(const PictureBase &src); // 重载等号运算符
   int copyData(const PictureBase &src, bool isMallocAndCopyData);

@@ -1,6 +1,7 @@
 #include "Nalu.hpp"
 #include "BitStream.hpp"
 #include "CH264Golomb.hpp"
+#include "H264SPS.hpp"
 #include "MacroBlock.hpp"
 #include "PictureBase.hpp"
 #include "RBSP.hpp"
@@ -157,22 +158,16 @@ int Nalu::extractSPSparameters(RBSP &rbsp) {
     sps.qpprime_y_zero_transform_bypass_flag = bitStream.readU1();
     sps.seq_scaling_matrix_present_flag = bitStream.readU1();
 
-    uint32_t ScalingList4x4[6][16];
-    uint32_t ScalingList8x8[6][64];
-
-    uint32_t UseDefaultScalingMatrix4x4Flag[6];
-    uint32_t UseDefaultScalingMatrix8x8Flag[6];
-
     if (sps.seq_scaling_matrix_present_flag) {
       for (int i = 0; i < ((sps.chroma_format_idc != 3) ? 8 : 12); i++) {
         sps.seq_scaling_list_present_flag[i] = bitStream.readU1();
         if (sps.seq_scaling_list_present_flag[i]) {
           if (i < 6)
-            scaling_list(bitStream, pps.ScalingList4x4[i], 16,
-                         pps.UseDefaultScalingMatrix4x4Flag[i]);
+            scaling_list(bitStream, sps.ScalingList4x4[i], 16,
+                         sps.UseDefaultScalingMatrix4x4Flag[i]);
           else
-            scaling_list(bitStream, pps.ScalingList8x8[i - 6], 64,
-                         pps.UseDefaultScalingMatrix8x8Flag[i - 6]);
+            scaling_list(bitStream, sps.ScalingList8x8[i - 6], 64,
+                         sps.UseDefaultScalingMatrix8x8Flag[i - 6]);
         }
       }
     }
@@ -199,30 +194,30 @@ int Nalu::extractSPSparameters(RBSP &rbsp) {
       offset_for_ref_frame[i] = bitStream.readSE();
   }
 
-  uint32_t max_num_ref_frames = bitStream.readUE();
-  bool gaps_in_frame_num_value_allowed_flag = bitStream.readU1();
-  uint32_t pic_width_in_mbs_minus1 = bitStream.readUE();
-  uint32_t pic_height_in_map_units_minus1 = bitStream.readUE();
+  sps.max_num_ref_frames = bitStream.readUE();
+  sps.gaps_in_frame_num_value_allowed_flag = bitStream.readU1();
+  sps.pic_width_in_mbs_minus1 = bitStream.readUE();
+  sps.pic_height_in_map_units_minus1 = bitStream.readUE();
 
   sps.frame_mbs_only_flag = bitStream.readU1();
   if (!sps.frame_mbs_only_flag)
     sps.mb_adaptive_frame_field_flag = bitStream.readU1();
-  bool direct_8x8_inference_flag = bitStream.readU1();
-  bool frame_cropping_flag = bitStream.readU1();
-  if (frame_cropping_flag) {
-    uint32_t frame_crop_left_offset = bitStream.readUE();
-    uint32_t frame_crop_right_offset = bitStream.readUE();
-    uint32_t frame_crop_top_offset = bitStream.readUE();
-    uint32_t frame_crop_bottom_offset = bitStream.readUE();
+  sps.direct_8x8_inference_flag = bitStream.readU1();
+  sps.frame_cropping_flag = bitStream.readU1();
+  if (sps.frame_cropping_flag) {
+    sps.frame_crop_left_offset = bitStream.readUE();
+    sps.frame_crop_right_offset = bitStream.readUE();
+    sps.frame_crop_top_offset = bitStream.readUE();
+    sps.frame_crop_bottom_offset = bitStream.readUE();
   }
   bool vui_parameters_present_flag = bitStream.readU1();
   if (vui_parameters_present_flag)
     vui_parameters(bitStream);
 
   /* 计算宏块大小以及图像宽、高 */
-  sps.PicWidthInMbs = pic_width_in_mbs_minus1 + 1;
+  sps.PicWidthInMbs = sps.pic_width_in_mbs_minus1 + 1;
   // 宏块单位的图像宽度 = pic_width_in_mbs_minus1 + 1
-  sps.PicHeightInMapUnits = pic_height_in_map_units_minus1 + 1;
+  sps.PicHeightInMapUnits = sps.pic_height_in_map_units_minus1 + 1;
   // 宏块单位的图像高度 = pic_height_in_map_units_minus1 + 1
   sps.PicSizeInMapUnits = sps.PicWidthInMbs * sps.PicHeightInMapUnits;
   // 宏块单位的图像大小 = 宽 * 高
@@ -233,8 +228,8 @@ int Nalu::extractSPSparameters(RBSP &rbsp) {
   // frame_mbs_only_flag 为0，则图像包含场，并且帧高度等于图像高度的一半。
 
   //----------- 下面都是一些需要进行额外计算的（文档都有需要自己找）------------
-  int width = (pic_width_in_mbs_minus1 + 1) * 16;
-  int height = (pic_height_in_map_units_minus1 + 1) * 16;
+  int width = (sps.pic_width_in_mbs_minus1 + 1) * 16;
+  int height = (sps.pic_height_in_map_units_minus1 + 1) * 16;
   printf("\tprediction width:%d, prediction height:%d\n", width, height);
 
   /* 获取帧率 */
@@ -252,11 +247,11 @@ int Nalu::extractSPSparameters(RBSP &rbsp) {
   /* 计算位深度 */
   sps.BitDepthY = sps.bit_depth_luma_minus8 + 8;
   // 亮度分量的位深度
-  sps.QpBitDepthY = sps.bit_depth_luma_minus8 * 6;
+  sps.QpBdOffsetY = sps.bit_depth_luma_minus8 * 6;
   // 亮度分量的量化参数步长偏移
-  sps.BitDepthUV = sps.bit_depth_chroma_minus8 + 8;
+  sps.BitDepthC = sps.bit_depth_chroma_minus8 + 8;
   // 色度分量的位深度
-  sps.QpBitDepthUV = sps.bit_depth_chroma_minus8 * 6;
+  sps.QpBdOffsetC = sps.bit_depth_chroma_minus8 * 6;
   // 色度分量的量化参数步长偏移
   //
 
@@ -306,8 +301,8 @@ $$
 The value of log2_max_frame_num_minus4 shall be in the range of 0 to
 12,inclusive.
    * */
-  slice.MaxFrameNum = std::pow(log2_max_frame_num_minus4 + 4, 2);
-  slice.maxPicOrderCntLsb =
+  sps.MaxFrameNum = std::pow(log2_max_frame_num_minus4 + 4, 2);
+  sps.maxPicOrderCntLsb =
       std::pow(sps.log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
 
   /* 计算预期图像顺序计数周期增量 */
@@ -415,705 +410,35 @@ int Nalu::extractPPSparameters(RBSP &rbsp) {
 }
 
 /* 在T-REC-H.264-202108-I!!PDF-E.pdf -48页 */
-int Nalu::extractSEIparameters(RBSP &sei) {
+int Nalu::extractSEIparameters(RBSP &rbsp) {
+  sei._buf = rbsp._buf;
+  sei._len = rbsp._len;
   /* 初始化bit处理器，填充sei的数据 */
   BitStream bitStream(sei._buf, sei._len);
   do {
-    sei_message(bitStream);
+    sei.sei_message(bitStream);
   } while (pps.more_rbsp_data());
   return 0;
-}
-
-void Nalu::sei_message(BitStream &bitStream) {
-  long payloadType = 0;
-  while (bitStream.readUn(8) == 0xFF) {
-    int8_t ff_byte = bitStream.readUn(8);
-    payloadType += 255;
-  }
-  uint8_t last_payload_type_byte = bitStream.readUn(8);
-  payloadType += last_payload_type_byte;
-
-  long payloadSize = 0;
-  while (bitStream.readUn(8) == 0xFF) {
-    int8_t ff_byte = bitStream.readUn(8);
-    payloadSize += 255;
-  }
-  uint8_t last_payload_size_byte = bitStream.readUn(8);
-  payloadSize += last_payload_size_byte;
-  sei_payload(bitStream, payloadType, payloadSize);
-  std::cout << "\tpayloadType:" << payloadType << std::endl;
-  std::cout << "\tpayloadSize:" << payloadSize << std::endl;
-}
-
-void Nalu::sei_payload(BitStream &bitStream, long payloadType,
-                       long payloadSize) {
-  /* TODO YangJing 忽略了一些if elseif, 见T-REC-H.264-202108-I!!PDF-E.pdf
-   * 331-332页 <24-04-05 02:19:55> */
-  if (!byte_aligned(bitStream)) {
-    int8_t bit_equal_to_one = bitStream.readU1();
-    while (!byte_aligned(bitStream))
-      int8_t bit_equal_to_zero = bitStream.readU1();
-  }
-}
-
-bool Nalu::byte_aligned(BitStream &bitStream) {
-  /*
-   * 1. If the current position in the bitstream is on a byte boundary, i.e.,
-   * the next bit in the bitstream is the first bit in a byte, the return value
-   * of byte_aligned( ) is equal to TRUE.
-   * 2. Otherwise, the return value of byte_aligned( ) is equal to FALSE.
-   */
-  return bitStream.endOfBit();
 }
 
 int Nalu::extractSliceparameters(RBSP &rbsp) {
   /* 初始化bit处理器，填充slice的数据 */
   BitStream bitStream(rbsp._buf, rbsp._len);
-  parseSliceHeader(bitStream, rbsp);
+  slice_header.m_sps = sps;
+  slice_header.m_pps = pps;
+  slice_header.m_idr = idr;
+  slice_header.parseSliceHeader(bitStream, rbsp, this);
   return 0;
 }
 
 int Nalu::extractIDRparameters(RBSP &rbsp) {
   /* 初始化bit处理器，填充idr的数据 */
   BitStream bitStream(rbsp._buf, rbsp._len);
-  parseSliceHeader(bitStream, rbsp);
+  slice_header.m_sps = sps;
+  slice_header.m_pps = pps;
+  slice_header.m_idr = idr;
+  slice_header.parseSliceHeader(bitStream, rbsp, this);
   return 0;
-}
-
-/* Slice header syntax -> 51 page */
-int Nalu::parseSliceHeader(BitStream &bitStream, RBSP &rbsp) {
-  slice.first_mb_in_slice = bitStream.readUE();
-  slice.slice_type = bitStream.readUE();
-  slice.pic_parametter_set_id = bitStream.readUE();
-  if (sps.separate_colour_plane_flag == 1)
-    slice.colour_plane_id = bitStream.readUn(2);
-
-  slice.frame_num = bitStream.readUn(std::log2(slice.MaxFrameNum)); // u(v)
-  if (!sps.frame_mbs_only_flag) {
-    slice.field_pic_flag = bitStream.readU1();
-    if (slice.field_pic_flag)
-      slice.bottom_field_flag = bitStream.readU1();
-  }
-  slice.IdrPicFlag = ((nal_unit_type == 5) ? 1 : 0);
-  if (slice.IdrPicFlag)
-    slice.idr_pic_id = bitStream.readUE();
-  if (sps.pic_order_cnt_type == 0) {
-    slice.pic_order_cnt_lsb = bitStream.readUn(std::log2(slice.MaxFrameNum));
-    if (pps.bottom_field_pic_order_in_frame_present_flag &&
-        !slice.field_pic_flag)
-      slice.delta_pic_order_cnt_bottom = bitStream.readSE();
-  }
-
-  if (sps.pic_order_cnt_type == 1 && !sps.delta_pic_order_always_zero_flag) {
-    slice.delta_pic_order_cnt[0] = bitStream.readSE();
-    if (pps.bottom_field_pic_order_in_frame_present_flag &&
-        !slice.field_pic_flag)
-      slice.delta_pic_order_cnt[1] = bitStream.readSE();
-  }
-
-  if (pps.redundant_pic_cnt_present_flag)
-    slice.redundant_pic_cnt = bitStream.readUE();
-  if (slice.slice_type % 5 == SLICE_B)
-    slice.direct_spatial_mv_pred_flag = bitStream.readU1();
-  if (slice.slice_type % 5 == SLICE_P || slice.slice_type % 5 == SLICE_SP ||
-      slice.slice_type % 5 == SLICE_B) {
-    slice.num_ref_idx_active_override_flag = bitStream.readU1();
-    if (slice.num_ref_idx_active_override_flag) {
-      slice.num_ref_idx_l0_active_minus1 = bitStream.readUE();
-      if (slice.slice_type % 5 == SLICE_B)
-        slice.num_ref_idx_l1_active_minus1 = bitStream.readUE();
-    }
-  }
-  if (nal_unit_type == 20 || nal_unit_type == 21)
-    ref_pic_list_mvc_modification(bitStream); /* specified in Annex H */
-  else
-    ref_pic_list_modification(bitStream);
-  if ((pps.weighted_pred_flag &&
-       (slice.slice_type % 5 == SLICE_P || slice.slice_type % 5 == SLICE_SP)) ||
-      (pps.weighted_bipred_idc == 1 && slice.slice_type % 5 == SLICE_B))
-    pred_weight_table(bitStream);
-  if (nal_ref_idc != 0)
-    dec_ref_pic_marking(bitStream);
-  if (pps.entropy_coding_mode_flag && slice.slice_type % 5 != SLICE_I &&
-      slice.slice_type % 5 != SLICE_SI)
-    slice.cabac_init_idc = bitStream.readUE();
-  slice.slice_qp_delta = bitStream.readSE();
-  if (slice.slice_type % 5 == SLICE_SP || slice.slice_type % 5 == SLICE_SI) {
-    if (slice.slice_type % 5 == SLICE_SP)
-      slice.sp_for_switch_flag = bitStream.readU1();
-    slice.slice_qs_delta = bitStream.readSE();
-  }
-  if (pps.deblocking_filter_control_present_flag) {
-    slice.disable_deblocking_filter_idc = bitStream.readUE();
-    if (slice.disable_deblocking_filter_idc != 1) {
-      slice.slice_alpha_c0_offset_div2 = bitStream.readSE();
-      slice.slice_beta_offset_div2 = bitStream.readSE();
-    }
-  }
-  if (pps.num_slice_groups_minus1 > 0 && pps.slice_group_map_type >= 3 &&
-      pps.slice_group_map_type <= 5)
-    slice.slice_group_change_cycle = bitStream.readUE();
-
-  switch (slice.slice_type % 5) {
-  case SLICE_P:
-    std::cout << "\tP Slice" << std::endl;
-    break;
-  case SLICE_B:
-    std::cout << "\tB Slice" << std::endl;
-    break;
-  case SLICE_I:
-    std::cout << "\tI Slice" << std::endl;
-    break;
-  case SLICE_SP:
-    std::cout << "\tSP Slice" << std::endl;
-    break;
-  case SLICE_SI:
-    std::cout << "\tSI Slice" << std::endl;
-    break;
-  }
-
-  //----------- 下面都是一些需要进行额外计算的（文档都有需要自己找）------------
-  int SliceGroupChangeRate = pps.slice_group_change_rate_minus1 + 1;
-  if (pps.num_slice_groups_minus1 > 0 && pps.slice_group_map_type >= 3 &&
-      pps.slice_group_map_type <= 5) {
-    int32_t temp = sps.PicSizeInMapUnits / SliceGroupChangeRate + 1;
-    int32_t v = h264_log2(
-        temp); // Ceil( Log2( PicSizeInMapUnits ÷ SliceGroupChangeRate + 1 ) );
-    slice.slice_group_change_cycle = bitStream.readUn(v); // 2 u(v)
-  }
-
-  slice.SliceQPY = 26 + pps.pic_init_qp_minus26 + slice.slice_qp_delta;
-  slice.QPY_prev = slice.SliceQPY;
-  slice.MbaffFrameFlag =
-      (sps.mb_adaptive_frame_field_flag && !slice.field_pic_flag);
-  slice.PicHeightInMbs = sps.frameHeightInMbs / (1 + slice.field_pic_flag);
-  slice.PicHeightInSamplesL = slice.PicHeightInMbs * 16;
-  slice.PicHeightInSamplesC = slice.PicHeightInMbs * sps.MbHeightC;
-  slice.PicSizeInMbs = sps.PicWidthInMbs * slice.PicHeightInMbs;
-  slice.MaxPicNum =
-      (slice.field_pic_flag == 0) ? slice.MaxFrameNum : (2 * slice.MaxFrameNum);
-  slice.CurrPicNum =
-      (slice.field_pic_flag == 0) ? slice.frame_num : (2 * slice.frame_num + 1);
-  slice.MapUnitsInSliceGroup0 =
-      MIN(slice.slice_group_change_cycle * SliceGroupChangeRate,
-          sps.PicSizeInMapUnits);
-  slice.QSY = 26 + pps.pic_init_qs_minus26 + slice.slice_qs_delta;
-  slice.FilterOffsetA = slice.slice_alpha_c0_offset_div2 << 1;
-  slice.FilterOffsetB = slice.slice_beta_offset_div2 << 1;
-
-  if (!slice.mapUnitToSliceGroupMap) {
-    slice.mapUnitToSliceGroupMap = new int32_t[sps.PicSizeInMapUnits]{0};
-  }
-
-  if (!slice.MbToSliceGroupMap) {
-    slice.MbToSliceGroupMap = new int32_t[slice.PicSizeInMbs]{0};
-  }
-
-  setMapUnitToSliceGroupMap();
-
-  setMbToSliceGroupMap();
-
-  set_scaling_lists_values();
-
-  slice.m_is_malloc_mem_self = 1;
-  return 0;
-}
-
-int Nalu::setMapUnitToSliceGroupMap() {
-  int32_t i = 0;
-  int32_t j = 0;
-  int32_t k = 0;
-  int32_t x = 0;
-  int32_t y = 0;
-  int32_t iGroup = 0;
-
-  if (pps.num_slice_groups_minus1 == 0) {
-    for (i = 0; i < sps.PicSizeInMapUnits; i++) {
-      slice.mapUnitToSliceGroupMap[i] = 0;
-    }
-    return 0;
-  }
-
-  if (pps.slice_group_map_type ==
-      0) // 8.2.2.1 Specification for interleaved slice
-         // group map type 交叉型 slice组映射类型的描述
-  {
-    i = 0;
-    do {
-      for (iGroup = 0;
-           iGroup <= pps.num_slice_groups_minus1 && i < sps.PicSizeInMapUnits;
-           i += pps.run_length_minus1[iGroup++] + 1) {
-        for (j = 0; j <= pps.run_length_minus1[iGroup] &&
-                    i + j < sps.PicSizeInMapUnits;
-             j++) {
-          slice.mapUnitToSliceGroupMap[i + j] = iGroup;
-        }
-      }
-    } while (i < sps.PicSizeInMapUnits);
-  } else if (pps.slice_group_map_type ==
-             1) // 8.2.2.2 Specification for dispersed slice group map type
-                // 分散型 slice 组映射类型的描述
-  {
-    for (i = 0; i < sps.PicSizeInMapUnits; i++) {
-      slice.mapUnitToSliceGroupMap[i] =
-          ((i % sps.PicWidthInMbs) +
-           (((i / sps.PicWidthInMbs) * (pps.num_slice_groups_minus1 + 1)) /
-            2)) %
-          (pps.num_slice_groups_minus1 + 1);
-    }
-  } else if (pps.slice_group_map_type ==
-             2) // 8.2.2.3 Specification for foreground with left-over slice
-                // group map type 前景加剩余型 slice 组映射类型的描述
-  {
-    for (i = 0; i < sps.PicSizeInMapUnits; i++) {
-      slice.mapUnitToSliceGroupMap[i] = pps.num_slice_groups_minus1;
-    }
-    for (iGroup = pps.num_slice_groups_minus1 - 1; iGroup >= 0; iGroup--) {
-      int32_t yTopLeft = pps.top_left[iGroup] / sps.PicWidthInMbs;
-      int32_t xTopLeft = pps.top_left[iGroup] % sps.PicWidthInMbs;
-      int32_t yBottomRight = pps.bottom_right[iGroup] / sps.PicWidthInMbs;
-      int32_t xBottomRight = pps.bottom_right[iGroup] % sps.PicWidthInMbs;
-      for (y = yTopLeft; y <= yBottomRight; y++) {
-        for (x = xTopLeft; x <= xBottomRight; x++) {
-          slice.mapUnitToSliceGroupMap[y * sps.PicWidthInMbs + x] = iGroup;
-        }
-      }
-    }
-  } else if (pps.slice_group_map_type == 3) {
-    // 8.2.2.4 Specification for box-out slice group map types
-    // 外旋盒子型 slice 组映射类型的描述
-    for (i = 0; i < sps.PicSizeInMapUnits; i++) {
-      slice.mapUnitToSliceGroupMap[i] = 1;
-    }
-    x = (sps.PicWidthInMbs - pps.slice_group_change_direction_flag) / 2;
-    y = (sps.PicHeightInMapUnits - pps.slice_group_change_direction_flag) / 2;
-
-    int32_t leftBound = x;
-    int32_t topBound = y;
-    int32_t rightBound = x;
-    int32_t bottomBound = y;
-    int32_t xDir = pps.slice_group_change_direction_flag - 1;
-    int32_t yDir = pps.slice_group_change_direction_flag;
-    int32_t mapUnitVacant = 0;
-
-    for (k = 0; k < slice.MapUnitsInSliceGroup0; k += mapUnitVacant) {
-      mapUnitVacant =
-          (slice.mapUnitToSliceGroupMap[y * sps.PicWidthInMbs + x] == 1);
-      if (mapUnitVacant) {
-        slice.mapUnitToSliceGroupMap[y * sps.PicWidthInMbs + x] = 0;
-      }
-      if (xDir == -1 && x == leftBound) {
-        leftBound = std::max(leftBound - 1, 0);
-        x = leftBound;
-        xDir = 0;
-        yDir = 2 * pps.slice_group_change_direction_flag - 1;
-      } else if (xDir == 1 && x == rightBound) {
-        rightBound = MIN(rightBound + 1, sps.PicWidthInMbs - 1);
-        x = rightBound;
-        xDir = 0;
-        yDir = 1 - 2 * pps.slice_group_change_direction_flag;
-      } else if (yDir == -1 && y == topBound) {
-        topBound = MAX(topBound - 1, 0);
-        y = topBound;
-        xDir = 1 - 2 * pps.slice_group_change_direction_flag;
-        yDir = 0;
-      } else if (yDir == 1 && y == bottomBound) {
-        bottomBound = MIN(bottomBound + 1, sps.PicHeightInMapUnits - 1);
-        y = bottomBound;
-        xDir = 2 * pps.slice_group_change_direction_flag - 1;
-        yDir = 0;
-      } else {
-        (x, y) = (x + xDir, y + yDir);
-      }
-    }
-  } else if (pps.slice_group_map_type ==
-             4) // 8.2.2.5 Specification for raster scan slice group map types
-                // 栅格扫描型 slice 组映射类型的描述
-  {
-    int32_t sizeOfUpperLeftGroup = 0;
-    if (pps.num_slice_groups_minus1 == 1) {
-      sizeOfUpperLeftGroup =
-          (pps.slice_group_change_direction_flag
-               ? (sps.PicSizeInMapUnits - slice.MapUnitsInSliceGroup0)
-               : slice.MapUnitsInSliceGroup0);
-    }
-
-    for (i = 0; i < sps.PicSizeInMapUnits; i++) {
-      if (i < sizeOfUpperLeftGroup) {
-        slice.mapUnitToSliceGroupMap[i] = pps.slice_group_change_direction_flag;
-      } else {
-        slice.mapUnitToSliceGroupMap[i] =
-            1 - pps.slice_group_change_direction_flag;
-      }
-    }
-  } else if (pps.slice_group_map_type ==
-             5) // 8.2.2.6 Specification for wipe slice group map types 擦除型
-                // slice 组映射类型的描述
-  {
-    int32_t sizeOfUpperLeftGroup = 0;
-    if (pps.num_slice_groups_minus1 == 1) {
-      sizeOfUpperLeftGroup =
-          (pps.slice_group_change_direction_flag
-               ? (sps.PicSizeInMapUnits - slice.MapUnitsInSliceGroup0)
-               : slice.MapUnitsInSliceGroup0);
-    }
-
-    k = 0;
-    for (j = 0; j < sps.PicWidthInMbs; j++) {
-      for (i = 0; i < sps.PicHeightInMapUnits; i++) {
-        if (k++ < sizeOfUpperLeftGroup) {
-          slice.mapUnitToSliceGroupMap[i * sps.PicWidthInMbs + j] =
-              pps.slice_group_change_direction_flag;
-        } else {
-          slice.mapUnitToSliceGroupMap[i * sps.PicWidthInMbs + j] =
-              1 - pps.slice_group_change_direction_flag;
-        }
-      }
-    }
-  } else if (pps.slice_group_map_type ==
-             6) // 8.2.2.7 Specification for explicit slice group map type
-                // 显式型 slice 组映射类型的描述
-  {
-    for (i = 0; i < sps.PicSizeInMapUnits; i++) {
-      slice.mapUnitToSliceGroupMap[i] = pps.slice_group_id[i];
-    }
-  } else {
-    printf("slice_group_map_type=%d, must be in [0..6];\n",
-           pps.slice_group_map_type);
-    return -1;
-  }
-
-  return 0;
-}
-
-int Nalu::setMbToSliceGroupMap() {
-  for (int i = 0; i < idr.PicSizeInMbs; i++) {
-    if (sps.frame_mbs_only_flag == 1 || slice.field_pic_flag == 1) {
-      slice.MbToSliceGroupMap[i] = slice.mapUnitToSliceGroupMap[i];
-    } else if (slice.MbaffFrameFlag == 1) {
-      slice.MbToSliceGroupMap[i] = slice.mapUnitToSliceGroupMap[i / 2];
-    } else // if (frame_mbs_only_flag == 0 &&
-           // mb_adaptive_frame_field_flag == 0 && slice.field_pic_flag == 0)
-    {
-      slice.MbToSliceGroupMap[i] =
-          slice.mapUnitToSliceGroupMap[(i / (2 * sps.PicWidthInMbs)) *
-                                           sps.PicWidthInMbs +
-                                       (i % sps.PicWidthInMbs)];
-    }
-  }
-
-  return 0;
-}
-
-int Nalu::set_scaling_lists_values() {
-  int ret = 0;
-
-  //--------------------------------
-  static int32_t Flat_4x4_16[16] = {16, 16, 16, 16, 16, 16, 16, 16,
-                                    16, 16, 16, 16, 16, 16, 16, 16};
-  static int32_t Flat_8x8_16[64] = {
-      16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
-      16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
-      16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
-      16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
-  };
-
-  //--------------------------------
-  // Table 7-3 – Specification of default scaling lists Default_4x4_Intra and
-  // Default_4x4_Inter
-  static int32_t Default_4x4_Intra[16] = {6,  13, 13, 20, 20, 20, 28, 28,
-                                          28, 28, 32, 32, 32, 37, 37, 42};
-  static int32_t Default_4x4_Inter[16] = {10, 14, 14, 20, 20, 20, 24, 24,
-                                          24, 24, 27, 27, 27, 30, 30, 34};
-
-  // Table 7-4 – Specification of default scaling lists Default_8x8_Intra and
-  // Default_8x8_Inter
-  static int32_t Default_8x8_Intra[64] = {
-      6,  10, 10, 13, 11, 13, 16, 16, 16, 16, 18, 18, 18, 18, 18, 23,
-      23, 23, 23, 23, 23, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27,
-      27, 27, 27, 27, 29, 29, 29, 29, 29, 29, 29, 31, 31, 31, 31, 31,
-      31, 33, 33, 33, 33, 33, 36, 36, 36, 36, 38, 38, 38, 40, 40, 42,
-  };
-
-  static int32_t Default_8x8_Inter[64] = {
-      9,  13, 13, 15, 13, 15, 17, 17, 17, 17, 19, 19, 19, 19, 19, 21,
-      21, 21, 21, 21, 21, 22, 22, 22, 22, 22, 22, 22, 24, 24, 24, 24,
-      24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27, 27,
-      27, 28, 28, 28, 28, 28, 30, 30, 30, 30, 32, 32, 32, 33, 33, 35,
-  };
-
-  //--------------------------------
-  int32_t i = 0;
-  int32_t scaling_list_size = (sps.chroma_format_idc != 3) ? 8 : 12;
-
-  if (sps.seq_scaling_matrix_present_flag == 0 &&
-      pps.pic_scaling_matrix_present_flag == 0) {
-    // 如果编码器未给出缩放矩阵值，则缩放矩阵值全部默认为16
-    for (i = 0; i < scaling_list_size; i++) {
-      if (i < 6) {
-        memcpy(pps.ScalingList4x4[i], Flat_4x4_16, sizeof(int32_t) * 16);
-      } else // if (i >= 6)
-      {
-        memcpy(pps.ScalingList8x8[i - 6], Flat_8x8_16, sizeof(int32_t) * 64);
-      }
-    }
-  } else {
-    if (sps.seq_scaling_matrix_present_flag == 1) {
-      for (i = 0; i < scaling_list_size; i++) {
-        if (i < 6) {
-          if (sps.seq_scaling_list_present_flag[i] ==
-              0) // 参照 Table 7-2 Scaling list fall-back rule A
-          {
-            if (i == 0) {
-              memcpy(pps.ScalingList4x4[i], Default_4x4_Intra,
-                     sizeof(int32_t) * 16);
-            } else if (i == 3) {
-              memcpy(pps.ScalingList4x4[i], Default_4x4_Inter,
-                     sizeof(int32_t) * 16);
-            } else {
-              memcpy(pps.ScalingList4x4[i], pps.ScalingList4x4[i - 1],
-                     sizeof(int32_t) * 16);
-            }
-          } else {
-            if (pps.UseDefaultScalingMatrix4x4Flag[i] == 1) {
-              if (i < 3) {
-                memcpy(pps.ScalingList4x4[i], Default_4x4_Intra,
-                       sizeof(int32_t) * 16);
-              } else // if (i >= 3)
-              {
-                memcpy(pps.ScalingList4x4[i], Default_4x4_Inter,
-                       sizeof(int32_t) * 16);
-              }
-            } else {
-              memcpy(pps.ScalingList4x4[i], pps.ScalingList4x4[i],
-                     sizeof(int32_t) *
-                         16); // 采用编码器传送过来的量化系数的缩放值
-            }
-          }
-        } else // if (i >= 6)
-        {
-          if (sps.seq_scaling_list_present_flag[i] ==
-              0) // 参照 Table 7-2 Scaling list fall-back rule A
-          {
-            if (i == 6) {
-              memcpy(pps.ScalingList8x8[i - 6], Default_8x8_Intra,
-                     sizeof(int32_t) * 64);
-            } else if (i == 7) {
-              memcpy(pps.ScalingList8x8[i - 6], Default_8x8_Inter,
-                     sizeof(int32_t) * 64);
-            } else {
-              memcpy(pps.ScalingList8x8[i - 6], pps.ScalingList8x8[i - 8],
-                     sizeof(int32_t) * 64);
-            }
-          } else {
-            if (pps.UseDefaultScalingMatrix8x8Flag[i - 6] == 1) {
-              if (i == 6 || i == 8 || i == 10) {
-                memcpy(pps.ScalingList8x8[i - 6], Default_8x8_Intra,
-                       sizeof(int32_t) * 64);
-              } else {
-                memcpy(pps.ScalingList8x8[i - 6], Default_8x8_Inter,
-                       sizeof(int32_t) * 64);
-              }
-            } else {
-              memcpy(pps.ScalingList8x8[i - 6], pps.ScalingList8x8[i - 6],
-                     sizeof(int32_t) *
-                         64); // 采用编码器传送过来的量化系数的缩放值
-            }
-          }
-        }
-      }
-    }
-
-    // 注意：此处不是"else if"，意即面的值，可能会覆盖之前到的值
-    if (pps.pic_scaling_matrix_present_flag == 1) {
-      for (i = 0; i < scaling_list_size; i++) {
-        if (i < 6) {
-          if (pps.pic_scaling_list_present_flag[i] ==
-              0) // 参照 Table 7-2 Scaling list fall-back rule B
-          {
-            if (i == 0) {
-              if (sps.seq_scaling_matrix_present_flag == 0) {
-                memcpy(pps.ScalingList4x4[i], Default_4x4_Intra,
-                       sizeof(int32_t) * 16);
-              }
-            } else if (i == 3) {
-              if (sps.seq_scaling_matrix_present_flag == 0) {
-                memcpy(pps.ScalingList4x4[i], Default_4x4_Inter,
-                       sizeof(int32_t) * 16);
-              }
-            } else {
-              memcpy(pps.ScalingList4x4[i], pps.ScalingList4x4[i - 1],
-                     sizeof(int32_t) * 16);
-            }
-          } else {
-            if (pps.UseDefaultScalingMatrix4x4Flag[i] == 1) {
-              if (i < 3) {
-                memcpy(pps.ScalingList4x4[i], Default_4x4_Intra,
-                       sizeof(int32_t) * 16);
-              } else // if (i >= 3)
-              {
-                memcpy(pps.ScalingList4x4[i], Default_4x4_Inter,
-                       sizeof(int32_t) * 16);
-              }
-            } else {
-              memcpy(pps.ScalingList4x4[i], pps.ScalingList4x4[i],
-                     sizeof(int32_t) *
-                         16); // 采用编码器传送过来的量化系数的缩放值
-            }
-          }
-        } else // if (i >= 6)
-        {
-          if (pps.pic_scaling_list_present_flag[i] ==
-              0) // 参照 Table 7-2 Scaling list fall-back rule B
-          {
-            if (i == 6) {
-              if (sps.seq_scaling_matrix_present_flag == 0) {
-                memcpy(pps.ScalingList8x8[i - 6], Default_8x8_Intra,
-                       sizeof(int32_t) * 64);
-              }
-            } else if (i == 7) {
-              if (sps.seq_scaling_matrix_present_flag == 0) {
-                memcpy(pps.ScalingList8x8[i - 6], Default_8x8_Inter,
-                       sizeof(int32_t) * 64);
-              }
-            } else {
-              memcpy(pps.ScalingList8x8[i - 6], pps.ScalingList8x8[i - 8],
-                     sizeof(int32_t) * 64);
-            }
-          } else {
-            if (pps.UseDefaultScalingMatrix8x8Flag[i - 6] == 1) {
-              if (i == 6 || i == 8 || i == 10) {
-                memcpy(pps.ScalingList8x8[i - 6], Default_8x8_Intra,
-                       sizeof(int32_t) * 64);
-              } else {
-                memcpy(pps.ScalingList8x8[i - 6], Default_8x8_Inter,
-                       sizeof(int32_t) * 64);
-              }
-            } else {
-              memcpy(pps.ScalingList8x8[i - 6], pps.ScalingList8x8[i - 6],
-                     sizeof(int32_t) *
-                         64); // 采用编码器传送过来的量化系数的缩放值
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-void Nalu::ref_pic_list_mvc_modification(BitStream &bitStream) {}
-
-void Nalu::ref_pic_list_modification(BitStream &bitStream) {
-  uint32_t modification_of_pic_nums_idc;
-  if (slice.slice_type % 5 != SLICE_I && slice.slice_type % 5 != SLICE_SI) {
-    bool ref_pic_list_modification_flag_l0 = bitStream.readU1();
-    if (ref_pic_list_modification_flag_l0) {
-      do {
-        modification_of_pic_nums_idc = bitStream.readUE();
-        if (modification_of_pic_nums_idc == 0 ||
-            modification_of_pic_nums_idc == 1)
-          uint32_t abs_diff_pic_num_minus1 = bitStream.readUE();
-        else if (modification_of_pic_nums_idc == 2)
-          uint32_t long_term_pic_num = bitStream.readUE();
-      } while (modification_of_pic_nums_idc != 3);
-    }
-  }
-  if (slice.slice_type % 5 == SLICE_B) {
-    bool ref_pic_list_modification_flag_l1 = bitStream.readU1();
-    if (ref_pic_list_modification_flag_l1)
-      do {
-        modification_of_pic_nums_idc = bitStream.readUE();
-        if (modification_of_pic_nums_idc == 0 ||
-            modification_of_pic_nums_idc == 1)
-          uint32_t abs_diff_pic_num_minus1 = bitStream.readUE();
-        else if (modification_of_pic_nums_idc == 2)
-          uint32_t long_term_pic_num = bitStream.readUE();
-      } while (modification_of_pic_nums_idc != 3);
-  }
-}
-
-void Nalu::pred_weight_table(BitStream &bitStream) {
-  uint32_t luma_log2_weight_denom = bitStream.readUE();
-  if (sps.ChromaArrayType != 0) {
-    uint32_t chroma_log2_weight_denom = bitStream.readUE();
-  }
-
-  int32_t luma_weight_l0[slice.num_ref_idx_l0_active_minus1 + 1];
-  int32_t luma_offset_l0[slice.num_ref_idx_l0_active_minus1 + 1];
-
-  int32_t chroma_weight_l0[slice.num_ref_idx_l0_active_minus1 + 1][2];
-  int32_t chroma_offset_l0[slice.num_ref_idx_l0_active_minus1 + 1][2];
-
-  for (int i = 0; i <= slice.num_ref_idx_l0_active_minus1; i++) {
-    bool luma_weight_l0_flag = bitStream.readU1();
-    if (luma_weight_l0_flag) {
-      luma_weight_l0[i] = bitStream.readSE();
-      luma_offset_l0[i] = bitStream.readSE();
-    }
-    if (sps.ChromaArrayType != 0) {
-      bool chroma_weight_l0_flag = bitStream.readU1();
-      if (chroma_weight_l0_flag) {
-        for (int j = 0; j < 2; j++) {
-          chroma_weight_l0[i][j] = bitStream.readSE();
-          chroma_offset_l0[i][j] = bitStream.readSE();
-        }
-      }
-    }
-  }
-
-  if (slice.slice_type % 5 == SLICE_B) {
-    int32_t luma_weight_l1[slice.num_ref_idx_l1_active_minus1 + 1];
-    int32_t luma_offset_l1[slice.num_ref_idx_l1_active_minus1 + 1];
-
-    int32_t chroma_weight_l1[slice.num_ref_idx_l1_active_minus1 + 1][2];
-    int32_t chroma_offset_l1[slice.num_ref_idx_l1_active_minus1 + 1][2];
-
-    for (int i = 0; i <= slice.num_ref_idx_l1_active_minus1; i++) {
-      bool luma_weight_l1_flag = bitStream.readU1();
-      if (luma_weight_l1_flag) {
-        luma_weight_l1[i] = bitStream.readSE();
-        luma_offset_l1[i] = bitStream.readSE();
-      }
-
-      if (sps.ChromaArrayType != 0) {
-        bool chroma_weight_l1_flag = bitStream.readU1();
-        if (chroma_weight_l1_flag) {
-          for (int j = 0; j < 2; j++) {
-            chroma_weight_l1[i][j] = bitStream.readSE();
-            chroma_offset_l1[i][j] = bitStream.readSE();
-          }
-        }
-      }
-    }
-  }
-}
-
-void Nalu::dec_ref_pic_marking(BitStream &bitStream) {
-  if (slice.IdrPicFlag) {
-    bool no_output_of_prior_pics_flag = bitStream.readU1();
-    bool long_term_reference_flag = bitStream.readU1();
-  } else {
-    bool adaptive_ref_pic_marking_mode_flag = bitStream.readU1();
-
-    uint32_t memory_management_control_operation;
-    if (adaptive_ref_pic_marking_mode_flag) {
-      do {
-        memory_management_control_operation = bitStream.readUE();
-        if (memory_management_control_operation == 1 ||
-            memory_management_control_operation == 3)
-          uint32_t difference_of_pic_nums_minus1 = bitStream.readUE();
-        if (memory_management_control_operation == 2)
-          uint32_t long_term_pic_num = bitStream.readUE();
-        if (memory_management_control_operation == 3 ||
-            memory_management_control_operation == 6)
-          uint32_t long_term_frame_idx = bitStream.readUE();
-        if (memory_management_control_operation == 4)
-          uint32_t max_long_term_frame_idx_plus1 = bitStream.readUE();
-      } while (memory_management_control_operation != 0);
-    }
-  }
 }
 
 void Nalu::scaling_list(BitStream &bitStream, uint32_t *scalingList,
@@ -1223,10 +548,11 @@ int Nalu::decode(RBSP &rbsp) {
 
   picture.m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
   picture.m_parent = this;
-  /* TODO YangJing 写到这里来了，现在要解决Slice_header的问题 <24-07-29 19:46:00> */
-   //memcpy(picture.m_dpb, dpb, sizeof(Picture *) * size_pdb);
-   m_current_picture_ptr = &m_picture_frame;
-   //m_picture_frame.init(slice);
+  /* TODO YangJing 这里先放置一下，这里是在处理前一帧的数据 <24-07-30 10:39:24>
+   */
+  // memcpy(picture.m_dpb, dpb, sizeof(Picture *) * size_pdb);
+  m_current_picture_ptr = &m_picture_frame;
+  m_picture_frame.init(slice_header);
 
   parseSliceData(bitStream, rbsp, picture);
   return 0;
@@ -1239,8 +565,8 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp,
   /* CABAC编码 */
   if (pps.entropy_coding_mode_flag) {
     std::cout << "CABAC编码" << std::endl;
-    while (!byte_aligned(bitStream))
-      slice.cabac_alignment_one_bit = bitStream.readU1();
+    while (!bitStream.byte_aligned())
+      slice_body.cabac_alignment_one_bit = bitStream.readU1();
 
     //    ret = cabac.Initialisation_process_for_context_variables(
     //        (H264_SLIECE_TYPE)slice_header.slice.slice_type,
@@ -1251,16 +577,17 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp,
     //        bs); // cabac初始化解码引擎
   }
 
-  if (slice.MbaffFrameFlag == 0)
-    slice.mb_field_decoding_flag = slice.field_pic_flag;
+  if (slice_header.MbaffFrameFlag == 0)
+    slice_body.mb_field_decoding_flag = slice_header.field_pic_flag;
 
-  slice.CurrMbAddr = slice.first_mb_in_slice * (1 + slice.MbaffFrameFlag);
-  picture.CurrMbAddr = slice.CurrMbAddr;
+  slice_body.CurrMbAddr =
+      slice_header.first_mb_in_slice * (1 + slice_header.MbaffFrameFlag);
+  picture.CurrMbAddr = slice_body.CurrMbAddr;
 
   if (picture.m_slice_cnt == 0) {
     /* TODO YangJing  <24-07-29 17:01:59> */
-    int ret = picture.Decoding_process_for_picture_order_count(); // 解码POC
-    RETURN_IF_FAILED(ret != 0, ret);
+    // int ret = picture.Decoding_process_for_picture_order_count(); // 解码POC
+    // RETURN_IF_FAILED(ret != 0, ret);
 
     /*
     if (frame_mbs_only_flag == 0) // 有可能出现场帧或场宏块
@@ -1339,10 +666,11 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp,
   bool is_need_skip_read_mb_field_decoding_flag = false;
 
   do {
-    if (slice.slice_type != SLICE_I && slice.slice_type != SLICE_SI) {
+    if (slice_header.slice_type != SLICE_I &&
+        slice_header.slice_type != SLICE_SI) {
       if (!pps.entropy_coding_mode_flag) {
         uint32_t mb_skip_run = bitStream.readUE();
-        slice.prevMbSkipped = (mb_skip_run > 0);
+        slice_body.prevMbSkipped = (mb_skip_run > 0);
         for (int i = 0; i < mb_skip_run; i++) {
           exit(0);
           // CurrMbAddr = NextMbAddress(CurrMbAddr);
@@ -1351,7 +679,7 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp,
         if (mb_skip_run > 0) {
           /* TODO YangJing 没进 <24-05-26 15:46:35> */
           exit(0);
-          slice.moreDataFlag = pps.more_rbsp_data();
+          slice_body.moreDataFlag = pps.more_rbsp_data();
         }
       } else {
         exit(0);
@@ -1362,10 +690,10 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp,
       }
     }
 
-    if (slice.moreDataFlag) {
-      if (slice.MbaffFrameFlag &&
-          (slice.CurrMbAddr % 2 == 0 ||
-           (slice.CurrMbAddr % 2 == 1 && slice.prevMbSkipped))) {
+    if (slice_body.moreDataFlag) {
+      if (slice_header.MbaffFrameFlag &&
+          (slice_body.CurrMbAddr % 2 == 0 ||
+           (slice_body.CurrMbAddr % 2 == 1 && slice_body.prevMbSkipped))) {
         /* 表示本宏块是属于一个宏块对中的一个 */
         /* TODO YangJing 没进 <24-05-26 15:49:00> */
         std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m"
@@ -1377,17 +705,19 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp,
       //----------
 
       //----------------------------
-      picture.mb_x = (slice.CurrMbAddr %
-                      (sps.PicWidthInMbs * (1 + slice.MbaffFrameFlag))) /
-                     (1 + slice.MbaffFrameFlag);
+      picture.mb_x = (slice_body.CurrMbAddr %
+                      (sps.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag))) /
+                     (1 + slice_header.MbaffFrameFlag);
       picture.mb_y =
-          (slice.CurrMbAddr / (sps.PicWidthInMbs * (1 + slice.MbaffFrameFlag)) *
-           (1 + slice.MbaffFrameFlag)) +
-          ((slice.CurrMbAddr %
-            (sps.PicWidthInMbs * (1 + slice.MbaffFrameFlag))) %
-           (1 + slice.MbaffFrameFlag));
+          (slice_body.CurrMbAddr /
+           (sps.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag)) *
+           (1 + slice_header.MbaffFrameFlag)) +
+          ((slice_body.CurrMbAddr %
+            (sps.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag))) %
+           (1 + slice_header.MbaffFrameFlag));
       picture.CurrMbAddr =
-          slice.CurrMbAddr; // picture.mb_x + picture.mb_y * sps.PicWidthInMbs;
+          slice_body
+              .CurrMbAddr; // picture.mb_x + picture.mb_y * sps.PicWidthInMbs;
 
       picture.mb_cnt++;
 
@@ -1426,7 +756,7 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp,
     }
 
     if (!pps.entropy_coding_mode_flag) {
-      slice.moreDataFlag = pps.more_rbsp_data();
+      slice_body.moreDataFlag = pps.more_rbsp_data();
     } else {
       /* TODO YangJing 没进 <24-05-26 16:01:53> */
       // if (slice.slice_type != SLICE_I && slice_type != SLICE_SI)
@@ -1437,8 +767,8 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp,
       //   moreDataFlag = !end_of_slice_flag;
       // }
     }
-    slice.CurrMbAddr = NextMbAddress(slice.CurrMbAddr);
-  } while (slice.moreDataFlag);
+    slice_body.CurrMbAddr = NextMbAddress(slice_body.CurrMbAddr);
+  } while (slice_body.moreDataFlag);
 
   if (picture.mb_cnt == picture.PicSizeInMbs) {
     picture.m_is_decode_finished = 1;
@@ -1448,24 +778,25 @@ int Nalu::parseSliceData(BitStream &bitStream, RBSP &rbsp,
 
 int Nalu::set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
                            BitStream &bs) {
-  picture.mb_x =
-      (slice.CurrMbAddr % (sps.PicWidthInMbs * (1 + slice.MbaffFrameFlag))) /
-      (1 + slice.MbaffFrameFlag);
-  picture.mb_y =
-      (slice.CurrMbAddr / (sps.PicWidthInMbs * (1 + slice.MbaffFrameFlag)) *
-       (1 + slice.MbaffFrameFlag)) +
-      ((slice.CurrMbAddr % (sps.PicWidthInMbs * (1 + slice.MbaffFrameFlag))) %
-       (1 + slice.MbaffFrameFlag));
-  picture.CurrMbAddr = slice.CurrMbAddr;
+  picture.mb_x = (slice_body.CurrMbAddr %
+                  (sps.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag))) /
+                 (1 + slice_header.MbaffFrameFlag);
+  picture.mb_y = (slice_body.CurrMbAddr /
+                  (sps.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag)) *
+                  (1 + slice_header.MbaffFrameFlag)) +
+                 ((slice_body.CurrMbAddr %
+                   (sps.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag))) %
+                  (1 + slice_header.MbaffFrameFlag));
+  picture.CurrMbAddr = slice_body.CurrMbAddr;
 
   // picture.m_mbs[picture.CurrMbAddr].slice.MbaffFrameFlag =
   // slice.MbaffFrameFlag;
   // //因为解码mb_skip_flag需要事先知道slice.MbaffFrameFlag的值
   picture.m_mbs[picture.CurrMbAddr].slice_number =
-      slice.slice_number; // 因为解码mb_skip_flag需要事先知道slice_id的值
+      slice_header.slice_number; // 因为解码mb_skip_flag需要事先知道slice_id的值
 
-  if (slice.MbaffFrameFlag) {
-    if (slice.CurrMbAddr % 2 == 0) // 顶场宏块
+  if (slice_header.MbaffFrameFlag) {
+    if (slice_body.CurrMbAddr % 2 == 0) // 顶场宏块
     {
       if (picture.mb_x == 0 &&
           picture.mb_y >=
@@ -1475,37 +806,38 @@ int Nalu::set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
         // not present for both the top and the bottom macroblock of a
         // macroblock pair
         if (picture.mb_x > 0 &&
-            picture.m_mbs[slice.CurrMbAddr - 2].slice_number ==
-                slice.slice_number) // the left of the current macroblock pair
-                                    // in the same slice
+            picture.m_mbs[slice_body.CurrMbAddr - 2].slice_number ==
+                slice_header.slice_number) // the left of the current macroblock
+                                           // pair in the same slice
         {
-          slice.mb_field_decoding_flag =
-              picture.m_mbs[slice.CurrMbAddr - 2].mb_field_decoding_flag;
+          slice_body.mb_field_decoding_flag =
+              picture.m_mbs[slice_body.CurrMbAddr - 2].mb_field_decoding_flag;
         } else if (picture.mb_y > 0 &&
-                   picture.m_mbs[slice.CurrMbAddr - 2 * sps.PicWidthInMbs]
+                   picture.m_mbs[slice_body.CurrMbAddr - 2 * sps.PicWidthInMbs]
                            .slice_number ==
-                       slice.slice_number) // above the current macroblock pair
-                                           // in the same slice
+                       slice_header
+                           .slice_number) // above the current macroblock pair
+                                          // in the same slice
         {
-          slice.mb_field_decoding_flag =
-              picture.m_mbs[slice.CurrMbAddr - 2 * sps.PicWidthInMbs]
+          slice_body.mb_field_decoding_flag =
+              picture.m_mbs[slice_body.CurrMbAddr - 2 * sps.PicWidthInMbs]
                   .mb_field_decoding_flag;
         } else {
-          slice.mb_field_decoding_flag = 0; // is inferred to be equal to 0
+          slice_body.mb_field_decoding_flag = 0; // is inferred to be equal to 0
         }
       }
     }
 
     picture.m_mbs[picture.CurrMbAddr].mb_field_decoding_flag =
-        slice
+        slice_body
             .mb_field_decoding_flag; // 因为解码mb_skip_flag需要事先知道mb_field_decoding_flag的值
   }
 
   //-------------解码mb_skip_flag-----------------------
-  if (slice.MbaffFrameFlag && slice.CurrMbAddr % 2 == 1 &&
-      slice.prevMbSkipped) {
+  if (slice_header.MbaffFrameFlag && slice_body.CurrMbAddr % 2 == 1 &&
+      slice_body.prevMbSkipped) {
     // 如果是bottom field macroblock
-    mb_skip_flag = slice.mb_skip_flag_next_mb;
+    mb_skip_flag = slice_header.mb_skip_flag_next_mb;
   } else {
     // cabac.CABAC_decode_mb_skip_flag(picture, bs, CurrMbAddr,
     //                                 mb_skip_flag); // 2 ae(v)
@@ -1515,22 +847,24 @@ int Nalu::set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
   if (mb_skip_flag == 1) {
     // 表示本宏块没有残差数据，相应的像素值只需要利用之前已经解码的I/P帧来预测获得
     picture.mb_cnt++;
-    if (slice.MbaffFrameFlag) {
-      if (slice.CurrMbAddr % 2 == 0) {
+    if (slice_header.MbaffFrameFlag) {
+      if (slice_body.CurrMbAddr % 2 == 0) {
         // 只需要处理top field macroblock
         picture.m_mbs[picture.CurrMbAddr].mb_skip_flag =
             mb_skip_flag; // 因为解码mb_skip_flag_next_mb需要事先知道前面顶场宏块的mb_skip_flag值
         picture.m_mbs[picture.CurrMbAddr + 1].slice_number =
-            slice.slice_number; // 因为解码mb_skip_flag需要事先知道slice_id的值
+            slice_header
+                .slice_number; // 因为解码mb_skip_flag需要事先知道slice_id的值
         picture.m_mbs[picture.CurrMbAddr + 1].mb_field_decoding_flag =
-            slice
+            slice_body
                 .mb_field_decoding_flag; // 特别注意：底场宏块和顶场宏块的mb_field_decoding_flag值是相同的
 
         // cabac.CABAC_decode_mb_skip_flag(
         //     picture, bs, CurrMbAddr + 1,
         //     mb_skip_flag_next_mb); // 2 ae(v) 先读取底场宏块的mb_skip_flag
 
-        if (slice.mb_skip_flag_next_mb == 0) // 如果底场宏块mb_skip_flag=0
+        if (slice_header.mb_skip_flag_next_mb ==
+            0) // 如果底场宏块mb_skip_flag=0
         {
           //          cabac.CABAC_decode_mb_field_decoding_flag(
           //              picture, bs,
@@ -1545,23 +879,27 @@ int Nalu::set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
           // is not present for both the top and the bottom macroblock of
           // a macroblock pair
           if (picture.mb_x > 0 &&
-              picture.m_mbs[slice.CurrMbAddr - 2].slice_number ==
-                  slice.slice_number) // the left of the current macroblock pair
-                                      // in the same slice
+              picture.m_mbs[slice_body.CurrMbAddr - 2].slice_number ==
+                  slice_header
+                      .slice_number) // the left of the current macroblock pair
+                                     // in the same slice
           {
-            slice.mb_field_decoding_flag =
-                picture.m_mbs[slice.CurrMbAddr - 2].mb_field_decoding_flag;
+            slice_body.mb_field_decoding_flag =
+                picture.m_mbs[slice_body.CurrMbAddr - 2].mb_field_decoding_flag;
           } else if (picture.mb_y > 0 &&
-                     picture.m_mbs[slice.CurrMbAddr - 2 * sps.PicWidthInMbs]
+                     picture.m_mbs[slice_body.CurrMbAddr -
+                                   2 * sps.PicWidthInMbs]
                              .slice_number ==
-                         slice.slice_number) // above the current macroblock
-                                             // pair in the same slice
+                         slice_header
+                             .slice_number) // above the current macroblock
+                                            // pair in the same slice
           {
-            slice.mb_field_decoding_flag =
-                picture.m_mbs[slice.CurrMbAddr - 2 * sps.PicWidthInMbs]
+            slice_body.mb_field_decoding_flag =
+                picture.m_mbs[slice_body.CurrMbAddr - 2 * sps.PicWidthInMbs]
                     .mb_field_decoding_flag;
           } else {
-            slice.mb_field_decoding_flag = 0; // is inferred to be equal to 0
+            slice_body.mb_field_decoding_flag =
+                0; // is inferred to be equal to 0
           }
         }
       }
@@ -1581,7 +919,7 @@ int Nalu::set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
 int Nalu::NextMbAddress(int n) {
   int i = n + 1;
   while (i < idr.PicSizeInMbs &&
-         slice.MbToSliceGroupMap[i] != slice.MbToSliceGroupMap[n])
+         slice_header.MbToSliceGroupMap[i] != slice_header.MbToSliceGroupMap[n])
     i++;
   return i;
 }
@@ -1596,9 +934,10 @@ int Nalu::macroblock_layer(BitStream &bs, PictureBase &picture) {
   int32_t transform_size_8x8_flag_temp = 0;
 
   picture.Inverse_macroblock_scanning_process(
-      slice.MbaffFrameFlag, slice.CurrMbAddr, slice.mb_field_decoding_flag,
-      picture.m_mbs[slice.CurrMbAddr].m_mb_position_x,
-      picture.m_mbs[slice.CurrMbAddr].m_mb_position_y);
+      slice_header.MbaffFrameFlag, slice_body.CurrMbAddr,
+      slice_body.mb_field_decoding_flag,
+      picture.m_mbs[slice_body.CurrMbAddr].m_mb_position_x,
+      picture.m_mbs[slice_body.CurrMbAddr].m_mb_position_y);
 
   if (is_ae) // ae(v) 表示CABAC编码
   {
@@ -1609,7 +948,7 @@ int Nalu::macroblock_layer(BitStream &bs, PictureBase &picture) {
   }
   const int I_PCM = 25;
   if (mb_type == I_PCM) {
-    while (!byte_aligned(bs))
+    while (!bs.byte_aligned())
       uint8_t pcm_alignment_zero_bit = bs.readU1();
     int32_t pcm_sample_luma[256]; // 3 u(v)
     for (int i = 0; i < 256; i++) {
@@ -1617,7 +956,7 @@ int Nalu::macroblock_layer(BitStream &bs, PictureBase &picture) {
       pcm_sample_luma[i] = bs.readUn(v); // 3 u(v)
     }
     for (int i = 0; i < 2 * sps.MbWidthC * sps.MbHeightC; i++)
-      sps.pcm_sample_chroma[i] = bs.readUn(sps.BitDepthUV);
+      sps.pcm_sample_chroma[i] = bs.readUn(sps.BitDepthC);
   } else {
     bool noSubMbPartSizeLessThan8x8Flag = 1;
     //    if (mb_type != I_NxN && MbPartPredMode(mb_type, 0) != Intra_16x16 &&

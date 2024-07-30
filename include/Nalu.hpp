@@ -8,8 +8,10 @@
 #include "PPS.hpp"
 #include "PictureBase.hpp"
 #include "RBSP.hpp"
+#include "SEI.hpp"
 #include "SPS.hpp"
-#include "Slice.hpp"
+#include "SliceBody.hpp"
+#include "SliceHeader.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -68,24 +70,12 @@ class Nalu {
   PPS pps;
 
   /* SEI */
-  void sei_message(BitStream &bitStream);
-  void sei_payload(BitStream &bitStream, long payloadType, long payloadSize);
-  bool byte_aligned(BitStream &bitStream);
+  SEI sei;
 
   /* Slice */
-  Slice slice;
-  int parseSliceHeader(BitStream &bitStream, RBSP &rbsp);
+  SliceHeader slice_header;
+  SliceBody slice_body;
   int parseSliceData(BitStream &bitStream, RBSP &rbsp, PictureBase &picture);
-
-  void ref_pic_list_mvc_modification(BitStream &bitStream);
-  void ref_pic_list_modification(BitStream &bitStream);
-
-  void pred_weight_table(BitStream &bitStream);
-  void dec_ref_pic_marking(BitStream &bitStream);
-
-  int setMapUnitToSliceGroupMap();
-  int setMbToSliceGroupMap();
-  int set_scaling_lists_values();
   int set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
                        BitStream &bitStream);
 

@@ -29,6 +29,8 @@ class BitStream {
   // int getBitsLeft() { return _bitsLeft; }
   bool endOfBit();
 
+  bool byte_aligned();
+
  private:
   // buffer length
   int _size = 0;
