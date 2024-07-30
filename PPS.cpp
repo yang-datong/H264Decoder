@@ -62,7 +62,7 @@ int PPS::extractParameters() {
   deblocking_filter_control_present_flag = bitStream.readU1();
   constrained_intra_pred_flag = bitStream.readU1();
   redundant_pic_cnt_present_flag = bitStream.readU1();
-  if (more_rbsp_data(bitStream)) {
+  if (bitStream.more_rbsp_data()) {
     transform_8x8_mode_flag = bitStream.readU1();
     pic_scaling_matrix_present_flag = bitStream.readU1();
     if (pic_scaling_matrix_present_flag) {
@@ -83,50 +83,6 @@ int PPS::extractParameters() {
       second_chroma_qp_index_offset = bitStream.readSE();
     }
   }
-  rbsp_trailing_bits(bitStream);
-  return 0;
-}
-
-bool PPS::more_rbsp_data(BitStream &bs) {
-  if (bs.isEndOf())
-    return 0;
-
-  uint8_t *p1 = bs.getEndBuf();
-  while (p1 > bs.getP() && *p1 == 0) {
-    // 从后往前找，直到找到第一个非0值字节位置为止
-    p1--;
-  }
-
-  if (p1 > bs.getP()) {
-    return 1; // 说明当前位置bs.m_p后面还有码流数据
-  } else {
-    int flag = 0;
-    int i = 0;
-    for (i = 0; i < 8;
-         i++) // 在单个字节的8个比特位中，从后往前找，找到rbsp_stop_one_bit位置
-    {
-      int v = ((*(bs.getP())) >> i) & 0x01;
-      if (v == 1) {
-        i++;
-        flag = 1;
-        break;
-      }
-    }
-
-    if (flag == 1 && i < bs.getBitsLeft())
-      return 1;
-    else
-      return 0;
-  }
-
-  return 0;
-}
-
-int PPS::rbsp_trailing_bits(BitStream &bs) {
-  if (bs.getP() >= bs.getEndBuf())
-    return 0;
-  int32_t rbsp_stop_one_bit = bs.readU1(); // /* equal to 1 */ All f(1)
-  while (!bs.byte_aligned())
-    int32_t rbsp_alignment_zero_bit = bs.readU1();
+  bitStream.rbsp_trailing_bits();
   return 0;
 }

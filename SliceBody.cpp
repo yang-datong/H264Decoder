@@ -120,7 +120,7 @@ int SliceBody::parseSliceData(BitStream &bitStream, PictureBase &picture) {
           // CurrMbAddr = NextMbAddress(CurrMbAddr);
         }
         if (mb_skip_run > 0) {
-          moreDataFlag = m_pps.more_rbsp_data(bitStream);
+          moreDataFlag = bitStream.more_rbsp_data();
         }
       } else {
         /* CABAC编码 */
@@ -194,7 +194,7 @@ int SliceBody::parseSliceData(BitStream &bitStream, PictureBase &picture) {
     }
 
     if (!m_pps.entropy_coding_mode_flag) {
-      moreDataFlag = m_pps.more_rbsp_data(bitStream);
+      moreDataFlag = bitStream.more_rbsp_data();
     } else {
       /* TODO YangJing 没进 <24-05-26 16:01:53> */
       // if (slice.slice_type != SLICE_I && slice_type != SLICE_SI)

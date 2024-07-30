@@ -1,9 +1,6 @@
 #include "./BitStream.hpp"
 #include <cstdint>
 
-/* TODO YangJing
- * 这里有问题，不应该是[index]的方式，这里一个index就是8bits，如果是比特流应该不是这样
- * <24-07-30 20:16:44> */
 BitStream::BitStream(uint8_t *buf, int size)
     : _size(size), _p(buf), _endBuf(&buf[_size - 1]) {}
 
@@ -73,3 +70,46 @@ bool BitStream::byte_aligned() {
 }
 
 bool BitStream::isEndOf() { return ((*_p == *_endBuf) && _bitsLeft == 0); }
+
+bool BitStream::more_rbsp_data() {
+  if (isEndOf())
+    return 0;
+
+  uint8_t *p1 = getEndBuf();
+  while (p1 > getP() && *p1 == 0) {
+    // 从后往前找，直到找到第一个非0值字节位置为止
+    p1--;
+  }
+
+  if (p1 > getP()) {
+    return 1; // 说明当前位置m_p后面还有码流数据
+  } else {
+    int flag = 0;
+    int i = 0;
+    for (i = 0; i < 8; i++){
+    // 在单个字节的8个比特位中，从后往前找，找到rbsp_stop_one_bit位置
+      int v = ((*(getP())) >> i) & 0x01;
+      if (v == 1) {
+        i++;
+        flag = 1;
+        break;
+      }
+    }
+
+    if (flag == 1 && i < getBitsLeft())
+      return 1;
+    else
+      return 0;
+  }
+
+  return 0;
+}
+
+int BitStream::rbsp_trailing_bits() {
+  if (getP() >= getEndBuf())
+    return 0;
+  int32_t rbsp_stop_one_bit = readU1(); // /* equal to 1 */ All f(1)
+  while (!byte_aligned())
+    int32_t rbsp_alignment_zero_bit = readU1();
+  return 0;
+}

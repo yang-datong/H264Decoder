@@ -45,6 +45,8 @@ class BitStream {
   uint8_t *getP() { return _p; }
   uint8_t *getEndBuf() { return _endBuf; }
   int getBitsLeft() { return _bitsLeft; }
+  bool more_rbsp_data();
+  int rbsp_trailing_bits();
 };
 
 #endif /* end of include guard: BITSTREAM_HPP_AUHM38NB */

@@ -140,13 +140,11 @@ int Nalu::extractIDRparameters(RBSP &rbsp) {
   slice_header.m_pps = pps;
   slice_header.m_idr = idr;
   slice_header.parseSliceHeader(bitStream, this);
-  //decode(bitStream);
+  // decode(bitStream);
   return 0;
 }
 
 int Nalu::decode(BitStream &bitStream) {
-  /* 初始化bit处理器，填充sps的数据 */
-  // BitStream bitStream(rbsp._buf, rbsp._len);
   PictureBase picture;
 
   picture.m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;

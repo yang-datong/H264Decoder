@@ -408,7 +408,6 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, Nalu *nalu) {
     pic_order_cnt_lsb =
         bitStream.readUn(m_sps.log2_max_pic_order_cnt_lsb_minus4 + 4);
     if (m_pps.bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
-      /* TODO YangJing 这里应该是0,但是我是0 <24-07-30 19:06:20> */
       delta_pic_order_cnt_bottom = bitStream.readSE();
   }
 

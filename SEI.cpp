@@ -20,8 +20,9 @@ void SEI::sei_message(BitStream &bitStream) {
   uint8_t last_payload_size_byte = bitStream.readUn(8);
   payloadSize += last_payload_size_byte;
   sei_payload(bitStream, payloadType, payloadSize);
-  std::cout << "\tpayloadType:" << payloadType << std::endl;
-  std::cout << "\tpayloadSize:" << payloadSize << std::endl;
+  /* TODO YangJing 这里打印太多了，先注释 <24-07-30 22:32:11> */
+  // std::cout << "\tpayloadType:" << payloadType << std::endl;
+  // std::cout << "\tpayloadSize:" << payloadSize << std::endl;
 }
 
 void SEI::sei_payload(BitStream &bitStream, long payloadType,
@@ -40,6 +41,8 @@ int SEI::extractParameters() {
   BitStream bitStream(_buf, _len);
   do {
     sei_message(bitStream);
-  } while (pps.more_rbsp_data(bitStream));
+  } while (bitStream.more_rbsp_data());
+
+  bitStream.rbsp_trailing_bits();
   return 0;
 }
