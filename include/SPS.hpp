@@ -9,6 +9,15 @@
 #define H264_MAX_OFFSET_REF_FRAME_COUNT                                        \
   256 // 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle shall be in the range
       // of 0 to 255, inclusive.
+
+struct CHROMA_FORMAT_IDC_T {
+  int32_t chroma_format_idc;
+  int32_t separate_colour_plane_flag;
+  int32_t Chroma_Format;
+  int32_t SubWidthC;
+  int32_t SubHeightC;
+};
+
 class SPS : public RBSP {
  public:
   SPS();
@@ -17,6 +26,7 @@ class SPS : public RBSP {
   int _len = 0;
 
  public:
+  int extractParameters();
   uint32_t MaxFrameNum = 0;
   uint32_t maxPicOrderCntLsb = 0;
   bool direct_8x8_inference_flag = 0;

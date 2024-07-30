@@ -1,15 +1,22 @@
 #ifndef PPS_CPP_F6QSULFM
 #define PPS_CPP_F6QSULFM
 
+#include "BitStream.hpp"
 #include "RBSP.hpp"
+#include "SPS.hpp"
+#include <iostream>
+#include <ostream>
+
 class PPS : public RBSP {
  public:
   // PPS();
   //~PPS();
   uint8_t *_buf = nullptr;
   int _len = 0;
+  SPS sps;
 
  public:
+  int extractParameters();
   bool more_rbsp_data();
   void rbsp_trailing_bits();
 

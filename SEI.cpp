@@ -34,3 +34,12 @@ void SEI::sei_payload(BitStream &bitStream, long payloadType,
       int8_t bit_equal_to_zero = bitStream.readU1();
   }
 }
+
+int SEI::extractParameters() {
+  /* 初始化bit处理器，填充sei的数据 */
+  BitStream bitStream(_buf, _len);
+  do {
+    sei_message(bitStream);
+  } while (pps.more_rbsp_data());
+  return 0;
+}

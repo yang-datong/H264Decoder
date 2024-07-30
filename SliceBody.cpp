@@ -8,20 +8,12 @@ int SliceBody::parseSliceData(BitStream &bitStream, RBSP &rbsp,
   /* CABAC编码 */
   if (m_pps.entropy_coding_mode_flag) {
     std::cout << "CABAC编码" << std::endl;
-    while (!bitStream.byte_aligned())
-      cabac_alignment_one_bit = bitStream.readU1();
-
-    //    ret = cabac.Initialisation_process_for_context_variables(
-    //        (H264_SLIECE_TYPE)slice_header.slice.slice_type,
-    //        slice.cabac_init_idc, slice_header.SliceQPY); //
-    //        cabac初始化环境变量
-    //
-    //    ret = cabac.Initialisation_process_for_the_arithmetic_decoding_engine(
-    //        bs); // cabac初始化解码引擎
+    /* TODO YangJing 没进 <24-07-30 16:16:41> */
   }
 
-  if (slice_header.MbaffFrameFlag == 0)
+  if (slice_header.MbaffFrameFlag == 0) {
     mb_field_decoding_flag = slice_header.field_pic_flag;
+  }
 
   CurrMbAddr =
       slice_header.first_mb_in_slice * (1 + slice_header.MbaffFrameFlag);
