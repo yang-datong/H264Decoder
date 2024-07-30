@@ -2,7 +2,6 @@
 #define SLICEBODY_HPP_OVHTPIZQ
 #include "BitStream.hpp"
 #include "PictureBase.hpp"
-#include "RBSP.hpp"
 #include "SliceHeader.hpp"
 
 #include <cstdint>
@@ -25,7 +24,7 @@ class SliceBody {
   uint32_t prevMbSkipped = 0;
   bool moreDataFlag = 1;
 
-  int parseSliceData(BitStream &bitStream, RBSP &rbsp, PictureBase &picture);
+  int parseSliceData(BitStream &bitStream, PictureBase &picture);
   int set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
                        BitStream &bitStream);
 

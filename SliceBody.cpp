@@ -1,43 +1,57 @@
 #include "SliceBody.hpp"
 #include "CH264Golomb.hpp"
+#include "Nalu.hpp"
 
 /* Rec. ITU-T H.264 (08/2021) 56 */
-int SliceBody::parseSliceData(BitStream &bitStream, RBSP &rbsp,
-                              PictureBase &picture) {
-
+int SliceBody::parseSliceData(BitStream &bitStream, PictureBase &picture) {
+  CH264Cabac cabac;
   /* CABAC编码 */
   if (m_pps.entropy_coding_mode_flag) {
     std::cout << "CABAC编码" << std::endl;
-    /* TODO YangJing 没进 <24-07-30 16:16:41> */
+    while (!bitStream.byte_aligned()) {
+      std::cout << "hi~" << std::endl;
+      cabac_alignment_one_bit = bitStream.readU1(); // 2 f(1)
+    }
+
+    int ret = cabac.Initialisation_process_for_context_variables(
+        (H264_SLIECE_TYPE)slice_header.slice_type, slice_header.cabac_init_idc,
+        slice_header.SliceQPY); // cabac初始化环境变量
+    RETURN_IF_FAILED(ret != 0, -1);
+
+    ret = cabac.Initialisation_process_for_the_arithmetic_decoding_engine(
+        bitStream); // cabac初始化解码引擎
+    RETURN_IF_FAILED(ret != 0, -1);
   }
 
-  if (slice_header.MbaffFrameFlag == 0) {
+  if (slice_header.MbaffFrameFlag == 0)
     mb_field_decoding_flag = slice_header.field_pic_flag;
-  }
 
   CurrMbAddr =
       slice_header.first_mb_in_slice * (1 + slice_header.MbaffFrameFlag);
+
   picture.CurrMbAddr = CurrMbAddr;
 
-  if (picture.m_slice_cnt == 0) {
-    /* TODO YangJing  <24-07-29 17:01:59> */
-    // int ret = picture.Decoding_process_for_picture_order_count(); // 解码POC
-    // RETURN_IF_FAILED(ret != 0, ret);
+  slice_header.picNumL0Pred = slice_header.CurrPicNum;
+  slice_header.picNumL1Pred = slice_header.CurrPicNum;
 
-    /*
-    if (frame_mbs_only_flag == 0) // 有可能出现场帧或场宏块
+  if (picture.m_slice_cnt == 0) {
+    int ret = picture.Decoding_process_for_picture_order_count(); // 解码POC
+    RETURN_IF_FAILED(ret != 0, ret);
+
+    if (m_sps.frame_mbs_only_flag == 0) // 有可能出现场帧或场宏块
     {
-      picture.m_parent->m_picture_top_filed.copyDataPicOrderCnt(
-          picture); //
-    顶（底）场帧有可能被选为参考帧，在解码P/B帧时，会用到PicOrderCnt字段，所以需要在此处复制一份
-      picture.m_parent->m_picture_bottom_filed.copyDataPicOrderCnt(picture);
+      /* TODO YangJing 没进 <24-07-30 16:51:53> */
+      // picture.m_parent->m_picture_top_filed.copyDataPicOrderCnt(picture); //
+      //  顶（底）场帧有可能被选为参考帧，在解码P/B帧时，会用到PicOrderCnt字段，所以需要在此处复制一份
+      // picture.m_parent->m_picture_bottom_filed.copyDataPicOrderCnt(picture);
     }
 
     //--------参考帧重排序------------
     // 只有当前帧为P帧，B帧时，才会对参考图像数列表组进行重排序
-    if (slice_header.slice.slice_type == H264_SLIECE_TYPE_P ||
-        slice_header.slice.slice_type == H264_SLIECE_TYPE_SP ||
-        slice_header.slice.slice_type == H264_SLIECE_TYPE_B) {
+    if (slice_header.slice_type == H264_SLIECE_TYPE_P ||
+        slice_header.slice_type == H264_SLIECE_TYPE_SP ||
+        slice_header.slice_type == H264_SLIECE_TYPE_B) {
+      /* TODO YangJing 没进 <24-07-30 16:53:52> */
       // 8.2.4 Decoding process for reference picture lists construction
       // This process is invoked at the beginning of the decoding process for
       // each P, SP, or B slice.
@@ -50,12 +64,12 @@ int SliceBody::parseSliceData(BitStream &bitStream, RBSP &rbsp,
         printf("m_PicNumCnt=%d(%s); PicOrderCnt=%d; m_RefPicList0[%d]: %s; "
                "PicOrderCnt=%d; PicNum=%d; PicNumCnt=%d;\n",
                picture.m_PicNumCnt,
-               H264_SLIECE_TYPE_TO_STR(slice_header.slice.slice_type),
+               H264_SLIECE_TYPE_TO_STR(slice_header.slice_type),
                picture.PicOrderCnt, i,
                (picture.m_RefPicList0[i])
                    ? H264_SLIECE_TYPE_TO_STR(
                          picture.m_RefPicList0[i]
-                             ->m_picture_frame.m_h264_slice_header.slice.slice_type)
+                             ->m_picture_frame.m_h264_slice_header.slice_type)
                    : "UNKNOWN",
                (picture.m_RefPicList0[i])
                    ? picture.m_RefPicList0[i]->m_picture_frame.PicOrderCnt
@@ -71,12 +85,12 @@ int SliceBody::parseSliceData(BitStream &bitStream, RBSP &rbsp,
         printf("m_PicNumCnt=%d(%s); PicOrderCnt=%d; m_RefPicList1[%d]: %s; "
                "PicOrderCnt=%d; PicNum=%d; PicNumCnt=%d;\n",
                picture.m_PicNumCnt,
-               H264_SLIECE_TYPE_TO_STR(slice_header.slice.slice_type),
+               H264_SLIECE_TYPE_TO_STR(slice_header.slice_type),
                picture.PicOrderCnt, i,
                (picture.m_RefPicList1[i])
                    ? H264_SLIECE_TYPE_TO_STR(
                          picture.m_RefPicList1[i]
-                             ->m_picture_frame.m_h264_slice_header.slice.slice_type)
+                             ->m_picture_frame.m_h264_slice_header.slice_type)
                    : "UNKNOWN",
                (picture.m_RefPicList1[i])
                    ? picture.m_RefPicList1[i]->m_picture_frame.PicOrderCnt
@@ -89,10 +103,6 @@ int SliceBody::parseSliceData(BitStream &bitStream, RBSP &rbsp,
                    : -1);
       }
     }
-    */
-    /* TODO YangJing 解码POC <24-05-26 15:36:41> */
-    /* TODO YangJing 场帧或场宏块 <24-05-26 15:36:41> */
-    /* TODO YangJing 暂时没有进 <24-05-26 15:36:41> */
   }
 
   picture.m_slice_cnt++;
@@ -107,17 +117,12 @@ int SliceBody::parseSliceData(BitStream &bitStream, RBSP &rbsp,
         uint32_t mb_skip_run = bitStream.readUE();
         prevMbSkipped = (mb_skip_run > 0);
         for (int i = 0; i < mb_skip_run; i++) {
-          exit(0);
           // CurrMbAddr = NextMbAddress(CurrMbAddr);
-          /* TODO 没进YangJing  <24-05-26 15:45:56> */
         }
         if (mb_skip_run > 0) {
-          /* TODO YangJing 没进 <24-05-26 15:46:35> */
-          exit(0);
-          moreDataFlag = m_pps.more_rbsp_data();
+          moreDataFlag = m_pps.more_rbsp_data(bitStream);
         }
       } else {
-        exit(0);
         /* CABAC编码 */
         /* TODO YangJing 没进 <24-05-26 15:41:57> */
         // set_mb_skip_flag(mb_skip_flag, picture, bitStream);
@@ -189,7 +194,7 @@ int SliceBody::parseSliceData(BitStream &bitStream, RBSP &rbsp,
     }
 
     if (!m_pps.entropy_coding_mode_flag) {
-      moreDataFlag = m_pps.more_rbsp_data();
+      moreDataFlag = m_pps.more_rbsp_data(bitStream);
     } else {
       /* TODO YangJing 没进 <24-05-26 16:01:53> */
       // if (slice.slice_type != SLICE_I && slice_type != SLICE_SI)

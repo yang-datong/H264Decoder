@@ -67,12 +67,12 @@ int Nalu::parseRBSP(EBSP &ebsp, RBSP &rbsp) {
     return -1;
   }
 
-  uint8_t *rbspBuffer = new uint8_t[ebsp._len - 1]; // 去掉RBSP head (1 byte)
+  uint8_t *rbspBuffer = new uint8_t[ebsp._len - 1]{0}; // 去掉RBSP head (1 byte)
   int index = 0;
   rbspBuffer[index++] = ebsp._buf[1]; // 从RBSP body开始
   rbspBuffer[index++] = ebsp._buf[2];
   rbsp._len = ebsp._len - 1; // 不包括RBSP head
-  for (int i = 3; i < ebsp._len - 1; i++) {
+  for (int i = 3; i < ebsp._len; i++) {
     if (ebsp._buf[i] == 3 && ebsp._buf[i - 1] == 0 && ebsp._buf[i - 2] == 0) {
       if (ebsp._buf[i + 1] == 0 || ebsp._buf[i + 1] == 1 ||
           ebsp._buf[i + 1] == 2 || ebsp._buf[i + 1] == 3)
@@ -129,7 +129,7 @@ int Nalu::extractSliceparameters(RBSP &rbsp) {
   slice_header.m_sps = sps;
   slice_header.m_pps = pps;
   slice_header.m_idr = idr;
-  slice_header.parseSliceHeader(bitStream, rbsp, this);
+  slice_header.parseSliceHeader(bitStream, this);
   return 0;
 }
 
@@ -139,14 +139,14 @@ int Nalu::extractIDRparameters(RBSP &rbsp) {
   slice_header.m_sps = sps;
   slice_header.m_pps = pps;
   slice_header.m_idr = idr;
-  slice_header.parseSliceHeader(bitStream, rbsp, this);
+  slice_header.parseSliceHeader(bitStream, this);
+  //decode(bitStream);
   return 0;
 }
 
-int Nalu::decode(RBSP &rbsp) {
+int Nalu::decode(BitStream &bitStream) {
   /* 初始化bit处理器，填充sps的数据 */
-  BitStream bitStream(rbsp._buf, rbsp._len);
-
+  // BitStream bitStream(rbsp._buf, rbsp._len);
   PictureBase picture;
 
   picture.m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
@@ -161,6 +161,6 @@ int Nalu::decode(RBSP &rbsp) {
   slice_body.m_sps = this->sps;
   slice_body.m_pps = this->pps;
   slice_body.m_idr = this->idr;
-  slice_body.parseSliceData(bitStream, rbsp, picture);
+  slice_body.parseSliceData(bitStream, picture);
   return 0;
 }

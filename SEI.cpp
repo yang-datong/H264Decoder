@@ -40,6 +40,6 @@ int SEI::extractParameters() {
   BitStream bitStream(_buf, _len);
   do {
     sei_message(bitStream);
-  } while (pps.more_rbsp_data());
+  } while (pps.more_rbsp_data(bitStream));
   return 0;
 }

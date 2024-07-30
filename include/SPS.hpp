@@ -28,7 +28,6 @@ class SPS : public RBSP {
  public:
   int extractParameters();
   uint32_t MaxFrameNum = 0;
-  uint32_t maxPicOrderCntLsb = 0;
   bool direct_8x8_inference_flag = 0;
   uint32_t chroma_format_idc = 0;
   bool separate_colour_plane_flag = 0;
@@ -99,6 +98,12 @@ class SPS : public RBSP {
   uint32_t ScalingList8x8[6][64];
   uint32_t UseDefaultScalingMatrix4x4Flag[6];
   uint32_t UseDefaultScalingMatrix8x8Flag[6];
+
+  uint32_t picWidthInSamplesL = 0;
+  // 亮度分量的采样宽度，等于宏块宽度乘以 16
+  uint32_t picWidthInSamplesC = 0;
+  // 色度分量的采样宽度，等于宏块宽度乘以 MbWidthC。
+  uint32_t RawMbBits = 0;
 
   void vui_parameters(BitStream &bitStream);
   void hrd_parameters(BitStream &bitStream);

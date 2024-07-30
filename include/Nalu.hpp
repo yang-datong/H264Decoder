@@ -51,7 +51,8 @@ class Nalu {
   int GetNaluType();
 
   /* 开始解码图像 */
-  int decode(RBSP &rbsp);
+  // int decode(RBSP &rbsp);
+  int decode(BitStream &bitStream);
 
  private:
   int parseNALHeader(EBSP &rbsp);

@@ -388,8 +388,7 @@ int SliceHeader::setMbToSliceGroupMap() {
 }
 
 /* Slice header syntax -> 51 page */
-int SliceHeader::parseSliceHeader(BitStream &bitStream, RBSP &rbsp,
-                                  Nalu *nalu) {
+int SliceHeader::parseSliceHeader(BitStream &bitStream, Nalu *nalu) {
   first_mb_in_slice = bitStream.readUE();
   slice_type = bitStream.readUE();
   pic_parametter_set_id = bitStream.readUE();
@@ -406,8 +405,10 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, RBSP &rbsp,
   if (IdrPicFlag)
     idr_pic_id = bitStream.readUE();
   if (m_sps.pic_order_cnt_type == 0) {
-    pic_order_cnt_lsb = bitStream.readUn(std::log2(m_sps.MaxFrameNum));
+    pic_order_cnt_lsb =
+        bitStream.readUn(m_sps.log2_max_pic_order_cnt_lsb_minus4 + 4);
     if (m_pps.bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
+      /* TODO YangJing 这里应该是0,但是我是0 <24-07-30 19:06:20> */
       delta_pic_order_cnt_bottom = bitStream.readSE();
   }
 
@@ -540,6 +541,7 @@ void SliceHeader::ref_pic_list_modification(BitStream &bitStream) {
       } while (modification_of_pic_nums_idc != 3);
     }
   }
+
   if (slice_type % 5 == SLICE_B) {
     bool ref_pic_list_modification_flag_l1 = bitStream.readU1();
     if (ref_pic_list_modification_flag_l1)

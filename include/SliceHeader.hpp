@@ -131,6 +131,6 @@ class SliceHeader {
 
   void pred_weight_table(BitStream &bitStream);
   void dec_ref_pic_marking(BitStream &bitStream);
-  int parseSliceHeader(BitStream &bitStream, RBSP &rbsp, Nalu *nalu);
+  int parseSliceHeader(BitStream &bitStream, Nalu *nalu);
 };
 #endif /* end of include guard: SLICEHEADER_HPP_JYXLKOEI */

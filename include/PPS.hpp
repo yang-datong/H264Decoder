@@ -1,11 +1,8 @@
 #ifndef PPS_CPP_F6QSULFM
 #define PPS_CPP_F6QSULFM
 
-#include "BitStream.hpp"
 #include "RBSP.hpp"
 #include "SPS.hpp"
-#include <iostream>
-#include <ostream>
 
 class PPS : public RBSP {
  public:
@@ -17,7 +14,7 @@ class PPS : public RBSP {
 
  public:
   int extractParameters();
-  bool more_rbsp_data();
+  bool more_rbsp_data(BitStream &bs);
   void rbsp_trailing_bits();
 
   bool bottom_field_pic_order_in_frame_present_flag = 0;

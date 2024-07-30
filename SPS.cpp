@@ -4,7 +4,6 @@
 #include <ostream>
 
 SPS::SPS() {
-  MaxPicOrderCntLsb = h264_power2(log2_max_pic_order_cnt_lsb_minus4 + 4);
   if (pic_order_cnt_type == 1) {
     ExpectedDeltaPerPicOrderCntCycle = 0;
     for (int i = 0; i < (int32_t)num_ref_frames_in_pic_order_cnt_cycle; i++) {
@@ -202,7 +201,7 @@ int SPS::extractParameters() {
     frame_crop_top_offset = bitStream.readUE();
     frame_crop_bottom_offset = bitStream.readUE();
   }
-  bool vui_parameters_present_flag = bitStream.readU1();
+  vui_parameters_present_flag = bitStream.readU1();
   if (vui_parameters_present_flag)
     vui_parameters(bitStream);
 
@@ -222,6 +221,7 @@ int SPS::extractParameters() {
   int width = (pic_width_in_mbs_minus1 + 1) * 16;
   int height = (pic_height_in_map_units_minus1 + 1) * 16;
   printf("\tprediction width:%d, prediction height:%d\n", width, height);
+  /* TODO YangJing 这里的高为什么是1088？ <24-07-30 20:18:36> */
 
   /* 获取帧率 */
   /* TODO YangJing  <24-04-05 00:22:50> */
@@ -275,11 +275,11 @@ int SPS::extractParameters() {
   }
 
   /* 计算采样宽度和比特深度 */
-  uint32_t picWidthInSamplesL = PicWidthInMbs * 16;
+  picWidthInSamplesL = PicWidthInMbs * 16;
   // 亮度分量的采样宽度，等于宏块宽度乘以 16
-  uint32_t picWidthInSamplesC = PicWidthInMbs * MbWidthC;
+  picWidthInSamplesC = PicWidthInMbs * MbWidthC;
   // 色度分量的采样宽度，等于宏块宽度乘以 MbWidthC。
-  uint32_t RawMbBits = 256 * BitDepthY + 2 * MbWidthC * MbHeightC * BitDepthY;
+  RawMbBits = 256 * BitDepthY + 2 * MbWidthC * MbHeightC * BitDepthY;
 
   /* 计算最大帧号和最大图像顺序计数 LSB  in 77 page*/
   /*
@@ -292,7 +292,7 @@ The value of log2_max_frame_num_minus4 shall be in the range of 0 to
 12,inclusive.
    * */
   MaxFrameNum = std::pow(log2_max_frame_num_minus4 + 4, 2);
-  maxPicOrderCntLsb = std::pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
+  MaxPicOrderCntLsb = std::pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
 
   /* 计算预期图像顺序计数周期增量 */
   if (pic_order_cnt_type == 1) {

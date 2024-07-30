@@ -25,19 +25,26 @@ class BitStream {
   /* 读取有符号指数哥伦布编码 */
   uint32_t readSE();
 
-  /* 用于计算是否以及字节对齐，比如_bitsLeft % 8 == 0 */
-  // int getBitsLeft() { return _bitsLeft; }
   bool endOfBit();
 
   bool byte_aligned();
+
+  bool isEndOf();
 
  private:
   // buffer length
   int _size = 0;
   // curent byte
   uint8_t *_p = nullptr;
+
+  uint8_t *_endBuf = 0;
   // curent byte in the bit
   int _bitsLeft = ARCH_64_BIT_COUNT;
+
+ public:
+  uint8_t *getP() { return _p; }
+  uint8_t *getEndBuf() { return _endBuf; }
+  int getBitsLeft() { return _bitsLeft; }
 };
 
 #endif /* end of include guard: BITSTREAM_HPP_AUHM38NB */

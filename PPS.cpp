@@ -1,4 +1,7 @@
 #include "PPS.hpp"
+#include "BitStream.hpp"
+#include <iostream>
+#include <ostream>
 
 int PPS::extractParameters() {
   /* 初始化bit处理器，填充pps的数据 */
@@ -9,7 +12,7 @@ int PPS::extractParameters() {
   seq_parameter_set_id = bitStream.readUE();
   std::cout << "\tseq_parameter_set_id:" << seq_parameter_set_id << std::endl;
 
-  entropy_coding_mode_flag = bitStream.readUE();
+  entropy_coding_mode_flag = bitStream.readU1();
   if (entropy_coding_mode_flag == 0)
     std::cout << "\tentropy_coding_mode_flag:CAVLC" << std::endl;
   else if (entropy_coding_mode_flag == 1)
@@ -17,7 +20,7 @@ int PPS::extractParameters() {
   else
     std::cout << "\tentropy_coding_mode_flag:?????" << std::endl;
 
-  bottom_field_pic_order_in_frame_present_flag = bitStream.readUE();
+  bottom_field_pic_order_in_frame_present_flag = bitStream.readU1();
   num_slice_groups_minus1 = bitStream.readUE();
   if (num_slice_groups_minus1 > 0) {
     slice_group_map_type = bitStream.readUE();
@@ -59,7 +62,8 @@ int PPS::extractParameters() {
   deblocking_filter_control_present_flag = bitStream.readU1();
   constrained_intra_pred_flag = bitStream.readU1();
   redundant_pic_cnt_present_flag = bitStream.readU1();
-  if (more_rbsp_data()) {
+  if (more_rbsp_data(bitStream)) {
+    /* TODO YangJing 这里应该进来，我这里没进来 <24-07-30 19:50:26> */
     transform_8x8_mode_flag = bitStream.readU1();
     pic_scaling_matrix_present_flag = bitStream.readU1();
     if (pic_scaling_matrix_present_flag) {
@@ -84,6 +88,39 @@ int PPS::extractParameters() {
   return 0;
 }
 
-bool PPS::more_rbsp_data() { return false; }
+bool PPS::more_rbsp_data(BitStream &bs) {
+  if (bs.isEndOf())
+    return 0;
+
+  uint8_t *p1 = bs.getEndBuf();
+  while (p1 > bs.getP() && *p1 == 0) {
+    // 从后往前找，直到找到第一个非0值字节位置为止
+    p1--;
+  }
+
+  if (p1 > bs.getP()) {
+    return 1; // 说明当前位置bs.m_p后面还有码流数据
+  } else {
+    int flag = 0;
+    int i = 0;
+    for (i = 0; i < 8;
+         i++) // 在单个字节的8个比特位中，从后往前找，找到rbsp_stop_one_bit位置
+    {
+      int v = ((*(bs.getP())) >> i) & 0x01;
+      if (v == 1) {
+        i++;
+        flag = 1;
+        break;
+      }
+    }
+
+    if (flag == 1 && i < bs.getBitsLeft())
+      return 1;
+    else
+      return 0;
+  }
+
+  return 0;
+}
 
 void PPS::rbsp_trailing_bits() { /* TODO YangJing  <24-04-07 21:55:36> */ }

@@ -1,7 +1,11 @@
 #include "./BitStream.hpp"
 #include <cstdint>
 
-BitStream::BitStream(uint8_t *buf, int size) : _size(size), _p(buf) {}
+/* TODO YangJing
+ * 这里有问题，不应该是[index]的方式，这里一个index就是8bits，如果是比特流应该不是这样
+ * <24-07-30 20:16:44> */
+BitStream::BitStream(uint8_t *buf, int size)
+    : _size(size), _p(buf), _endBuf(&buf[_size - 1]) {}
 
 BitStream::~BitStream() {}
 
@@ -67,3 +71,5 @@ bool BitStream::byte_aligned() {
    */
   return endOfBit();
 }
+
+bool BitStream::isEndOf() { return ((*_p == *_endBuf) && _bitsLeft == 0); }
