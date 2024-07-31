@@ -3326,6 +3326,9 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks(
       int32_t c[4][4] = {{0}};
       int32_t r[4][4] = {{0}};
 
+      /* TODO YangJing
+       * LumaLevel4x4是没有值的，有问题，需要向前找一下是哪里出现了问题，或者没有进行赋值
+       * <24-07-31 11:22:28> */
       ret =
           Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
               m_mbs[CurrMbAddr].LumaLevel4x4[luma4x4BlkIdx], c,
@@ -3393,10 +3396,6 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks(
 
       for (int32_t i = 0; i <= 3; i++) {
         for (int32_t j = 0; j <= 3; j++) {
-          // uij = Clip1Y( predL[ xO + j, yO + i ] + rij ) = Clip3( 0, ( 1 <<
-          // BitDepthY ) − 1, x ); u[i * 4 + j] = CLIP3(0, (1 << BitDepth) - 1,
-          // pic_buff[(mb_y * 16 + (yO + i)) * PicWidthInSamples + (mb_x * 16 +
-          // (xO + j))] + r[i][j]);
           u[i * 4 + j] =
               CLIP3(0, (1 << BitDepth) - 1,
                     pic_buff[(m_mbs[CurrMbAddr].m_mb_position_y +
@@ -4051,14 +4050,14 @@ int PictureBase::
 int PictureBase::Scaling_and_transformation_process_for_residual_4x4_blocks(
     int32_t c[4][4], int32_t (&r)[4][4], int32_t isChroma, int32_t isChromaCb) {
   int ret = 0;
-  // int32_t bitDepth = 0;
+  int32_t bitDepth = 0;
 
   SliceHeader &slice_header = m_h264_slice_header;
 
   if (isChroma == 0) {
-    // bitDepth = slice_header.m_sps.BitDepthY;
+    bitDepth = slice_header.m_sps.BitDepthY;
   } else if (isChroma == 1) {
-    // bitDepth = slice_header.m_sps.BitDepthC;
+    bitDepth = slice_header.m_sps.BitDepthC;
   }
 
   int32_t sMbFlag = 0;

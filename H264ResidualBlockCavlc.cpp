@@ -445,42 +445,39 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
     int32_t availableFlagN_A = 0;
     int32_t availableFlagN_B = 0;
 
-    //    if (mbAddrN_A < 0 // mbAddrN is not available
-    //        || (IS_INTRA_Prediction_Mode(
-    //                MbPartPredMode) // the current macroblock is coded using
-    //                an
-    //                                // Intra macroblock prediction mode
-    //            && slice_header.m_pps.constrained_intra_pred_flag ==
-    //                   1 // constrained_intra_pred_flag is equal to 1
-    //            && !IS_INTRA_Prediction_Mode(
-    //                   picture.m_mbs[mbAddrN_A]
-    //                       .m_mb_pred_mode) // mbAddrN is coded using an Inter
-    //                                        // macroblock prediction mode
-    //            && slice_header.m_nal_unit.nal_unit_type >= 2 &&
-    //            slice_header.m_nal_unit.nal_unit_type <=
-    //                4) // slice data partitioning is in use (nal_unit_type is
-    //                in the
-    //                   // range of 2 to 4, inclusive)
-    //    ) {
-    //      availableFlagN_A = 0;
-    //    } else {
-    //      availableFlagN_A = 1;
-    //    }
+    if (mbAddrN_A < 0 // mbAddrN is not available
+        || (IS_INTRA_Prediction_Mode(
+                MbPartPredMode) // the current macroblock is coded using an
+                                // Intra macroblock prediction mode
+            && slice_header.m_pps.constrained_intra_pred_flag ==
+                   1 // constrained_intra_pred_flag is equal to 1
+            && !IS_INTRA_Prediction_Mode(
+                   picture.m_mbs[mbAddrN_A]
+                       .m_mb_pred_mode) // mbAddrN is coded using an Inter
+                                        // macroblock prediction mode
+            && slice_header.nal_unit_type >= 2 &&
+            slice_header.nal_unit_type <=
+                4) // slice data partitioning is in use (nal_unit_type is in the
+                   // range of 2 to 4, inclusive)
+    ) {
+      availableFlagN_A = 0;
+    } else {
+      availableFlagN_A = 1;
+    }
 
-    //    if (mbAddrN_B < 0 ||
-    //        (IS_INTRA_Prediction_Mode(MbPartPredMode) &&
-    //         slice_header.m_pps.constrained_intra_pred_flag == 1 &&
-    //         !IS_INTRA_Prediction_Mode(
-    //             picture.m_mbs[mbAddrN_B]
-    //                 .m_mb_pred_mode) // mbAddrN is coded using an Inter
-    //                 macroblock
-    //                                  // prediction mode
-    //         && slice_header.m_nal_unit.nal_unit_type >= 2 &&
-    //         slice_header.m_nal_unit.nal_unit_type <= 4)) {
-    //      availableFlagN_B = 0;
-    //    } else {
-    //      availableFlagN_B = 1;
-    //    }
+    if (mbAddrN_B < 0 ||
+        (IS_INTRA_Prediction_Mode(MbPartPredMode) &&
+         slice_header.m_pps.constrained_intra_pred_flag == 1 &&
+         !IS_INTRA_Prediction_Mode(
+             picture.m_mbs[mbAddrN_B]
+                 .m_mb_pred_mode) // mbAddrN is coded using an Inter macroblock
+                                  // prediction mode
+         && slice_header.nal_unit_type >= 2 &&
+         slice_header.nal_unit_type <= 4)) {
+      availableFlagN_B = 0;
+    } else {
+      availableFlagN_B = 1;
+    }
 
     //-----------------------
     int32_t nA = 0;

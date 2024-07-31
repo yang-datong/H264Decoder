@@ -2489,61 +2489,60 @@ int CH264Cabac::
   int32_t condTermFlagB = 0;
 
   //----------A------------
-  //  if ((mbAddrA < 0 &&
-  //       IS_INTRA_Prediction_Mode(
-  //           picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode) == false) ||
-  //      (mbAddrA >= 0 && transBlockA == -1 &&
-  //       picture.m_mbs[mbAddrA].m_name_of_mb_type != I_PCM) ||
-  //      (IS_INTRA_Prediction_Mode(
-  //           picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode) &&
-  //       picture.m_mbs[picture.CurrMbAddr].constrained_intra_pred_flag == 1 &&
-  //       mbAddrA >= 0 &&
-  //       IS_INTRA_Prediction_Mode(picture.m_mbs[mbAddrA].m_mb_pred_mode) ==
-  //           false &&
-  //       (picture.m_h264_slice_header.m_nal_unit.nal_unit_type >= 2 &&
-  //        picture.m_h264_slice_header.m_nal_unit.nal_unit_type <= 4))) {
-  //    condTermFlagA = 0;
-  //  } else if (mbAddrA < 0 &&
-  //                 IS_INTRA_Prediction_Mode(
-  //                     picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode) ||
-  //             picture.m_mbs[mbAddrA].m_name_of_mb_type == I_PCM) {
-  //    condTermFlagA = 1;
-  //  } else {
-  //    // condTermFlagN is set equal to the value of the coded_block_flag of
-  //    the
-  //    // transform block transBlockN that was decoded for the macroblock
-  //    mbAddrN. condTermFlagA = transBlockA_coded_block_flag;
-  //  }
-  //
-  //  //----------B------------
-  //  if ((mbAddrB < 0 &&
-  //       IS_INTRA_Prediction_Mode(
-  //           picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode) == false) ||
-  //      (mbAddrB >= 0 && transBlockB == -1 &&
-  //       picture.m_mbs[mbAddrB].m_name_of_mb_type != I_PCM) ||
-  //      (IS_INTRA_Prediction_Mode(
-  //           picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode) &&
-  //       picture.m_mbs[picture.CurrMbAddr].constrained_intra_pred_flag == 1 &&
-  //       mbAddrB >= 0 &&
-  //       IS_INTRA_Prediction_Mode(picture.m_mbs[mbAddrB].m_mb_pred_mode) ==
-  //           false &&
-  //       (picture.m_h264_slice_header.m_nal_unit.nal_unit_type >= 2 &&
-  //        picture.m_h264_slice_header.m_nal_unit.nal_unit_type <= 4))) {
-  //    condTermFlagB = 0;
-  //  } else if (mbAddrB < 0 &&
-  //                 IS_INTRA_Prediction_Mode(
-  //                     picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode) ||
-  //             picture.m_mbs[mbAddrB].m_name_of_mb_type == I_PCM) {
-  //    condTermFlagB = 1;
-  //  } else {
-  //    // condTermFlagN is set equal to the value of the coded_block_flag of
-  //    the
-  //    // transform block transBlockN that was decoded for the macroblock
-  //    mbAddrN. condTermFlagB = transBlockB_coded_block_flag;
-  //  }
-  //
-  //  //------ctxIdxInc( ctxBlockCat )--------------
-  //  ctxIdxInc = condTermFlagA + 2 * condTermFlagB;
+  if ((mbAddrA < 0 &&
+       IS_INTRA_Prediction_Mode(
+           picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode) == false) ||
+      (mbAddrA >= 0 && transBlockA == -1 &&
+       picture.m_mbs[mbAddrA].m_name_of_mb_type != I_PCM) ||
+      (IS_INTRA_Prediction_Mode(
+           picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode) &&
+       picture.m_mbs[picture.CurrMbAddr].constrained_intra_pred_flag == 1 &&
+       mbAddrA >= 0 &&
+       IS_INTRA_Prediction_Mode(picture.m_mbs[mbAddrA].m_mb_pred_mode) ==
+           false &&
+       (picture.m_h264_slice_header.nal_unit_type >= 2 &&
+        picture.m_h264_slice_header.nal_unit_type <= 4))) {
+    condTermFlagA = 0;
+  } else if (mbAddrA < 0 &&
+                 IS_INTRA_Prediction_Mode(
+                     picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode) ||
+             picture.m_mbs[mbAddrA].m_name_of_mb_type == I_PCM) {
+    condTermFlagA = 1;
+  } else {
+    // condTermFlagN is set equal to the value of the coded_block_flag of the
+    // transform block transBlockN that was decoded for the macroblock mbAddrN.
+    condTermFlagA = transBlockA_coded_block_flag;
+  }
+
+  //----------B------------
+  if ((mbAddrB < 0 &&
+       IS_INTRA_Prediction_Mode(
+           picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode) == false) ||
+      (mbAddrB >= 0 && transBlockB == -1 &&
+       picture.m_mbs[mbAddrB].m_name_of_mb_type != I_PCM) ||
+      (IS_INTRA_Prediction_Mode(
+           picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode) &&
+       picture.m_mbs[picture.CurrMbAddr].constrained_intra_pred_flag == 1 &&
+       mbAddrB >= 0 &&
+       IS_INTRA_Prediction_Mode(picture.m_mbs[mbAddrB].m_mb_pred_mode) ==
+           false &&
+       (picture.m_h264_slice_header.nal_unit_type >= 2 &&
+        picture.m_h264_slice_header.nal_unit_type <= 4))) {
+    condTermFlagB = 0;
+  } else if (mbAddrB < 0 &&
+                 IS_INTRA_Prediction_Mode(
+                     picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode) ||
+             picture.m_mbs[mbAddrB].m_name_of_mb_type == I_PCM) {
+    condTermFlagB = 1;
+  } else {
+    // condTermFlagN is set equal to the value of the coded_block_flag of the
+    // transform block transBlockN that was decoded for the macroblock
+    // mbAddrN.
+    condTermFlagB = transBlockB_coded_block_flag;
+  }
+
+  //------ctxIdxInc( ctxBlockCat )--------------
+  ctxIdxInc = condTermFlagA + 2 * condTermFlagB;
 
   return 0;
 }

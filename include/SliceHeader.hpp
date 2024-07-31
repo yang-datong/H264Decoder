@@ -27,6 +27,7 @@ class SliceHeader {
   SPS m_sps;
   PPS m_pps;
   IDR m_idr;
+  char nal_unit_type = 0;
 
   int m_is_malloc_mem_self = 0;
   uint32_t slice_type = 0;

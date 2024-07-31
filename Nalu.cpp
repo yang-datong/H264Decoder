@@ -129,6 +129,7 @@ int Nalu::extractSliceparameters(RBSP &rbsp) {
   slice_header.m_sps = sps;
   slice_header.m_pps = pps;
   slice_header.m_idr = idr;
+  slice_header.nal_unit_type = nal_unit_type;
   slice_header.parseSliceHeader(bitStream, this);
   return 0;
 }
@@ -139,6 +140,7 @@ int Nalu::extractIDRparameters(RBSP &rbsp) {
   slice_header.m_sps = sps;
   slice_header.m_pps = pps;
   slice_header.m_idr = idr;
+  slice_header.nal_unit_type = nal_unit_type;
   slice_header.parseSliceHeader(bitStream, this);
   decode(bitStream);
   return 0;

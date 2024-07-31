@@ -198,27 +198,52 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
       uint8_t *pic_buff_luma = picture.m_pic_buff_luma;
       uint8_t *pic_buff_cb = picture.m_pic_buff_cb;
       uint8_t *pic_buff_cr = picture.m_pic_buff_cr;
-      if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
-          Intra_4x4) // 帧内预测
-        std::cout << "hi1~" << std::endl;
-      /* TODO YangJing  <24-07-30 23:47:00> */
-      else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
-               Intra_8x8) // 帧内预测
-        std::cout << "hi2~" << std::endl;
-      /* TODO YangJing  <24-07-30 23:47:00> */
-      else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
-               Intra_16x16) // 帧内预测
+      // 帧内预测
+      if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode == Intra_4x4) {
+        isChroma = 0;
+        isChromaCb = 0;
+        BitDepth = picture.m_h264_slice_header.m_sps.BitDepthY;
+
+        picture.transform_decoding_process_for_4x4_luma_residual_blocks(
+            isChroma, isChromaCb, BitDepth, picWidthInSamplesL, pic_buff_luma);
+
+        isChromaCb = 1;
+        picture.transform_decoding_process_for_chroma_samples(
+            isChromaCb, picWidthInSamplesC, pic_buff_cb);
+
+        isChromaCb = 0;
+        picture.transform_decoding_process_for_chroma_samples(
+            isChromaCb, picWidthInSamplesC, pic_buff_cr);
+
+      } else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
+                 Intra_8x8) {
+        isChroma = 0;
+        isChromaCb = 0;
+        BitDepth = picture.m_h264_slice_header.m_sps.BitDepthY;
+
+        picture.transform_decoding_process_for_8x8_luma_residual_blocks(
+            isChroma, isChromaCb, BitDepth, picWidthInSamplesL,
+            picture.m_mbs[picture.CurrMbAddr].LumaLevel8x8, pic_buff_luma);
+
+        isChromaCb = 1;
+        picture.transform_decoding_process_for_chroma_samples(
+            isChromaCb, picWidthInSamplesC, pic_buff_cb);
+
+        isChromaCb = 0;
+        picture.transform_decoding_process_for_chroma_samples(
+            isChromaCb, picWidthInSamplesC, pic_buff_cr);
+
+      } else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
+                 Intra_16x16)
         std::cout << "hi3~" << std::endl;
       /* TODO YangJing  <24-07-30 23:47:00> */
-      else if (
-          picture.m_mbs[picture.CurrMbAddr].m_name_of_mb_type ==
-          I_PCM) // 说明该宏块没有残差，也没有预测值，码流中的数据直接为原始像素值
+      else if (picture.m_mbs[picture.CurrMbAddr].m_name_of_mb_type == I_PCM)
+        // 说明该宏块没有残差，也没有预测值，码流中的数据直接为原始像素值
         std::cout << "hi4~" << std::endl;
       /* TODO YangJing  <24-07-30 23:47:00> */
-      else {
+      else
         /* TODO YangJing 这里没进 <24-07-30 23:46:43> */
         exit(0);
-      }
     }
 
     if (!m_pps.entropy_coding_mode_flag) {

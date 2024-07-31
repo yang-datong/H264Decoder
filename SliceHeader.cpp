@@ -390,7 +390,7 @@ int SliceHeader::setMbToSliceGroupMap() {
 /* Slice header syntax -> 51 page */
 int SliceHeader::parseSliceHeader(BitStream &bitStream, Nalu *nalu) {
   first_mb_in_slice = bitStream.readUE();
-  slice_type = bitStream.readUE();
+  slice_type = bitStream.readUE() % 5;
   pic_parametter_set_id = bitStream.readUE();
   if (m_sps.separate_colour_plane_flag == 1)
     colour_plane_id = bitStream.readUn(2);
