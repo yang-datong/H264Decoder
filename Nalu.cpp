@@ -5,6 +5,7 @@
 #include "RBSP.hpp"
 #include <cmath>
 #include <cstdint>
+#include <fstream>
 
 Nalu::Nalu() {}
 
@@ -153,10 +154,8 @@ int Nalu::decode(BitStream &bitStream) {
   m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
   m_picture_frame.m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
   m_picture_frame.m_parent = this;
-
   /* TODO YangJing 处理前一帧内存 <24-07-30 23:25:01> */
   // memcpy(m_picture_frame.m_dpb, dpb, sizeof(CH264Picture *) * size_pdb);
-
   m_current_picture_ptr = &m_picture_frame;
   m_picture_frame.init(slice_header);
 
@@ -170,6 +169,8 @@ int Nalu::decode(BitStream &bitStream) {
   slice_body.m_pps = this->pps;
   slice_body.m_idr = this->idr;
   slice_body.parseSliceData(bitStream, m_picture_frame);
+  // NOTE:已经可以正确解码I帧
+  // m_picture_frame.saveToBmpFile("output.bmp");
   return 0;
 }
 

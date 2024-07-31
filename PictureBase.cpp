@@ -1,4 +1,5 @@
 ﻿#include "PictureBase.hpp"
+#include "Bitmap.hpp"
 #include "Nalu.hpp"
 
 extern int32_t g_PicNumCnt;
@@ -479,7 +480,6 @@ int PictureBase::createEmptyImage(MY_BITMAP &bitmap, int32_t width,
 
   bitmap.bmWidthBytes = (width * bmBitsPixel / 8 + 3) / 4 * 4;
 
-
   uint8_t *pBits =
       (uint8_t *)my_malloc(bitmap.bmHeight * bitmap.bmWidthBytes); // 在堆上申请
   if (pBits == NULL) {
@@ -522,9 +522,94 @@ int PictureBase::saveToBmpFile(const char *filename) {
 }
 
 int PictureBase::saveBmp(const char *filename, MY_BITMAP *pBitmap) {
+
   int ret = 0;
-  std::cout << "No call saveBmp" << std::endl;
-  exit(0);
+
+  MY_BitmapFileHeader bmpFileHeader;
+  MY_BitmapInfoHeader bmpInfoHeader;
+  unsigned char pixVal = '\0';
+  MY_RgbQuad quad[256] = {0};
+
+  FILE *fp = fopen(filename, "wb");
+  if (!fp) {
+    return -1;
+  }
+
+  unsigned short fileType = 0x4D42;
+  fwrite(&fileType, sizeof(unsigned short), 1, fp);
+
+  if (pBitmap->bmBitsPixel == 24 ||
+      pBitmap->bmBitsPixel == 32) // 24位，通道，彩图
+  {
+    int rowbytes = pBitmap->bmWidthBytes;
+
+    bmpFileHeader.bfSize = pBitmap->bmHeight * rowbytes + 54;
+    bmpFileHeader.bfReserved1 = 0;
+    bmpFileHeader.bfReserved2 = 0;
+    bmpFileHeader.bfOffBits = 54;
+    fwrite(&bmpFileHeader, sizeof(MY_BitmapFileHeader), 1, fp);
+
+    bmpInfoHeader.biSize = 40;
+    bmpInfoHeader.biWidth = pBitmap->bmWidth;
+    bmpInfoHeader.biHeight = pBitmap->bmHeight;
+    bmpInfoHeader.biPlanes = 1;
+    bmpInfoHeader.biBitCount = pBitmap->bmBitsPixel; // 24|32
+    bmpInfoHeader.biCompression = 0;
+    bmpInfoHeader.biSizeImage = pBitmap->bmHeight * rowbytes;
+    bmpInfoHeader.biXPelsPerMeter = 0;
+    bmpInfoHeader.biYPelsPerMeter = 0;
+    bmpInfoHeader.biClrUsed = 0;
+    bmpInfoHeader.biClrImportant = 0;
+    fwrite(&bmpInfoHeader, sizeof(MY_BitmapInfoHeader), 1, fp);
+
+    int channels = pBitmap->bmBitsPixel / 8;
+    unsigned char *pBits = (unsigned char *)(pBitmap->bmBits);
+
+    for (int i = pBitmap->bmHeight - 1; i > -1; i--) {
+      fwrite(pBits + i * rowbytes, rowbytes, 1, fp);
+    }
+  } else if (pBitmap->bmBitsPixel == 8) // 8位，单通道，灰度图
+  {
+    int rowbytes = pBitmap->bmWidthBytes;
+
+    bmpFileHeader.bfSize = pBitmap->bmHeight * rowbytes + 54 + 256 * 4;
+    bmpFileHeader.bfReserved1 = 0;
+    bmpFileHeader.bfReserved2 = 0;
+    bmpFileHeader.bfOffBits = 54 + 256 * 4;
+    fwrite(&bmpFileHeader, sizeof(MY_BitmapFileHeader), 1, fp);
+
+    bmpInfoHeader.biSize = 40;
+    bmpInfoHeader.biWidth = pBitmap->bmWidth;
+    bmpInfoHeader.biHeight = pBitmap->bmHeight;
+    bmpInfoHeader.biPlanes = 1;
+    bmpInfoHeader.biBitCount = 8;
+    bmpInfoHeader.biCompression = 0;
+    bmpInfoHeader.biSizeImage = pBitmap->bmHeight * rowbytes;
+    bmpInfoHeader.biXPelsPerMeter = 0;
+    bmpInfoHeader.biYPelsPerMeter = 0;
+    bmpInfoHeader.biClrUsed = 256;
+    bmpInfoHeader.biClrImportant = 256;
+    fwrite(&bmpInfoHeader, sizeof(MY_BitmapInfoHeader), 1, fp);
+
+    for (int i = 0; i < 256; i++) {
+      quad[i].rgbBlue = i;
+      quad[i].rgbGreen = i;
+      quad[i].rgbRed = i;
+      quad[i].rgbReserved = 0;
+    }
+
+    fwrite(quad, sizeof(MY_RgbQuad), 256, fp);
+
+    int channels = pBitmap->bmBitsPixel / 8;
+    unsigned char *pBits = (unsigned char *)(pBitmap->bmBits);
+
+    for (int i = pBitmap->bmHeight - 1; i > -1; i--) {
+      fwrite(pBits + i * rowbytes, rowbytes, 1, fp);
+    }
+  }
+
+  fclose(fp);
+
   return ret;
 }
 
