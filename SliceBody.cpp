@@ -7,7 +7,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
   CH264Cabac cabac;
   /* CABAC编码 */
   if (m_pps.entropy_coding_mode_flag) {
-    std::cout << "CABAC编码" << std::endl;
+    std::cout << "CABAC编码（哥伦布熵编码）" << std::endl;
     while (!bs.byte_aligned())
       cabac_alignment_one_bit = bs.readU1(); // 2 f(1)
 

@@ -34,6 +34,7 @@ int32_t h264_power2(int32_t value);
   printf("[WARN] %s:(%d) %s: " pszFormat, __FILE__, __LINE__, __FUNCTION__,    \
          ##__VA_ARGS__)
 
+/* 从比特流中解析 4x4/8x8 缩放矩阵 */
 void scaling_list(BitStream &bitStream, uint32_t *scalingList,
                   uint32_t sizeOfScalingList,
                   uint32_t &useDefaultScalingMatrixFlag);

@@ -102,11 +102,11 @@ int SPS::extractParameters() {
   BitStream bitStream(_buf, _len);
 
   /* 读取profile_idc等等(4 bytes) */
-  uint8_t profile_idc = bitStream.readUn(8); // 0x64
-  uint8_t constraint_set0_5_flag = bitStream.readUn(6);
-  uint8_t reserved_zero_2bits = bitStream.readUn(2);
-  uint8_t level_idc = bitStream.readUn(8); // 0
-  uint32_t seq_parameter_set_id = bitStream.readUE();
+  profile_idc = bitStream.readUn(8); // 0x64
+  constraint_set0_5_flag = bitStream.readUn(6);
+  reserved_zero_2bits = bitStream.readUn(2);
+  level_idc = bitStream.readUn(8); // 0
+  seq_parameter_set_id = bitStream.readUE();
   std::cout << "\tseq_parameter_set_id:" << seq_parameter_set_id << std::endl;
   // 通过gdb断点到这里然后 "p /t {ssp._buf[1],profile_idc}"即可判断是否读取正确
 
@@ -165,7 +165,7 @@ int SPS::extractParameters() {
     }
   }
 
-  uint32_t log2_max_frame_num_minus4 = bitStream.readUE();
+  log2_max_frame_num_minus4 = bitStream.readUE();
   pic_order_cnt_type = bitStream.readUE();
 
   int32_t *offset_for_ref_frame = nullptr;
