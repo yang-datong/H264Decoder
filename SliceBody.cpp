@@ -37,7 +37,6 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
       // 有可能出现场帧或场宏块
       std::cout << "hi~" << std::endl;
       exit(0);
-      /* TODO YangJing 没进 <24-07-30 16:51:53> */
     }
 
     //--------参考帧重排序------------
@@ -47,7 +46,6 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
         slice_header.slice_type == H264_SLIECE_TYPE_B) {
       std::cout << "hi~" << std::endl;
       exit(0);
-      /* TODO YangJing 没进 <24-07-30 16:53:52> */
       picture.Decoding_process_for_reference_picture_lists_construction(
           picture.m_dpb, picture.m_RefPicList0, picture.m_RefPicList1);
 
@@ -108,7 +106,6 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
       if (!m_pps.entropy_coding_mode_flag) {
         std::cout << "hi~" << std::endl;
         exit(0);
-        /* TODO YangJing 没进 <24-07-30 22:56:07> */
       } else {
         /* CABAC编码开始 */
         picture.mb_x = (CurrMbAddr % (picture.PicWidthInMbs *
@@ -131,7 +128,6 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
         if (slice_header.MbaffFrameFlag) {
           std::cout << "hi~" << std::endl;
           exit(0);
-          /* TODO YangJing 没进 <24-07-30 23:30:50> */
         }
 
         //-------------解码mb_skip_flag-----------------------
@@ -140,7 +136,6 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
           // 如果是bottom field macroblock
           std::cout << "hi~" << std::endl;
           exit(0);
-          /* TODO YangJing 没进 <24-07-30 23:31:22> */
           // mb_skip_flag = mb_skip_flag_next_mb;
         } else
           cabac.CABAC_decode_mb_skip_flag(picture, bs, CurrMbAddr,
@@ -151,7 +146,6 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
           picture.mb_cnt++;
           std::cout << "hi~" << std::endl;
           exit(0);
-          /* TODO YangJing 没进 <24-07-30 23:32:32> */
         }
         moreDataFlag = !mb_skip_flag;
         /* CABAC编码结束 */
@@ -162,7 +156,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
           (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped))) {
         /* 表示本宏块是属于一个宏块对中的一个 */
         std::cout << "hi~" << std::endl;
-        /* TODO YangJing 没进 <24-05-26 15:49:00> */
+        exit(0);
       }
 
       picture.mb_x = (CurrMbAddr % (picture.PicWidthInMbs *
@@ -234,30 +228,45 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
             isChromaCb, picWidthInSamplesC, pic_buff_cr);
 
       } else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode ==
-                 Intra_16x16)
-        std::cout << "hi3~" << std::endl;
-      /* TODO YangJing  <24-07-30 23:47:00> */
-      else if (picture.m_mbs[picture.CurrMbAddr].m_name_of_mb_type == I_PCM)
+                 Intra_16x16) {
+        isChroma = 0;
+        isChromaCb = 0;
+        BitDepth = picture.m_h264_slice_header.m_sps.BitDepthY;
+        int32_t QP1 = picture.m_mbs[picture.CurrMbAddr].QP1Y;
+
+        picture
+            .transform_decoding_process_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
+                isChroma, BitDepth, QP1, picWidthInSamplesL,
+                picture.m_mbs[picture.CurrMbAddr].Intra16x16DCLevel,
+                picture.m_mbs[picture.CurrMbAddr].Intra16x16ACLevel,
+                pic_buff_luma);
+        isChromaCb = 1;
+        picture.transform_decoding_process_for_chroma_samples(
+            isChromaCb, picWidthInSamplesC, pic_buff_cb);
+
+        isChromaCb = 0;
+        picture.transform_decoding_process_for_chroma_samples(
+            isChromaCb, picWidthInSamplesC, pic_buff_cr);
+      } else if (picture.m_mbs[picture.CurrMbAddr].m_name_of_mb_type == I_PCM)
         // 说明该宏块没有残差，也没有预测值，码流中的数据直接为原始像素值
-        std::cout << "hi4~" << std::endl;
-      /* TODO YangJing  <24-07-30 23:47:00> */
+        exit(0);
       else
-        /* TODO YangJing 这里没进 <24-07-30 23:46:43> */
         exit(0);
     }
 
     if (!m_pps.entropy_coding_mode_flag) {
-      moreDataFlag = bs.more_rbsp_data();
-      std::cout << "hi~" << std::endl;
-      /* TODO YangJing 没进 <24-07-30 23:47:38> */
+      // moreDataFlag = bs.more_rbsp_data();
+      exit(0);
     } else {
       if (slice_header.slice_type != H264_SLIECE_TYPE_I &&
           slice_header.slice_type != H264_SLIECE_TYPE_SI) {
-        prevMbSkipped = mb_skip_flag;
+        // prevMbSkipped = mb_skip_flag;
+        exit(0);
       }
 
       if (slice_header.MbaffFrameFlag && CurrMbAddr % 2 == 0) {
-        moreDataFlag = 1;
+        // moreDataFlag = 1;
+        exit(0);
       } else {
         cabac.CABAC_decode_end_of_slice_flag(picture, bs, end_of_slice_flag);
         moreDataFlag = !end_of_slice_flag;

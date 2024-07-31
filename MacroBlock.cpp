@@ -1,25 +1,9 @@
-#include "MacroBlock.hpp"
+﻿#include "MacroBlock.hpp"
 #include "CH264Golomb.hpp"
 #include "H264ResidualBlockCavlc.hpp"
-#include "SliceBody.hpp"
-
 #include "PictureBase.hpp"
+#include "SliceHeader.hpp"
 
-/*
-//Table 7-11 – Macroblock types for I slices
-//Name of mb_type    transform_size_8x8_flag    MbPartPredMode(mb_type, 0)
-Intra16x16PredMode    CodedBlockPatternChroma    CodedBlockPatternLuma struct
-MB_TYPE_I_SLICES_T
-{
-    int32_t                   mb_type;
-    H264_MB_TYPE              name_of_mb_type;
-    int32_t                   transform_size_8x8_flag;
-    H264_MB_PART_PRED_MODE    MbPartPredMode;
-    int32_t                   Intra16x16PredMode;
-    int32_t                   CodedBlockPatternChroma;
-    int32_t                   CodedBlockPatternLuma;
-};
-*/
 MB_TYPE_I_SLICES_T mb_type_I_slices_define[27] = {
     {0, I_NxN, 0, Intra_4x4, NA, -1, -1},
     {0, I_NxN, 1, Intra_8x8, NA, -1, -1},
@@ -49,37 +33,9 @@ MB_TYPE_I_SLICES_T mb_type_I_slices_define[27] = {
     {24, I_16x16_3_2_1, NA, Intra_16x16, 3, 2, 15},
     {25, I_PCM, NA, Intra_NA, NA, NA, NA}};
 
-/*
-//Table 7-12 – Macroblock type with value 0 for SI slices
-//mb_type    Name of mb_type     MbPartPredMode(mb_type, 0) Intra16x16PredMode
-CodedBlockPatternChroma    CodedBlockPatternLuma struct MB_TYPE_SI_SLICES_T
-{
-    int32_t                   mb_type;
-    H264_MB_TYPE              name_of_mb_type;
-    H264_MB_PART_PRED_MODE    MbPartPredMode;
-    int32_t                   Intra16x16PredMode;
-    int32_t                   CodedBlockPatternChroma;
-    int32_t                   CodedBlockPatternLuma;
-};
-*/
 MB_TYPE_SI_SLICES_T mb_type_SI_slices_define[1] = {
     {0, SI, Intra_4x4, NA, NA, NA}};
 
-/*
-//Table 7-13 – Macroblock type values 0 to 4 for P and SP slices
-//mb_type    Name of mb_type    NumMbPart(mb_type)    MbPartPredMode(mb_type, 0)
-MbPartPredMode(mb_type, 1)    MbPartWidth(mb_type)    MbPartHeight(mb_type)
-struct MB_TYPE_P_SP_SLICES_T
-{
-    int32_t                   mb_type;
-    H264_MB_TYPE              name_of_mb_type;
-    int32_t                   NumMbPart;
-    H264_MB_PART_PRED_MODE    MbPartPredMode0;
-    H264_MB_PART_PRED_MODE    MbPartPredMode1;
-    int32_t                   MbPartWidth;
-    int32_t                   MbPartHeight;
-};
-*/
 MB_TYPE_P_SP_SLICES_T mb_type_P_SP_slices_define[6] = {
     {0, P_L0_16x16, 1, Pred_L0, Pred_NA, 16, 16},
     {
@@ -625,7 +581,7 @@ int MacroBlock::fix_mb_type(const int32_t slice_type_raw,
       slice_type_fixed = H264_SLIECE_TYPE_I;
       mb_type_fixed = mb_type_raw - 1; // 说明 SI slices 中含有I宏块
     } else {
-      LOG_ERROR("SI slices: mb_type_raw=%d; Must be in [0..26]\n", mb_type_raw);
+      printf("SI slices: mb_type_raw=%d; Must be in [0..26]\n", mb_type_raw);
       return -1;
     }
   } else if ((slice_type_raw % 5) == H264_SLIECE_TYPE_P ||
@@ -640,8 +596,8 @@ int MacroBlock::fix_mb_type(const int32_t slice_type_raw,
       slice_type_fixed = H264_SLIECE_TYPE_I;
       mb_type_fixed = mb_type_raw - 5; // 说明 P and SP slices 中含有I宏块
     } else {
-      LOG_ERROR("P and SP slices: mb_type_raw=%d; Must be in [0..30]\n",
-                mb_type_raw);
+      printf("P and SP slices: mb_type_raw=%d; Must be in [0..30]\n",
+             mb_type_raw);
       return -1;
     }
   } else if ((slice_type_raw % 5) == H264_SLIECE_TYPE_B) {
@@ -655,7 +611,7 @@ int MacroBlock::fix_mb_type(const int32_t slice_type_raw,
       slice_type_fixed = H264_SLIECE_TYPE_I;
       mb_type_fixed = mb_type_raw - 23; // 说明 B slices 中含有I宏块
     } else {
-      LOG_ERROR("B slices: mb_type_raw=%d; Must be in [0..48]\n", mb_type_raw);
+      printf("B slices: mb_type_raw=%d; Must be in [0..48]\n", mb_type_raw);
       return -1;
     }
   }
@@ -722,8 +678,8 @@ int MacroBlock::MbPartPredMode(
           mb_type_I_slices_define[_mb_type + 1].Intra16x16PredMode;
       mb_pred_mode = mb_type_I_slices_define[_mb_type + 1].MbPartPredMode;
     } else {
-      LOG_ERROR("mb_type_I_slices_define: _mb_type=%d; Must be in [0..25]\n",
-                _mb_type);
+      printf("mb_type_I_slices_define: _mb_type=%d; Must be in [0..25]\n",
+             _mb_type);
       return -1;
     }
   } else if ((slice_type % 5) == H264_SLIECE_TYPE_SI) {
@@ -731,8 +687,8 @@ int MacroBlock::MbPartPredMode(
       name_of_mb_type = mb_type_SI_slices_define[0].name_of_mb_type;
       mb_pred_mode = mb_type_SI_slices_define[0].MbPartPredMode;
     } else {
-      LOG_ERROR("mb_type_SI_slices_define: _mb_type=%d; Must be in [0..0]\n",
-                _mb_type);
+      printf("mb_type_SI_slices_define: _mb_type=%d; Must be in [0..0]\n",
+             _mb_type);
       return -1;
     }
   } else if ((slice_type % 5) == H264_SLIECE_TYPE_P ||
@@ -747,8 +703,8 @@ int MacroBlock::MbPartPredMode(
         mb_pred_mode = mb_type_P_SP_slices_define[_mb_type].MbPartPredMode1;
       }
     } else {
-      LOG_ERROR("mb_type_P_SP_slices_define: _mb_type=%d; Must be in [0..5]\n",
-                _mb_type);
+      printf("mb_type_P_SP_slices_define: _mb_type=%d; Must be in [0..5]\n",
+             _mb_type);
       return -1;
     }
   } else if ((slice_type % 5) == H264_SLIECE_TYPE_B) {
@@ -762,12 +718,12 @@ int MacroBlock::MbPartPredMode(
         mb_pred_mode = mb_type_B_slices_define[_mb_type].MbPartPredMode1;
       }
     } else {
-      LOG_ERROR("mb_type_B_slices_define: _mb_type=%d; Must be in [0..23]\n",
-                _mb_type);
+      printf("mb_type_B_slices_define: _mb_type=%d; Must be in [0..23]\n",
+             _mb_type);
       return -1;
     }
   } else {
-    LOG_ERROR("Unknown slice_type=%d;\n", slice_type);
+    printf("Unknown slice_type=%d;\n", slice_type);
     return -1;
   }
 
@@ -788,7 +744,7 @@ int MacroBlock::MbPartPredMode2(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
         mb_pred_mode = mb_type_I_slices_define[1].MbPartPredMode;
       }
     } else {
-      LOG_ERROR("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
+      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
       return -1;
     }
   } else if (name_of_mb_type >= I_16x16_0_0_0 &&
@@ -797,7 +753,7 @@ int MacroBlock::MbPartPredMode2(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
       mb_pred_mode =
           mb_type_I_slices_define[mbPartIdx - I_16x16_0_0_0].MbPartPredMode;
     } else {
-      LOG_ERROR("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
+      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
       return -1;
     }
   }
@@ -806,7 +762,7 @@ int MacroBlock::MbPartPredMode2(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
     if (mbPartIdx == 0) {
       mb_pred_mode = mb_type_SI_slices_define[0].MbPartPredMode;
     } else {
-      LOG_ERROR("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
+      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
       return -1;
     }
   }
@@ -815,7 +771,7 @@ int MacroBlock::MbPartPredMode2(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
     if (mbPartIdx == 0) {
       mb_pred_mode = Pred_L0;
     } else {
-      LOG_ERROR("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
+      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
       return -1;
     }
   } else if (name_of_mb_type >= P_L0_L0_16x8 &&
@@ -827,14 +783,14 @@ int MacroBlock::MbPartPredMode2(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
       mb_pred_mode = mb_type_P_SP_slices_define[name_of_mb_type - P_L0_16x16]
                          .MbPartPredMode1;
     } else {
-      LOG_ERROR("mbPartIdx=%d; Must be in [0..1]\n", mbPartIdx);
+      printf("mbPartIdx=%d; Must be in [0..1]\n", mbPartIdx);
       return -1;
     }
   } else if (name_of_mb_type >= P_8x8 && name_of_mb_type <= P_8x8ref0) {
     if (mbPartIdx >= 0 && mbPartIdx <= 3) {
       mb_pred_mode = Pred_L0;
     } else {
-      LOG_ERROR("mbPartIdx=%d; Must be in [0..3]\n", mbPartIdx);
+      printf("mbPartIdx=%d; Must be in [0..3]\n", mbPartIdx);
       return -1;
     }
   }
@@ -843,21 +799,21 @@ int MacroBlock::MbPartPredMode2(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
     if (mbPartIdx == 0) {
       mb_pred_mode = Pred_L0;
     } else {
-      LOG_ERROR("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
+      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
       return -1;
     }
   } else if (name_of_mb_type == B_L1_16x16) {
     if (mbPartIdx == 0) {
       mb_pred_mode = Pred_L1;
     } else {
-      LOG_ERROR("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
+      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
       return -1;
     }
   } else if (name_of_mb_type == B_Bi_16x16) {
     if (mbPartIdx == 0) {
       mb_pred_mode = BiPred;
     } else {
-      LOG_ERROR("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
+      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
       return -1;
     }
   } else if (name_of_mb_type >= B_Direct_16x16 && name_of_mb_type <= B_Skip) {
@@ -870,11 +826,11 @@ int MacroBlock::MbPartPredMode2(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
     } else if (mbPartIdx == 2 || mbPartIdx == 3) {
       mb_pred_mode = MB_PRED_MODE_NA;
     } else {
-      LOG_ERROR("mbPartIdx=%d; Must be in [0..3]\n", mbPartIdx);
+      printf("mbPartIdx=%d; Must be in [0..3]\n", mbPartIdx);
       return -1;
     }
   } else {
-    LOG_ERROR("Invaild value: name_of_mb_type=%d;\n", name_of_mb_type);
+    printf("Invaild value: name_of_mb_type=%d;\n", name_of_mb_type);
     return -1;
   }
 
@@ -887,7 +843,7 @@ int MacroBlock::SubMbPredModeFunc(int32_t slice_type, int32_t sub_mb_type,
                                   int32_t &SubMbPartWidth,
                                   int32_t &SubMbPartHeight) {
   if (slice_type == H264_SLIECE_TYPE_I) {
-    LOG_ERROR("Unknown slice_type=%d;\n", slice_type);
+    printf("Unknown slice_type=%d;\n", slice_type);
     return -1;
   } else if (slice_type == H264_SLIECE_TYPE_P) {
     if (sub_mb_type >= 0 && sub_mb_type <= 4) {
@@ -896,9 +852,8 @@ int MacroBlock::SubMbPredModeFunc(int32_t slice_type, int32_t sub_mb_type,
       SubMbPartWidth = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPartWidth;
       SubMbPartHeight = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPartHeight;
     } else {
-      LOG_ERROR(
-          "sub_mb_type_P_mbs_define: sub_mb_type=%d; Must be in [-1..5]\n",
-          sub_mb_type);
+      printf("sub_mb_type_P_mbs_define: sub_mb_type=%d; Must be in [-1..5]\n",
+             sub_mb_type);
       return -1;
     }
   } else if (slice_type == H264_SLIECE_TYPE_B) {
@@ -908,13 +863,12 @@ int MacroBlock::SubMbPredModeFunc(int32_t slice_type, int32_t sub_mb_type,
       SubMbPartWidth = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPartWidth;
       SubMbPartHeight = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPartHeight;
     } else {
-      LOG_ERROR(
-          "sub_mb_type_B_mbs_define: sub_mb_type=%d; Must be in [0..12]\n",
-          sub_mb_type);
+      printf("sub_mb_type_B_mbs_define: sub_mb_type=%d; Must be in [0..12]\n",
+             sub_mb_type);
       return -1;
     }
   } else {
-    LOG_ERROR("Unknown slice_type=%d;\n", slice_type);
+    printf("Unknown slice_type=%d;\n", slice_type);
     return -1;
   }
 
@@ -935,7 +889,7 @@ int MacroBlock::set_mb_type_X_slice_info() {
     } else if (m_mb_type_fixed >= 1 && m_mb_type_fixed <= 25) {
       mb_type_I_slice = mb_type_I_slices_define[m_mb_type_fixed + 1];
     } else {
-      LOG_ERROR(
+      printf(
           "mb_type_I_slices_define: m_mb_type_fixed=%d; Must be in [0..25]\n",
           m_mb_type_fixed);
       return -1;
@@ -944,7 +898,7 @@ int MacroBlock::set_mb_type_X_slice_info() {
     if (m_mb_type_fixed == 0) {
       mb_type_SI_slice = mb_type_SI_slices_define[0];
     } else {
-      LOG_ERROR(
+      printf(
           "mb_type_SI_slices_define: m_mb_type_fixed=%d; Must be in [0..0]\n",
           m_mb_type_fixed);
       return -1;
@@ -954,7 +908,7 @@ int MacroBlock::set_mb_type_X_slice_info() {
     if (m_mb_type_fixed >= 0 && m_mb_type_fixed <= 5) {
       mb_type_P_SP_slice = mb_type_P_SP_slices_define[m_mb_type_fixed];
     } else {
-      LOG_ERROR(
+      printf(
           "mb_type_P_SP_slices_define: m_mb_type_fixed=%d; Must be in [0..5]\n",
           m_mb_type_fixed);
       return -1;
@@ -978,7 +932,7 @@ int MacroBlock::set_mb_type_X_slice_info() {
     if (m_mb_type_fixed >= 0 && m_mb_type_fixed <= 23) {
       mb_type_B_slice = mb_type_B_slices_define[m_mb_type_fixed];
     } else {
-      LOG_ERROR(
+      printf(
           "mb_type_B_slices_define: m_mb_type_fixed=%d; Must be in [0..23]\n",
           m_mb_type_fixed);
       return -1;
@@ -999,8 +953,8 @@ int MacroBlock::set_mb_type_X_slice_info() {
     // sub_mb_type_B_mbs_define[sub_mb_type[ mbPartIdx ]].SubMbPartHeight;
     //}
   } else {
-    LOG_ERROR("Unknown mb_type=%d; m_mb_type_fixed=%d;\n", mb_type,
-              m_mb_type_fixed);
+    printf("Unknown mb_type=%d; m_mb_type_fixed=%d;\n", mb_type,
+           m_mb_type_fixed);
     return -1;
   }
 
@@ -1066,9 +1020,9 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
 
   if (m_mb_type_fixed == 25) // I_PCM=25
   {
-    // while (!byte_aligned(bs)) {
-    // pcm_alignment_zero_bit = bs.readUn(1); // 3 f(1)    is a bit equal to 0.
-    //}
+    while (!bs.byte_aligned()) {
+      pcm_alignment_zero_bit = bs.readUn(1); // 3 f(1)    is a bit equal to 0.
+    }
 
     for (i = 0; i < 256; i++) {
       int32_t v = slice_header.m_sps.BitDepthY;
@@ -1106,7 +1060,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
             NumSubMbPart =
                 sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]].NumSubMbPart;
           } else {
-            LOG_ERROR(
+            printf(
                 "m_slice_type=%d; m_slice_type_fixed=%d; sub_mb_type[%d]=%d;\n",
                 m_slice_type, m_slice_type_fixed, mbPartIdx,
                 sub_mb_type[mbPartIdx]);
@@ -1125,6 +1079,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
     } else {
       if (slice_header.m_pps.transform_8x8_mode_flag &&
           m_name_of_mb_type == I_NxN) {
+
         if (is_ae) // ae(v) 表示CABAC编码
         {
           ret = cabac.CABAC_decode_transform_size_8x8_flag(
@@ -1627,9 +1582,9 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
       SubMbPartHeight[mbPartIdx] =
           sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]].SubMbPartHeight;
     } else {
-      LOG_ERROR("m_slice_type=%d; m_slice_type_fixed=%d; sub_mb_type[%d]=%d;\n",
-                m_slice_type, m_slice_type_fixed, mbPartIdx,
-                sub_mb_type[mbPartIdx]);
+      printf("m_slice_type=%d; m_slice_type_fixed=%d; sub_mb_type[%d]=%d;\n",
+             m_slice_type, m_slice_type_fixed, mbPartIdx,
+             sub_mb_type[mbPartIdx]);
       return -1;
     }
   }

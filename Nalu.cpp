@@ -130,6 +130,7 @@ int Nalu::extractSliceparameters(RBSP &rbsp) {
   slice_header.m_pps = pps;
   slice_header.m_idr = idr;
   slice_header.nal_unit_type = nal_unit_type;
+  slice_header.nal_ref_idc = nal_ref_idc;
   slice_header.parseSliceHeader(bitStream, this);
   return 0;
 }
@@ -169,5 +170,28 @@ int Nalu::decode(BitStream &bitStream) {
   slice_body.m_pps = this->pps;
   slice_body.m_idr = this->idr;
   slice_body.parseSliceData(bitStream, m_picture_frame);
+  return 0;
+}
+
+int Nalu::reset() {
+  m_picture_coded_type = H264_PICTURE_CODED_TYPE_UNKNOWN;
+  m_picture_coded_type_marked_as_refrence = H264_PICTURE_CODED_TYPE_UNKNOWN;
+
+  TopFieldOrderCnt = 0;
+  BottomFieldOrderCnt = 0;
+  PicOrderCntMsb = 0;
+  PicOrderCntLsb = 0;
+  FrameNumOffset = 0;
+  absFrameNum = 0;
+  picOrderCntCycleCnt = 0;
+  frameNumInPicOrderCntCycle = 0;
+  expectedPicOrderCnt = 0;
+  PicOrderCnt = 0;
+  PicNum = 0;
+  LongTermPicNum = 0;
+  reference_marked_type = H264_PICTURE_MARKED_AS_unkown;
+  m_is_decode_finished = 0;
+  m_is_in_use = 1; // 正在使用状态
+
   return 0;
 }

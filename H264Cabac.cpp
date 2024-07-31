@@ -1,7 +1,5 @@
-#include "H264Cabac.hpp"
+﻿#include "H264Cabac.hpp"
 #include "PictureBase.hpp"
-#include <stdint.h>
-#include <stdlib.h>
 
 CH264Cabac::CH264Cabac() {
   m_codIRange = 0;
@@ -16,6 +14,7 @@ CH264Cabac::~CH264Cabac() {}
 //-----------------------------
 int CH264Cabac::get_m_and_n(int32_t ctxIdx, H264_SLIECE_TYPE slice_type,
                             int32_t cabac_init_idc, int32_t &m, int32_t &n) {
+  int ret = 0;
 
   RETURN_IF_FAILED(ctxIdx < 0 || ctxIdx > 1024, -1);
   RETURN_IF_FAILED(cabac_init_idc < 0 || cabac_init_idc > 2, -1);
@@ -2025,12 +2024,14 @@ int CH264Cabac::
         int32_t iCbCr, int32_t &ctxIdxInc) {
   int ret = 0;
 
+  int32_t i = 0;
   int32_t mbAddrA = 0;
   int32_t mbAddrB = 0;
   int32_t transBlockA = -1;
   int32_t transBlockB = -1;
   int32_t transBlockA_coded_block_flag = 0;
   int32_t transBlockB_coded_block_flag = 0;
+  int32_t non_zero_count_coeff = 0;
 
   if (ctxBlockCat == 0     // MB_RESIDUAL_Intra16x16DCLevel
       || ctxBlockCat == 6  // MB_RESIDUAL_CbIntra16x16DCLevel
@@ -2181,6 +2182,7 @@ int CH264Cabac::
     int32_t chroma4x4BlkIdx = BlkIdx;
     int32_t chroma4x4BlkIdxA = 0;
     int32_t chroma4x4BlkIdxB = 0;
+    int32_t isChroma = 1;
 
     // 6.4.11.5 Derivation process for neighbouring 4x4 chroma blocks
     ret = picture.Derivation_process_for_neighbouring_4x4_chroma_blocks(
@@ -2536,8 +2538,7 @@ int CH264Cabac::
     condTermFlagB = 1;
   } else {
     // condTermFlagN is set equal to the value of the coded_block_flag of the
-    // transform block transBlockN that was decoded for the macroblock
-    // mbAddrN.
+    // transform block transBlockN that was decoded for the macroblock mbAddrN.
     condTermFlagB = transBlockB_coded_block_flag;
   }
 
@@ -2590,6 +2591,7 @@ int CH264Cabac::
 // 9.3.3.2.1 Arithmetic decoding process for a binary decision
 // 二进制判决的算术解码过程 DecodeDecision(ctxIdx)
 int CH264Cabac::DecodeDecision(BitStream &bs, int32_t ctxIdx, int32_t &binVal) {
+  int ret = 0;
 
   // Table 9-45 – State transition table
   const int32_t transIdxLPS[64] = {
@@ -2693,6 +2695,7 @@ int CH264Cabac::RenormD(BitStream &bs, int32_t &codIRange,
 // 9.3.3.2.3 Bypass decoding process for binary decisions
 // DecodeBypass()
 int CH264Cabac::DecodeBypass(BitStream &bs, int32_t &binVal) {
+  int ret = 0;
 
   int32_t &codIRange = m_codIRange;
   int32_t &codIOffset = m_codIOffset;
@@ -2713,6 +2716,7 @@ int CH264Cabac::DecodeBypass(BitStream &bs, int32_t &binVal) {
 // 9.3.3.2.4 Decoding process for binary decisions before termination
 // DecodeTerminate()
 int CH264Cabac::DecodeTerminate(BitStream &bs, int32_t &binVal) {
+  int ret = 0;
 
   int32_t &codIRange = m_codIRange;
   int32_t &codIOffset = m_codIOffset;
@@ -2826,9 +2830,9 @@ int CH264Cabac::CABAC_decode_mb_type_in_I_slices(PictureBase &picture,
                                                  int32_t &synElVal) {
   int ret = 0;
 
-  // int32_t maxBinIdxCtx = 0;
+  int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxInc = 0;
-  // int32_t binIdx = -1;
+  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -3183,10 +3187,10 @@ int CH264Cabac::CABAC_decode_mb_type_in_SI_slices(PictureBase &picture,
 
   H264_SLIECE_TYPE slice_type =
       (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
-  // int32_t maxBinIdxCtx = 0;
+  int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
-  // int32_t binIdx = -1;
+  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -3194,7 +3198,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_SI_slices(PictureBase &picture,
   RETURN_IF_FAILED((slice_type % 5) != H264_SLIECE_TYPE_SI, -1);
 
   //------Table 9-34: ctxIdxOffset-prefix: 0--------
-  // maxBinIdxCtx = 0;
+  maxBinIdxCtx = 0;
   ctxIdxOffset = 0;
 
   // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values
@@ -3221,7 +3225,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_SI_slices(PictureBase &picture,
   } else          // if (binVal == 1) //b0 + suffix
   {
     //------Table 9-34: ctxIdxOffset-suffix: 3--------
-    // maxBinIdxCtx = 6;
+    maxBinIdxCtx = 6;
     ctxIdxOffset = 3;
 
     ret = CABAC_decode_mb_type_in_I_slices(picture, bs, ctxIdxOffset, synElVal);
@@ -3242,9 +3246,9 @@ int CH264Cabac::CABAC_decode_mb_type_in_P_SP_slices(PictureBase &picture,
 
   H264_SLIECE_TYPE slice_type =
       (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
-  // int32_t maxBinIdxCtx = 0;
+  int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
-  // int32_t ctxIdxInc = 0;
+  int32_t ctxIdxInc = 0;
   int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
@@ -3255,7 +3259,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_P_SP_slices(PictureBase &picture,
                    -1);
 
   //------Table 9-34: ctxIdxOffset-prefix: 14--------
-  // maxBinIdxCtx = 2;
+  maxBinIdxCtx = 2;
   ctxIdxOffset = 14;
 
   // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values
@@ -3307,7 +3311,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_P_SP_slices(PictureBase &picture,
   } else // if (binVal == 1) //(1)b //5 to 30 (Intra, prefix only)
   {
     //------Table 9-34: ctxIdxOffset-suffix: 17--------
-    // maxBinIdxCtx = 5;
+    maxBinIdxCtx = 5;
     ctxIdxOffset = 17;
 
     ret = CABAC_decode_mb_type_in_I_slices(picture, bs, ctxIdxOffset, synElVal);
@@ -3331,7 +3335,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_B_slices(PictureBase &picture,
 
   H264_SLIECE_TYPE slice_type =
       (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
-  // int32_t maxBinIdxCtx = 0;
+  int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
   int32_t binIdx = -1;
@@ -3342,7 +3346,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_B_slices(PictureBase &picture,
   RETURN_IF_FAILED((slice_type % 5) != H264_SLIECE_TYPE_B, -1);
 
   //------Table 9-34: ctxIdxOffset-prefix: 27--------
-  // maxBinIdxCtx = 3;
+  maxBinIdxCtx = 3;
   ctxIdxOffset = 27;
 
   // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values
@@ -3574,7 +3578,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_B_slices(PictureBase &picture,
               // 23 to 48 (Intra, prefix only)
 
               //------Table 9-34: ctxIdxOffset-suffix: 32--------
-              // maxBinIdxCtx = 5;
+              maxBinIdxCtx = 5;
               ctxIdxOffset = 32;
 
               ret = CABAC_decode_mb_type_in_I_slices(picture, bs, ctxIdxOffset,
@@ -3617,10 +3621,10 @@ int CH264Cabac::CABAC_decode_sub_mb_type_in_P_SP_slices(PictureBase &picture,
 
   H264_SLIECE_TYPE slice_type =
       (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
-  // int32_t maxBinIdxCtx = 0;
+  int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
-  // int32_t ctxIdxInc = 0;
-  // int32_t binIdx = -1;
+  int32_t ctxIdxInc = 0;
+  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -3630,7 +3634,7 @@ int CH264Cabac::CABAC_decode_sub_mb_type_in_P_SP_slices(PictureBase &picture,
                    -1);
 
   //------Table 9-34: ctxIdxOffset: 21--------
-  // maxBinIdxCtx = 2;
+  maxBinIdxCtx = 2;
   ctxIdxOffset = 21;
 
   // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values
@@ -3680,10 +3684,10 @@ int CH264Cabac::CABAC_decode_sub_mb_type_in_B_slices(PictureBase &picture,
 
   H264_SLIECE_TYPE slice_type =
       (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
-  // int32_t maxBinIdxCtx = 0;
+  int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
-  // int32_t ctxIdxInc = 0;
-  // int32_t binIdx = -1;
+  int32_t ctxIdxInc = 0;
+  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -3691,7 +3695,7 @@ int CH264Cabac::CABAC_decode_sub_mb_type_in_B_slices(PictureBase &picture,
   RETURN_IF_FAILED((slice_type % 5) != H264_SLIECE_TYPE_B, -1);
 
   //------Table 9-34: ctxIdxOffset: 36--------
-  // maxBinIdxCtx = 3;
+  maxBinIdxCtx = 3;
   ctxIdxOffset = 36;
 
   // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values
@@ -3849,11 +3853,11 @@ int CH264Cabac::CABAC_decode_mb_skip_flag(PictureBase &picture, BitStream &bs,
   if ((slice_type % 5) == H264_SLIECE_TYPE_P ||
       (slice_type % 5) == H264_SLIECE_TYPE_SP) {
     //------Table 9-34: ctxIdxOffset: 11--------
-    // maxBinIdxCtx = 0;
+    maxBinIdxCtx = 0;
     ctxIdxOffset = 11;
   } else if ((slice_type % 5) == H264_SLIECE_TYPE_B) {
     //------Table 9-34: ctxIdxOffset: 24--------
-    // maxBinIdxCtx = 0;
+    maxBinIdxCtx = 0;
     ctxIdxOffset = 24;
   } else {
     RETURN_IF_FAILED(-1, -1);
@@ -3890,10 +3894,10 @@ int CH264Cabac::CABAC_decode_mvd_lX(PictureBase &picture, BitStream &bs,
                                     int32_t &synElVal) {
   int ret = 0;
 
-  // int32_t maxBinIdxCtx = 0;
+  int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
-  // int32_t binIdx = -1;
+  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -3905,13 +3909,13 @@ int CH264Cabac::CABAC_decode_mvd_lX(PictureBase &picture, BitStream &bs,
   if (mvd_flag == 0    // mvd_l0[ ][ ][ 0 ]
       || mvd_flag == 2 // mvd_l1[ ][ ][ 0 ]
   ) {
-    // maxBinIdxCtx = 4;
+    maxBinIdxCtx = 4;
     ctxIdxOffset = 40;
   } else // if (mvd_flag == 1 //mvd_l0[ ][ ][ 1 ]
          //|| mvd_flag == 3 //mvd_l1[ ][ ][ 1 ]
          //)
   {
-    // maxBinIdxCtx = 4;
+    maxBinIdxCtx = 4;
     ctxIdxOffset = 47;
   }
 

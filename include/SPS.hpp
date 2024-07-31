@@ -6,6 +6,9 @@
 
 #define Extended_SAR 255
 
+#define H264_MAX_SPS_COUNT                                                     \
+  32 // 7.4.2.1.1: seq_parameter_set_id shall be in the range of 0 to 31,
+     // inclusive.
 #define H264_MAX_OFFSET_REF_FRAME_COUNT                                        \
   256 // 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle shall be in the range
       // of 0 to 255, inclusive.

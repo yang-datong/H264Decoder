@@ -9,6 +9,7 @@
 -I./include
 -Wno-unused-but-set-variable
 -Wno-unused-variable
+-w
 
 #单独的Android NDK项目，引入NDK目录下的头文件到clangd，会与系统目录的头文件与NDK目录下的头文件会发生冲突
 #比如-I/home/hi/Android/Sdk/ndk/21.1.6352462/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/

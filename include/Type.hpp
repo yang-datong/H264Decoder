@@ -404,15 +404,15 @@ enum H264_SLICE_TYPE { SLICE_P = 0, SLICE_B, SLICE_I, SLICE_SP, SLICE_SI };
   : (pred_mode == Direct)        ? "Direct"                                    \
                                  : "UNKNOWN"
 
-//Table 8-8 – Specification of mbAddrCol, yM, and vertMvScale
-typedef enum _H264_VERT_MV_SCALE_
-{
-    H264_VERT_MV_SCALE_UNKNOWN = 0,
-    H264_VERT_MV_SCALE_One_To_One = 1,
-    H264_VERT_MV_SCALE_Frm_To_Fld = 2,
-    H264_VERT_MV_SCALE_Fld_To_Frm = 3,
-}H264_VERT_MV_SCALE;
+// Table 8-8 – Specification of mbAddrCol, yM, and vertMvScale
+typedef enum _H264_VERT_MV_SCALE_ {
+  H264_VERT_MV_SCALE_UNKNOWN = 0,
+  H264_VERT_MV_SCALE_One_To_One = 1,
+  H264_VERT_MV_SCALE_Frm_To_Fld = 2,
+  H264_VERT_MV_SCALE_Fld_To_Frm = 3,
+} H264_VERT_MV_SCALE;
 
-#define    H264_MAX_REF_PIC_LIST_COUNT    16    // RefPicList0[16]
+#define H264_MAX_DECODED_PICTURE_BUFFER_COUNT 16 // DPB[16]
+#define H264_MAX_REF_PIC_LIST_COUNT 16           // RefPicList0[16]
 
 #endif /* end of include guard: TYPE_HPP_TPOWA9WD */

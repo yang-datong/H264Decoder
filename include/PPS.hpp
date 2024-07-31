@@ -4,6 +4,9 @@
 #include "RBSP.hpp"
 #include "SPS.hpp"
 
+#define H264_MAX_PPS_COUNT 256
+// 7.4.2.2: pic_parameter_set_id shall be in the range of 0 to 255,
+// inclusive.
 class PPS : public RBSP {
  public:
   // PPS();

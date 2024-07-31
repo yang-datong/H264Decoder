@@ -102,6 +102,7 @@ class Nalu {
   int32_t m_is_decode_finished;                 // 本帧是否解码完毕;
                                 // 0-未解码完毕，1-已经解码完毕
   int32_t m_is_in_use; // 本帧数据是否正在使用; 0-未使用，1-正在使用
+  int reset();
 };
 
 #endif /* end of include guard: NALU_HPP_YDI8RPRP */

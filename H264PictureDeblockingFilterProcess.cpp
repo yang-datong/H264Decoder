@@ -1,4 +1,4 @@
-#include "PictureBase.hpp"
+﻿#include "PictureBase.hpp"
 
 // 6.4.11.1 Derivation process for neighbouring macroblocks
 int PictureBase::Derivation_process_for_neighbouring_macroblocks(
@@ -801,8 +801,8 @@ int PictureBase::Filtering_process_for_block_edges(
           }
         } else // if (mbAddrN < 0)
         {
-          //                    LOG_ERROR("mb_x_p0(%d) < 0 and mbAddrN(%d) <
-          //                    0\n", mb_x_p0, mbAddrN);
+          //                    printf("mb_x_p0(%d) < 0 and mbAddrN(%d) < 0\n",
+          //                    mb_x_p0, mbAddrN);
         }
 
         if (chromaEdgeFlag == 0) {
@@ -825,8 +825,8 @@ int PictureBase::Filtering_process_for_block_edges(
           mbAddr_p0 = mbAddrN;
         } else // if (mbAddrN < 0)
         {
-          //                    LOG_ERROR("mb_x_p0(%d) < 0 and mbAddrN(%d) <
-          //                    0\n", mb_x_p0, mbAddrN);
+          //                    printf("mb_x_p0(%d) < 0 and mbAddrN(%d) < 0\n",
+          //                    mb_x_p0, mbAddrN);
         }
 
         if (chromaEdgeFlag == 0) {
@@ -1381,20 +1381,6 @@ int PictureBase::
            ABS(MvL0_p0_y - MvL0_q0_y) >= mv_y_diff) ||
           (ABS(MvL1_p0_x - MvL1_q0_x) >= 4 ||
            ABS(MvL1_p0_y - MvL1_q0_y) >= mv_y_diff)
-
-              // The absolute difference between the horizontal or vertical
-              // components of list 0 motion vector used in the prediction of
-              // the macroblock/sub-macroblock partition containing the sample
-              // p0 and the list 1 motion vector used in the prediction of the
-              // macroblock/sub-macroblock partition containing the sample q0 is
-              // greater than or equal to 4 in units of quarter luma frame
-              // samples or the absolute difference between the horizontal or
-              // vertical components of the list 1 motion vector used in the
-              // prediction of the macroblock/sub-macroblock partition
-              // containing the sample p0 and list 0 motion vector used in the
-              // prediction of the macroblock/sub-macroblock partition
-              // containing the sample q0 is greater than or equal to 4 in units
-              // of quarter luma frame samples.
               && (ABS(MvL0_p0_x - MvL1_q0_x) >= 4 ||
                   ABS(MvL0_p0_y - MvL1_q0_y) >= mv_y_diff) ||
           (ABS(MvL1_p0_x - MvL0_q0_x) >= 4 ||

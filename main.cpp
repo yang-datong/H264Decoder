@@ -1,5 +1,87 @@
 #include "AnnexBReader.hpp"
+#include "H264PicturesGOP.hpp"
 #include "NaluPPS.hpp"
+
+int32_t g_PicNumCnt = 0;
+
+CH264PicturesGOP *pictures_gop = new CH264PicturesGOP;
+
+int my_output_frame_callback(Nalu *outPicture, void *userData, int errorCode) {
+  int ret = 0;
+
+  if (outPicture) {
+    static int s_PicNumCnt = 0;
+
+    char *outDir = (char *)userData;
+
+    char filename[600] = {0};
+    sprintf(filename, "%s/out_%dx%d.%d.bmp", outDir,
+            outPicture->m_picture_frame.PicWidthInSamplesL,
+            outPicture->m_picture_frame.PicHeightInSamplesL, s_PicNumCnt);
+
+    printf("my_output_frame_callback(): m_PicNumCnt=%d(%s); PicOrderCnt=%d; "
+           "filename=%s;\n",
+           outPicture->m_picture_frame.m_PicNumCnt,
+           H264_SLIECE_TYPE_TO_STR(
+               outPicture->m_picture_frame.m_h264_slice_header.slice_type),
+           outPicture->m_picture_frame.PicOrderCnt, filename);
+
+    ret = outPicture->m_picture_frame.saveToBmpFile(filename);
+    if (ret != 0) {
+      printf("outPicture->m_picture_frame.saveToBmpFile() failed! %s\n",
+             filename);
+      return -1;
+    }
+
+    s_PicNumCnt++;
+
+  } else
+    // 表示解码结束了
+    return -1;
+
+  return 0;
+}
+
+int do_callback(Nalu *picture_current, CH264PicturesGOP *pictures_gop,
+                int32_t is_need_flush) {
+  int ret = 0;
+  Nalu *outPicture = NULL;
+  int errorCode = 0;
+
+  if (is_need_flush) { // 说明当前已解码完毕的帧是IDR帧
+    while (1) {
+      ret = pictures_gop->getOneOutPicture(NULL, outPicture); // flush操作
+      RETURN_IF_FAILED(ret != 0, ret);
+
+      if (my_output_frame_callback != NULL) {
+        ret = my_output_frame_callback(
+            outPicture, NULL,
+            errorCode); // 当找到可输出的帧时，主动通知外部用户
+        if (ret != 0) {
+          return -1; // 直接退出
+        }
+        outPicture->m_is_in_use = 0; // 标记为闲置状态，以便后续回收重复利用
+      } else                         // if (outPicture == NULL)
+             // //说明已经flush完毕，DPB缓存中已经没有可输出的帧了
+        break;
+    }
+  }
+
+  //-----------------------------------------------------------------------
+  ret = pictures_gop->getOneOutPicture(picture_current, outPicture);
+  RETURN_IF_FAILED(ret != 0, ret);
+
+  if (outPicture != NULL) {
+    if (my_output_frame_callback != NULL) {
+      ret = my_output_frame_callback(outPicture, NULL, errorCode);
+      // 当找到可输出的帧时，主动通知外部用户
+    }
+
+    outPicture->m_is_in_use = 0; // 标记为闲置状态，以便后续回收重复利用
+  }
+
+  return 0;
+}
 
 int main() {
   std::string filePath = "./source_cut_10_frames.h264";
@@ -90,8 +172,14 @@ int main() {
     }
   }
 
-  /* TODO YangJing flush操作 <24-04-02 22:13:05> */
-
+  //--------flush操作--------------
+  if (result == 0) {
+    // int is_need_flush = nalu.m_picture_frame.m_h264_slice_header.IdrPicFlag;
+    //  当前已解码完毕的帧是否是IDR帧，如果是IDR帧则lush
+    do_callback(&nalu, pictures_gop, 1); // 回调操作
+    // RETURN_IF_FAILED(ret != 0, ret);
+    do_callback(NULL, pictures_gop, 1); // 最后再回调一次
+  }
   reader.close();
   return 0;
 }
