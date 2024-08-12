@@ -1,8 +1,6 @@
 #include "Nalu.hpp"
 #include <cstdint>
 #include <fstream>
-#include <iostream>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string>
 

@@ -1,9 +1,7 @@
 #ifndef EBSP_HPP_6XPPLZUK
 #define EBSP_HPP_6XPPLZUK
 
-#include "RBSP.hpp"
-#include <iostream>
-
+#include <cstdint>
 class EBSP {
  public:
   EBSP();

@@ -4,7 +4,7 @@
 int32_t g_PicNumCnt = 0;
 
 int main() {
-  std::string filePath = "./source_cut_10_frames.h264";
+  string filePath = "./source_cut_10_frames.h264";
   // std::string filePath = "./demo_10_frames.h264";
   /* 1. 用类封装h264文件的打开文件、读取NUL、存储NUL的操作 */
   AnnexBReader reader(filePath);

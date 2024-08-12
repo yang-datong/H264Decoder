@@ -5,7 +5,6 @@
 #include "RBSP.hpp"
 #include <cmath>
 #include <cstdint>
-#include <fstream>
 
 Nalu::Nalu() {}
 
