@@ -561,17 +561,6 @@ void SliceHeader::pred_weight_table(BitStream &bitStream) {
     chroma_log2_weight_denom = bitStream.readUE();
   }
 
-  int32_t _luma_weight_l0[num_ref_idx_l0_active_minus1 + 1];
-  int32_t _luma_offset_l0[num_ref_idx_l0_active_minus1 + 1];
-
-  int32_t _chroma_weight_l0[num_ref_idx_l0_active_minus1 + 1][2];
-  int32_t _chroma_offset_l0[num_ref_idx_l0_active_minus1 + 1][2];
-
-  luma_weight_l0 = _luma_weight_l0;
-  luma_offset_l0 = _luma_offset_l0;
-  chroma_weight_l0 = _chroma_weight_l0;
-  chroma_offset_l0 = _chroma_offset_l0;
-
   for (int i = 0; i <= num_ref_idx_l0_active_minus1; i++) {
     bool luma_weight_l0_flag = bitStream.readU1();
     if (luma_weight_l0_flag) {
@@ -590,17 +579,6 @@ void SliceHeader::pred_weight_table(BitStream &bitStream) {
   }
 
   if (slice_type % 5 == SLICE_B) {
-    int32_t _luma_weight_l1[num_ref_idx_l1_active_minus1 + 1];
-    int32_t _luma_offset_l1[num_ref_idx_l1_active_minus1 + 1];
-
-    int32_t _chroma_weight_l1[num_ref_idx_l1_active_minus1 + 1][2];
-    int32_t _chroma_offset_l1[num_ref_idx_l1_active_minus1 + 1][2];
-
-    luma_weight_l1 = _luma_weight_l1;
-    luma_offset_l1 = _luma_offset_l1;
-    chroma_weight_l1 = _chroma_weight_l1;
-    chroma_offset_l1 = _chroma_offset_l1;
-
     for (int i = 0; i <= num_ref_idx_l1_active_minus1; i++) {
       bool luma_weight_l1_flag = bitStream.readU1();
       if (luma_weight_l1_flag) {

@@ -250,8 +250,32 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
       } else if (picture.m_mbs[picture.CurrMbAddr].m_name_of_mb_type == I_PCM)
         // 说明该宏块没有残差，也没有预测值，码流中的数据直接为原始像素值
         exit(0);
-      else
-        exit(0);
+      else {
+        // P,B帧，I帧不会进这里
+        // TODO 有问题 <24-08-12 23:05:15, YangJing>
+        picture.Inter_prediction_process(); // 帧间预测
+
+        BitDepth = picture.m_h264_slice_header.m_sps.BitDepthY;
+
+        //-------残差-----------
+        if (picture.m_mbs[picture.CurrMbAddr].transform_size_8x8_flag == 0) {
+          picture.transform_decoding_process_for_4x4_luma_residual_blocks_inter(
+              isChroma, isChromaCb, BitDepth, picWidthInSamplesL,
+              pic_buff_luma);
+        } else {
+          picture.transform_decoding_process_for_8x8_luma_residual_blocks_inter(
+              isChroma, isChromaCb, BitDepth, picWidthInSamplesL,
+              picture.m_mbs[picture.CurrMbAddr].LumaLevel8x8, pic_buff_luma);
+        }
+
+        isChromaCb = 1;
+        picture.transform_decoding_process_for_chroma_samples_inter(
+            isChromaCb, picWidthInSamplesC, pic_buff_cb);
+
+        isChromaCb = 0;
+        picture.transform_decoding_process_for_chroma_samples_inter(
+            isChromaCb, picWidthInSamplesC, pic_buff_cr);
+      }
     }
 
     if (!m_pps.entropy_coding_mode_flag) {

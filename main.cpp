@@ -16,6 +16,7 @@ int main() {
 
   /* 2. 创建一个NUL类，用于存储NUL数据，它与NUL具有同样的数据结构 */
   GOP *gop = new GOP();
+  /* 初始化第一个Nal */
   Nalu nalu = gop->nalu[0];
   EBSP ebsp;
   RBSP rbsp;
@@ -53,9 +54,10 @@ int main() {
       switch (nalu.nal_unit_type) {
       case 1: /* Slice(non-VCL) */
         /* 11-2. 解码普通帧 */
-        //std::cout << "Original Slice -> {" << std::endl;
-        //nalu.extractSliceparameters(rbsp);
-        //std::cout << " }" << std::endl;
+        std::cout << "Original Slice -> {" << std::endl;
+        nalu.extractSliceparameters(rbsp);
+        gop->gop_fill_size++;
+        std::cout << " }" << std::endl;
         break;
       case 2: /* DPA(non-VCL) */
         break;
@@ -63,6 +65,7 @@ int main() {
         /* 11-1. 解码立即刷新帧 GOP[0] */
         std::cout << "IDR -> {" << std::endl;
         nalu.extractIDRparameters(rbsp);
+        gop->gop_fill_size++;
         std::cout << " }" << std::endl;
         break;
       case 6: /* SEI(VCL) */

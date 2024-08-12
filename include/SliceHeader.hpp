@@ -87,15 +87,15 @@ class SliceHeader {
 
   uint32_t luma_log2_weight_denom = 0;
   uint32_t chroma_log2_weight_denom = 0;
-  int32_t *luma_weight_l0 = nullptr;
-  int32_t *luma_offset_l0 = nullptr;
-  int32_t (*chroma_weight_l0)[2];
-  int32_t (*chroma_offset_l0)[2];
+  int32_t luma_weight_l0[32] = {0};
+  int32_t luma_offset_l0[32] = {0};
+  int32_t chroma_weight_l0[32][2] = {{0}};
+  int32_t chroma_offset_l0[32][2] = {{0}};
 
-  int32_t *luma_weight_l1 = nullptr;
-  int32_t *luma_offset_l1 = nullptr;
-  int32_t (*chroma_weight_l1)[2];
-  int32_t (*chroma_offset_l1)[2];
+  int32_t luma_weight_l1[32] = {0};
+  int32_t luma_offset_l1[32] = {0};
+  int32_t chroma_weight_l1[32][2] = {{0}};
+  int32_t chroma_offset_l1[32][2] = {{0}};
 
   int32_t picNumL0Pred;
   int32_t picNumL1Pred;

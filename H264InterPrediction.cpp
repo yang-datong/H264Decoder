@@ -2368,7 +2368,6 @@ int PictureBase::Luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
 
   //------------------------
   // #define CLIP3(x, y, z)  (((z) < (x)) ? (x) : (((z) > (y)) ? (y) : (z)))
-
 #define getLumaSample(xDZL, yDZL)                                              \
   refPic                                                                       \
       ->m_pic_buff_luma[CLIP3(0, refPicHeightEffectiveL - 1, yIntL + (yDZL)) * \
@@ -3033,6 +3032,7 @@ int PictureBase::Derivation_process_for_prediction_weights(
     // If C is equal to L for luma samples
     logWDL = slice_header.luma_log2_weight_denom;
     w0L = slice_header.luma_weight_l0[refIdxL0WP];
+    /* TODO YangJing 这里没有进行初始化，没有内存 <24-08-12 23:14:11> */
     w1L = slice_header.luma_weight_l1[refIdxL1WP];
     o0L = slice_header.luma_offset_l0[refIdxL0WP] *
           (1 << (slice_header.m_sps.BitDepthY - 8));

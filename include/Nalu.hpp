@@ -24,7 +24,7 @@ class Nalu {
  public:
   Nalu();
   /* 拷贝构造函数 */
-  Nalu(const Nalu &nalu);
+  // Nalu(const Nalu &nalu);
   ~Nalu();
 
   int _startCodeLenth = 0;
