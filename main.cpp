@@ -1,4 +1,6 @@
 #include "AnnexBReader.hpp"
+#include "GOP.hpp"
+#include "Nalu.hpp"
 #include "NaluPPS.hpp"
 
 int32_t g_PicNumCnt = 0;
@@ -13,7 +15,8 @@ int main() {
     return -1;
 
   /* 2. 创建一个NUL类，用于存储NUL数据，它与NUL具有同样的数据结构 */
-  Nalu nalu;
+  GOP *gop = new GOP();
+  Nalu nalu = gop->nalu[0];
   EBSP ebsp;
   RBSP rbsp;
   int number = 0;
@@ -50,9 +53,9 @@ int main() {
       switch (nalu.nal_unit_type) {
       case 1: /* Slice(non-VCL) */
         /* 11-2. 解码普通帧 */
-        std::cout << "Original Slice -> {" << std::endl;
-        nalu.extractSliceparameters(rbsp);
-        std::cout << " }" << std::endl;
+        //std::cout << "Original Slice -> {" << std::endl;
+        //nalu.extractSliceparameters(rbsp);
+        //std::cout << " }" << std::endl;
         break;
       case 2: /* DPA(non-VCL) */
         break;
@@ -86,7 +89,7 @@ int main() {
       if (result == 0)
         break;
     } else {
-      std::cerr << "\033[31mReading error\033[0m" << std::endl;
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__ << std::endl;
       break;
     }
   }

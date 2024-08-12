@@ -159,9 +159,11 @@ int Nalu::decode(BitStream &bitStream) {
   m_picture_frame.init(slice_header);
 
   if (slice_header.field_pic_flag == 0) // 帧
-    std::cout << "帧编码" << std::endl;
-  else // 场编码->顶场，底场
-    std::cout << "场编码" << std::endl;
+    std::cout << "\t帧编码" << std::endl;
+  else { // 场编码->顶场，底场
+    std::cout << "\t场编码(暂不处理)" << std::endl;
+    return -1;
+  }
 
   slice_body.slice_header = this->slice_header;
   slice_body.m_sps = this->sps;
