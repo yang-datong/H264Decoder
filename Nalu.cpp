@@ -123,34 +123,34 @@ int Nalu::extractSEIparameters(RBSP &rbsp) {
   return 0;
 }
 
-int Nalu::extractSliceparameters(RBSP &rbsp,GOP &gop) {
+int Nalu::extractSliceparameters(RBSP &rbsp, GOP &gop) {
   /* 初始化bit处理器，填充slice的数据 */
   BitStream bitStream(rbsp._buf, rbsp._len);
-  slice_header.m_sps = sps;
-  slice_header.m_pps = pps;
+  slice_header.m_sps = gop.m_spss[0];
+  slice_header.m_pps = gop.m_ppss[0];
   slice_header.m_idr = idr;
   slice_header.nal_unit_type = nal_unit_type;
   slice_header.nal_ref_idc = nal_ref_idc;
   slice_header.parseSliceHeader(bitStream, this);
-  decode(bitStream,gop.m_DecodedPictureBuffer);
+  decode(bitStream, gop.m_DecodedPictureBuffer, gop.m_spss[0], gop.m_ppss[0]);
   return 0;
 }
 
-int Nalu::extractIDRparameters(RBSP &rbsp,GOP &gop) {
+int Nalu::extractIDRparameters(RBSP &rbsp, GOP &gop) {
   /* 初始化bit处理器，填充idr的数据 */
   BitStream bitStream(rbsp._buf, rbsp._len);
-  slice_header.m_sps = sps;
-  slice_header.m_pps = pps;
+  slice_header.m_sps = gop.m_spss[0];
+  slice_header.m_pps = gop.m_ppss[0];
   slice_header.m_idr = idr;
   slice_header.nal_unit_type = nal_unit_type;
   slice_header.nal_ref_idc = nal_ref_idc;
   slice_header.parseSliceHeader(bitStream, this);
-  decode(bitStream,gop.m_DecodedPictureBuffer);
+  decode(bitStream, gop.m_DecodedPictureBuffer, gop.m_spss[0], gop.m_ppss[0]);
   return 0;
 }
 
-
-int Nalu::decode(BitStream &bitStream,Nalu *(&dpb)[GOP_SIZE]) {
+int Nalu::decode(BitStream &bitStream, Nalu *(&dpb)[GOP_SIZE], SPS &sps,
+                 PPS &pps) {
 
   //----------------帧----------------------------------
   m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
@@ -168,9 +168,9 @@ int Nalu::decode(BitStream &bitStream,Nalu *(&dpb)[GOP_SIZE]) {
   }
 
   slice_body.slice_header = this->slice_header;
-  slice_body.m_sps = this->sps;
-  slice_body.m_pps = this->pps;
-  slice_body.m_idr = this->idr;
+  slice_body.m_sps = sps;
+  slice_body.m_pps = pps;
+  slice_body.m_idr = idr;
   slice_body.parseSliceData(bitStream, m_picture_frame);
   // NOTE:已经可以正确解码I帧
   // m_picture_frame.saveToBmpFile("output.bmp");

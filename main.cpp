@@ -17,11 +17,11 @@ int main() {
   /* 2. 创建一个NUL类，用于存储NUL数据，它与NUL具有同样的数据结构 */
   GOP *gop = new GOP();
   /* 初始化第一个Nal */
-  Nalu nalu = *gop->m_DecodedPictureBuffer[0];
-  EBSP ebsp;
-  RBSP rbsp;
   int number = 0;
   while (true) {
+    Nalu &nalu = *gop->m_DecodedPictureBuffer[gop->m_dpb_for_output_length];
+    EBSP ebsp;
+    RBSP rbsp;
     /* 3. 循环读取一个个的Nalu */
     result = reader.readNalu(nalu);
 
@@ -59,6 +59,7 @@ int main() {
         is_need_flush = 1; // 针对IDR帧后，需要flush一次
         // do_callback(nalu, gop, is_need_flush); // 回调操作
         nalu.extractSliceparameters(rbsp, *gop);
+        gop->m_dpb_for_output_length++;
         std::cout << " }" << std::endl;
         break;
       case 2: /* DPA(non-VCL) */
@@ -67,6 +68,7 @@ int main() {
         /* 11-1. 解码立即刷新帧 GOP[0] */
         std::cout << "IDR -> {" << std::endl;
         nalu.extractIDRparameters(rbsp, *gop);
+        gop->m_dpb_for_output_length++;
         std::cout << " }" << std::endl;
         break;
       case 6: /* SEI(VCL) */
@@ -79,12 +81,14 @@ int main() {
         /* 8. 解码SPS中信息 */
         std::cout << "SPS -> {" << std::endl;
         nalu.extractSPSparameters(rbsp);
+        gop->m_spss[0] = nalu.getSPS();
         std::cout << " }" << std::endl;
         break;
       case 8: /* PPS(VCL) */
         /* 9. 解码PPS中信息 */
         std::cout << "PPS -> {" << std::endl;
         nalu.extractPPSparameters(rbsp);
+        gop->m_ppss[0] = nalu.getPPS();
         std::cout << " }" << std::endl;
         break;
       }

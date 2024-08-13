@@ -31,7 +31,6 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
   slice_header.picNumL0Pred = slice_header.CurrPicNum;
   slice_header.picNumL1Pred = slice_header.CurrPicNum;
 
-  /* TODO YangJing 为什么P帧这里还是为1,应该被重置为0了 <24-08-13 16:06:50> */
   if (picture.m_slice_cnt == 0) {
     picture.Decoding_process_for_picture_order_count(); // 解码POC
     if (m_sps.frame_mbs_only_flag == 0) {
@@ -45,8 +44,6 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
     if (slice_header.slice_type == H264_SLIECE_TYPE_P ||
         slice_header.slice_type == H264_SLIECE_TYPE_SP ||
         slice_header.slice_type == H264_SLIECE_TYPE_B) {
-      std::cout << "hi~" << std::endl;
-      exit(0);
       /* TODO YangJing P帧经过这里后m_RefPicList0就有值了 <24-08-13 13:56:56> */
       picture.Decoding_process_for_reference_picture_lists_construction(
           picture.m_dpb, picture.m_RefPicList0, picture.m_RefPicList1);

@@ -53,7 +53,7 @@ class Nalu {
 
   /* 开始解码图像 */
   // int decode(RBSP &rbsp);
-  int decode(BitStream &bitStream, Nalu *(&dpb)[GOP_SIZE]);
+  int decode(BitStream &bitStream, Nalu *(&dpb)[GOP_SIZE], SPS &sps, PPS &pps);
 
  private:
   int parseNALHeader(EBSP &rbsp);
@@ -73,6 +73,10 @@ class Nalu {
 
   /* IDR */
   IDR idr;
+
+ public:
+  SPS getSPS() { return sps; }
+  PPS getPPS() { return pps; }
 
  public:
   /* NOTE 以下均来自Picture */
