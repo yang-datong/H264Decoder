@@ -6,7 +6,7 @@
 #include <cstdint>
 
 class PictureBase;
-class Picture;
+// class Picture;
 
 /*
  * T-REC-H.264-201704-S!!PDF-E.pdf

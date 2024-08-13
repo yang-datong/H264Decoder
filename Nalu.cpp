@@ -123,7 +123,7 @@ int Nalu::extractSEIparameters(RBSP &rbsp) {
   return 0;
 }
 
-int Nalu::extractSliceparameters(RBSP &rbsp) {
+int Nalu::extractSliceparameters(RBSP &rbsp,GOP &gop) {
   /* 初始化bit处理器，填充slice的数据 */
   BitStream bitStream(rbsp._buf, rbsp._len);
   slice_header.m_sps = sps;
@@ -132,11 +132,11 @@ int Nalu::extractSliceparameters(RBSP &rbsp) {
   slice_header.nal_unit_type = nal_unit_type;
   slice_header.nal_ref_idc = nal_ref_idc;
   slice_header.parseSliceHeader(bitStream, this);
-  decode(bitStream);
+  decode(bitStream,gop.m_DecodedPictureBuffer);
   return 0;
 }
 
-int Nalu::extractIDRparameters(RBSP &rbsp) {
+int Nalu::extractIDRparameters(RBSP &rbsp,GOP &gop) {
   /* 初始化bit处理器，填充idr的数据 */
   BitStream bitStream(rbsp._buf, rbsp._len);
   slice_header.m_sps = sps;
@@ -145,18 +145,18 @@ int Nalu::extractIDRparameters(RBSP &rbsp) {
   slice_header.nal_unit_type = nal_unit_type;
   slice_header.nal_ref_idc = nal_ref_idc;
   slice_header.parseSliceHeader(bitStream, this);
-  decode(bitStream);
+  decode(bitStream,gop.m_DecodedPictureBuffer);
   return 0;
 }
 
-int Nalu::decode(BitStream &bitStream) {
+
+int Nalu::decode(BitStream &bitStream,Nalu *(&dpb)[GOP_SIZE]) {
 
   //----------------帧----------------------------------
   m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
   m_picture_frame.m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
   m_picture_frame.m_parent = this;
-  /* TODO YangJing 处理前一帧内存 <24-07-30 23:25:01> */
-  // memcpy(m_picture_frame.m_dpb, dpb, sizeof(CH264Picture *) * size_pdb);
+  memcpy(m_picture_frame.m_dpb, dpb, sizeof(Nalu *) * GOP_SIZE);
   m_current_picture_ptr = &m_picture_frame;
   m_picture_frame.init(slice_header);
 

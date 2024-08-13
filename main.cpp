@@ -17,7 +17,7 @@ int main() {
   /* 2. 创建一个NUL类，用于存储NUL数据，它与NUL具有同样的数据结构 */
   GOP *gop = new GOP();
   /* 初始化第一个Nal */
-  Nalu nalu = gop->nalu[0];
+  Nalu nalu = *gop->m_DecodedPictureBuffer[0];
   EBSP ebsp;
   RBSP rbsp;
   int number = 0;
@@ -51,12 +51,14 @@ int main() {
       //        nalu.forbidden_zero_bit, nalu.nal_ref_idc, nalu.nal_unit_type);
 
       /* 见T-REC-H.264-202108-I!!PDF-E.pdf 87页 */
+      int is_need_flush = 0;
       switch (nalu.nal_unit_type) {
       case 1: /* Slice(non-VCL) */
         /* 11-2. 解码普通帧 */
         std::cout << "Original Slice -> {" << std::endl;
-        nalu.extractSliceparameters(rbsp);
-        gop->gop_fill_size++;
+        is_need_flush = 1; // 针对IDR帧后，需要flush一次
+        // do_callback(nalu, gop, is_need_flush); // 回调操作
+        nalu.extractSliceparameters(rbsp, *gop);
         std::cout << " }" << std::endl;
         break;
       case 2: /* DPA(non-VCL) */
@@ -64,8 +66,7 @@ int main() {
       case 5: /* IDR(VCL) */
         /* 11-1. 解码立即刷新帧 GOP[0] */
         std::cout << "IDR -> {" << std::endl;
-        nalu.extractIDRparameters(rbsp);
-        gop->gop_fill_size++;
+        nalu.extractIDRparameters(rbsp, *gop);
         std::cout << " }" << std::endl;
         break;
       case 6: /* SEI(VCL) */
@@ -92,7 +93,8 @@ int main() {
       if (result == 0)
         break;
     } else {
-      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__ << std::endl;
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
       break;
     }
   }

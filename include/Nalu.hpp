@@ -4,6 +4,7 @@
 #include "BitStream.hpp"
 #include "Common.hpp"
 #include "EBSP.hpp"
+#include "GOP.hpp"
 #include "IDR.hpp"
 #include "PPS.hpp"
 #include "PictureBase.hpp"
@@ -45,14 +46,14 @@ class Nalu {
   int extractSPSparameters(RBSP &rbsp);
   int extractPPSparameters(RBSP &rbsp);
   int extractSEIparameters(RBSP &rbsp);
-  int extractSliceparameters(RBSP &rbsp);
-  int extractIDRparameters(RBSP &rbsp);
+  int extractSliceparameters(RBSP &rbsp, GOP &gop);
+  int extractIDRparameters(RBSP &rbsp, GOP &gop);
 
   int GetNaluType();
 
   /* 开始解码图像 */
   // int decode(RBSP &rbsp);
-  int decode(BitStream &bitStream);
+  int decode(BitStream &bitStream, Nalu *(&dpb)[GOP_SIZE]);
 
  private:
   int parseNALHeader(EBSP &rbsp);
