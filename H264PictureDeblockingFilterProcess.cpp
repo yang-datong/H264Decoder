@@ -1219,19 +1219,19 @@ int PictureBase::
     bS = 1;
     return 0;
   } else if (mixedModeEdgeFlag == 0) {
-    Nalu *RefPicList0_p0 =
+    Frame *RefPicList0_p0 =
         (m_mbs[mbAddr_p0].m_RefIdxL0[mbPartIdx_p0] >= 0)
             ? this->m_RefPicList0[m_mbs[mbAddr_p0].m_RefIdxL0[mbPartIdx_p0]]
             : NULL;
-    Nalu *RefPicList1_p0 =
+    Frame *RefPicList1_p0 =
         (m_mbs[mbAddr_p0].m_RefIdxL1[mbPartIdx_p0] >= 0)
             ? this->m_RefPicList1[m_mbs[mbAddr_p0].m_RefIdxL1[mbPartIdx_p0]]
             : NULL;
-    Nalu *RefPicList0_q0 =
+    Frame *RefPicList0_q0 =
         (m_mbs[mbAddr_q0].m_RefIdxL0[mbPartIdx_q0] >= 0)
             ? this->m_RefPicList0[m_mbs[mbAddr_q0].m_RefIdxL0[mbPartIdx_q0]]
             : NULL;
-    Nalu *RefPicList1_q0 =
+    Frame *RefPicList1_q0 =
         (m_mbs[mbAddr_q0].m_RefIdxL1[mbPartIdx_q0] >= 0)
             ? this->m_RefPicList1[m_mbs[mbAddr_q0].m_RefIdxL1[mbPartIdx_q0]]
             : NULL;

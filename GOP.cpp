@@ -1,4 +1,5 @@
 #include "GOP.hpp"
+#include "Frame.hpp"
 #include "Nalu.hpp"
 
 GOP::GOP() { int ret = init(); }
@@ -17,9 +18,9 @@ int GOP::init() {
   for (int i = 0; i < size_dpb; i++) {
     m_dpb_for_output[i] = NULL;
 
-    m_DecodedPictureBuffer[i] = new Nalu;
+    m_DecodedPictureBuffer[i] = new Frame;
     if (m_DecodedPictureBuffer[i] == NULL) {
-      LOG_ERROR("new Nalu failed! m_DecodedPictureBuffer[%d] == NULL\n", i);
+      LOG_ERROR("new Frame failed! m_DecodedPictureBuffer[%d] == NULL\n", i);
       return -1;
     }
   }
@@ -41,7 +42,7 @@ int GOP::unInit() {
   return 0;
 }
 
-int GOP::getOneEmptyPicture(Nalu *&pic) {
+int GOP::getOneEmptyPicture(Frame *&pic) {
   int ret = 0;
   int32_t size_dpb = H264_MAX_DECODED_PICTURE_BUFFER_COUNT;
 
@@ -58,7 +59,7 @@ int GOP::getOneEmptyPicture(Nalu *&pic) {
   return -1;
 }
 
-int GOP::getOneOutPicture(Nalu *newDecodedPic, Nalu *&outPic) {
+int GOP::getOneOutPicture(Frame *newDecodedPic, Frame *&outPic) {
   int32_t i = 0;
   int32_t index = -1;
 

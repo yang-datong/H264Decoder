@@ -2147,7 +2147,7 @@ int PictureBase::Decoding_process_for_Inter_prediction_samples(
 // 8.4.2.1 Reference picture selection process
 //  Page 164/186/812
 int PictureBase::Reference_picture_selection_process(int32_t refIdxLX,
-                                                     Nalu *RefPicListX[16],
+                                                     Frame *RefPicListX[16],
                                                      int32_t RefPicListXLength,
                                                      PictureBase *&refPic) {
   int ret = 0;

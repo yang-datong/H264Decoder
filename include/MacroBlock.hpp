@@ -1,7 +1,7 @@
 #ifndef MACROBLOCK_HPP_FBNXLFQV
 #define MACROBLOCK_HPP_FBNXLFQV
 #include "BitStream.hpp"
-#include "H264SliceData.hpp"
+#include "H264Cabac.hpp"
 #include "Type.hpp"
 
 class PictureBase;

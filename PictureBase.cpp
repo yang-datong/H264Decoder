@@ -1,6 +1,6 @@
 ﻿#include "PictureBase.hpp"
 #include "Bitmap.hpp"
-#include "Nalu.hpp"
+#include "Frame.hpp"
 
 extern int32_t g_PicNumCnt;
 
@@ -92,9 +92,9 @@ int PictureBase::reset() {
   m_is_decode_finished = 0;
   m_parent = NULL;
   m_slice_cnt = 0;
-  memset(m_dpb, 0, sizeof(Nalu *) * 16);
-  memset(m_RefPicList0, 0, sizeof(Nalu *) * 16);
-  memset(m_RefPicList1, 0, sizeof(Nalu *) * 16);
+  memset(m_dpb, 0, sizeof(Frame *) * 16);
+  memset(m_RefPicList0, 0, sizeof(Frame *) * 16);
+  memset(m_RefPicList1, 0, sizeof(Frame *) * 16);
   m_RefPicList0Length = 0;
   m_RefPicList1Length = 0;
   m_PicNumCnt = 0;
@@ -359,10 +359,10 @@ int PictureBase::copyData2(const PictureBase &src, int32_t copyMbsDataFlag) {
   m_is_decode_finished = src.m_is_decode_finished;
   m_slice_cnt = src.m_slice_cnt;
 
-  memcpy(m_dpb, src.m_dpb, sizeof(Nalu *) * 16);
+  memcpy(m_dpb, src.m_dpb, sizeof(Frame *) * 16);
   m_parent = src.m_parent;
-  memcpy(m_RefPicList0, src.m_RefPicList0, sizeof(Nalu *) * 16);
-  memcpy(m_RefPicList1, src.m_RefPicList1, sizeof(Nalu *) * 16);
+  memcpy(m_RefPicList0, src.m_RefPicList0, sizeof(Frame *) * 16);
+  memcpy(m_RefPicList1, src.m_RefPicList1, sizeof(Frame *) * 16);
   m_RefPicList0Length = src.m_RefPicList0Length;
   m_RefPicList1Length = src.m_RefPicList1Length;
   m_PicNumCnt = src.m_PicNumCnt;
@@ -394,8 +394,8 @@ int PictureBase::copyDataPicOrderCnt(const PictureBase &src) {
   m_is_decode_finished = src.m_is_decode_finished;
   m_slice_cnt = src.m_slice_cnt;
 
-  memcpy(m_RefPicList0, src.m_RefPicList0, sizeof(Nalu *) * 16);
-  memcpy(m_RefPicList1, src.m_RefPicList1, sizeof(Nalu *) * 16);
+  memcpy(m_RefPicList0, src.m_RefPicList0, sizeof(Frame *) * 16);
+  memcpy(m_RefPicList1, src.m_RefPicList1, sizeof(Frame *) * 16);
   m_RefPicList0Length = src.m_RefPicList0Length;
   m_RefPicList1Length = src.m_RefPicList1Length;
   m_PicNumCnt = src.m_PicNumCnt;
@@ -630,7 +630,7 @@ int PictureBase::writeYUV(const char *filename) {
   return ret;
 }
 
-int PictureBase::getOneEmptyPicture(Nalu *&pic) {
+int PictureBase::getOneEmptyPicture(Frame *&pic) {
   int32_t size_dpb = H264_MAX_DECODED_PICTURE_BUFFER_COUNT;
 
   for (int i = 0; i < size_dpb; i++) {
@@ -652,7 +652,7 @@ int PictureBase::getOneEmptyPicture(Nalu *&pic) {
 }
 
 int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
-    Nalu *&newEmptyPicture) {
+    Frame *&newEmptyPicture) {
   int ret = 0;
 
   this->m_is_decode_finished = 1;
@@ -698,7 +698,7 @@ int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
   }
 
   //--------------------------------------
-  Nalu *emptyPic = NULL;
+  Frame *emptyPic = NULL;
   ret = getOneEmptyPicture(emptyPic);
   RETURN_IF_FAILED(ret != 0, ret);
 

@@ -1,7 +1,6 @@
 #include "AnnexBReader.hpp"
 #include "GOP.hpp"
 #include "Nalu.hpp"
-#include "NaluPPS.hpp"
 
 int32_t g_PicNumCnt = 0;
 
@@ -17,11 +16,12 @@ int main() {
   /* 2. 创建一个NUL类，用于存储NUL数据，它与NUL具有同样的数据结构 */
   GOP *gop = new GOP();
   /* 初始化第一个Nal */
+  Nalu nalu;
+  Frame *frame = gop->m_DecodedPictureBuffer[0];
+  EBSP ebsp;
+  RBSP rbsp;
   int number = 0;
   while (true) {
-    Nalu &nalu = *gop->m_DecodedPictureBuffer[gop->m_dpb_for_output_length];
-    EBSP ebsp;
-    RBSP rbsp;
     /* 3. 循环读取一个个的Nalu */
     result = reader.readNalu(nalu);
 
@@ -58,8 +58,12 @@ int main() {
         std::cout << "Original Slice -> {" << std::endl;
         is_need_flush = 1; // 针对IDR帧后，需要flush一次
         // do_callback(nalu, gop, is_need_flush); // 回调操作
-        nalu.extractSliceparameters(rbsp, *gop);
-        gop->m_dpb_for_output_length++;
+        Frame *newEmptyPicture;
+        frame->m_current_picture_ptr
+            ->end_decode_the_picture_and_get_a_new_empty_picture(
+                newEmptyPicture);
+        frame = newEmptyPicture;
+        nalu.extractSliceparameters(rbsp, *gop, *frame);
         std::cout << " }" << std::endl;
         break;
       case 2: /* DPA(non-VCL) */
@@ -67,8 +71,7 @@ int main() {
       case 5: /* IDR(VCL) */
         /* 11-1. 解码立即刷新帧 GOP[0] */
         std::cout << "IDR -> {" << std::endl;
-        nalu.extractIDRparameters(rbsp, *gop);
-        gop->m_dpb_for_output_length++;
+        nalu.extractIDRparameters(rbsp, *gop, *frame);
         std::cout << " }" << std::endl;
         break;
       case 6: /* SEI(VCL) */
