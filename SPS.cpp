@@ -222,11 +222,9 @@ int SPS::extractParameters() {
   int height = PicHeightInMapUnits * 16;
   printf("\tprediction width:%d, prediction height:%d\n", width, height);
 
-  /* 获取帧率 */
-  /* TODO YangJing  <24-04-05 00:22:50> */
+  /* TODO 获取帧率YangJing  <24-04-05 00:22:50> */
 
-  /* 获取B帧是否配置 */
-  /* TODO YangJing  <24-04-05 00:30:03> */
+  /* TODO 获取B帧是否配置YangJing  <24-04-05 00:30:03> */
 
   /* 确定色度数组类型 74 page */
   if (separate_colour_plane_flag == 0)

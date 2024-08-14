@@ -2410,7 +2410,6 @@ int PictureBase::
             slice_header.m_dec_ref_pic_marking[j].long_term_frame_idx;
       }
 
-      // TODO:
       // After marking the current decoded reference picture, the total number
       // of frames with at least one field marked as "used for reference", plus
       // the number of complementary field pairs with at least one field marked

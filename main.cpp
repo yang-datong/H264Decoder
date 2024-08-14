@@ -65,6 +65,10 @@ int main() {
         frame = newEmptyPicture;
         nalu.extractSliceparameters(rbsp, *gop, *frame);
         std::cout << " }" << std::endl;
+        /* TODO YangJing number = 5 为B帧，则需要解码后一个P帧<24-08-14
+         * 22:39:46> */
+        if (number == 5)
+          exit(0);
         break;
       case 2: /* DPA(non-VCL) */
         break;

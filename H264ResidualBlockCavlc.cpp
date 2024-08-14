@@ -35,7 +35,7 @@ int CH264ResidualBlockCavlc::residual_block_cavlc(
   RETURN_IF_FAILED(ret != 0, -1);
 
   // uint16_t coeff_token = bs.getBits(16);
-  // TODO  <24-07-29 15:08:41, YangJing>
+  // TODO 没有实现bs.getBits <24-07-29 15:08:41, YangJing>
   //  先获取16bit数据（注意：并不是读取），因为coeff_token_table表里面最长的coeff_token为16bit，所以预先获取16bit数据就足够了
 
   int32_t coeff_token_bit_length = 0;

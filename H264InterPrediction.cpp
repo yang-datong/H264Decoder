@@ -2719,9 +2719,7 @@ int PictureBase::Weighted_sample_prediction_process_2(
                      logWDL) +
                         o0L);
         } else {
-          predPartL[y * partWidth + x] =
-              CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1,
-                    predPartL0L[y * partWidth + x] * w0L + o0L);
+          predPartL[y * partWidth + x] = CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1, predPartL0L[y * partWidth + x] * w0L + o0L);
         }
       }
     }
@@ -3032,7 +3030,6 @@ int PictureBase::Derivation_process_for_prediction_weights(
     // If C is equal to L for luma samples
     logWDL = slice_header.luma_log2_weight_denom;
     w0L = slice_header.luma_weight_l0[refIdxL0WP];
-    /* TODO YangJing 这里没有进行初始化，没有内存 <24-08-12 23:14:11> */
     w1L = slice_header.luma_weight_l1[refIdxL1WP];
     o0L = slice_header.luma_offset_l0[refIdxL0WP] *
           (1 << (slice_header.m_sps.BitDepthY - 8));

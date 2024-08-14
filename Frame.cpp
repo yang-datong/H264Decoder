@@ -23,8 +23,12 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[GOP_SIZE], SPS &sps,
   slice_body.m_pps = pps;
   slice_body.m_idr = idr;
   slice_body.parseSliceData(bitStream, m_picture_frame);
-  // NOTE:已经可以正确解码I帧
-  // m_picture_frame.saveToBmpFile("output.bmp");
+
+  // NOTE: 测试使用，后续删除
+  // if (slice_body.slice_header.slice_type == SLICE_I)
+  // m_picture_frame.saveToBmpFile("output_I.bmp");
+  // else if (slice_body.slice_header.slice_type == SLICE_P)
+  // m_picture_frame.saveToBmpFile("output_P.bmp");
   return 0;
 }
 

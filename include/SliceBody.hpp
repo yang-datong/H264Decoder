@@ -34,10 +34,7 @@ class SliceBody {
   bool moreDataFlag = 1;
 
   int parseSliceData(BitStream &bitStream, PictureBase &picture);
-  int set_mb_skip_flag(int32_t &mb_skip_flag, PictureBase &picture,
-                       BitStream &bitStream);
 
   int NextMbAddress(int n);
-  int macroblock_layer(BitStream &bs, PictureBase &picture);
 };
 #endif /* end of include guard: SLICEBODY_HPP_OVHTPIZQ */
