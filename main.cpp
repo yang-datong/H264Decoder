@@ -6,6 +6,7 @@ int32_t g_PicNumCnt = 0;
 
 int main() {
   string filePath = "./source_cut_10_frames.h264";
+  //string filePath = "./source_cut_10_frames_no_B.h264";
   // std::string filePath = "./demo_10_frames.h264";
   /* 1. 用类封装h264文件的打开文件、读取NUL、存储NUL的操作 */
   AnnexBReader reader(filePath);
@@ -56,8 +57,6 @@ int main() {
       case 1: /* Slice(non-VCL) */
         /* 11-2. 解码普通帧 */
         std::cout << "Original Slice -> {" << std::endl;
-        is_need_flush = 1; // 针对IDR帧后，需要flush一次
-        // do_callback(nalu, gop, is_need_flush); // 回调操作
         Frame *newEmptyPicture;
         frame->m_current_picture_ptr
             ->end_decode_the_picture_and_get_a_new_empty_picture(
@@ -67,7 +66,7 @@ int main() {
         std::cout << " }" << std::endl;
         /* TODO YangJing number = 5 为B帧，则需要解码后一个P帧<24-08-14
          * 22:39:46> */
-        if (number == 5)
+        if (number == 7)
           exit(0);
         break;
       case 2: /* DPA(non-VCL) */

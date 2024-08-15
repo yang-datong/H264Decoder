@@ -425,6 +425,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, Nalu *nalu) {
   if (slice_type % 5 == SLICE_P || slice_type % 5 == SLICE_SP ||
       slice_type % 5 == SLICE_B) {
     num_ref_idx_active_override_flag = bitStream.readU1();
+    num_ref_idx_l0_active_minus1 = m_pps.num_ref_idx_l0_default_active_minus1;
     if (num_ref_idx_active_override_flag) {
       num_ref_idx_l0_active_minus1 = bitStream.readUE();
       if (slice_type % 5 == SLICE_B)

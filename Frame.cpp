@@ -2,6 +2,7 @@
 
 int Frame::decode(BitStream &bitStream, Frame *(&dpb)[GOP_SIZE], SPS &sps,
                   PPS &pps) {
+  static int index = 0;
 
   //----------------帧----------------------------------
   m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
@@ -11,12 +12,27 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[GOP_SIZE], SPS &sps,
   m_current_picture_ptr = &m_picture_frame;
   m_picture_frame.init(slice_header);
 
+  //----------------顶场-------------------------------
+  m_picture_top_filed.m_picture_coded_type = H264_PICTURE_CODED_TYPE_TOP_FIELD;
+  m_picture_top_filed.m_parent = this;
+
+  m_picture_top_filed.init(slice_header);
+
+  //----------------底场-------------------------------
+  m_picture_bottom_filed.m_picture_coded_type =
+      H264_PICTURE_CODED_TYPE_BOTTOM_FIELD;
+  m_picture_bottom_filed.m_parent = this;
+
+  m_picture_bottom_filed.init(slice_header);
+
   if (slice_header.field_pic_flag == 0) // 帧
     std::cout << "\t帧编码" << std::endl;
   else { // 场编码->顶场，底场
     std::cout << "\t场编码(暂不处理)" << std::endl;
     return -1;
   }
+  // if (slice_header.slice_type == SLICE_B)
+  // std::cout << "hi~" << std::endl;
 
   slice_body.slice_header = this->slice_header;
   slice_body.m_sps = sps;
@@ -24,11 +40,19 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[GOP_SIZE], SPS &sps,
   slice_body.m_idr = idr;
   slice_body.parseSliceData(bitStream, m_picture_frame);
 
-  // NOTE: 测试使用，后续删除
-  // if (slice_body.slice_header.slice_type == SLICE_I)
-  // m_picture_frame.saveToBmpFile("output_I.bmp");
-  // else if (slice_body.slice_header.slice_type == SLICE_P)
-  // m_picture_frame.saveToBmpFile("output_P.bmp");
+  // NOTE: 已经可以正常解码IPPPP的H264视频了，测试使用，后续删除
+  string output_file;
+  if (slice_body.slice_header.slice_type == SLICE_I)
+    output_file = "output_I_" + to_string(index++) + ".bmp";
+  else if (slice_body.slice_header.slice_type == SLICE_P)
+    output_file = "output_P_" + to_string(index++) + ".bmp";
+  else if (slice_body.slice_header.slice_type == SLICE_B)
+    output_file = "output_B_" + to_string(index++) + ".bmp";
+  else {
+    std::cerr << "未知帧" << std::endl;
+    exit(0);
+  }
+  m_picture_frame.saveToBmpFile(output_file.c_str());
   return 0;
 }
 

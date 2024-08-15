@@ -40,6 +40,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
       exit(0);
     }
 
+    static int ii = 0;
     //--------参考帧重排序------------
     // 只有当前帧为P帧，B帧时，才会对参考图像数列表组进行重排序
     if (slice_header.slice_type == H264_SLIECE_TYPE_P ||
@@ -48,29 +49,18 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
       picture.Decoding_process_for_reference_picture_lists_construction(
           picture.m_dpb, picture.m_RefPicList0, picture.m_RefPicList1);
 
+      /* TODO YangJing 我这里的picture.m_RefPicList0Length是1,应该是3
+       * <24-08-15 20:59:29> */
+      ii++;
+      if (slice_header.slice_type == H264_SLIECE_TYPE_P && ii > 2)
+        std::cout << "H264_SLIECE_TYPE_P" << std::endl;
       //--------------
       for (int i = 0; i < picture.m_RefPicList0Length; ++i) {
-        printf("\tm_PicNumCnt=%d(%s); PicOrderCnt=%d; m_RefPicList0[%d]: %s; "
-               "PicOrderCnt=%d; PicNum=%d; PicNumCnt=%d;\n",
-               picture.m_PicNumCnt,
-               H264_SLIECE_TYPE_TO_STR(slice_header.slice_type),
-               picture.PicOrderCnt, i,
-               (picture.m_RefPicList0[i])
-                   ? H264_SLIECE_TYPE_TO_STR(
-                         picture.m_RefPicList0[i]
-                             ->m_picture_frame.m_h264_slice_header.slice_type)
-                   : "UNKNOWN",
-               (picture.m_RefPicList0[i])
-                   ? picture.m_RefPicList0[i]->m_picture_frame.PicOrderCnt
-                   : -1,
-               (picture.m_RefPicList0[i])
-                   ? picture.m_RefPicList0[i]->m_picture_frame.PicNum
-                   : -1,
-               (picture.m_RefPicList0[i])
-                   ? picture.m_RefPicList0[i]->m_picture_frame.m_PicNumCnt
-                   : -1);
+        printf("\tm_PicNumCnt=%d(%s); PicOrderCnt=%d; m_RefPicList0[%d]: %s; PicOrderCnt=%d; PicNum=%d; PicNumCnt=%d;\n",picture.m_PicNumCnt,H264_SLIECE_TYPE_TO_STR(slice_header.slice_type),picture.PicOrderCnt, i,(picture.m_RefPicList0[i]) ? H264_SLIECE_TYPE_TO_STR( picture.m_RefPicList0[i] ->m_picture_frame.m_h264_slice_header.slice_type) : "UNKNOWN", (picture.m_RefPicList0[i]) ? picture.m_RefPicList0[i]->m_picture_frame.PicOrderCnt : -1, (picture.m_RefPicList0[i]) ? picture.m_RefPicList0[i]->m_picture_frame.PicNum : -1, (picture.m_RefPicList0[i]) ? picture.m_RefPicList0[i]->m_picture_frame.m_PicNumCnt : -1);
       }
 
+      if (slice_header.slice_type == H264_SLIECE_TYPE_P && ii > 2)
+        std::cout << "H264_SLIECE_TYPE_P" << std::endl;
       for (int i = 0; i < picture.m_RefPicList1Length; ++i) {
         printf("\tm_PicNumCnt=%d(%s); PicOrderCnt=%d; m_RefPicList1[%d]: %s; "
                "PicOrderCnt=%d; PicNum=%d; PicNumCnt=%d;\n",
@@ -92,6 +82,10 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
                    ? picture.m_RefPicList1[i]->m_picture_frame.m_PicNumCnt
                    : -1);
       }
+
+      if (slice_header.slice_type == H264_SLIECE_TYPE_P && ii > 2)
+        std::cout << "H264_SLIECE_TYPE_P" << std::endl;
+      /* TODO YangJing 问题在这里，不知道为什么跑不下去了 <24-08-15 21:30:30> */
     }
   }
 

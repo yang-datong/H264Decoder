@@ -977,6 +977,9 @@ int PictureBase::
 
   int32_t topAbsDiffPOC = 0;
   int32_t bottomAbsDiffPOC = 0;
+  // if (slice_header.slice_type == 1) {
+  // std::cout << "B" << std::endl;
+  //}
 
   if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
           H264_PICTURE_CODED_TYPE_FRAME ||
@@ -2719,7 +2722,9 @@ int PictureBase::Weighted_sample_prediction_process_2(
                      logWDL) +
                         o0L);
         } else {
-          predPartL[y * partWidth + x] = CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1, predPartL0L[y * partWidth + x] * w0L + o0L);
+          predPartL[y * partWidth + x] =
+              CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1,
+                    predPartL0L[y * partWidth + x] * w0L + o0L);
         }
       }
     }
