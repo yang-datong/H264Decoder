@@ -18,6 +18,6 @@ jobs:
     - name: make
       run: cmake --build build -j 4
     - name: test
-      run: ../build/a.out
+      run: ./build/a.out
     - name: test and gen md5
       run: ./test.sh
