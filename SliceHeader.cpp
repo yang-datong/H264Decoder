@@ -286,7 +286,7 @@ int SliceHeader::setMapUnitToSliceGroupMap() {
         mapUnitToSliceGroupMap[y * m_sps.PicWidthInMbs + x] = 0;
       }
       if (xDir == -1 && x == leftBound) {
-        leftBound = std::fmax(leftBound - 1, 0);
+        leftBound = fmax(leftBound - 1, 0);
         x = leftBound;
         xDir = 0;
         yDir = 2 * m_pps.slice_group_change_direction_flag - 1;
@@ -392,10 +392,13 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, Nalu *nalu) {
   first_mb_in_slice = bitStream.readUE();
   slice_type = bitStream.readUE() % 5;
   pic_parametter_set_id = bitStream.readUE();
+  /* TODO YangJing
+   * 这里可能存在多个sps和pps的情况，这里并没有使用到id，后续注意一下 <24-08-16
+   * 10:13:03> */
   if (m_sps.separate_colour_plane_flag == 1)
     colour_plane_id = bitStream.readUn(2);
 
-  frame_num = bitStream.readUn(std::log2(m_sps.MaxFrameNum)); // u(v)
+  frame_num = bitStream.readUn(log2(m_sps.MaxFrameNum)); // u(v)
   if (!m_sps.frame_mbs_only_flag) {
     field_pic_flag = bitStream.readU1();
     if (field_pic_flag)
@@ -524,35 +527,43 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, Nalu *nalu) {
   return 0;
 }
 
-void SliceHeader::ref_pic_list_mvc_modification(BitStream &bitStream) {}
+void SliceHeader::ref_pic_list_mvc_modification(BitStream &bitStream) {
+  /* TODO YangJing 函数未实现（好像不用实现？） <24-08-16 00:08:32> */
+}
 
 void SliceHeader::ref_pic_list_modification(BitStream &bitStream) {
-  uint32_t modification_of_pic_nums_idc;
   if (slice_type % 5 != SLICE_I && slice_type % 5 != SLICE_SI) {
     ref_pic_list_modification_flag_l0 = bitStream.readU1();
     if (ref_pic_list_modification_flag_l0) {
+      int i = 0;
       do {
-        modification_of_pic_nums_idc = bitStream.readUE();
-        if (modification_of_pic_nums_idc == 0 ||
-            modification_of_pic_nums_idc == 1)
-          uint32_t abs_diff_pic_num_minus1 = bitStream.readUE();
-        else if (modification_of_pic_nums_idc == 2)
-          uint32_t long_term_pic_num = bitStream.readUE();
-      } while (modification_of_pic_nums_idc != 3);
+        modification_of_pic_nums_idc[0][i] = bitStream.readUE();
+        if (modification_of_pic_nums_idc[0][i] == 0 ||
+            modification_of_pic_nums_idc[0][i] == 1)
+          abs_diff_pic_num_minus1[0][i] = bitStream.readUE();
+        else if (modification_of_pic_nums_idc[0][i] == 2)
+          long_term_pic_num[0][i] = bitStream.readUE();
+        i++;
+      } while (modification_of_pic_nums_idc[0][i - 1] != 3);
+      ref_pic_list_modification_count_l0 = i;
     }
   }
 
   if (slice_type % 5 == SLICE_B) {
-    bool ref_pic_list_modification_flag_l1 = bitStream.readU1();
-    if (ref_pic_list_modification_flag_l1)
+    ref_pic_list_modification_flag_l1 = bitStream.readU1();
+    if (ref_pic_list_modification_flag_l1) {
+      int i = 0;
       do {
-        modification_of_pic_nums_idc = bitStream.readUE();
-        if (modification_of_pic_nums_idc == 0 ||
-            modification_of_pic_nums_idc == 1)
-          uint32_t abs_diff_pic_num_minus1 = bitStream.readUE();
-        else if (modification_of_pic_nums_idc == 2)
-          uint32_t long_term_pic_num = bitStream.readUE();
-      } while (modification_of_pic_nums_idc != 3);
+        modification_of_pic_nums_idc[1][i] = bitStream.readUE();
+        if (modification_of_pic_nums_idc[1][i] == 0 ||
+            modification_of_pic_nums_idc[1][i] == 1)
+          abs_diff_pic_num_minus1[1][i] = bitStream.readUE();
+        else if (modification_of_pic_nums_idc[1][i] == 2)
+          long_term_pic_num[1][i] = bitStream.readUE();
+        i++;
+      } while (modification_of_pic_nums_idc[1][i - 1] != 3);
+      ref_pic_list_modification_count_l1 = i;
+    }
   }
 }
 

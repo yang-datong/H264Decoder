@@ -31,10 +31,7 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[GOP_SIZE], SPS &sps,
     std::cout << "\t场编码(暂不处理)" << std::endl;
     return -1;
   }
-  // if (slice_header.slice_type == SLICE_B)
-  // std::cout << "hi~" << std::endl;
 
-  slice_body.slice_header = this->slice_header;
   slice_body.m_sps = sps;
   slice_body.m_pps = pps;
   slice_body.m_idr = idr;
@@ -42,11 +39,11 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[GOP_SIZE], SPS &sps,
 
   // NOTE: 已经可以正常解码IPPPP的H264视频了，测试使用，后续删除
   string output_file;
-  if (slice_body.slice_header.slice_type == SLICE_I)
+  if (slice_header.slice_type == SLICE_I)
     output_file = "output_I_" + to_string(index++) + ".bmp";
-  else if (slice_body.slice_header.slice_type == SLICE_P)
+  else if (slice_header.slice_type == SLICE_P)
     output_file = "output_P_" + to_string(index++) + ".bmp";
-  else if (slice_body.slice_header.slice_type == SLICE_B)
+  else if (slice_header.slice_type == SLICE_B)
     output_file = "output_B_" + to_string(index++) + ".bmp";
   else {
     std::cerr << "未知帧" << std::endl;

@@ -288,8 +288,8 @@ $$
 The value of log2_max_frame_num_minus4 shall be in the range of 0 to
 12,inclusive.
    * */
-  MaxFrameNum = std::pow(log2_max_frame_num_minus4 + 4, 2);
-  MaxPicOrderCntLsb = std::pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
+  MaxFrameNum = pow(log2_max_frame_num_minus4 + 4, 2);
+  MaxPicOrderCntLsb = pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
 
   /* 计算预期图像顺序计数周期增量 */
   if (pic_order_cnt_type == 1) {

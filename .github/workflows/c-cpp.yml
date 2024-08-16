@@ -1,0 +1,23 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: cmake
+      run: cmake -B build
+    - name: make
+      run: cmake --build build -j 4
+    - name: test
+      run: ../build/a.out
+    - name: test and gen md5
+      run: ./test.sh

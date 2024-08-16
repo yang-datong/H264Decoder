@@ -10,7 +10,7 @@ class SliceBody {
   // Slice();
   //~Slice();
 
-  SliceHeader slice_header;
+  /* 注意这里应该是引用，因为SliceBody内部会修改slice_header内的成员 */
   SPS m_sps;
   PPS m_pps;
   IDR m_idr;
@@ -35,6 +35,6 @@ class SliceBody {
 
   int parseSliceData(BitStream &bitStream, PictureBase &picture);
 
-  int NextMbAddress(int n);
+  int NextMbAddress(int n, SliceHeader &slice_header);
 };
 #endif /* end of include guard: SLICEBODY_HPP_OVHTPIZQ */

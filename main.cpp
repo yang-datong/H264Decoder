@@ -5,9 +5,10 @@
 int32_t g_PicNumCnt = 0;
 
 int main() {
-  string filePath = "./source_cut_10_frames.h264";
-  //string filePath = "./source_cut_10_frames_no_B.h264";
-  // std::string filePath = "./demo_10_frames.h264";
+  //string filePath = "./source_cut_10_frames.h264";
+  //  string filePath = "./source_cut_10_frames_no_B.h264";
+    std::string filePath = "./demo_10_frames.h264";
+
   /* 1. 用类封装h264文件的打开文件、读取NUL、存储NUL的操作 */
   AnnexBReader reader(filePath);
   int result = reader.open();
@@ -64,10 +65,6 @@ int main() {
         frame = newEmptyPicture;
         nalu.extractSliceparameters(rbsp, *gop, *frame);
         std::cout << " }" << std::endl;
-        /* TODO YangJing number = 5 为B帧，则需要解码后一个P帧<24-08-14
-         * 22:39:46> */
-        if (number == 7)
-          exit(0);
         break;
       case 2: /* DPA(non-VCL) */
         break;
