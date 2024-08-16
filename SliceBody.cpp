@@ -1,12 +1,10 @@
 #include "SliceBody.hpp"
-#include "Nalu.hpp"
-#include "Type.hpp"
+#include "BitStream.hpp"
+#include "Frame.hpp"
+#include "PictureBase.hpp"
 
-/* Rec. ITU-T H.264 (08/2021) 56 */
-int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
-  CH264Cabac cabac;
-  SliceHeader &slice_header = picture.m_h264_slice_header;
-  /* CABAC编码 */
+int SliceBody::DecodeCABAC(CH264Cabac &cabac, BitStream &bs,
+                           SliceHeader &slice_header) {
   if (m_pps.entropy_coding_mode_flag) {
     std::cout << "\tCABAC编码（哥伦布熵编码）" << std::endl;
     while (!bs.byte_aligned())
@@ -20,6 +18,16 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
     cabac.Initialisation_process_for_the_arithmetic_decoding_engine(bs);
     // cabac初始化解码引擎
   }
+  return 0;
+}
+
+/* Rec. ITU-T H.264 (08/2021) 56 */
+int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
+  SliceHeader &slice_header = picture.m_h264_slice_header;
+
+  /* CABAC编码 */
+  CH264Cabac cabac;
+  DecodeCABAC(cabac, bs, slice_header);
 
   if (slice_header.MbaffFrameFlag == 0)
     mb_field_decoding_flag = slice_header.field_pic_flag;

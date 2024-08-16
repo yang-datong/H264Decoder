@@ -2,11 +2,21 @@
 
 
 
-if [ 11 != $(ls *.bmp | wc -l) ];then
-	echo "Output file is bad"
-	return -1
-else
-	echo "Test success!"
+main(){
+	if [ 11 != $(ls *.bmp | wc -l) ];then
+		echo "Output file is bad"
+		return -1
+	else
+		echo "Test success!"
+	fi
+}
+
+if [ ! $1 ];then
+	main	
+elif [ $1 == "--md5" ];then
+	for i in *.bmp;do
+		md5sum $i
+	done
 fi
 
 #第一次成功解码后的输出文件MD5

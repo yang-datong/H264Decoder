@@ -39,29 +39,16 @@ class Nalu {
   char nal_ref_idc = 0;
   char nal_unit_type = 0;
 
-  int extractSPSparameters(RBSP &rbsp);
-  int extractPPSparameters(RBSP &rbsp);
-  int extractSEIparameters(RBSP &rbsp);
-  int extractSliceparameters(RBSP &rbsp, GOP &gop, Frame &frame);
-  int extractIDRparameters(RBSP &rbsp, GOP &gop, Frame &frame);
+  int extractSPSparameters(RBSP &rbsp, SPS &sps);
+  int extractPPSparameters(RBSP &rbsp, PPS &pps, uint32_t chroma_format_idc);
+  int extractSEIparameters(RBSP &rbsp, SEI &sei);
+  int extractSliceparameters(BitStream &bitStream, GOP &gop, Frame &frame);
+  int extractIDRparameters(BitStream &bitStream, GOP &gop, Frame &frame);
 
   int GetNaluType();
 
  private:
   int parseNALHeader(EBSP &rbsp);
-
-  /* SPS 参数 */
-  SPS sps;
-
-  /* PPS 参数 */
-  PPS pps;
-
-  /* SEI */
-  SEI sei;
-
- public:
-  SPS getSPS() { return sps; }
-  PPS getPPS() { return pps; }
 };
 
 #endif /* end of include guard: NALU_HPP_YDI8RPRP */

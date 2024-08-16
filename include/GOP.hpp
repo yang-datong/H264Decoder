@@ -2,6 +2,7 @@
 #define GOP_HPP_PUYEPJDM
 
 #include "Common.hpp"
+#include "PPS.hpp"
 #include "SEI.hpp"
 #include "SPS.hpp"
 #include "Type.hpp"

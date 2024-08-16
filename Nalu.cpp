@@ -97,7 +97,7 @@ int Nalu::parseNALHeader(EBSP &ebsp) {
 }
 
 /* 在T-REC-H.264-202108-I!!PDF-E.pdf -43页 */
-int Nalu::extractSPSparameters(RBSP &rbsp) {
+int Nalu::extractSPSparameters(RBSP &rbsp, SPS &sps) {
   sps._buf = rbsp._buf;
   sps._len = rbsp._len;
   sps.extractParameters();
@@ -105,46 +105,49 @@ int Nalu::extractSPSparameters(RBSP &rbsp) {
 }
 
 /* 在T-REC-H.264-202108-I!!PDF-E.pdf -47页 */
-int Nalu::extractPPSparameters(RBSP &rbsp) {
+int Nalu::extractPPSparameters(RBSP &rbsp, PPS &pps,
+                               uint32_t chroma_format_idc) {
   pps._buf = rbsp._buf;
   pps._len = rbsp._len;
-  pps.sps = this->sps;
-  pps.extractParameters();
+  pps.extractParameters(chroma_format_idc);
   return 0;
 }
 
 /* 在T-REC-H.264-202108-I!!PDF-E.pdf -48页 */
-int Nalu::extractSEIparameters(RBSP &rbsp) {
+int Nalu::extractSEIparameters(RBSP &rbsp, SEI &sei) {
   sei._buf = rbsp._buf;
   sei._len = rbsp._len;
-  sei.pps = this->pps;
   sei.extractParameters();
   return 0;
 }
 
-int Nalu::extractSliceparameters(RBSP &rbsp, GOP &gop, Frame &frame) {
-  /* 初始化bit处理器，填充slice的数据 */
-  BitStream bitStream(rbsp._buf, rbsp._len);
+int Nalu::extractSliceparameters(BitStream &bitStream, GOP &gop, Frame &frame) {
   frame.slice_header.m_sps = gop.m_spss[0];
   frame.slice_header.m_pps = gop.m_ppss[0];
   // frame.slice_header.m_idr = idr;
   frame.slice_header.nal_unit_type = nal_unit_type;
   frame.slice_header.nal_ref_idc = nal_ref_idc;
   frame.slice_header.parseSliceHeader(bitStream, this);
+
+  frame.slice_body.m_sps = frame.slice_header.m_sps;
+  frame.slice_body.m_pps = frame.slice_header.m_pps;
+  // frame.slice_body.m_idr = frame.slice_header.m_idr;
   frame.decode(bitStream, gop.m_DecodedPictureBuffer, gop.m_spss[0],
                gop.m_ppss[0]);
   return 0;
 }
 
-int Nalu::extractIDRparameters(RBSP &rbsp, GOP &gop, Frame &frame) {
-  /* 初始化bit处理器，填充idr的数据 */
-  BitStream bitStream(rbsp._buf, rbsp._len);
+int Nalu::extractIDRparameters(BitStream &bitStream, GOP &gop, Frame &frame) {
   frame.slice_header.m_sps = gop.m_spss[0];
   frame.slice_header.m_pps = gop.m_ppss[0];
   // frame.slice_header.m_idr = idr;
   frame.slice_header.nal_unit_type = nal_unit_type;
   frame.slice_header.nal_ref_idc = nal_ref_idc;
   frame.slice_header.parseSliceHeader(bitStream, this);
+
+  frame.slice_body.m_sps = frame.slice_header.m_sps;
+  frame.slice_body.m_pps = frame.slice_header.m_pps;
+  // frame.slice_body.m_idr = frame.slice_header.m_idr;
   frame.decode(bitStream, gop.m_DecodedPictureBuffer, gop.m_spss[0],
                gop.m_ppss[0]);
   return 0;

@@ -1,9 +1,7 @@
 #include "PPS.hpp"
-#include "BitStream.hpp"
 #include <iostream>
-#include <ostream>
 
-int PPS::extractParameters() {
+int PPS::extractParameters(uint32_t chroma_format_idc) {
   /* 初始化bit处理器，填充pps的数据 */
   BitStream bitStream(_buf, _len);
 
@@ -67,7 +65,7 @@ int PPS::extractParameters() {
     pic_scaling_matrix_present_flag = bitStream.readU1();
     if (pic_scaling_matrix_present_flag) {
       maxPICScalingList =
-          6 + ((sps.chroma_format_idc != 3) ? 2 : 6) * transform_8x8_mode_flag;
+          6 + ((chroma_format_idc != 3) ? 2 : 6) * transform_8x8_mode_flag;
       pic_scaling_list_present_flag = new uint32_t[maxPICScalingList]{0};
       for (int i = 0; i < maxPICScalingList; i++) {
         pic_scaling_list_present_flag[i] = bitStream.readU1();

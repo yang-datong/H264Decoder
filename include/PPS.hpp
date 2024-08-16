@@ -1,21 +1,17 @@
 #ifndef PPS_CPP_F6QSULFM
 #define PPS_CPP_F6QSULFM
 
+#include "Common.hpp"
 #include "RBSP.hpp"
-#include "SPS.hpp"
 
 #define H264_MAX_PPS_COUNT 256
 // 7.4.2.2: pic_parameter_set_id shall be in the range of 0 to 255,
 // inclusive.
 class PPS : public RBSP {
  public:
-  // PPS();
-  //~PPS();
   uint8_t *_buf = nullptr;
   int _len = 0;
-  int extractParameters();
-
-  SPS sps;
+  int extractParameters(uint32_t chroma_format_idc);
 
  public:
   /* PPS 的唯一标识符 */

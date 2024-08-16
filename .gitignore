@@ -4,6 +4,8 @@
 *.bmp
 
 # CMakeFiles
+compile_commands.json
+/.cache
 /build
 /CMakeFiles
 CMakeLists.txt
