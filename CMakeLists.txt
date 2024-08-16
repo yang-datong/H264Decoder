@@ -6,7 +6,7 @@ project(project_name)
 
 # C++ version used, added compilation parameters
 set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w -g3 -O0")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g3 -O0 -Wno-unused-variable -Wno-sign-compare -Wno-restrict -Wno-class-memaccess")
 
  
 # Specify header file directory

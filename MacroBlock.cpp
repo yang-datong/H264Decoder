@@ -563,8 +563,6 @@ std::string MacroBlock::getNameOfMbTypeStr(H264_MB_TYPE name_of_mb_type) {
 int MacroBlock::fix_mb_type(const int32_t slice_type_raw,
                             const int32_t mb_type_raw,
                             int32_t &slice_type_fixed, int32_t &mb_type_fixed) {
-  int ret = 0;
-
   slice_type_fixed = slice_type_raw;
   mb_type_fixed = mb_type_raw;
 
@@ -876,7 +874,7 @@ int MacroBlock::SubMbPredModeFunc(int32_t slice_type, int32_t sub_mb_type,
 }
 
 int MacroBlock::set_mb_type_X_slice_info() {
-  int32_t mbPartIdx = 0;
+  // int32_t mbPartIdx = 0;
 
   if ((m_slice_type_fixed % 5) == H264_SLIECE_TYPE_I) {
     if (m_mb_type_fixed == 0) {
@@ -966,7 +964,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
                                  const SliceBody &slice_data,
                                  CH264Cabac &cabac) {
   int ret = 0;
-  int32_t i = 0;
+  uint32_t i = 0;
   CH264Golomb gb;
   int32_t mbPartIdx = 0;
   int32_t transform_size_8x8_flag_temp = 0;
@@ -1216,9 +1214,8 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
                                          const SliceBody &slice_data,
                                          CH264Cabac &cabac) {
   int ret = 0;
-  int32_t i = 0;
   CH264Golomb gb;
-  int32_t mbPartIdx = 0;
+  // int32_t mbPartIdx = 0;
 
   SliceHeader &slice_header = picture.m_h264_slice_header;
 
@@ -1262,7 +1259,7 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
   m_mb_type_fixed = mb_type;
 
   //-----------------------------------------------
-  int32_t noSubMbPartSizeLessThan8x8Flag = 1;
+  // int32_t noSubMbPartSizeLessThan8x8Flag = 1;
   ret = MbPartPredMode(m_slice_type_fixed, transform_size_8x8_flag,
                        m_mb_type_fixed, 0, m_NumMbPart, CodedBlockPatternChroma,
                        CodedBlockPatternLuma, Intra16x16PredMode,
@@ -1534,7 +1531,6 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
 int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
                             const SliceBody &slice_data, CH264Cabac &cabac) {
   int ret = 0;
-  int i = 0;
   CH264Golomb gb;
   int32_t mbPartIdx = 0;
   int32_t subMbPartIdx = 0;
@@ -1877,7 +1873,7 @@ int MacroBlock::residual_luma(
   int32_t i4x4 = 0;
   int32_t BlkIdx = 0;
   int32_t TotalCoeff = 0; // 该 4x4 block的残差中，总共有多少个非零系数
-  H264_MB_TYPE name_of_mb_type2 = MB_TYPE_NA;
+  // H264_MB_TYPE name_of_mb_type2 = MB_TYPE_NA;
   CH264ResidualBlockCavlc cavlc;
 
   SliceHeader &slice_header = picture.m_h264_slice_header;

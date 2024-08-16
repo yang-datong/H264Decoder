@@ -1,26 +1,6 @@
 #ifndef TYPE_HPP_TPOWA9WD
 #define TYPE_HPP_TPOWA9WD
 
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-
-// Ceil( x ) the smallest integer greater than or equal to x.
-#define CEIL(x) (int(x))
-
-#define CLIP(x, low, high)                                                     \
-  (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
-#define CLIP3(x, y, z) (((z) < (x)) ? (x) : (((z) > (y)) ? (y) : (z)))
-#define ROUND(x) ((int)((x) + 0.5))
-#define ABS(x) ((int)(((x) >= (0)) ? (x) : (-(x))))
-#define RETURN_IF_FAILED(condition, ret)                                       \
-  do {                                                                         \
-    if (condition) {                                                           \
-      printf("%s(%d): %s: Error: ret=%d;\n", __FILE__, __LINE__, __FUNCTION__, \
-             ret);                                                             \
-      return ret;                                                              \
-    }                                                                          \
-  } while (0)
-
 #include <array>
 #include <bitset>
 #include <cctype>
@@ -41,6 +21,26 @@
 #include <vector>
 
 using namespace std;
+
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
+// Ceil( x ) the smallest integer greater than or equal to x.
+#define CEIL(x) (int(x))
+
+#define CLIP(x, low, high)                                                     \
+  (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
+#define CLIP3(x, y, z) (((z) < (x)) ? (x) : (((z) > (y)) ? (y) : (z)))
+#define ROUND(x) ((int)((x) + 0.5))
+#define ABS(x) ((int)(((x) >= (0)) ? (x) : (-(x))))
+#define RETURN_IF_FAILED(condition, ret)                                       \
+  do {                                                                         \
+    if (condition) {                                                           \
+      printf("%s(%d): %s: Error: ret=%d;\n", __FILE__, __LINE__, __FUNCTION__, \
+             ret);                                                             \
+      return ret;                                                              \
+    }                                                                          \
+  } while (0)
 
 // Table 7-9 – Memory management control operation
 // (memory_management_control_operation) values

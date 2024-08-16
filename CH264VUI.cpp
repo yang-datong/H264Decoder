@@ -93,7 +93,6 @@ int CH264VUI::printInfo() {
 
 // E.1.1 VUI parameters syntax
 int CH264VUI::vui_parameters(BitStream &bs) {
-  int ret = 0;
   CH264Golomb gb;
 
   this->aspect_ratio_info_present_flag = bs.readUn(1); // 0 u(1)
@@ -133,11 +132,11 @@ int CH264VUI::vui_parameters(BitStream &bs) {
   }
   this->nal_hrd_parameters_present_flag = bs.readUn(1); // 0 u(1)
   if (this->nal_hrd_parameters_present_flag) {
-    ret = m_hrd_parameter_nal.hrd_parameters(bs);
+     m_hrd_parameter_nal.hrd_parameters(bs);
   }
   this->vcl_hrd_parameters_present_flag = bs.readUn(1); // 0 u(1)
   if (this->vcl_hrd_parameters_present_flag) {
-    ret = m_hrd_parameter_nal.hrd_parameters(bs);
+     m_hrd_parameter_nal.hrd_parameters(bs);
   }
   if (this->nal_hrd_parameters_present_flag ||
       this->vcl_hrd_parameters_present_flag) {

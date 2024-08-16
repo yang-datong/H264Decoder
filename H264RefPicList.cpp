@@ -632,11 +632,11 @@ int PictureBase::
   int32_t j = 0;
   int32_t short_refs_count = 0;
   int32_t long_refs_count = 0;
-  int32_t not_refs_count = 0;
+  //int32_t not_refs_count = 0;
 
   int32_t indexTemp_short[16] = {0};
   int32_t indexTemp_long[16] = {0};
-  int32_t indexTemp3[16] = {0};
+  //int32_t indexTemp3[16] = {0};
 
   SliceHeader &slice_header = m_h264_slice_header;
 
@@ -664,8 +664,8 @@ int PictureBase::
       indexTemp_long[long_refs_count] = i;
       long_refs_count++;
     } else {
-      indexTemp3[not_refs_count] = i;
-      not_refs_count++;
+      //indexTemp3[not_refs_count] = i;
+      //not_refs_count++;
     }
   }
 
@@ -741,7 +741,7 @@ int PictureBase::
   int32_t j = 0;
   int32_t short_refs_count = 0;
   int32_t long_refs_count = 0;
-  int32_t not_refs_count = 0;
+  //int32_t not_refs_count = 0;
   int32_t indexTemp_short[16] = {0};
   int32_t indexTemp_long[16] = {0};
 
@@ -766,7 +766,7 @@ int PictureBase::
       refFrameList0LongTerm[long_refs_count] = dpb[i];
       long_refs_count++;
     } else {
-      not_refs_count++;
+      //not_refs_count++;
     }
   }
 
@@ -1136,12 +1136,12 @@ int PictureBase::
   int32_t short_refs_count_left = 0;
   int32_t short_refs_count_right = 0;
   int32_t long_refs_count = 0;
-  int32_t not_refs_count = 0;
+  //int32_t not_refs_count = 0;
 
   int32_t indexTemp_short_left[16] = {0};
   int32_t indexTemp_short_right[16] = {0};
   int32_t indexTemp_long[16] = {0};
-  int32_t indexTemp3[16] = {0};
+  //int32_t indexTemp3[16] = {0};
 
   Frame *refFrameList0ShortTerm[16] = {NULL};
   Frame *refFrameList1ShortTerm[16] = {NULL};
@@ -1183,8 +1183,8 @@ int PictureBase::
       indexTemp_long[long_refs_count] = i;
       long_refs_count++;
     } else {
-      indexTemp3[not_refs_count] = i;
-      not_refs_count++;
+      //indexTemp3[not_refs_count] = i;
+      //not_refs_count++;
     }
   }
 

@@ -206,7 +206,7 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
   int32_t chroma4x4BlkIdx = BlkIdx;
   int32_t cb4x4BlkIdx = BlkIdx;
   int32_t cr4x4BlkIdx = BlkIdx;
-  int32_t mb_type_neighbouring_A = 0;
+  //int32_t mb_type_neighbouring_A = 0;
   int32_t mb_type_neighbouring_B = 0;
 
   MB_ADDR_TYPE mbAddrN_A_type = MB_ADDR_TYPE_UNKOWN;
@@ -300,7 +300,7 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
             luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
 
-        mb_type_neighbouring_A = I_NxN;
+        //mb_type_neighbouring_A = I_NxN;
 
         ret = picture.getMbAddrN_MBAFF_frames(
             x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_B_type, mbAddrN_B,

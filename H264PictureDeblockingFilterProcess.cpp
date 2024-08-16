@@ -153,7 +153,7 @@ int PictureBase::Deblocking_filter_process() {
     int32_t verticalEdgeFlag = 0;
     int32_t fieldModeInFrameFilteringFlag = 0;
     int32_t iCbCr = 0;
-    int32_t E[16][2] = {0};
+    int32_t E[16][2] = {{0}};
 
     // a. When filterLeftMbEdgeFlag is equal to 1, the left vertical luma edge
     // is filtered
@@ -1053,11 +1053,11 @@ int PictureBase::
     // the samples p0 and q0 are both in frame macroblocks and either or both of
     // the samples p0 or q0 is in a macroblock coded using an Intra macroblock
     // prediction mode,
-    if (m_mbs[mbAddr_p0].mb_field_decoding_flag == 0 &&
+    if ((m_mbs[mbAddr_p0].mb_field_decoding_flag == 0 &&
             m_mbs[mbAddr_q0].mb_field_decoding_flag == 0 &&
             (IS_INTRA_Prediction_Mode(m_mbs[mbAddr_p0].m_mb_pred_mode) ==
                  true ||
-             IS_INTRA_Prediction_Mode(m_mbs[mbAddr_q0].m_mb_pred_mode) == true)
+             IS_INTRA_Prediction_Mode(m_mbs[mbAddr_q0].m_mb_pred_mode) == true))
 
         // the samples p0 and q0 are both in frame macroblocks and either or
         // both of the samples p0 or q0 is in a macroblock that is in a slice
@@ -1379,10 +1379,10 @@ int PictureBase::
       // greater than or equal to 4 in units of quarter luma frame samples,
       if ((ABS(MvL0_p0_x - MvL0_q0_x) >= 4 ||
            ABS(MvL0_p0_y - MvL0_q0_y) >= mv_y_diff) ||
-          (ABS(MvL1_p0_x - MvL1_q0_x) >= 4 ||
+          ((ABS(MvL1_p0_x - MvL1_q0_x) >= 4 ||
            ABS(MvL1_p0_y - MvL1_q0_y) >= mv_y_diff)
               && (ABS(MvL0_p0_x - MvL1_q0_x) >= 4 ||
-                  ABS(MvL0_p0_y - MvL1_q0_y) >= mv_y_diff) ||
+                  ABS(MvL0_p0_y - MvL1_q0_y) >= mv_y_diff)) ||
           (ABS(MvL1_p0_x - MvL0_q0_x) >= 4 ||
            ABS(MvL1_p0_y - MvL0_q0_y) >= mv_y_diff)) {
         bS = 1;

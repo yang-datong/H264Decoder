@@ -625,8 +625,8 @@ void SliceHeader::pred_weight_table(BitStream &bitStream) {
 
 void SliceHeader::dec_ref_pic_marking(BitStream &bitStream) {
   if (IdrPicFlag) {
-    bool no_output_of_prior_pics_flag = bitStream.readU1();
-    bool long_term_reference_flag = bitStream.readU1();
+    no_output_of_prior_pics_flag = bitStream.readU1();
+    long_term_reference_flag = bitStream.readU1();
   } else {
     bool adaptive_ref_pic_marking_mode_flag = bitStream.readU1();
 

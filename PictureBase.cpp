@@ -11,13 +11,10 @@ PictureBase::PictureBase() {
   m_pic_buff_cr = NULL;
   m_is_malloc_mem_by_myself = 0;
 
-  int ret = reset();
+  reset();
 }
 
-PictureBase::~PictureBase() {
-  int ret = 0;
-  ret = unInit();
-}
+PictureBase::~PictureBase() { unInit(); }
 
 int PictureBase::printInfo() {
   printf("---------Picture info------------\n");
@@ -103,8 +100,6 @@ int PictureBase::reset() {
 }
 
 int PictureBase::init(SliceHeader &slice_header) {
-  int ret = 0;
-
   m_h264_slice_header = slice_header;
 
   MbWidthL = MB_WIDTH;   // 16
@@ -214,8 +209,6 @@ int PictureBase::init(SliceHeader &slice_header) {
 }
 
 int PictureBase::unInit() {
-  int ret = 0;
-
   if (m_is_malloc_mem_by_myself == 1) {
     SAFE_FREE(m_mbs);
     SAFE_FREE(m_pic_buff_luma);
@@ -232,12 +225,10 @@ int PictureBase::unInit() {
 }
 
 PictureBase &PictureBase::operator=(const PictureBase &src) {
-  int ret = 0;
   bool isMallocAndCopyData = false;
 
-  ret = copyData(
-      src,
-      isMallocAndCopyData); // 重载的等号运算符，默认不拷贝YUV数据，主要是为了RefPicListX[]排序时，只操作YUV数据的内存指针
+  copyData(src, isMallocAndCopyData);
+  // 重载的等号运算符，默认不拷贝YUV数据，主要是为了RefPicListX[]排序时，只操作YUV数据的内存指针
 
   return *this;
 }
@@ -527,8 +518,8 @@ int PictureBase::saveBmp(const char *filename, MY_BITMAP *pBitmap) {
 
   MY_BitmapFileHeader bmpFileHeader;
   MY_BitmapInfoHeader bmpInfoHeader;
-  unsigned char pixVal = '\0';
-  MY_RgbQuad quad[256] = {0};
+  // unsigned char pixVal = '\0';
+  MY_RgbQuad quad[256] = {{0}};
 
   FILE *fp = fopen(filename, "wb");
   if (!fp) {
@@ -562,7 +553,7 @@ int PictureBase::saveBmp(const char *filename, MY_BITMAP *pBitmap) {
     bmpInfoHeader.biClrImportant = 0;
     fwrite(&bmpInfoHeader, sizeof(MY_BitmapInfoHeader), 1, fp);
 
-    int channels = pBitmap->bmBitsPixel / 8;
+    // int channels = pBitmap->bmBitsPixel / 8;
     unsigned char *pBits = (unsigned char *)(pBitmap->bmBits);
 
     for (int i = pBitmap->bmHeight - 1; i > -1; i--) {
@@ -600,7 +591,7 @@ int PictureBase::saveBmp(const char *filename, MY_BITMAP *pBitmap) {
 
     fwrite(quad, sizeof(MY_RgbQuad), 256, fp);
 
-    int channels = pBitmap->bmBitsPixel / 8;
+    // int channels = pBitmap->bmBitsPixel / 8;
     unsigned char *pBits = (unsigned char *)(pBitmap->bmBits);
 
     for (int i = pBitmap->bmHeight - 1; i > -1; i--) {
@@ -2117,8 +2108,8 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
 
   SliceHeader &slice_header = m_h264_slice_header;
 
-  int32_t SubWidthC = slice_header.m_sps.SubWidthC;
-  int32_t SubHeightC = slice_header.m_sps.SubHeightC;
+  // int32_t SubWidthC = slice_header.m_sps.SubWidthC;
+  // int32_t SubHeightC = slice_header.m_sps.SubHeightC;
 
   // The neighbouring samples p[ x, y ] that are constructed chroma samples
   // prior to the deblocking filter process, with x = −1,y = −1..MbHeightC − 1
@@ -2563,7 +2554,6 @@ int PictureBase::Sample_construction_process_for_I_PCM_macroblocks() {
 int PictureBase::Inverse_macroblock_scanning_process(
     int32_t MbaffFrameFlag, int32_t mbAddr, int32_t mb_field_decoding_flag,
     int32_t &x, int32_t &y) {
-  int ret = 0;
 
   if (MbaffFrameFlag == 0) {
     x = InverseRasterScan(mbAddr, 16, 16, PicWidthInSamplesL, 0);
@@ -2592,7 +2582,6 @@ int PictureBase::Inverse_macroblock_scanning_process(
 int PictureBase::Inverse_sub_macroblock_partition_scanning_process(
     H264_MB_TYPE m_name_of_mb_type, int32_t mbPartIdx, int32_t subMbPartIdx,
     int32_t &x, int32_t &y) {
-  int ret = 0;
 
   if (m_name_of_mb_type == P_8x8 || m_name_of_mb_type == P_8x8ref0 ||
       m_name_of_mb_type == B_8x8) // FIXME:
@@ -2949,7 +2938,6 @@ int PictureBase::getMbAddrN_non_MBAFF_frames(
     int32_t xN, int32_t yN, int32_t maxW, int32_t maxH, int32_t CurrMbAddr,
     MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN, int32_t &_4x4BlkIdxN,
     int32_t &_8x8BlkIdxN, int32_t &xW, int32_t &yW, int32_t isChroma) {
-  int ret = 0;
 
   mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
   mbAddrN = -1;
@@ -3039,12 +3027,11 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
                                          int32_t &mbAddrN, int32_t &_4x4BlkIdxN,
                                          int32_t &_8x8BlkIdxN, int32_t &xW,
                                          int32_t &yW, int32_t isChroma) {
-  int ret = 0;
   int32_t currMbFrameFlag = 0;
   int32_t mbIsTopMbFlag = 0;
   int32_t mbAddrXFrameFlag = 0;
   int32_t yM = 0;
-  MB_ADDR_TYPE mbAddrX_type = MB_ADDR_TYPE_UNKOWN;
+  // MB_ADDR_TYPE mbAddrX_type = MB_ADDR_TYPE_UNKOWN;
   int32_t mbAddrX = -1;
 
   mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
@@ -3106,14 +3093,14 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
   if (xN < 0 && yN < 0) {
     if (currMbFrameFlag == 1) {
       if (mbIsTopMbFlag == 1) {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrD;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrD;
         mbAddrX = mbAddrD;
         mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1;
         mbAddrN = mbAddrD + 1;
         yM = yN;
       } else // if (mbIsTopMbFlag == 0)
       {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) // marked as available
         {
@@ -3134,7 +3121,7 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
     } else // if (currMbFrameFlag == 0)
     {
       if (mbIsTopMbFlag == 1) {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrD;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrD;
         mbAddrX = mbAddrD;
         if (mbAddrX >= 0) // marked as available
         {
@@ -3153,7 +3140,7 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
         }
       } else // if (mbIsTopMbFlag == 0)
       {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrD;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrD;
         mbAddrX = mbAddrD;
         mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1;
         mbAddrN = mbAddrD + 1;
@@ -3163,7 +3150,7 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
   } else if (xN < 0 && (yN >= 0 && yN <= maxH - 1)) {
     if (currMbFrameFlag == 1) {
       if (mbIsTopMbFlag == 1) {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) // marked as available
         {
@@ -3189,7 +3176,7 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
         }
       } else // if (mbIsTopMbFlag == 0)
       {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) // marked as available
         {
@@ -3217,7 +3204,7 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
     } else // if (currMbFrameFlag == 0)
     {
       if (mbIsTopMbFlag == 1) {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) // marked as available
         {
@@ -3243,7 +3230,7 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
         }
       } else // if (mbIsTopMbFlag == 0)
       {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) // marked as available
         {
@@ -3272,14 +3259,14 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
   } else if ((xN >= 0 && xN <= maxW - 1) && yN < 0) {
     if (currMbFrameFlag == 1) {
       if (mbIsTopMbFlag == 1) {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrB;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrB;
         mbAddrX = mbAddrB;
         mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1;
         mbAddrN = mbAddrB + 1;
         yM = yN;
       } else // if (mbIsTopMbFlag == 0)
       {
-        mbAddrX_type = MB_ADDR_TYPE_CurrMbAddr;
+        // mbAddrX_type = MB_ADDR_TYPE_CurrMbAddr;
         mbAddrX = CurrMbAddr;
         mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr_minus_1;
         mbAddrN = CurrMbAddr - 1;
@@ -3288,7 +3275,7 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
     } else // if (currMbFrameFlag == 0)
     {
       if (mbIsTopMbFlag == 1) {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrB;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrB;
         mbAddrX = mbAddrB;
         if (mbAddrX >= 0) // marked as available
         {
@@ -3307,7 +3294,7 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
         }
       } else // if (mbIsTopMbFlag == 0)
       {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrB;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrB;
         mbAddrX = mbAddrB;
         mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1;
         mbAddrN = mbAddrB + 1;
@@ -3315,7 +3302,7 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
       }
     }
   } else if ((xN >= 0 && xN <= maxW - 1) && (yN >= 0 && yN <= maxH - 1)) {
-    mbAddrX_type = MB_ADDR_TYPE_CurrMbAddr;
+    // mbAddrX_type = MB_ADDR_TYPE_CurrMbAddr;
     mbAddrX = CurrMbAddr;
     mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr;
     mbAddrN = CurrMbAddr;
@@ -3323,14 +3310,14 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
   } else if (xN > maxW - 1 && yN < 0) {
     if (currMbFrameFlag == 1) {
       if (mbIsTopMbFlag == 1) {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrC;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrC;
         mbAddrX = mbAddrC;
         mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1;
         mbAddrN = mbAddrC + 1;
         yM = yN;
       } else // if (mbIsTopMbFlag == 0)
       {
-        mbAddrX_type = MB_ADDR_TYPE_UNKOWN;
+        // mbAddrX_type = MB_ADDR_TYPE_UNKOWN;
         mbAddrX = -2;
         mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
         mbAddrN = -2;
@@ -3339,7 +3326,7 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
     } else // if (currMbFrameFlag == 0)
     {
       if (mbIsTopMbFlag == 1) {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrC;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrC;
         mbAddrX = mbAddrC;
         if (mbAddrX >= 0) // marked as available
         {
@@ -3358,7 +3345,7 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
         }
       } else // if (mbIsTopMbFlag == 0)
       {
-        mbAddrX_type = MB_ADDR_TYPE_mbAddrC;
+        // mbAddrX_type = MB_ADDR_TYPE_mbAddrC;
         mbAddrX = mbAddrC;
         mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1;
         mbAddrN = mbAddrC + 1;
@@ -3422,8 +3409,8 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks(
       // 8.5.6 Inverse scanning process for 4x4 transform coefficients and
       // scaling lists
 
-      int32_t c[4][4] = {0};
-      int32_t r[4][4] = {0};
+      int32_t c[4][4] = {{0}};
+      int32_t r[4][4] = {{0}};
 
       ret =
           Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
@@ -3445,7 +3432,7 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks(
         int32_t nH = 4;
         int32_t horPredFlag = m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx];
 
-        int32_t f[4][4] = {0};
+        int32_t f[4][4] = {{0}};
         for (int32_t i = 0; i <= nH - 1; i++) {
           for (int32_t j = 0; j <= nW - 1; j++) {
             f[i][j] = r[i][j];
@@ -3529,8 +3516,8 @@ int PictureBase::
 
   // The 4x4 luma DC transform coefficients of all 4x4 luma blocks of the
   // macroblock are decoded.
-  int32_t c2[4][4] = {0};
-  int32_t dcY[4][4] = {0};
+  int32_t c2[4][4] = {{0}};
+  int32_t dcY[4][4] = {{0}};
 
   ret =
       Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
@@ -3551,7 +3538,7 @@ int PictureBase::
       dcY[2][2], dcY[2][3], dcY[3][2], dcY[3][3],
   };
 
-  int32_t rMb[16][16] = {0};
+  int32_t rMb[16][16] = {{0}};
 
   int32_t isMbAff = (m_h264_slice_header.MbaffFrameFlag == 1 &&
                      m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
@@ -3571,8 +3558,8 @@ int PictureBase::
 
     // 8.5.6 Inverse scanning process for 4x4 transform coefficients and scaling
     // lists
-    int32_t c[4][4] = {0};
-    int32_t r[4][4] = {0};
+    int32_t c[4][4] = {{0}};
+    int32_t r[4][4] = {{0}};
     ret =
         Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
             lumaList, c,
@@ -3688,8 +3675,8 @@ int PictureBase::transform_decoding_process_for_8x8_luma_residual_blocks(
   for (int32_t luma8x8BlkIdx = 0; luma8x8BlkIdx <= 3;
        luma8x8BlkIdx++) // or cb8x8BlkIdx or cr8x8BlkIdx
   {
-    int32_t c[8][8] = {0};
-    int32_t r[8][8] = {0};
+    int32_t c[8][8] = {{0}};
+    int32_t r[8][8] = {{0}};
 
     ret =
         Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
@@ -3801,13 +3788,13 @@ int PictureBase::transform_decoding_process_for_chroma_samples(
   } else // if (slice_header.m_sps.ChromaArrayType != 3)
   {
     int32_t iCbCr = (isChromaCb == 1) ? 0 : 1;
-    int32_t dcC[4][2] = {0};
+    int32_t dcC[4][2] = {{0}};
 
     int32_t numChroma4x4Blks = (MbWidthC / 4) * (MbHeightC / 4);
 
     if (slice_header.m_sps.ChromaArrayType == 1) // YUV420
     {
-      int32_t c[2][2] = {0};
+      int32_t c[2][2] = {{0}};
       c[0][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][0];
       c[0][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][1];
       c[1][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][2];
@@ -3819,7 +3806,7 @@ int PictureBase::transform_decoding_process_for_chroma_samples(
       RETURN_IF_FAILED(ret != 0, ret);
     } else if (slice_header.m_sps.ChromaArrayType == 2) // YUV422
     {
-      int32_t c[4][2] = {0};
+      int32_t c[4][2] = {{0}};
       c[0][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][0];
       c[0][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][1];
       c[1][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][2];
@@ -3842,8 +3829,8 @@ int PictureBase::transform_decoding_process_for_chroma_samples(
         dcC[2][0], dcC[2][1], dcC[3][0], dcC[3][1],
     };
 
-    int32_t rMb[16][16] = {
-        0}; // 本应该是rMb[MbHeightC][MbWidthC], 此处按最大的16x16尺寸来申请数组
+    int32_t rMb[16][16] = {{0}};
+    // 本应该是rMb[MbHeightC][MbWidthC], 此处按最大的16x16尺寸来申请数组
 
     int32_t isMbAff = (m_h264_slice_header.MbaffFrameFlag == 1 &&
                        m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
@@ -3863,8 +3850,8 @@ int PictureBase::transform_decoding_process_for_chroma_samples(
       }
 
       //-----------------
-      int32_t c[4][4] = {0};
-      int32_t r[4][4] = {0};
+      int32_t c[4][4] = {{0}};
+      int32_t r[4][4] = {{0}};
 
       ret =
           Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
@@ -3893,15 +3880,15 @@ int PictureBase::transform_decoding_process_for_chroma_samples(
     if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1 &&
         (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_4x4 ||
          m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_8x8 ||
-         (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_16x16 &&
-              m_mbs[CurrMbAddr].intra_chroma_pred_mode == 1 ||
+         ((m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_16x16 &&
+           m_mbs[CurrMbAddr].intra_chroma_pred_mode == 1) ||
           m_mbs[CurrMbAddr].intra_chroma_pred_mode == 2))) {
       // 8.5.15 Intra residual transform-bypass decoding process
       int32_t nW = MbWidthC;
       int32_t nH = MbHeightC;
       int32_t horPredFlag = 2 - m_mbs[CurrMbAddr].intra_chroma_pred_mode;
 
-      int32_t f[16][16] = {0};
+      int32_t f[16][16] = {{0}};
       for (int32_t i = 0; i <= nH - 1; i++) {
         for (int32_t j = 0; j <= nW - 1; j++) {
           f[i][j] = rMb[i][j];
@@ -4029,13 +4016,13 @@ int PictureBase::
         int32_t isChromaCb, int32_t c[4][2], int32_t nW, int32_t nH,
         int32_t (&dcC)[4][2]) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  // SliceHeader &slice_header = m_h264_slice_header;
 
   // 8.5.8 Derivation process for chroma quantisation parameters
   ret = get_chroma_quantisation_parameters(isChromaCb);
   RETURN_IF_FAILED(ret != 0, ret);
 
-  int32_t bitDepth = slice_header.m_sps.BitDepthC;
+  // int32_t bitDepth = slice_header.m_sps.BitDepthC;
   int32_t qP =
       (isChromaCb == 1) ? m_mbs[CurrMbAddr].QP1Cb : m_mbs[CurrMbAddr].QP1Cr;
 
@@ -4059,7 +4046,7 @@ int PictureBase::
       //            | 1 -1 |   | c10 c11 |   | 1 -1 |   | c00 - c10    c01 - c11
       //            |   | 1 -1 |
 
-      int32_t f[2][2] = {0};
+      int32_t f[2][2] = {{0}};
 
       int32_t e00 = c[0][0] + c[1][0];
       int32_t e01 = c[0][1] + c[1][1];
@@ -4095,7 +4082,7 @@ int PictureBase::
       //            | c30 c31 |              | c00 - c10 + c20 - c30    c01 -
       //            c11 + c21 - c31 |
 
-      int32_t f[4][2] = {0};
+      int32_t f[4][2] = {{0}};
 
       int32_t e00 = c[0][0] + c[1][0] + c[2][0] + c[3][0];
       int32_t e01 = c[0][1] + c[1][1] + c[2][1] + c[3][1];
@@ -4150,15 +4137,15 @@ int PictureBase::
 int PictureBase::Scaling_and_transformation_process_for_residual_4x4_blocks(
     int32_t c[4][4], int32_t (&r)[4][4], int32_t isChroma, int32_t isChromaCb) {
   int ret = 0;
-  int32_t bitDepth = 0;
+  // int32_t bitDepth = 0;
 
   SliceHeader &slice_header = m_h264_slice_header;
 
-  if (isChroma == 0) {
-    bitDepth = slice_header.m_sps.BitDepthY;
-  } else if (isChroma == 1) {
-    bitDepth = slice_header.m_sps.BitDepthC;
-  }
+  // if (isChroma == 0) {
+  // bitDepth = slice_header.m_sps.BitDepthY;
+  //} else if (isChroma == 1) {
+  // bitDepth = slice_header.m_sps.BitDepthC;
+  //}
 
   int32_t sMbFlag = 0;
 
@@ -4207,7 +4194,7 @@ int PictureBase::Scaling_and_transformation_process_for_residual_4x4_blocks(
     }
   } else {
     // 8.5.12.1 Scaling process for residual 4x4 blocks
-    int32_t d[4][4] = {0};
+    int32_t d[4][4] = {{0}};
 
     for (int32_t i = 0; i <= 3; i++) {
       for (int32_t j = 0; j <= 3; j++) {
@@ -4244,8 +4231,8 @@ int PictureBase::Scaling_and_transformation_process_for_residual_4x4_blocks(
     // 8.5.12.2 Transformation process for residual 4x4 blocks
     // 类似4x4 IDC离散余弦反变换蝶形运算
 
-    int32_t f[4][4] = {0};
-    int32_t h[4][4] = {0};
+    int32_t f[4][4] = {{0}};
+    int32_t h[4][4] = {{0}};
 
     for (int32_t i = 0; i <= 3; i++) // 先行变换
     {
@@ -4287,19 +4274,19 @@ int PictureBase::Scaling_and_transformation_process_for_residual_4x4_blocks(
 // 8.5.13 Scaling and transformation process for residual 8x8 blocks
 int PictureBase::Scaling_and_transformation_process_for_residual_8x8_blocks(
     int32_t c[8][8], int32_t (&r)[8][8], int32_t isChroma, int32_t isChromaCb) {
-  SliceHeader &slice_header = m_h264_slice_header;
+  // SliceHeader &slice_header = m_h264_slice_header;
 
-  int32_t bitDepth = 0;
+  // int32_t bitDepth = 0;
   int32_t qP = 0;
 
   if (isChroma == 0) // If the input array c relates to a luma residual block
   {
-    bitDepth = slice_header.m_sps.BitDepthY;
+    // bitDepth = slice_header.m_sps.BitDepthY;
     qP = m_mbs[CurrMbAddr].QP1Y;
   } else // if (isChroma == 1) //the input array c relates to a chroma residual
          // block
   {
-    bitDepth = slice_header.m_sps.BitDepthC;
+    // bitDepth = slice_header.m_sps.BitDepthC;
     if (isChromaCb == 1) {
       qP = m_mbs[CurrMbAddr].QP1Cb;
     } else if (isChromaCb == 0) {
@@ -4316,7 +4303,7 @@ int PictureBase::Scaling_and_transformation_process_for_residual_8x8_blocks(
     }
   } else {
     // 8.5.13.1 Scaling process for residual 8x8 blocks
-    int32_t d[8][8] = {0};
+    int32_t d[8][8] = {{0}};
 
     for (int32_t i = 0; i <= 7; i++) {
       for (int32_t j = 0; j <= 7; j++) {
@@ -4786,8 +4773,8 @@ int PictureBase::get_chroma_quantisation_parameters(int32_t isChromaCb) {
   if (qPI < 30) {
     QPC = qPI;
   } else {
-    int32_t qPIs[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-                      41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
+    // int32_t qPIs[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    // 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
     int32_t QPCs[] = {29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36,
                       36, 37, 37, 37, 38, 38, 38, 39, 39, 39, 39};
 
@@ -4851,8 +4838,8 @@ int PictureBase::get_chroma_quantisation_parameters2(int32_t QPY,
   if (qPI < 30) {
     QPC = qPI;
   } else {
-    int32_t qPIs[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-                      41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
+    // int32_t qPIs[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    // 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
     int32_t QPCs[] = {29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36,
                       36, 37, 37, 37, 38, 38, 38, 39, 39, 39, 39};
 
@@ -4903,7 +4890,7 @@ int PictureBase::scaling_functions(int32_t isChroma, int32_t isChromaCb) {
   // ( (mbIsInterFlag = = 1 ) ? 3 : 0 )] as the input and the output is assigned
   // to the 4x4 matrix weightScale4x4.
 
-  int32_t weightScale4x4[4][4] = {0};
+  int32_t weightScale4x4[4][4] = {{0}};
 
   ret =
       Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
@@ -4941,7 +4928,7 @@ int PictureBase::scaling_functions(int32_t isChroma, int32_t isChromaCb) {
   // iYCbCr + mbIsInterFlag ] as the input and the output is assigned to the 8x8
   // matrix weightScale8x8.
 
-  int32_t weightScale8x8[8][8] = {0};
+  int32_t weightScale8x8[8][8] = {{0}};
 
   ret =
       Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
@@ -4987,8 +4974,8 @@ int PictureBase::scaling_functions(int32_t isChroma, int32_t isChromaCb) {
 int PictureBase::
     Scaling_and_transformation_process_for_DC_transform_coefficients_for_Intra_16x16_macroblock_type(
         int32_t bitDepth, int32_t qP, int32_t c[4][4], int32_t (&dcY)[4][4]) {
-  int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  // int ret = 0;
+  // SliceHeader &slice_header = m_h264_slice_header;
 
   if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1) {
     for (int32_t i = 0; i <= 3; i++) {

@@ -340,8 +340,8 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
     if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1 &&
         (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_4x4 ||
          m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_8x8 ||
-         (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_16x16 &&
-              m_mbs[CurrMbAddr].intra_chroma_pred_mode == 1 ||
+         ((m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_16x16 &&
+              m_mbs[CurrMbAddr].intra_chroma_pred_mode == 1) ||
           m_mbs[CurrMbAddr].intra_chroma_pred_mode == 2))) {
       // 8.5.15 Intra residual transform-bypass decoding process
       int32_t nW = MbWidthC;
@@ -416,7 +416,7 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
 // This process is invoked when decoding P and B macroblock types.
 int PictureBase::Inter_prediction_process() {
   int ret = 0;
-  int32_t MvCnt = 0;
+  //int32_t MvCnt = 0;
 
   SliceHeader &slice_header = m_h264_slice_header;
 
@@ -519,7 +519,7 @@ int PictureBase::Inter_prediction_process() {
       RETURN_IF_FAILED(ret != 0, ret);
 
       // 2. The variable MvCnt is incremented by subMvCnt.
-      MvCnt += subMvCnt;
+      //MvCnt += subMvCnt;
 
       // 3. When (weighted_pred_flag is equal to 1 and (slice_type % 5) is equal
       // to 0 or 3) or (weighted_bipred_idc is greater than 0 and (slice_type %
@@ -1109,7 +1109,7 @@ int PictureBase::
                  InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
 
   //-----------------
-  int32_t fieldDecodingFlagX = 0;
+  //int32_t fieldDecodingFlagX = 0;
   mbAddrCol = CurrMbAddr;
   int32_t yM = 0;
   vertMvScale = H264_VERT_MV_SCALE_UNKNOWN;
@@ -1133,7 +1133,7 @@ int PictureBase::
           0) // Otherwise (the macroblock mbAddrX in the picture colPic is a
              // frame macroblock), fieldDecodingFlagX is set equal to 0.
       {
-        fieldDecodingFlagX = 0;
+        //fieldDecodingFlagX = 0;
         int32_t mbAddrCol2 = 2 * CurrMbAddr + (yCol / 8);
         mbAddrCol = mbAddrCol2;
         yM = (2 * yCol) % 16;
@@ -1142,7 +1142,7 @@ int PictureBase::
              // macroblock mbAddrX in the picture colPic is a field macroblock,
              // fieldDecodingFlagX is set equal to 1.
       {
-        fieldDecodingFlagX = 1;
+        //fieldDecodingFlagX = 1;
         int32_t mbAddrCol3 =
             2 * CurrMbAddr + this->m_mbs[CurrMbAddr].bottom_field_flag;
         mbAddrCol = mbAddrCol3;
@@ -1182,7 +1182,7 @@ int PictureBase::
             0) // Otherwise (the macroblock mbAddrX in the picture colPic is a
                // frame macroblock), fieldDecodingFlagX is set equal to 0.
         {
-          fieldDecodingFlagX = 0;
+          //fieldDecodingFlagX = 0;
           mbAddrCol = CurrMbAddr;
           yM = yCol;
           vertMvScale = H264_VERT_MV_SCALE_One_To_One;
@@ -1190,7 +1190,7 @@ int PictureBase::
                // the macroblock mbAddrX in the picture colPic is a field
                // macroblock, fieldDecodingFlagX is set equal to 1.
         {
-          fieldDecodingFlagX = 1;
+          //fieldDecodingFlagX = 1;
           int32_t mbAddrCol6 = 2 * (CurrMbAddr / 2) +
                                ((topAbsDiffPOC < bottomAbsDiffPOC) ? 0 : 1);
           mbAddrCol = mbAddrCol6;
@@ -1203,7 +1203,7 @@ int PictureBase::
             0) // Otherwise (the macroblock mbAddrX in the picture colPic is a
                // frame macroblock), fieldDecodingFlagX is set equal to 0.
         {
-          fieldDecodingFlagX = 0;
+          //fieldDecodingFlagX = 0;
           int32_t mbAddrCol7 = 2 * (CurrMbAddr / 2) + (yCol / 8);
           mbAddrCol = mbAddrCol7;
           yM = (2 * yCol) % 16;
@@ -1212,7 +1212,7 @@ int PictureBase::
                // the macroblock mbAddrX in the picture colPic is a field
                // macroblock, fieldDecodingFlagX is set equal to 1.
         {
-          fieldDecodingFlagX = 1;
+          //fieldDecodingFlagX = 1;
           mbAddrCol = CurrMbAddr;
           yM = yCol;
           vertMvScale = H264_VERT_MV_SCALE_One_To_One;

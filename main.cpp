@@ -54,7 +54,7 @@ int main() {
       // nalu.parseSODB(rbsp, SODB);
 
       /* 见T-REC-H.264-202108-I!!PDF-E.pdf 87页 */
-      int is_need_flush = 0;
+      //int is_need_flush = 0;
       switch (nalu.nal_unit_type) {
       case 1: /* Slice(non-VCL) */
         /* 11-2. 解码普通帧 */

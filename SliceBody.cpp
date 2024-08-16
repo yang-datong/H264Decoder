@@ -104,7 +104,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
   picture.m_slice_cnt++;
 
   //-------------------------------
-  bool is_need_skip_read_mb_field_decoding_flag = false;
+  //bool is_need_skip_read_mb_field_decoding_flag = false;
 
   do {
     if (slice_header.slice_type != SLICE_I &&
@@ -173,7 +173,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
                     mb_field_decoding_flag); // 2 u(1) | ae(v)
                                              // 再读取底场宏块的mb_field_decoding_flag
 
-                is_need_skip_read_mb_field_decoding_flag = true;
+                //is_need_skip_read_mb_field_decoding_flag = true;
               } else // if (mb_skip_flag_next_mb == 1)
               {
                 // When MbaffFrameFlag is equal to 1 and mb_field_decoding_flag
