@@ -1,10 +1,5 @@
-#include "./BitStream.hpp"
+#include "BitStream.hpp"
 #include <cstdint>
-
-BitStream::BitStream(uint8_t *buf, int size)
-    : _size(size), _p(buf), _endBuf(&buf[_size - 1]) {}
-
-BitStream::~BitStream() {}
 
 bool BitStream::readU1() {
   _bitsLeft--;
@@ -19,9 +14,8 @@ bool BitStream::readU1() {
 
 uint32_t BitStream::readUn(uint32_t num) {
   uint32_t n = 0;
-  for (int i = 0; i < (int)num; i++) {
+  for (int i = 0; i < (int)num; i++)
     n = (n << 1) | readU1();
-  }
   return n;
 }
 
@@ -81,25 +75,20 @@ bool BitStream::more_rbsp_data() {
     p1--;
   }
 
-  if (p1 > getP()) {
+  if (p1 > getP())
     return 1; // 说明当前位置m_p后面还有码流数据
-  } else {
-    int flag = 0;
-    int i = 0;
-    for (i = 0; i < 8; i++){
+  else {
+    int flag = 0, i = 0;
     // 在单个字节的8个比特位中，从后往前找，找到rbsp_stop_one_bit位置
-      int v = ((*(getP())) >> i) & 0x01;
-      if (v == 1) {
-        i++;
+    for (i = 0; i < 8; i++) {
+      if ((((*(getP())) >> i) & 0x01) == 1) {
         flag = 1;
         break;
       }
     }
 
-    if (flag == 1 && i < getBitsLeft())
+    if (flag == 1 && (i + 1) < getBitsLeft())
       return 1;
-    else
-      return 0;
   }
 
   return 0;

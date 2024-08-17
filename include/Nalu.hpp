@@ -2,11 +2,9 @@
 #define NALU_HPP_YDI8RPRP
 
 #include "Common.hpp"
-#include "EBSP.hpp"
 #include "Frame.hpp"
 #include "GOP.hpp"
 #include "PPS.hpp"
-#include "RBSP.hpp"
 #include "SEI.hpp"
 #include "SPS.hpp"
 #include <cstdint>
@@ -30,6 +28,21 @@ class Nalu {
 
   int setBuffer(uint8_t *buf, int len);
   // 用于给外界传输buf进来
+ public:
+  class EBSP {
+   public:
+    EBSP();
+    ~EBSP();
+    uint8_t *_buf = nullptr;
+    int _len = 0;
+  };
+  class RBSP {
+   public:
+    RBSP();
+    ~RBSP();
+    uint8_t *_buf = nullptr;
+    int _len = 0;
+  };
 
  public:
   int parseEBSP(EBSP &ebsp);
@@ -41,7 +54,7 @@ class Nalu {
 
   int extractSPSparameters(RBSP &rbsp, SPS &sps);
   int extractPPSparameters(RBSP &rbsp, PPS &pps, uint32_t chroma_format_idc);
-  int extractSEIparameters(RBSP &rbsp, SEI &sei);
+  int extractSEIparameters(RBSP &rbsp, SEI &sei, SPS &sps);
   int extractSliceparameters(BitStream &bitStream, GOP &gop, Frame &frame);
   int extractIDRparameters(BitStream &bitStream, GOP &gop, Frame &frame);
 

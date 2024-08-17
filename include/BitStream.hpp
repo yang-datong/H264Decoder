@@ -9,8 +9,8 @@
 
 class BitStream {
  public:
-  BitStream(uint8_t *buf, int size);
-  ~BitStream();
+  BitStream(uint8_t *buf, int size)
+      : _size(size), _p(buf), _endBuf(&buf[_size - 1]) {}
 
   /* 读取1 bit */
   bool readU1();

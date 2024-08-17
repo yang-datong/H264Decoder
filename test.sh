@@ -28,6 +28,7 @@ main(){
 		for key in "${!ALL_MD5[@]}"; do
 			if [ "$current_md5" == "${ALL_MD5[$key]}" ];then
 				((count++))
+				echo $current_md5 [yes]
 				break;
 			fi
 		done

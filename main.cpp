@@ -5,31 +5,36 @@
 int32_t g_PicNumCnt = 0;
 
 int main() {
+  /* 关闭io输出同步 */
+  // std::ios::sync_with_stdio(false);
   // string filePath = "./source_cut_10_frames.h264";
-  //   string filePath = "./source_cut_10_frames_no_B.h264";
+  // string filePath = "./source_cut_10_frames_no_B.h264";
   string filePath = "./demo_10_frames.h264";
 
   /* 1. 打开文件、读取NUL、存储NUL的操作 */
   AnnexBReader reader(filePath);
   int result = reader.open();
-  if (result)
+  if (result) {
+    cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+         << endl;
     return -1;
+  }
 
   /* 2. 创建一个GOP用于存放解码后的I、P、B帧序列 */
   GOP *gop = new GOP();
   Frame *frame = gop->m_DecodedPictureBuffer[0];
 
-  /* 3. 一个NUL类，用于存储NUL数据，它与NUL具有同样的数据结构 */
-  Nalu nalu;
-  EBSP ebsp;
-  RBSP rbsp;
-
-  SEI sei;
-
   BitStream *bitStream = nullptr;
 
   int number = 0;
   while (true) {
+    /* 3. 一个NUL类，用于存储NUL数据，它与NUL具有同样的数据结构 */
+
+    /* 这里只对文件进行解码，所以只有AnnesB格式 */
+    Nalu nalu;
+    Nalu::EBSP ebsp;
+    Nalu::RBSP rbsp;
+    SEI sei;
     /* 3. 循环读取一个个的Nalu */
     result = reader.readNalu(nalu);
 
@@ -54,7 +59,10 @@ int main() {
       // nalu.parseSODB(rbsp, SODB);
 
       /* 见T-REC-H.264-202108-I!!PDF-E.pdf 87页 */
-      //int is_need_flush = 0;
+      // int is_need_flush = 0;
+      if (nalu.nal_unit_type > 21)
+        std::cout << "Unknown Nalu Type !!!" << std::endl;
+
       switch (nalu.nal_unit_type) {
       case 1: /* Slice(non-VCL) */
         /* 11-2. 解码普通帧 */
@@ -73,10 +81,17 @@ int main() {
         cout << " }" << endl;
         break;
       case 2: /* DPA(non-VCL) */
+        std::cout << "Not Support DPA!" << std::endl;
         break;
-      case 5: /* IDR(VCL) */
+      case 3: /* DPB(non-VCL) */
+        std::cout << "Not Support DPB!" << std::endl;
+        break;
+      case 4: /* DPC(non-VCL) */
+        std::cout << "Not Support DPC!" << std::endl;
+        break;
+      case 5: /* IDR Slice(VCL) */
         /* 11-1. 解码立即刷新帧 GOP[0] */
-        cout << "IDR -> {" << endl;
+        cout << "IDR Slice -> {" << endl;
 
         /* 初始化bit处理器，填充idr的数据 */
         bitStream = new BitStream(rbsp._buf, rbsp._len);
@@ -84,10 +99,10 @@ int main() {
 
         cout << " }" << endl;
         break;
-      case 6: /* SEI(VCL) */
+      case 6: /* SEI（补充信息）(VCL) */
         /* 10. 解码SEI补充增强信息 */
         cout << "SEI -> {" << endl;
-        nalu.extractSEIparameters(rbsp, sei);
+        nalu.extractSEIparameters(rbsp, sei, gop->m_spss[0]);
         cout << " }" << endl;
         break;
       case 7: /* SPS(VCL) */
@@ -103,6 +118,8 @@ int main() {
                                   gop->m_spss[0].chroma_format_idc);
         cout << " }" << endl;
         break;
+      default:
+        cout << "nal_unit_type:" << nalu.nal_unit_type << endl;
       }
 
       /* 已读取完成所有NAL */
@@ -113,6 +130,7 @@ int main() {
            << endl;
       break;
     }
+    std::cout << std::endl;
   }
   reader.close();
   return 0;

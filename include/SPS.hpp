@@ -2,7 +2,6 @@
 #define SPS_CPP_F6QSULFM
 
 #include "Common.hpp"
-#include "RBSP.hpp"
 
 #define Extended_SAR 255
 
@@ -21,7 +20,7 @@ struct CHROMA_FORMAT_IDC_T {
   int32_t SubHeightC;
 };
 
-class SPS : public RBSP {
+class SPS {
  public:
   SPS();
   ~SPS();
@@ -149,6 +148,84 @@ class SPS : public RBSP {
   uint32_t picWidthInSamplesC = 0;
   // 色度分量的采样宽度，等于宏块宽度乘以 MbWidthC。
   uint32_t RawMbBits = 0;
+
+  /* SPS::hrd_parameters() */
+  uint32_t cpb_cnt_minus1 = 0;
+  uint8_t bit_rate_scale = 0;
+  uint8_t cpb_size_scale = 0;
+  uint32_t *bit_rate_value_minus1 = nullptr;
+  uint32_t *cpb_size_value_minus1 = nullptr;
+  bool *cbr_flag = nullptr;
+  uint8_t initial_cpb_removal_delay_length_minus1 = 0;
+  uint8_t cpb_removal_delay_length_minus1 = 0;
+  uint8_t dpb_output_delay_length_minus1 = 0;
+  uint8_t time_offset_length = 0;
+
+  /* VUI */
+  /* 指示是否存在宽高比信息 */
+  bool aspect_ratio_info_present_flag = 0;
+  /* 宽高比标识符，指示视频的宽高比类型 */
+  uint8_t aspect_ratio_idc = 0;
+  /* 表示样本的宽度（SAR，样本宽高比） */
+  uint16_t sar_width = 0;
+  /* 表示样本的高度（SAR，样本宽高比） */
+  uint16_t sar_height = 0;
+  /* 指示是否存在超扫描信息 */
+  bool overscan_info_present_flag = 0;
+  /* 指示视频是否适合超扫描显示 */
+  bool overscan_appropriate_flag = 0;
+  /* 指示是否存在视频信号类型信息 */
+  bool video_signal_type_present_flag = 0;
+  /* 视频格式标识符，指示视频的类型（如未压缩、压缩等） */
+  uint8_t video_format = 0;
+  /* 指示视频是否使用全范围色彩（0-255）或限范围色彩（16-235） */
+  bool video_full_range_flag = 0;
+  /* 指示是否存在颜色描述信息 */
+  bool colour_description_present_flag = 0;
+  /* 指示颜色原色的类型（如BT.709、BT.601等） */
+  uint8_t colour_primaries = 0;
+  /* 指示传输特性（如线性、伽马等） */
+  uint8_t transfer_characteristics = 0;
+  /* 指示矩阵系数，用于颜色空间转换 */
+  uint8_t matrix_coefficients = 0;
+  /* 指示是否存在色度样本位置的信息 */
+  bool chroma_loc_info_present_flag = 0;
+  /* 顶场色度样本位置类型 */
+  int32_t chroma_sample_loc_type_top_field = 0;
+  /* 底场色度样本位置类型 */
+  int32_t chroma_sample_loc_type_bottom_field = 0;
+  /* 指示是否存在时间信息 */
+  bool timing_info_present_flag = 0;
+  /* 每个时钟周期的单位数 */
+  uint32_t num_units_in_tick = 0;
+  /* 时间尺度，表示每秒的单位数 */
+  uint32_t time_scale = 0;
+  /* 指示是否使用固定帧率 */
+  bool fixed_frame_rate_flag = 0;
+  /* 指示是否存在NAL HRD（网络提取率控制）参数 */
+  bool nal_hrd_parameters_present_flag = 0;
+  /* 指示是否存在VCL HRD参数 */
+  bool vcl_hrd_parameters_present_flag = 0;
+  /* 指示是否使用低延迟HRD */
+  bool low_delay_hrd_flag = 0;
+  /* 指示是否存在图像结构信息 */
+  bool pic_struct_present_flag = 0;
+  /* 指示是否存在比特流限制 */
+  bool bitstream_restriction_flag = 0;
+  /* 指示是否允许运动矢量跨越图像边界 */
+  bool motion_vectors_over_pic_boundaries_flag = 0;
+  /* 每帧最大字节数的分母 */
+  uint32_t max_bytes_per_pic_denom = 0;
+  /* 每个宏块最大比特数的分母 */
+  uint32_t max_bits_per_mb_denom = 0;
+  /* 水平运动矢量的最大长度的对数值 */
+  uint32_t log2_max_mv_length_horizontal = 0;
+  /* 垂直运动矢量的最大长度的对数值 */
+  uint32_t log2_max_mv_length_vertical = 0;
+  /* 最大重排序帧数 */
+  uint32_t max_num_reorder_frames = 0;
+  /* 最大解码帧缓冲区大小 */
+  uint32_t max_dec_frame_buffering = 0;
 
  public:
   void vui_parameters(BitStream &bitStream);

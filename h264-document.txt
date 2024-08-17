@@ -21,4 +21,4 @@ U(N)：使用n位的无符号整数。当n在语法表中为“v”时，比特�
 
 UE(V)：无符号整数Exp-Golomb编码的语法元素，左位在前。此描述符的解析过程在第9.1条中规定。
 
-u(v): v = log2(MaxFrameNum)  = log2_max_frame_num_minus4 + 4
+u(v): v = log2(MaxFrameNum)  = log2_max_frame_num_minus4 + 4  <=> bitStream.readUn(log2(m_sps.MaxFrameNum));

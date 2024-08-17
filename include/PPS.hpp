@@ -2,12 +2,11 @@
 #define PPS_CPP_F6QSULFM
 
 #include "Common.hpp"
-#include "RBSP.hpp"
 
 #define H264_MAX_PPS_COUNT 256
 // 7.4.2.2: pic_parameter_set_id shall be in the range of 0 to 255,
 // inclusive.
-class PPS : public RBSP {
+class PPS {
  public:
   uint8_t *_buf = nullptr;
   int _len = 0;
@@ -74,7 +73,7 @@ class PPS : public RBSP {
   uint32_t *pic_scaling_list_present_flag = 0;
   /* 指定图像的初始量化参数减26 */
   int32_t pic_init_qp_minus26 = 0;
-  /* 指定图像的初始 QP 步长减 */
+  /* 指定图像的初始 QP 步长减26 */
   int32_t pic_init_qs_minus26 = 0;
 };
 

@@ -1,7 +1,6 @@
 #include "Nalu.hpp"
 #include "BitStream.hpp"
 #include "PictureBase.hpp"
-#include "RBSP.hpp"
 #include <cmath>
 #include <cstdint>
 
@@ -12,6 +11,20 @@ Nalu::~Nalu() {
     free(_buffer);
     _buffer = nullptr;
   }
+}
+
+Nalu::EBSP::EBSP() {}
+
+Nalu::EBSP::~EBSP() {
+  if (_buf)
+    delete[] _buf;
+}
+
+Nalu::RBSP::RBSP() {}
+
+Nalu::RBSP::~RBSP() {
+  if (_buf)
+    delete[] _buf;
 }
 
 int Nalu::setBuffer(uint8_t *buf, int len) {
@@ -114,10 +127,10 @@ int Nalu::extractPPSparameters(RBSP &rbsp, PPS &pps,
 }
 
 /* 在T-REC-H.264-202108-I!!PDF-E.pdf -48页 */
-int Nalu::extractSEIparameters(RBSP &rbsp, SEI &sei) {
+int Nalu::extractSEIparameters(RBSP &rbsp, SEI &sei, SPS &sps) {
   sei._buf = rbsp._buf;
   sei._len = rbsp._len;
-  sei.extractParameters();
+  sei.extractParameters(sps);
   return 0;
 }
 

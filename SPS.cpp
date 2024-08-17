@@ -15,86 +15,133 @@ SPS::SPS() {
 SPS::~SPS() {}
 
 void SPS::vui_parameters(BitStream &bitStream) {
-  bool aspect_ratio_info_present_flag = bitStream.readU1();
+  std::cout << "\tVUI -> {" << std::endl;
+  aspect_ratio_info_present_flag = bitStream.readU1();
   if (aspect_ratio_info_present_flag) {
-    uint8_t aspect_ratio_idc = bitStream.readUn(8);
+    aspect_ratio_idc = bitStream.readUn(8);
+    std::cout << "\t\t宽高比标识符，视频的宽高比类型:" << aspect_ratio_idc
+              << std::endl;
     if (aspect_ratio_idc == Extended_SAR) {
-      uint16_t sar_width = bitStream.readUn(16);
-      uint16_t sar_height = bitStream.readUn(16);
+      sar_width = bitStream.readUn(16);
+      std::cout << "\t\t表示样本的宽度（SAR，样本宽高比）:" << sar_width
+                << std::endl;
+      sar_height = bitStream.readUn(16);
+      std::cout << "\t\t表示样本的高度（SAR，样本宽高比）:" << sar_height
+                << std::endl;
     }
   }
-  bool overscan_info_present_flag = bitStream.readU1();
-  if (overscan_info_present_flag)
-    bool overscan_appropriate_flag = bitStream.readU1();
+  overscan_info_present_flag = bitStream.readU1();
+  if (overscan_info_present_flag) {
+    overscan_appropriate_flag = bitStream.readU1();
+    std::cout << "\t\t视频适合超扫描显示:" << overscan_appropriate_flag
+              << std::endl;
+  }
 
-  bool video_signal_type_present_flag = bitStream.readU1();
-
+  video_signal_type_present_flag = bitStream.readU1();
   if (video_signal_type_present_flag) {
-    uint8_t video_format = bitStream.readUn(3);
-    bool video_full_range_flag = bitStream.readU1();
-    bool colour_description_present_flag = bitStream.readU1();
+    video_format = bitStream.readUn(3);
+    std::cout << "\t\t视频格式标识符，视频的类型（如未压缩、压缩等）:"
+              << (int)video_format << std::endl;
+    video_full_range_flag = bitStream.readU1();
+    std::cout << "\t\t视频使用全范围色彩（0-255）或限范围色彩（16-235）:"
+              << video_full_range_flag << std::endl;
+    colour_description_present_flag = bitStream.readU1();
     if (colour_description_present_flag) {
-      uint8_t colour_primaries = bitStream.readUn(8);
-      uint8_t transfer_characteristics = bitStream.readUn(8);
-      uint8_t matrix_coefficients = bitStream.readUn(8);
+      colour_primaries = bitStream.readUn(8);
+      std::cout << "\t\t颜色原色的类型（如BT.709、BT.601等）:"
+                << (int)colour_primaries << std::endl;
+      transfer_characteristics = bitStream.readUn(8);
+      std::cout << "\t\t传输特性（如线性、伽马等）:"
+                << (int)transfer_characteristics << std::endl;
+      matrix_coefficients = bitStream.readUn(8);
+      std::cout << "\t\t矩阵系数，用于颜色空间转换:" << (int)matrix_coefficients
+                << std::endl;
     }
   }
 
-  bool chroma_loc_info_present_flag = bitStream.readU1();
+  chroma_loc_info_present_flag = bitStream.readU1();
   if (chroma_loc_info_present_flag) {
-    int32_t chroma_sample_loc_type_top_field = bitStream.readSE();
-    int32_t chroma_sample_loc_type_bottom_field = bitStream.readSE();
+    chroma_sample_loc_type_top_field = bitStream.readSE();
+    chroma_sample_loc_type_bottom_field = bitStream.readSE();
+    std::cout << "\t\t顶场色度样本位置类型:" << chroma_sample_loc_type_top_field
+              << ",底场色度样本位置类型:" << chroma_sample_loc_type_bottom_field
+              << std::endl;
   }
-  bool timing_info_present_flag = bitStream.readU1();
 
+  timing_info_present_flag = bitStream.readU1();
   if (timing_info_present_flag) {
-    uint32_t num_units_in_tick = bitStream.readUn(32);
-    uint32_t time_scale = bitStream.readUn(32);
-    bool fixed_frame_rate_flag = bitStream.readU1();
+    num_units_in_tick = bitStream.readUn(32);
+    time_scale = bitStream.readUn(32);
+    std::cout << "\t\t每个时钟周期的单位数:" << num_units_in_tick
+              << ",每秒的单位数(时间尺度):" << time_scale << std::endl;
+    fixed_frame_rate_flag = bitStream.readU1();
+    std::cout << "\t\t使用固定帧率:" << fixed_frame_rate_flag << std::endl;
   }
-  bool nal_hrd_parameters_present_flag = bitStream.readU1();
+
+  nal_hrd_parameters_present_flag = bitStream.readU1();
+  vcl_hrd_parameters_present_flag = bitStream.readU1();
   if (nal_hrd_parameters_present_flag)
     hrd_parameters(bitStream);
-
-  bool vcl_hrd_parameters_present_flag = bitStream.readU1();
   if (vcl_hrd_parameters_present_flag)
     hrd_parameters(bitStream);
+  std::cout << "\t\t存在NAL HRD（网络提取率控制）参数:"
+            << nal_hrd_parameters_present_flag
+            << ",存在VCL HRD参数:" << vcl_hrd_parameters_present_flag
+            << std::endl;
 
-  if (nal_hrd_parameters_present_flag || vcl_hrd_parameters_present_flag)
-    bool low_delay_hrd_flag = bitStream.readU1();
+  if (nal_hrd_parameters_present_flag || vcl_hrd_parameters_present_flag) {
+    low_delay_hrd_flag = bitStream.readU1();
+    std::cout << "\t\t使用低延迟HRD:" << low_delay_hrd_flag << std::endl;
+  }
 
-  bool pic_struct_present_flag = bitStream.readU1();
-  bool bitstream_restriction_flag = bitStream.readU1();
+  pic_struct_present_flag = bitStream.readU1();
+  std::cout << "\t\t存在图像结构信息:" << pic_struct_present_flag << std::endl;
+  bitstream_restriction_flag = bitStream.readU1();
+  std::cout << "\t\t存在比特流限制:" << bitstream_restriction_flag << std::endl;
 
   if (bitstream_restriction_flag) {
-    bool motion_vectors_over_pic_boundaries_flag = bitStream.readU1();
-    uint32_t max_bytes_per_pic_denom = bitStream.readUE();
-    uint32_t max_bits_per_mb_denom = bitStream.readUE();
-    uint32_t log2_max_mv_length_horizontal = bitStream.readUE();
-    uint32_t log2_max_mv_length_vertical = bitStream.readUE();
-    uint32_t max_num_reorder_frames = bitStream.readUE();
-    uint32_t max_dec_frame_buffering = bitStream.readUE();
+    motion_vectors_over_pic_boundaries_flag = bitStream.readU1();
+    std::cout << "\t\t允许运动矢量跨越图像边界:"
+              << motion_vectors_over_pic_boundaries_flag << std::endl;
+    max_bytes_per_pic_denom = bitStream.readUE();
+    std::cout << "\t\t每帧最大字节数的分母:" << max_bytes_per_pic_denom
+              << std::endl;
+    max_bits_per_mb_denom = bitStream.readUE();
+    std::cout << "\t\t每个宏块最大比特数的分母:" << max_bits_per_mb_denom
+              << std::endl;
+    log2_max_mv_length_horizontal = bitStream.readUE();
+    log2_max_mv_length_vertical = bitStream.readUE();
+    std::cout << "\t\t水平运动矢量的最大长度的对数值:"
+              << log2_max_mv_length_horizontal
+              << ",垂直运动矢量的最大长度的对数值:"
+              << log2_max_mv_length_vertical << std::endl;
+    max_num_reorder_frames = bitStream.readUE();
+    std::cout << "\t\t最大重排序帧数:" << max_num_reorder_frames << std::endl;
+    max_dec_frame_buffering = bitStream.readUE();
+    std::cout << "\t\t最大解码帧缓冲区大小:" << max_dec_frame_buffering
+              << std::endl;
   }
+  std::cout << "\t }" << std::endl;
 }
 
 void SPS::hrd_parameters(BitStream &bitStream) {
-  uint32_t cpb_cnt_minus1 = bitStream.readUE();
-  uint8_t bit_rate_scale = bitStream.readUn(8);
-  uint8_t cpb_size_scale = bitStream.readUn(8);
+  cpb_cnt_minus1 = bitStream.readUE();
+  bit_rate_scale = bitStream.readUn(8);
+  cpb_size_scale = bitStream.readUn(8);
 
-  uint32_t *bit_rate_value_minus1 = new uint32_t[cpb_cnt_minus1];
-  uint32_t *cpb_size_value_minus1 = new uint32_t[cpb_cnt_minus1];
-  bool *cbr_flag = new bool[cpb_cnt_minus1];
+  bit_rate_value_minus1 = new uint32_t[cpb_cnt_minus1];
+  cpb_size_value_minus1 = new uint32_t[cpb_cnt_minus1];
+  cbr_flag = new bool[cpb_cnt_minus1];
 
   for (int SchedSelIdx = 0; SchedSelIdx <= cpb_cnt_minus1; SchedSelIdx++) {
     bit_rate_value_minus1[SchedSelIdx] = bitStream.readUE();
     cpb_size_value_minus1[SchedSelIdx] = bitStream.readUE();
     cbr_flag[SchedSelIdx] = bitStream.readU1();
   }
-  uint8_t initial_cpb_removal_delay_length_minus1 = bitStream.readUn(5);
-  uint8_t cpb_removal_delay_length_minus1 = bitStream.readUn(5);
-  uint8_t dpb_output_delay_length_minus1 = bitStream.readUn(5);
-  uint8_t time_offset_length = bitStream.readUn(5);
+  initial_cpb_removal_delay_length_minus1 = bitStream.readUn(5);
+  cpb_removal_delay_length_minus1 = bitStream.readUn(5);
+  dpb_output_delay_length_minus1 = bitStream.readUn(5);
+  time_offset_length = bitStream.readUn(5);
 }
 
 int SPS::extractParameters() {
@@ -107,7 +154,8 @@ int SPS::extractParameters() {
   reserved_zero_2bits = bitStream.readUn(2);
   level_idc = bitStream.readUn(8); // 0
   seq_parameter_set_id = bitStream.readUE();
-  std::cout << "\tseq_parameter_set_id:" << seq_parameter_set_id << std::endl;
+  std::cout << "\tSPS ID:" << seq_parameter_set_id << std::endl;
+  std::cout << "\tlevel_idc:" << (int)level_idc << std::endl;
   // 通过gdb断点到这里然后 "p /t {ssp._buf[1],profile_idc}"即可判断是否读取正确
 
   switch (profile_idc) {
@@ -147,6 +195,8 @@ int SPS::extractParameters() {
     }
     bit_depth_luma_minus8 = bitStream.readUE();
     bit_depth_chroma_minus8 = bitStream.readUE();
+    std::cout << "\t亮度分量位深:" << bit_depth_luma_minus8 + 8
+              << ",色度分量位深:" << bit_depth_chroma_minus8 + 8 << std::endl;
     qpprime_y_zero_transform_bypass_flag = bitStream.readU1();
     seq_scaling_matrix_present_flag = bitStream.readU1();
 
@@ -186,22 +236,40 @@ int SPS::extractParameters() {
   }
 
   max_num_ref_frames = bitStream.readUE();
+  std::cout << "\t解码器需要支持的最大参考帧数:" << max_num_ref_frames
+            << std::endl;
   gaps_in_frame_num_value_allowed_flag = bitStream.readU1();
   pic_width_in_mbs_minus1 = bitStream.readUE();
   pic_height_in_map_units_minus1 = bitStream.readUE();
 
   frame_mbs_only_flag = bitStream.readU1();
-  if (!frame_mbs_only_flag)
+  if (!frame_mbs_only_flag) {
+    std::cout << "\t当前存在场编码:" << !frame_mbs_only_flag << std::endl;
     mb_adaptive_frame_field_flag = bitStream.readU1();
+    std::cout << "\t是否使用基于宏块的自适应帧/场编码:"
+              << mb_adaptive_frame_field_flag << std::endl;
+  } else
+    std::cout << "\t仅有帧编码:" << frame_mbs_only_flag << std::endl;
+
   direct_8x8_inference_flag = bitStream.readU1();
   frame_cropping_flag = bitStream.readU1();
   if (frame_cropping_flag) {
     frame_crop_left_offset = bitStream.readUE();
+    std::cout << "\t";
+    std::cout << "帧裁剪左偏移量:" << frame_crop_left_offset;
     frame_crop_right_offset = bitStream.readUE();
+    std::cout << ",帧裁剪右偏移量:" << frame_crop_left_offset;
     frame_crop_top_offset = bitStream.readUE();
+    std::cout << ",帧裁剪顶偏移量:" << frame_crop_left_offset;
     frame_crop_bottom_offset = bitStream.readUE();
+    std::cout << ",帧裁剪底偏移量:" << frame_crop_left_offset;
+    std::cout << std::endl;
   }
+
   vui_parameters_present_flag = bitStream.readU1();
+  std::cout << "\t存在视频用户界面(VUI)参数:" << vui_parameters_present_flag
+            << std::endl;
+
   if (vui_parameters_present_flag)
     vui_parameters(bitStream);
 

@@ -23,12 +23,11 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[GOP_SIZE], SPS &sps,
   m_picture_bottom_filed.m_parent = this;
   m_picture_bottom_filed.init(slice_header);
 
-  if (slice_header.field_pic_flag == 0) // 帧
-    std::cout << "\t帧编码" << std::endl;
-  else { // 场编码->顶场，底场
-    std::cout << "\t场编码(暂不处理)" << std::endl;
+  if (slice_header.field_pic_flag) // 场编码->顶场，底场
     exit(0);
-  }
+    //std::cout << "\t场编码(暂不处理)" << std::endl;
+  //else  // 帧
+    //std::cout << "\t帧编码" << std::endl;
 
   slice_body.parseSliceData(bitStream, m_picture_frame);
 

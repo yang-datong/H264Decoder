@@ -6,7 +6,7 @@
 int SliceBody::DecodeCABAC(CH264Cabac &cabac, BitStream &bs,
                            SliceHeader &slice_header) {
   if (m_pps.entropy_coding_mode_flag) {
-    std::cout << "\tCABAC编码（哥伦布熵编码）" << std::endl;
+    /* CABAC(上下文自适应二进制算术编码) */
     while (!bs.byte_aligned())
       cabac_alignment_one_bit = bs.readU1(); // 2 f(1)
 
