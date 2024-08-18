@@ -42,8 +42,7 @@ using namespace std;
     }                                                                          \
   } while (0)
 
-// Table 7-9 – Memory management control operation
-// (memory_management_control_operation) values
+// Table 7-9 – Memory management control operation (memory_management_control_operation) values
 typedef enum _H264_PICTURE_MARKED_AS_ {
   H264_PICTURE_MARKED_AS_unkown = 0,
   H264_PICTURE_MARKED_AS_used_for_reference = 1,

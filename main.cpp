@@ -14,11 +14,7 @@ int main() {
   /* 1. 打开文件、读取NUL、存储NUL的操作 */
   AnnexBReader reader(filePath);
   int result = reader.open();
-  if (result) {
-    cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-         << endl;
-    return -1;
-  }
+  if (result) return -1;
 
   /* 2. 创建一个GOP用于存放解码后的I、P、B帧序列 */
   GOP *gop = new GOP();
@@ -27,10 +23,9 @@ int main() {
   BitStream *bitStream = nullptr;
 
   int number = 0;
+  /* 这里只对文件进行解码，所以只有AnnesB格式 */
   while (true) {
     /* 3. 一个NUL类，用于存储NUL数据，它与NUL具有同样的数据结构 */
-
-    /* 这里只对文件进行解码，所以只有AnnesB格式 */
     Nalu nalu;
     Nalu::EBSP ebsp;
     Nalu::RBSP rbsp;
@@ -123,8 +118,7 @@ int main() {
       }
 
       /* 已读取完成所有NAL */
-      if (result == 0)
-        break;
+      if (result == 0) break;
     } else {
       cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
            << endl;

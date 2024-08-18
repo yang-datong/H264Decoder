@@ -16,15 +16,13 @@ Nalu::~Nalu() {
 Nalu::EBSP::EBSP() {}
 
 Nalu::EBSP::~EBSP() {
-  if (_buf)
-    delete[] _buf;
+  if (_buf) delete[] _buf;
 }
 
 Nalu::RBSP::RBSP() {}
 
 Nalu::RBSP::~RBSP() {
-  if (_buf)
-    delete[] _buf;
+  if (_buf) delete[] _buf;
 }
 
 int Nalu::setBuffer(uint8_t *buf, int len) {

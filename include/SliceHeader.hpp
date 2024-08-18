@@ -24,6 +24,7 @@ class SliceHeader {
   SPS m_sps;
   PPS m_pps;
   IDR m_idr;
+  //Nalu *m_nalu;
   char nal_unit_type = 0;
   char nal_ref_idc = 0;
 

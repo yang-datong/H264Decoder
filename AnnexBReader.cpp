@@ -1,10 +1,8 @@
 #include "AnnexBReader.hpp"
 #include "Nalu.hpp"
-#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <ios>
-#include <string>
 
 AnnexBReader::~AnnexBReader() { close(); }
 
@@ -18,15 +16,13 @@ int AnnexBReader::open() {
 }
 
 void AnnexBReader::close() {
-  if (_file)
-    _file.close();
+  if (_file) _file.close();
 }
 
 bool AnnexBReader::checkStartLen(int &startCodeLen, uint8_t *buffer,
                                  int bufferLen) {
   startCodeLen = 0;
-  if (bufferLen < 3)
-    return false;
+  if (bufferLen < 3) return false;
   if (bufferLen == 3 && buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 1) {
     startCodeLen = 3;
   } else if (bufferLen > 3 && buffer[0] == 0 && buffer[1] == 0 &&
@@ -54,8 +50,7 @@ bool AnnexBReader::findStartcode(int &startcodeLen, uint8_t *buffer,
 
 int AnnexBReader::readNalu(Nalu &nalu) {
   while (1) {
-    if (readData())
-      return -1;
+    if (readData()) return -1;
     /* 读取完一点数据后就开始检查startcode：
      * 1. startcode的长度不稳定（或3或4 bytes)
      * 2. 文件首个字节即startcode
@@ -104,8 +99,7 @@ int AnnexBReader::readNalu(Nalu &nalu) {
 }
 
 int AnnexBReader::readData() {
-  if (!_file.is_open())
-    return -1;
+  if (!_file.is_open()) return -1;
 
   int size = 1024;
   uint8_t *fileBuffer = new uint8_t[size];
