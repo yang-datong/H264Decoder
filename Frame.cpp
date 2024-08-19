@@ -7,7 +7,7 @@
 void Frame::encode() {
   // Implement frame encoding logic
   //for (auto &slice : slices) {
-    //slice->encode();
+  //slice->encode();
   //}
 }
 
@@ -17,17 +17,17 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], SPS &sps, PPS &pps) {
   static int index = 0;
   string output_file;
   //for (auto &slice : slices) {
-    slice->decode(bitStream, dpb, sps, pps, this);
-    if (slice->slice_header.slice_type == SLICE_I)
-      output_file = "output_I_" + to_string(index++) + ".bmp";
-    else if (slice->slice_header.slice_type == SLICE_P)
-      output_file = "output_P_" + to_string(index++) + ".bmp";
-    else if (slice->slice_header.slice_type == SLICE_B)
-      output_file = "output_B_" + to_string(index++) + ".bmp";
-    else {
-      std::cerr << "未知帧" << std::endl;
-      exit(0);
-    }
+  slice->decode(bitStream, dpb, sps, pps, this);
+  if (slice->slice_header.slice_type == SLICE_I)
+    output_file = "output_I_" + to_string(index++) + ".bmp";
+  else if (slice->slice_header.slice_type == SLICE_P)
+    output_file = "output_P_" + to_string(index++) + ".bmp";
+  else if (slice->slice_header.slice_type == SLICE_B)
+    output_file = "output_B_" + to_string(index++) + ".bmp";
+  else {
+    std::cerr << "未知帧" << std::endl;
+    exit(0);
+  }
   //}
   m_picture_frame.saveToBmpFile(output_file.c_str());
   return 0;

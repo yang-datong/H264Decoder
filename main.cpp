@@ -71,6 +71,7 @@ int main() {
 
         /* 初始化bit处理器，填充slice的数据 */
         bitStream = new BitStream(rbsp.buf, rbsp.len);
+        /* 此处根据SliceHeader可判断A Frame =? A Slice */
         nalu.extractSliceparameters(*bitStream, *gop, *frame);
         frame->decode(*bitStream, gop->m_DecodedPictureBuffer, gop->m_spss[0],
                       gop->m_ppss[0]);

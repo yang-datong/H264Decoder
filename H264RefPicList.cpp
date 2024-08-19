@@ -2,8 +2,7 @@
 #include "PictureBase.hpp"
 
 //--------------参考帧列表重排序------------------------
-// 8.2.1 Decoding process for picture order count (only needed to be invoked for
-// one slice of a picture)
+// 8.2.1 Decoding process for picture order count (only needed to be invoked for one slice of a picture)
 int PictureBase::Decoding_process_for_picture_order_count() {
   int ret = 0;
 

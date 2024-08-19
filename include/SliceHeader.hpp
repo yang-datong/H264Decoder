@@ -24,7 +24,13 @@ class SliceHeader {
   PPS m_pps;
   IDR m_idr;
 
+ private:
+  /* 私有化SliceBody，不提供给外界，只能通过Slice来访问本类 */
+  SliceHeader(){};
+
  public:
+  /* 允许Slice类访问 */
+  friend class Slice;
   void setSPS(SPS &sps) { this->m_sps = sps; }
   void setPPS(PPS &pps) { this->m_pps = pps; }
 

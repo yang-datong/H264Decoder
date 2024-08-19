@@ -4,15 +4,16 @@
 #include "PictureBase.hpp"
 
 int SliceBody::DecodeCABAC(CH264Cabac &cabac, BitStream &bs,
-                           SliceHeader &slice_header) {
+                           SliceHeader &header) {
   if (m_pps.entropy_coding_mode_flag) {
     /* CABAC(上下文自适应二进制算术编码) */
+
     while (!bs.byte_aligned())
-      cabac_alignment_one_bit = bs.readU1(); // 2 f(1)
+      bs.readU1(); //cabac_alignment_one_bit
 
     cabac.Initialisation_process_for_context_variables(
-        (H264_SLIECE_TYPE)slice_header.slice_type, slice_header.cabac_init_idc,
-        slice_header.SliceQPY);
+        (H264_SLIECE_TYPE)header.slice_type, header.cabac_init_idc,
+        header.SliceQPY);
     // cabac初始化环境变量
 
     cabac.Initialisation_process_for_the_arithmetic_decoding_engine(bs);
@@ -23,36 +24,36 @@ int SliceBody::DecodeCABAC(CH264Cabac &cabac, BitStream &bs,
 
 /* Rec. ITU-T H.264 (08/2021) 56 */
 int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
-  SliceHeader &slice_header = picture.m_slice.slice_header;
+  SliceHeader &header = picture.m_slice.slice_header;
 
   /* CABAC编码 */
   CH264Cabac cabac;
-  DecodeCABAC(cabac, bs, slice_header);
+  DecodeCABAC(cabac, bs, header);
 
-  if (slice_header.MbaffFrameFlag == 0)
-    mb_field_decoding_flag = slice_header.field_pic_flag;
+  /* 是否MBAFF编码 */
+  if (header.MbaffFrameFlag == 0)
+    mb_field_decoding_flag = header.field_pic_flag;
 
-  CurrMbAddr =
-      slice_header.first_mb_in_slice * (1 + slice_header.MbaffFrameFlag);
+  CurrMbAddr = header.first_mb_in_slice * (1 + header.MbaffFrameFlag);
 
   picture.CurrMbAddr = CurrMbAddr;
 
-  slice_header.picNumL0Pred = slice_header.CurrPicNum;
-  slice_header.picNumL1Pred = slice_header.CurrPicNum;
+  header.picNumL0Pred = header.CurrPicNum;
+  header.picNumL1Pred = header.CurrPicNum;
 
   if (picture.m_slice_cnt == 0) {
     picture.Decoding_process_for_picture_order_count(); // 解码POC
     if (m_sps.frame_mbs_only_flag == 0) {
-      // 有可能出现场帧或场宏块
+      /* 场编码 */
       std::cout << "hi~" << __LINE__ << std::endl;
       exit(0);
     }
 
     //--------参考帧重排序------------
     // 只有当前帧为P帧，B帧时，才会对参考图像数列表组进行重排序
-    if (slice_header.slice_type == H264_SLIECE_TYPE_P ||
-        slice_header.slice_type == H264_SLIECE_TYPE_SP ||
-        slice_header.slice_type == H264_SLIECE_TYPE_B) {
+    if (header.slice_type == H264_SLIECE_TYPE_P ||
+        header.slice_type == H264_SLIECE_TYPE_SP ||
+        header.slice_type == H264_SLIECE_TYPE_B) {
       picture.Decoding_process_for_reference_picture_lists_construction(
           picture.m_dpb, picture.m_RefPicList0, picture.m_RefPicList1);
 
@@ -73,7 +74,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
                  "m_RefPicList0[%d]: %s; "
                  "PicOrderCnt=%d; PicNum=%d; PicNumCnt=%d;\n",
                  picture.m_PicNumCnt,
-                 H264_SLIECE_TYPE_TO_STR(slice_header.slice_type),
+                 H264_SLIECE_TYPE_TO_STR(header.slice_type),
                  picture.PicOrderCnt, i, sliceType.c_str(), PicOrderCnt, PicNum,
                  PicNumCnt);
         }
@@ -93,7 +94,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
                  "m_RefPicList1[%d]: %s; "
                  "PicOrderCnt=%d; PicNum=%d; PicNumCnt=%d;\n",
                  picture.m_PicNumCnt,
-                 H264_SLIECE_TYPE_TO_STR(slice_header.slice_type),
+                 H264_SLIECE_TYPE_TO_STR(header.slice_type),
                  picture.PicOrderCnt, i, sliceType.c_str(), PicOrderCnt, PicNum,
                  PicNumCnt);
         }
@@ -107,38 +108,35 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
   //bool is_need_skip_read_mb_field_decoding_flag = false;
 
   do {
-    if (slice_header.slice_type != SLICE_I &&
-        slice_header.slice_type != SLICE_SI) {
+    if (header.slice_type != SLICE_I && header.slice_type != SLICE_SI) {
       if (!m_pps.entropy_coding_mode_flag) {
         std::cout << "hi~" << __LINE__ << std::endl;
         exit(0);
       } else {
         /* CABAC编码开始 */
-        picture.mb_x = (CurrMbAddr % (picture.PicWidthInMbs *
-                                      (1 + slice_header.MbaffFrameFlag))) /
-                       (1 + slice_header.MbaffFrameFlag);
+        picture.mb_x = (CurrMbAddr %
+                        (picture.PicWidthInMbs * (1 + header.MbaffFrameFlag))) /
+                       (1 + header.MbaffFrameFlag);
 
-        picture.mb_y =
-            (CurrMbAddr /
-             (picture.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag)) *
-             (1 + slice_header.MbaffFrameFlag)) +
-            ((CurrMbAddr %
-              (picture.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag))) %
-             (1 + slice_header.MbaffFrameFlag));
+        picture.mb_y = (CurrMbAddr /
+                        (picture.PicWidthInMbs * (1 + header.MbaffFrameFlag)) *
+                        (1 + header.MbaffFrameFlag)) +
+                       ((CurrMbAddr % (picture.PicWidthInMbs *
+                                       (1 + header.MbaffFrameFlag))) %
+                        (1 + header.MbaffFrameFlag));
         picture.CurrMbAddr = CurrMbAddr;
 
         // //因为解码mb_skip_flag需要事先知道MbaffFrameFlag的值
         picture.m_mbs[picture.CurrMbAddr].slice_number = slice_number;
         // 因为解码mb_skip_flag需要事先知道slice_id的值（从0开始）
 
-        if (slice_header.MbaffFrameFlag) {
+        if (header.MbaffFrameFlag) {
           std::cout << "hi~" << __LINE__ << std::endl;
           exit(0);
         }
 
         //-------------解码mb_skip_flag-----------------------
-        if (slice_header.MbaffFrameFlag && CurrMbAddr % 2 == 1 &&
-            prevMbSkipped) {
+        if (header.MbaffFrameFlag && CurrMbAddr % 2 == 1 && prevMbSkipped) {
           // 如果是bottom field macroblock
           std::cout << "hi~" << __LINE__ << std::endl;
           exit(0);
@@ -152,7 +150,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
           // 表示本宏块没有残差数据，相应的像素值只需要利用之前已经解码的I/P帧来预测获得
           // 首个IDR帧不会进这里，紧跟其后的P帧会进这里（可能会进）
           picture.mb_cnt++;
-          if (slice_header.MbaffFrameFlag) {
+          if (header.MbaffFrameFlag) {
             if (CurrMbAddr % 2 == 0) // 只需要处理top field macroblock
             {
               picture.m_mbs[picture.CurrMbAddr].mb_skip_flag =
@@ -215,23 +213,22 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
       }
     }
     if (moreDataFlag) {
-      if (slice_header.MbaffFrameFlag &&
+      if (header.MbaffFrameFlag &&
           (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped))) {
         /* 表示本宏块是属于一个宏块对中的一个 */
         std::cout << "hi~" << __LINE__ << std::endl;
         exit(0);
       }
 
-      picture.mb_x = (CurrMbAddr % (picture.PicWidthInMbs *
-                                    (1 + slice_header.MbaffFrameFlag))) /
-                     (1 + slice_header.MbaffFrameFlag);
+      picture.mb_x =
+          (CurrMbAddr % (picture.PicWidthInMbs * (1 + header.MbaffFrameFlag))) /
+          (1 + header.MbaffFrameFlag);
       picture.mb_y =
-          (CurrMbAddr /
-           (picture.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag)) *
-           (1 + slice_header.MbaffFrameFlag)) +
+          (CurrMbAddr / (picture.PicWidthInMbs * (1 + header.MbaffFrameFlag)) *
+           (1 + header.MbaffFrameFlag)) +
           ((CurrMbAddr %
-            (picture.PicWidthInMbs * (1 + slice_header.MbaffFrameFlag))) %
-           (1 + slice_header.MbaffFrameFlag));
+            (picture.PicWidthInMbs * (1 + header.MbaffFrameFlag))) %
+           (1 + header.MbaffFrameFlag));
       picture.CurrMbAddr =
           CurrMbAddr; // picture.mb_x + picture.mb_y * picture.PicWidthInMbs;
       picture.mb_cnt++;
@@ -345,12 +342,12 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
       // moreDataFlag = bs.more_rbsp_data();
       exit(0);
     } else {
-      if (slice_header.slice_type != H264_SLIECE_TYPE_I &&
-          slice_header.slice_type != H264_SLIECE_TYPE_SI) {
+      if (header.slice_type != H264_SLIECE_TYPE_I &&
+          header.slice_type != H264_SLIECE_TYPE_SI) {
         prevMbSkipped = mb_skip_flag;
       }
 
-      if (slice_header.MbaffFrameFlag && CurrMbAddr % 2 == 0) {
+      if (header.MbaffFrameFlag && CurrMbAddr % 2 == 0) {
         // moreDataFlag = 1;
         exit(0);
       } else {
@@ -358,7 +355,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
         moreDataFlag = !end_of_slice_flag;
       }
     }
-    CurrMbAddr = NextMbAddress(CurrMbAddr, slice_header);
+    CurrMbAddr = NextMbAddress(CurrMbAddr, header);
   } while (moreDataFlag);
 
   if (picture.mb_cnt == picture.PicSizeInMbs) picture.m_is_decode_finished = 1;

@@ -12,7 +12,13 @@ class SliceBody {
   PPS m_pps;
   IDR m_idr;
 
+ private:
+  /* 私有化SliceBody，不提供给外界，只能通过Slice来访问本类 */
+  SliceBody() {}
+
  public:
+  /* 允许Slice类访问 */
+  friend class Slice;
   void setSPS(SPS &sps) { this->m_sps = sps; }
   void setPPS(PPS &pps) { this->m_pps = pps; }
 
@@ -29,7 +35,6 @@ class SliceBody {
   int32_t end_of_slice_flag = 0; // 2 ae(v)
   int32_t mb_skip_flag_next_mb = 0;
 
-  uint32_t cabac_alignment_one_bit = 0;
   int32_t mb_field_decoding_flag = 0;
   uint32_t CurrMbAddr = 0;
   uint32_t prevMbSkipped = 0;
