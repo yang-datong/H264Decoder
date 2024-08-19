@@ -16,7 +16,7 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks_inter(
     ret = scaling_functions(isChroma, isChromaCb);
     RETURN_IF_FAILED(ret != 0, ret);
 
-    int32_t isMbAff = (m_h264_slice_header.MbaffFrameFlag == 1 &&
+    int32_t isMbAff = (m_slice.slice_header.MbaffFrameFlag == 1 &&
                        m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
                           ? 1
                           : 0;
@@ -128,7 +128,7 @@ int PictureBase::transform_decoding_process_for_8x8_luma_residual_blocks_inter(
 
   ret = scaling_functions(isChroma, isChromaCb);
 
-  int32_t isMbAff = (m_h264_slice_header.MbaffFrameFlag == 1 &&
+  int32_t isMbAff = (m_slice.slice_header.MbaffFrameFlag == 1 &&
                      m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
                         ? 1
                         : 0;
@@ -230,29 +230,29 @@ int PictureBase::transform_decoding_process_for_8x8_luma_residual_blocks_inter(
 int PictureBase::transform_decoding_process_for_chroma_samples_inter(
     int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
-  if (slice_header.m_sps.ChromaArrayType == 0) {
+  if (m_slice.m_sps.ChromaArrayType == 0) {
     LOG_ERROR("This process is invoked for each chroma component Cb and Cr "
               "separately when ChromaArrayType is not equal to 0.");
     return -1;
   }
 
-  if (slice_header.m_sps.ChromaArrayType == 3) {
+  if (m_slice.m_sps.ChromaArrayType == 3) {
     // 8.5.5 Specification of transform decoding process for chroma samples with
     // ChromaArrayType equal to 3
     ret =
         transform_decoding_process_for_chroma_samples_with_ChromaArrayType_equal_to_3(
             isChromaCb, PicWidthInSamples, pic_buff);
     RETURN_IF_FAILED(ret != 0, ret);
-  } else // if (slice_header.m_sps.ChromaArrayType != 3)
+  } else // if (m_slice.m_sps.ChromaArrayType != 3)
   {
     int32_t iCbCr = (isChromaCb == 1) ? 0 : 1;
     int32_t dcC[4][2] = {{0}};
 
     int32_t numChroma4x4Blks = (MbWidthC / 4) * (MbHeightC / 4);
 
-    if (slice_header.m_sps.ChromaArrayType == 1) // YUV420
+    if (m_slice.m_sps.ChromaArrayType == 1) // YUV420
     {
       int32_t c[2][2] = {{0}};
       c[0][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][0];
@@ -264,7 +264,7 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
           Scaling_and_transformation_process_for_chroma_DC_transform_coefficients(
               isChromaCb, c, 2, 2, dcC);
       RETURN_IF_FAILED(ret != 0, ret);
-    } else if (slice_header.m_sps.ChromaArrayType == 2) // YUV422
+    } else if (m_slice.m_sps.ChromaArrayType == 2) // YUV422
     {
       int32_t c[4][2] = {{0}};
       c[0][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][0];
@@ -292,7 +292,7 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
     int32_t rMb[16][16] = {{0}}; // 本应该是rMb[MbHeightC][MbWidthC],
                                  // 此处按最大的16x16尺寸来申请数组
 
-    int32_t isMbAff = (m_h264_slice_header.MbaffFrameFlag == 1 &&
+    int32_t isMbAff = (m_slice.slice_header.MbaffFrameFlag == 1 &&
                        m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
                           ? 1
                           : 0;
@@ -341,7 +341,7 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
         (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_4x4 ||
          m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_8x8 ||
          ((m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_16x16 &&
-              m_mbs[CurrMbAddr].intra_chroma_pred_mode == 1) ||
+           m_mbs[CurrMbAddr].intra_chroma_pred_mode == 1) ||
           m_mbs[CurrMbAddr].intra_chroma_pred_mode == 2))) {
       // 8.5.15 Intra residual transform-bypass decoding process
       int32_t nW = MbWidthC;
@@ -388,10 +388,10 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
       for (int32_t j = 0; j <= MbWidthC - 1; j++) {
         // uij = Clip1C( predC[ j, i ] + rMb[ j, i ] );
         // u[i * MbHeightC + j] = CLIP3(0, (1 <<
-        // m_h264_slice_header.m_sps.BitDepthC) - 1, pic_buff[(mb_y * MbHeightC
+        // m_h264_m_slice.m_sps.BitDepthC) - 1, pic_buff[(mb_y * MbHeightC
         // + i) * PicWidthInSamples + (mb_x * MbWidthC + j)] + rMb[i][j]);
         u[i * MbHeightC + j] = CLIP3(
-            0, (1 << m_h264_slice_header.m_sps.BitDepthC) - 1,
+            0, (1 << m_slice.m_sps.BitDepthC) - 1,
             pic_buff[(((m_mbs[CurrMbAddr].m_mb_position_y >> 4) * MbHeightC) +
                       (m_mbs[CurrMbAddr].m_mb_position_y % 2) +
                       (i) * (1 + isMbAff)) *
@@ -418,7 +418,7 @@ int PictureBase::Inter_prediction_process() {
   int ret = 0;
   //int32_t MvCnt = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   int32_t refIdxL0 = -1;
   int32_t refIdxL1 = -1;
@@ -460,8 +460,8 @@ int PictureBase::Inter_prediction_process() {
   //--------------------------------------------
   for (int mbPartIdx = 0; mbPartIdx <= NumMbPart - 1; mbPartIdx++) {
     ret = MacroBlock::SubMbPredModeFunc(
-        m_h264_slice_header.slice_type, mb.sub_mb_type[mbPartIdx], NumSubMbPart,
-        SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
+        m_slice.slice_header.slice_type, mb.sub_mb_type[mbPartIdx],
+        NumSubMbPart, SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
     RETURN_IF_FAILED(ret != 0, ret);
 
     if (mb.m_name_of_mb_type != P_8x8 && mb.m_name_of_mb_type != P_8x8ref0 &&
@@ -490,9 +490,9 @@ int PictureBase::Inter_prediction_process() {
     }
 
     //-----------------
-    if (slice_header.m_sps.ChromaArrayType != 0) {
-      partWidthC = partWidth / slice_header.m_sps.SubWidthC;
-      partHeightC = partHeight / slice_header.m_sps.SubHeightC;
+    if (m_slice.m_sps.ChromaArrayType != 0) {
+      partWidthC = partWidth / m_slice.m_sps.SubWidthC;
+      partHeightC = partHeight / m_slice.m_sps.SubHeightC;
     }
 
     //--------------------------------------
@@ -541,10 +541,10 @@ int PictureBase::Inter_prediction_process() {
       int32_t o0Cr = 0;
       int32_t o1Cr = 0;
 
-      if ((slice_header.m_pps.weighted_pred_flag == 1 &&
+      if ((m_slice.m_pps.weighted_pred_flag == 1 &&
            ((slice_header.slice_type % 5) == 0 ||
             (slice_header.slice_type % 5) == 3)) // H264_SLIECE_TYPE_P=0
-          || (slice_header.m_pps.weighted_bipred_idc > 0 &&
+          || (m_slice.m_pps.weighted_bipred_idc > 0 &&
               (slice_header.slice_type % 5) == 1) // H264_SLIECE_TYPE_B=1
       ) {
         // 8.4.3 Derivation process for prediction weights
@@ -621,27 +621,23 @@ int PictureBase::Inter_prediction_process() {
           }
         }
 
-        if (slice_header.m_sps.ChromaArrayType != 0) {
+        if (m_slice.m_sps.ChromaArrayType != 0) {
           for (i = 0; i <= partHeightC - 1; i++) {
             for (j = 0; j <= partWidthC - 1; j++) {
               // predC[ xP / SubWidthC + xS / SubWidthC + x, yP / SubHeightC +
               // yS / SubHeightC + y ] = predPartC[ x, y ];
-              m_pic_buff_cb[(mb_y * MbHeightC +
-                             yP / slice_header.m_sps.SubHeightC +
-                             yS / slice_header.m_sps.SubHeightC + i) *
+              m_pic_buff_cb[(mb_y * MbHeightC + yP / m_slice.m_sps.SubHeightC +
+                             yS / m_slice.m_sps.SubHeightC + i) *
                                 PicWidthInSamplesC +
-                            (mb_x * MbWidthC +
-                             xP / slice_header.m_sps.SubWidthC +
-                             xS / slice_header.m_sps.SubWidthC + j)] =
+                            (mb_x * MbWidthC + xP / m_slice.m_sps.SubWidthC +
+                             xS / m_slice.m_sps.SubWidthC + j)] =
                   predPartCb[i * partWidthC + j];
 
-              m_pic_buff_cr[(mb_y * MbHeightC +
-                             yP / slice_header.m_sps.SubHeightC +
-                             yS / slice_header.m_sps.SubHeightC + i) *
+              m_pic_buff_cr[(mb_y * MbHeightC + yP / m_slice.m_sps.SubHeightC +
+                             yS / m_slice.m_sps.SubHeightC + i) *
                                 PicWidthInSamplesC +
-                            (mb_x * MbWidthC +
-                             xP / slice_header.m_sps.SubWidthC +
-                             xS / slice_header.m_sps.SubWidthC + j)] =
+                            (mb_x * MbWidthC + xP / m_slice.m_sps.SubWidthC +
+                             xS / m_slice.m_sps.SubWidthC + j)] =
                   predPartCr[i * partWidthC + j];
             }
           }
@@ -659,29 +655,27 @@ int PictureBase::Inter_prediction_process() {
           }
         }
 
-        if (slice_header.m_sps.ChromaArrayType != 0) {
+        if (m_slice.m_sps.ChromaArrayType != 0) {
           for (i = 0; i <= partHeightC - 1; i++) {
             for (j = 0; j <= partWidthC - 1; j++) {
               // predC[ xP / SubWidthC + xS / SubWidthC + x, yP / SubHeightC +
               // yS / SubHeightC + y ] = predPartC[ x, y ];
               m_pic_buff_cb[(mb_y % 2) * PicWidthInSamplesC +
                             ((mb_y / 2) * MbHeightC +
-                             yP / slice_header.m_sps.SubHeightC +
-                             yS / slice_header.m_sps.SubHeightC + i) *
+                             yP / m_slice.m_sps.SubHeightC +
+                             yS / m_slice.m_sps.SubHeightC + i) *
                                 PicWidthInSamplesC * 2 +
-                            (mb_x * MbWidthC +
-                             xP / slice_header.m_sps.SubWidthC +
-                             xS / slice_header.m_sps.SubWidthC + j)] =
+                            (mb_x * MbWidthC + xP / m_slice.m_sps.SubWidthC +
+                             xS / m_slice.m_sps.SubWidthC + j)] =
                   predPartCb[i * partWidthC + j];
 
               m_pic_buff_cr[(mb_y % 2) * PicWidthInSamplesC +
                             ((mb_y / 2) * MbHeightC +
-                             yP / slice_header.m_sps.SubHeightC +
-                             yS / slice_header.m_sps.SubHeightC + i) *
+                             yP / m_slice.m_sps.SubHeightC +
+                             yS / m_slice.m_sps.SubHeightC + i) *
                                 PicWidthInSamplesC * 2 +
-                            (mb_x * MbWidthC +
-                             xP / slice_header.m_sps.SubWidthC +
-                             xS / slice_header.m_sps.SubWidthC + j)] =
+                            (mb_x * MbWidthC + xP / m_slice.m_sps.SubWidthC +
+                             xS / m_slice.m_sps.SubWidthC + j)] =
                   predPartCr[i * partWidthC + j];
             }
           }
@@ -706,7 +700,7 @@ int PictureBase::
         PictureBase *&refPicL1) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   int32_t mvpL0[2] = {0};
   int32_t mvpL1[2] = {0};
@@ -793,7 +787,7 @@ int PictureBase::
     RETURN_IF_FAILED(ret != 0, ret);
 
     ret = MacroBlock::SubMbPredModeFunc(
-        m_h264_slice_header.slice_type,
+        m_slice.slice_header.slice_type,
         m_mbs[CurrMbAddr].sub_mb_type[mbPartIdx], NumSubMbPart, SubMbPredMode,
         SubMbPartWidth, SubMbPartHeight);
     RETURN_IF_FAILED(ret != 0, ret);
@@ -898,18 +892,18 @@ int PictureBase::
   }
 
   //-----------------------------
-  if (slice_header.m_sps.ChromaArrayType != 0) {
+  if (m_slice.m_sps.ChromaArrayType != 0) {
     if (predFlagL0 == 1) {
       // 8.4.1.4 Derivation process for chroma motion vectors
       ret = Derivation_process_for_chroma_motion_vectors(
-          slice_header.m_sps.ChromaArrayType, mvL0, refPicL0, mvCL0);
+          m_slice.m_sps.ChromaArrayType, mvL0, refPicL0, mvCL0);
       RETURN_IF_FAILED(ret != 0, ret);
     }
 
     if (predFlagL1 == 1) {
       // 8.4.1.4 Derivation process for chroma motion vectors
       ret = Derivation_process_for_chroma_motion_vectors(
-          slice_header.m_sps.ChromaArrayType, mvL1, refPicL1, mvCL1);
+          m_slice.m_sps.ChromaArrayType, mvL1, refPicL1, mvCL1);
       RETURN_IF_FAILED(ret != 0, ret);
     }
   }
@@ -926,7 +920,7 @@ int PictureBase::
         int32_t &subMvCnt, int32_t &predFlagL0, int32_t &predFlagL1) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   //-----------------------------------
   if (slice_header.direct_spatial_mv_pred_flag ==
@@ -970,7 +964,7 @@ int PictureBase::
         int32_t &vertMvScale) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   PictureBase *firstRefPicL1Top = NULL;
   PictureBase *firstRefPicL1Bottom = NULL;
@@ -1027,14 +1021,14 @@ int PictureBase::
       colPic = &m_RefPicList1[0]->m_picture_frame;
     } else if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
                H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
-      if (m_h264_slice_data.mb_field_decoding_flag == 0) {
+      if (m_slice.slice_body.mb_field_decoding_flag == 0) {
         if (topAbsDiffPOC < bottomAbsDiffPOC) {
           colPic = firstRefPicL1Top;
         } else // if (topAbsDiffPOC >= bottomAbsDiffPOC)
         {
           colPic = firstRefPicL1Bottom;
         }
-      } else // if (m_h264_slice_data.mb_field_decoding_flag == 1)
+      } else // if (m_slice.slice_body.mb_field_decoding_flag == 1)
       {
         if ((CurrMbAddr & 1) == 0) {
           colPic = firstRefPicL1Top;
@@ -1056,9 +1050,9 @@ int PictureBase::
     PicCodingStruct_CurrPic = FLD;
   } else // if (slice_header.field_pic_flag == 0)
   {
-    if (slice_header.m_sps.mb_adaptive_frame_field_flag == 0) {
+    if (m_slice.m_sps.mb_adaptive_frame_field_flag == 0) {
       PicCodingStruct_CurrPic = FRM;
-    } else // if (slice_header.m_sps.mb_adaptive_frame_field_flag == 1)
+    } else // if (m_slice.m_sps.mb_adaptive_frame_field_flag == 1)
     {
       PicCodingStruct_CurrPic = AFRM;
     }
@@ -1068,13 +1062,13 @@ int PictureBase::
   // Table 8-7 – Specification of PicCodingStruct( X )
   int32_t PicCodingStruct_colPic = FLD;
 
-  if (colPic->m_h264_slice_header.field_pic_flag == 1) {
+  if (colPic->m_slice.slice_header.field_pic_flag == 1) {
     PicCodingStruct_colPic = FLD;
   } else // if (colPic->m_slice_header.field_pic_flag == 0)
   {
-    if (colPic->m_h264_slice_header.m_sps.mb_adaptive_frame_field_flag == 0) {
+    if (colPic->m_slice.m_sps.mb_adaptive_frame_field_flag == 0) {
       PicCodingStruct_colPic = FRM;
-    } else // if (colPic->m_h264_slice_header.m_sps.mb_adaptive_frame_field_flag
+    } else // if (colPic->m_h264_m_slice.m_sps.mb_adaptive_frame_field_flag
            // == 1)
     {
       PicCodingStruct_colPic = AFRM;
@@ -1092,9 +1086,9 @@ int PictureBase::
   //--------------------------------
   int32_t luma4x4BlkIdx = 0;
 
-  if (slice_header.m_sps.direct_8x8_inference_flag == 0) {
+  if (m_slice.m_sps.direct_8x8_inference_flag == 0) {
     luma4x4BlkIdx = (4 * mbPartIdx + subMbPartIdx);
-  } else // if (slice_header.m_sps.direct_8x8_inference_flag == 1)
+  } else // if (m_slice.m_sps.direct_8x8_inference_flag == 1)
   {
     luma4x4BlkIdx = 5 * mbPartIdx;
   }
@@ -1165,11 +1159,11 @@ int PictureBase::
   } else if (PicCodingStruct_CurrPic == AFRM) {
     if (PicCodingStruct_colPic == FLD) {
       int32_t mbAddrCol5 = CurrMbAddr / 2;
-      if (m_h264_slice_data.mb_field_decoding_flag == 0) {
+      if (m_slice.slice_body.mb_field_decoding_flag == 0) {
         mbAddrCol = mbAddrCol5;
         yM = 8 * (CurrMbAddr % 2) + 4 * (yCol / 8);
         vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
-      } else // if (m_h264_slice_data.mb_field_decoding_flag == 1)
+      } else // if (m_slice.slice_body.mb_field_decoding_flag == 1)
       {
         mbAddrCol = mbAddrCol5;
         yM = yCol;
@@ -1177,7 +1171,7 @@ int PictureBase::
       }
     } else if (PicCodingStruct_colPic == AFRM) {
       int32_t mbAddrX = CurrMbAddr;
-      if (m_h264_slice_data.mb_field_decoding_flag == 0) {
+      if (m_slice.slice_body.mb_field_decoding_flag == 0) {
         if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag ==
             0) // Otherwise (the macroblock mbAddrX in the picture colPic is a
                // frame macroblock), fieldDecodingFlagX is set equal to 0.
@@ -1197,7 +1191,7 @@ int PictureBase::
           yM = 8 * (CurrMbAddr % 2) + 4 * (yCol / 8);
           vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
         }
-      } else // if (m_h264_slice_data.mb_field_decoding_flag == 1)
+      } else // if (m_slice.slice_body.mb_field_decoding_flag == 1)
       {
         if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag ==
             0) // Otherwise (the macroblock mbAddrX in the picture colPic is a
@@ -1471,7 +1465,7 @@ int PictureBase::
       vertMvScale);
   RETURN_IF_FAILED(ret != 0, ret);
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   //---------------------------------
   int32_t refIdxL0_temp = 0;
@@ -1789,7 +1783,7 @@ int PictureBase::Derivation_process_for_motion_data_of_neighbouring_partitions(
     int32_t &refIdxLXN_C) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   //    int32_t mbAddrN_A= 0;
   int32_t mbPartIdxN_A = 0;
@@ -2154,7 +2148,7 @@ int PictureBase::Reference_picture_selection_process(int32_t refIdxLX,
                                                      int32_t RefPicListXLength,
                                                      PictureBase *&refPic) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   RETURN_IF_FAILED(refIdxLX < 0 || refIdxLX >= 32, -1);
 
@@ -2220,9 +2214,9 @@ int PictureBase::Reference_picture_selection_process(int32_t refIdxLX,
   }
 
   //-----------------------------
-  if (slice_header.m_sps.separate_colour_plane_flag == 0) {
+  if (m_slice.m_sps.separate_colour_plane_flag == 0) {
     // FIXME: 8.7 Deblocking filter process
-  } else // if (slice_header.m_sps.separate_colour_plane_flag == 1)
+  } else // if (m_slice.m_sps.separate_colour_plane_flag == 1)
   {
     if (slice_header.colour_plane_id == 0) {
 
@@ -2248,7 +2242,7 @@ int PictureBase::Fractional_sample_interpolation_process(
     uint8_t *predPartLXCr) // predPartCr[partHeightC][partWidthC]
 {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   //    int32_t xAL = mb_x * 16;
   //    int32_t yAL = mb_y * 16;
@@ -2270,7 +2264,7 @@ int PictureBase::Fractional_sample_interpolation_process(
   }
 
   //-------------------------
-  if (slice_header.m_sps.ChromaArrayType != 0) {
+  if (m_slice.m_sps.ChromaArrayType != 0) {
     int32_t xIntC = 0;
     int32_t yIntC = 0;
     int32_t xFracC = 0;
@@ -2279,17 +2273,17 @@ int PictureBase::Fractional_sample_interpolation_process(
 
     for (int32_t yC = 0; yC < partHeightC; yC++) {
       for (int32_t xC = 0; xC < partWidthC; xC++) {
-        if (slice_header.m_sps.ChromaArrayType == 1) {
-          xIntC = (xAL / slice_header.m_sps.SubWidthC) + (mvCLX[0] >> 3) + xC;
-          yIntC = (yAL / slice_header.m_sps.SubHeightC) + (mvCLX[1] >> 3) + yC;
+        if (m_slice.m_sps.ChromaArrayType == 1) {
+          xIntC = (xAL / m_slice.m_sps.SubWidthC) + (mvCLX[0] >> 3) + xC;
+          yIntC = (yAL / m_slice.m_sps.SubHeightC) + (mvCLX[1] >> 3) + yC;
           xFracC = mvCLX[0] & 7;
           yFracC = mvCLX[1] & 7;
-        } else if (slice_header.m_sps.ChromaArrayType == 2) {
-          xIntC = (xAL / slice_header.m_sps.SubWidthC) + (mvCLX[0] >> 3) + xC;
-          yIntC = (yAL / slice_header.m_sps.SubHeightC) + (mvCLX[1] >> 2) + yC;
+        } else if (m_slice.m_sps.ChromaArrayType == 2) {
+          xIntC = (xAL / m_slice.m_sps.SubWidthC) + (mvCLX[0] >> 3) + xC;
+          yIntC = (yAL / m_slice.m_sps.SubHeightC) + (mvCLX[1] >> 2) + yC;
           xFracC = mvCLX[0] & 7;
           yFracC = (mvCLX[1] & 3) << 1;
-        } else // if (slice_header.m_sps.ChromaArrayType == 3)
+        } else // if (m_slice.m_sps.ChromaArrayType == 3)
         {
           xIntC = xAL + (mvLX[0] >> 2) + xC;
           yIntC = yAL + (mvLX[1] >> 2) + yC;
@@ -2297,7 +2291,7 @@ int PictureBase::Fractional_sample_interpolation_process(
           yFracC = (mvCLX[1] & 3);
         }
 
-        if (slice_header.m_sps.ChromaArrayType != 3) {
+        if (m_slice.m_sps.ChromaArrayType != 3) {
           // 8.4.2.2.2 Chroma sample interpolation process
           uint8_t predPartLXCb_xC_yC = 0;
           isChromaCb = 1;
@@ -2358,13 +2352,13 @@ int PictureBase::Luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
   int ret = 0;
 
   int32_t refPicHeightEffectiveL = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   if (slice_header.MbaffFrameFlag == 0 ||
-      m_h264_slice_data.mb_field_decoding_flag == 0) {
+      m_slice.slice_body.mb_field_decoding_flag == 0) {
     refPicHeightEffectiveL = PicHeightInSamplesL;
   } else // if (slice_header.MbaffFrameFlag == 1 &&
-         // m_h264_slice_data.mb_field_decoding_flag == 1)
+         // m_slice.slice_body.mb_field_decoding_flag == 1)
   {
     refPicHeightEffectiveL = PicHeightInSamplesL / 2;
   }
@@ -2435,10 +2429,10 @@ int PictureBase::Luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
   int32_t m1 = a_6_tap_filter(B, D, H, N, S, U);
 
   // b = Clip1Y( ( b1 + 16 ) >> 5 ) = Clip3( 0, ( 1 << BitDepthY ) - 1, x );
-  int32_t b = CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1, (b1 + 16) >> 5);
-  int32_t s = CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1, (s1 + 16) >> 5);
-  int32_t h = CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1, (h1 + 16) >> 5);
-  int32_t m = CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1, (m1 + 16) >> 5);
+  int32_t b = CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1, (b1 + 16) >> 5);
+  int32_t s = CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1, (s1 + 16) >> 5);
+  int32_t h = CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1, (h1 + 16) >> 5);
+  int32_t m = CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1, (m1 + 16) >> 5);
 
   int32_t aa = a_6_tap_filter(X11, X12, A, B, X13, X14);
   int32_t bb = a_6_tap_filter(X21, X22, C, D, X23, X24);
@@ -2460,8 +2454,7 @@ int PictureBase::Luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
   //    RETURN_IF_FAILED(j1 != j2, -1);
 
   // int32_t j = Clip1Y( ( j1 + 512 ) >> 10 );
-  int32_t j =
-      CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1, (j1 + 512) >> 10);
+  int32_t j = CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1, (j1 + 512) >> 10);
 
   //--------------------
   int32_t a = (G + b + 1) >> 1;
@@ -2504,13 +2497,13 @@ int PictureBase::Chroma_sample_interpolation_process(
   int ret = 0;
 
   int32_t refPicHeightEffectiveC = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   if (slice_header.MbaffFrameFlag == 0 ||
-      m_h264_slice_data.mb_field_decoding_flag == 0) {
+      m_slice.slice_body.mb_field_decoding_flag == 0) {
     refPicHeightEffectiveC = PicHeightInSamplesC;
   } else // if (slice_header.MbaffFrameFlag == 1 &&
-         // m_h264_slice_data.mb_field_decoding_flag == 1)
+         // m_slice.slice_body.mb_field_decoding_flag == 1)
   {
     refPicHeightEffectiveC = PicHeightInSamplesC / 2;
   }
@@ -2561,18 +2554,18 @@ int PictureBase::Weighted_sample_prediction_process(
     uint8_t *predPartCr    // out: predPartLXCr[partHeightC][partWidthC]
 ) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   if (predFlagL0 == 1 && (slice_header.slice_type % 5 == H264_SLIECE_TYPE_P ||
                           slice_header.slice_type % 5 == H264_SLIECE_TYPE_SP)) {
-    if (slice_header.m_pps.weighted_pred_flag == 0) {
+    if (m_slice.m_pps.weighted_pred_flag == 0) {
       // 8.4.2.3.1 Default weighted sample prediction process
       ret = Default_weighted_sample_prediction_process(
           predFlagL0, predFlagL1, partWidth, partHeight, partWidthC,
           partHeightC, predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L,
           predPartL1Cb, predPartL1Cr, predPartL, predPartCb, predPartCr);
       RETURN_IF_FAILED(ret != 0, -1);
-    } else // if (slice_header.m_pps.weighted_pred_flag == 1)
+    } else // if (m_slice.m_pps.weighted_pred_flag == 1)
     {
       // 8.4.2.3.2 Weighted sample prediction process
       ret = Weighted_sample_prediction_process_2(
@@ -2585,14 +2578,14 @@ int PictureBase::Weighted_sample_prediction_process(
     }
   } else if ((predFlagL0 == 1 || predFlagL1 == 1) &&
              (slice_header.slice_type % 5 == H264_SLIECE_TYPE_B)) {
-    if (slice_header.m_pps.weighted_bipred_idc == 0) {
+    if (m_slice.m_pps.weighted_bipred_idc == 0) {
       // 8.4.2.3.1 Default weighted sample prediction process
       ret = Default_weighted_sample_prediction_process(
           predFlagL0, predFlagL1, partWidth, partHeight, partWidthC,
           partHeightC, predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L,
           predPartL1Cb, predPartL1Cr, predPartL, predPartCb, predPartCr);
       RETURN_IF_FAILED(ret != 0, -1);
-    } else if (slice_header.m_pps.weighted_bipred_idc == 1) {
+    } else if (m_slice.m_pps.weighted_bipred_idc == 1) {
       // 8.4.2.3.2 Weighted sample prediction process
       ret = Weighted_sample_prediction_process_2(
           mbPartIdx, subMbPartIdx, predFlagL0, predFlagL1, partWidth,
@@ -2601,7 +2594,7 @@ int PictureBase::Weighted_sample_prediction_process(
           predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L, predPartL1Cb,
           predPartL1Cr, predPartL, predPartCb, predPartCr);
       RETURN_IF_FAILED(ret != 0, -1);
-    } else // if (slice_header.m_pps.weighted_bipred_idc == 2)
+    } else // if (m_slice.m_pps.weighted_bipred_idc == 2)
     {
       if (predFlagL0 == 1 && predFlagL1 == 1) {
         // 8.4.2.3.2 Weighted sample prediction process
@@ -2635,7 +2628,7 @@ int PictureBase::Default_weighted_sample_prediction_process(
     uint8_t *predPartL1L, uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
     uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   if (predFlagL0 == 1 && predFlagL1 == 0) {
     for (int y = 0; y <= partHeight - 1; y++) {
@@ -2644,7 +2637,7 @@ int PictureBase::Default_weighted_sample_prediction_process(
       }
     }
 
-    if (slice_header.m_sps.ChromaArrayType != 0) {
+    if (m_slice.m_sps.ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           predPartCb[y * partWidthC + x] = predPartL0Cb[y * partWidthC + x];
@@ -2659,7 +2652,7 @@ int PictureBase::Default_weighted_sample_prediction_process(
       }
     }
 
-    if (slice_header.m_sps.ChromaArrayType != 0) {
+    if (m_slice.m_sps.ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           predPartCb[y * partWidthC + x] = predPartL1Cb[y * partWidthC + x];
@@ -2677,7 +2670,7 @@ int PictureBase::Default_weighted_sample_prediction_process(
       }
     }
 
-    if (slice_header.m_sps.ChromaArrayType != 0) {
+    if (m_slice.m_sps.ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           predPartCb[y * partWidthC + x] =
@@ -2708,7 +2701,7 @@ int PictureBase::Weighted_sample_prediction_process_2(
     uint8_t *predPartL1Cb, uint8_t *predPartL1Cr, uint8_t *predPartL,
     uint8_t *predPartCb, uint8_t *predPartCr) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   if (predFlagL0 == 1 && predFlagL1 == 0) {
     for (int y = 0; y <= partHeight - 1; y++) {
@@ -2716,34 +2709,34 @@ int PictureBase::Weighted_sample_prediction_process_2(
         if (logWDL >= 1) // Clip1Y( x ) = Clip3( 0, ( 1 << BitDepthY ) − 1, x )
         {
           predPartL[y * partWidth + x] =
-              CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1,
+              CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1,
                     ((predPartL0L[y * partWidth + x] * w0L +
                       h264_power2(logWDL - 1)) >>
                      logWDL) +
                         o0L);
         } else {
           predPartL[y * partWidth + x] =
-              CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1,
+              CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1,
                     predPartL0L[y * partWidth + x] * w0L + o0L);
         }
       }
     }
 
-    if (slice_header.m_sps.ChromaArrayType != 0) {
+    if (m_slice.m_sps.ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           if (logWDCb >=
               1) // Clip1Y( x ) = Clip3( 0, ( 1 << BitDepthC ) − 1, x )
           {
             predPartCb[y * partWidthC + x] =
-                CLIP3(0, (1 << slice_header.m_sps.BitDepthC) - 1,
+                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
                       ((predPartL0Cb[y * partWidthC + x] * w0Cb +
                         h264_power2(logWDCb - 1)) >>
                        logWDCb) +
                           o0Cb);
           } else {
             predPartCb[y * partWidthC + x] =
-                CLIP3(0, (1 << slice_header.m_sps.BitDepthC) - 1,
+                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
                       predPartL0Cb[y * partWidthC + x] * w0Cb + o0Cb);
           }
 
@@ -2751,14 +2744,14 @@ int PictureBase::Weighted_sample_prediction_process_2(
               1) // Clip1Y( x ) = Clip3( 0, ( 1 << BitDepthC ) − 1, x )
           {
             predPartCr[y * partWidthC + x] =
-                CLIP3(0, (1 << slice_header.m_sps.BitDepthC) - 1,
+                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
                       ((predPartL0Cr[y * partWidthC + x] * w0Cr +
                         h264_power2(logWDCr - 1)) >>
                        logWDCr) +
                           o0Cr);
           } else {
             predPartCr[y * partWidthC + x] =
-                CLIP3(0, (1 << slice_header.m_sps.BitDepthC) - 1,
+                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
                       predPartL0Cr[y * partWidthC + x] * w0Cr + o0Cr);
           }
         }
@@ -2770,34 +2763,34 @@ int PictureBase::Weighted_sample_prediction_process_2(
         if (logWDL >= 1) // Clip1Y( x ) = Clip3( 0, ( 1 << BitDepthY ) − 1, x )
         {
           predPartL[y * partWidth + x] =
-              CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1,
+              CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1,
                     ((predPartL1L[y * partWidth + x] * w0L +
                       h264_power2(logWDL - 1)) >>
                      logWDL) +
                         o0L);
         } else {
           predPartL[y * partWidth + x] =
-              CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1,
+              CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1,
                     predPartL1L[y * partWidth + x] * w0L + o0L);
         }
       }
     }
 
-    if (slice_header.m_sps.ChromaArrayType != 0) {
+    if (m_slice.m_sps.ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           if (logWDCb >=
               1) // Clip1Y( x ) = Clip3( 0, ( 1 << BitDepthC ) − 1, x )
           {
             predPartCb[y * partWidthC + x] =
-                CLIP3(0, (1 << slice_header.m_sps.BitDepthC) - 1,
+                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
                       ((predPartL1Cb[y * partWidthC + x] * w1Cb +
                         h264_power2(logWDCb - 1)) >>
                        logWDCb) +
                           o1Cb);
           } else {
             predPartCb[y * partWidthC + x] =
-                CLIP3(0, (1 << slice_header.m_sps.BitDepthC) - 1,
+                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
                       predPartL1Cb[y * partWidthC + x] * w1Cb + o1Cb);
           }
 
@@ -2805,14 +2798,14 @@ int PictureBase::Weighted_sample_prediction_process_2(
               1) // Clip1Y( x ) = Clip3( 0, ( 1 << BitDepthC ) − 1, x )
           {
             predPartCr[y * partWidthC + x] =
-                CLIP3(0, (1 << slice_header.m_sps.BitDepthC) - 1,
+                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
                       ((predPartL1Cr[y * partWidthC + x] * w1Cr +
                         h264_power2(logWDCr - 1)) >>
                        logWDCr) +
                           o1Cr);
           } else {
             predPartCr[y * partWidthC + x] =
-                CLIP3(0, (1 << slice_header.m_sps.BitDepthC) - 1,
+                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
                       predPartL1Cr[y * partWidthC + x] * w1Cr + o1Cr);
           }
         }
@@ -2826,7 +2819,7 @@ int PictureBase::Weighted_sample_prediction_process_2(
         // predPartL1C[ x, y ] * w1C + 2logWDC ) >> ( logWDC + 1 ) ) + ( ( o0C +
         // o1C + 1 ) >> 1 ) );
         predPartL[y * partWidth + x] = CLIP3(
-            0, (1 << slice_header.m_sps.BitDepthY) - 1,
+            0, (1 << m_slice.m_sps.BitDepthY) - 1,
             ((predPartL0L[y * partWidth + x] * w0L +
               predPartL1L[y * partWidth + x] * w1L + h264_power2(logWDL)) >>
              (logWDL + 1)) +
@@ -2834,11 +2827,11 @@ int PictureBase::Weighted_sample_prediction_process_2(
       }
     }
 
-    if (slice_header.m_sps.ChromaArrayType != 0) {
+    if (m_slice.m_sps.ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           predPartCb[y * partWidthC + x] =
-              CLIP3(0, (1 << slice_header.m_sps.BitDepthC) - 1,
+              CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
                     ((predPartL0Cb[y * partWidthC + x] * w0Cb +
                       predPartL1Cb[y * partWidthC + x] * w1Cb +
                       h264_power2(logWDCb)) >>
@@ -2846,7 +2839,7 @@ int PictureBase::Weighted_sample_prediction_process_2(
                         ((o0Cb + o1Cb + 1) >> 1));
 
           predPartCr[y * partWidthC + x] =
-              CLIP3(0, (1 << slice_header.m_sps.BitDepthC) - 1,
+              CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
                     ((predPartL0Cr[y * partWidthC + x] * w0Cr +
                       predPartL1Cr[y * partWidthC + x] * w1Cr +
                       h264_power2(logWDCr)) >>
@@ -2869,23 +2862,23 @@ int PictureBase::Derivation_process_for_prediction_weights(
     int32_t &o0Cr, int32_t &o1Cr) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   //-----------------------------
   int32_t implicitModeFlag = 0;
   int32_t explicitModeFlag = 0;
 
-  if (slice_header.m_pps.weighted_bipred_idc == 2 &&
+  if (m_slice.m_pps.weighted_bipred_idc == 2 &&
       (slice_header.slice_type % 5) == 1 && predFlagL0 == 1 &&
       predFlagL1 == 1) {
     implicitModeFlag = 1;
     explicitModeFlag = 0;
-  } else if (slice_header.m_pps.weighted_bipred_idc == 1 &&
+  } else if (m_slice.m_pps.weighted_bipred_idc == 1 &&
              (slice_header.slice_type % 5) == 1 &&
              (predFlagL0 + predFlagL1 == 1 || predFlagL0 + predFlagL1 == 2)) {
     implicitModeFlag = 0;
     explicitModeFlag = 1;
-  } else if (slice_header.m_pps.weighted_pred_flag == 1 &&
+  } else if (m_slice.m_pps.weighted_pred_flag == 1 &&
              ((slice_header.slice_type % 5) == 0 ||
               (slice_header.slice_type % 5) == 3) &&
              predFlagL0 == 1) {
@@ -2902,7 +2895,7 @@ int PictureBase::Derivation_process_for_prediction_weights(
     o0L = 0;
     o1L = 0;
 
-    if (slice_header.m_sps.ChromaArrayType != 0) {
+    if (m_slice.m_sps.ChromaArrayType != 0) {
       logWDCb = 5;
       o0Cb = 0;
       o1Cb = 0;
@@ -2997,7 +2990,7 @@ int PictureBase::Derivation_process_for_prediction_weights(
       w0L = 32;
       w1L = 32;
 
-      if (slice_header.m_sps.ChromaArrayType != 0) {
+      if (m_slice.m_sps.ChromaArrayType != 0) {
         w0Cb = 32;
         w1Cb = 32;
         w0Cr = 32;
@@ -3007,7 +3000,7 @@ int PictureBase::Derivation_process_for_prediction_weights(
       w0L = 64 - (DistScaleFactor >> 2);
       w1L = DistScaleFactor >> 2;
 
-      if (slice_header.m_sps.ChromaArrayType != 0) {
+      if (m_slice.m_sps.ChromaArrayType != 0) {
         w0Cb = 64 - (DistScaleFactor >> 2);
         w1Cb = DistScaleFactor >> 2;
         w0Cr = 64 - (DistScaleFactor >> 2);
@@ -3037,27 +3030,27 @@ int PictureBase::Derivation_process_for_prediction_weights(
     w0L = slice_header.luma_weight_l0[refIdxL0WP];
     w1L = slice_header.luma_weight_l1[refIdxL1WP];
     o0L = slice_header.luma_offset_l0[refIdxL0WP] *
-          (1 << (slice_header.m_sps.BitDepthY - 8));
+          (1 << (m_slice.m_sps.BitDepthY - 8));
     o1L = slice_header.luma_offset_l1[refIdxL1WP] *
-          (1 << (slice_header.m_sps.BitDepthY - 8));
+          (1 << (m_slice.m_sps.BitDepthY - 8));
 
     // C is equal to Cb or Cr for chroma samples
-    if (slice_header.m_sps.ChromaArrayType != 0) {
+    if (m_slice.m_sps.ChromaArrayType != 0) {
       logWDCb = slice_header.chroma_log2_weight_denom;
       w0Cb = slice_header.chroma_weight_l0[refIdxL0WP][0];
       w1Cb = slice_header.chroma_weight_l1[refIdxL1WP][0];
       o0Cb = slice_header.chroma_offset_l0[refIdxL0WP][0] *
-             (1 << (slice_header.m_sps.BitDepthC - 8));
+             (1 << (m_slice.m_sps.BitDepthC - 8));
       o1Cb = slice_header.chroma_offset_l1[refIdxL1WP][0] *
-             (1 << (slice_header.m_sps.BitDepthC - 8));
+             (1 << (m_slice.m_sps.BitDepthC - 8));
 
       logWDCr = slice_header.chroma_log2_weight_denom;
       w0Cr = slice_header.chroma_weight_l0[refIdxL0WP][1];
       w1Cr = slice_header.chroma_weight_l1[refIdxL1WP][1];
       o0Cr = slice_header.chroma_offset_l0[refIdxL0WP][1] *
-             (1 << (slice_header.m_sps.BitDepthC - 8));
+             (1 << (m_slice.m_sps.BitDepthC - 8));
       o1Cr = slice_header.chroma_offset_l1[refIdxL1WP][1] *
-             (1 << (slice_header.m_sps.BitDepthC - 8));
+             (1 << (m_slice.m_sps.BitDepthC - 8));
     }
   } else // if (implicitModeFlag == 0 && explicitModeFlag == 0)
   {
@@ -3070,7 +3063,7 @@ int PictureBase::Derivation_process_for_prediction_weights(
     // −128 <= w0C + w1C <= ( ( logWDC = = 7 ) ? 127 : 128 )
     RETURN_IF_FAILED(
         !(-128 <= w0L + w1L && w0L + w1L <= ((logWDL == 7) ? 127 : 128)), -1);
-    if (slice_header.m_sps.ChromaArrayType != 0) {
+    if (m_slice.m_sps.ChromaArrayType != 0) {
       RETURN_IF_FAILED(
           !(-128 <= w0Cb + w1Cb && w0Cb + w1Cb <= ((logWDCb == 7) ? 127 : 128)),
           -1);
@@ -3088,7 +3081,7 @@ int PictureBase::Inverse_sub_macroblock_partition_scanning_process(
     MacroBlock *mb, int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &x,
     int32_t &y) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   int32_t MbPartWidth = mb->MbPartWidth;
   int32_t MbPartHeight = mb->MbPartHeight;
@@ -3113,7 +3106,7 @@ int PictureBase::Derivation_process_for_neighbouring_partitions(
     int32_t subMbPartIdx, int32_t isChroma, int32_t &mbAddrN,
     int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   //---------------------------------------
   // 1. The inverse macroblock partition scanning process as described in
@@ -3226,7 +3219,7 @@ int PictureBase::
         H264_MB_TYPE mb_type_, H264_MB_TYPE subMbType_[4], int32_t xP,
         int32_t yP, int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   if (mb_type_ == MB_TYPE_NA) {
     LOG_ERROR("mb_type_ == MB_TYPE_NA\n");
@@ -3289,7 +3282,7 @@ int PictureBase::PicOrderCntFunc(
                                                             // or a
                                                             // complementary
                                                             // field pair
-                                                            // //当前图像为帧
+  // //当前图像为帧
   {
     picX->PicOrderCnt =
         MIN(picX->TopFieldOrderCnt,

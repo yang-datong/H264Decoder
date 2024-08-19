@@ -34,21 +34,21 @@ int main() {
     result = reader.readNalu(nalu);
 
     if (result == 1 || result == 0) {
-      cout << "Reading a NAL[" << ++number << "]{" << (int)nalu._buffer[0]
-           << " " << (int)nalu._buffer[1] << " " << (int)nalu._buffer[2] << " "
-           << (int)nalu._buffer[3] << "}, Buffer len[" << nalu._len << "]";
+      cout << "Reading a NAL[" << ++number << "]{" << (int)nalu.buffer[0] << " "
+           << (int)nalu.buffer[1] << " " << (int)nalu.buffer[2] << " "
+           << (int)nalu.buffer[3] << "}, Buffer len[" << nalu.len << "]";
 
       /* 4. 从NAL中解析出EBSP */
       nalu.parseEBSP(ebsp);
-      cout << "   --->   EBSP[" << number << "]{" << (int)ebsp._buf[0] << " "
-           << (int)ebsp._buf[1] << " " << (int)ebsp._buf[2] << " "
-           << (int)ebsp._buf[3] << "}, Buffer len[" << ebsp._len << "]";
+      cout << "   --->   EBSP[" << number << "]{" << (int)ebsp.buf[0] << " "
+           << (int)ebsp.buf[1] << " " << (int)ebsp.buf[2] << " "
+           << (int)ebsp.buf[3] << "}, Buffer len[" << ebsp.len << "]";
 
       /* 5. 从EBSP中解析出RBSP */
       nalu.parseRBSP(ebsp, rbsp);
-      cout << "  --->   RBSP[" << number << "]{" << (int)rbsp._buf[0] << " "
-           << (int)rbsp._buf[1] << " " << (int)rbsp._buf[2] << " "
-           << (int)rbsp._buf[3] << "}, Buffer len[" << rbsp._len << "]" << endl;
+      cout << "  --->   RBSP[" << number << "]{" << (int)rbsp.buf[0] << " "
+           << (int)rbsp.buf[1] << " " << (int)rbsp.buf[2] << " "
+           << (int)rbsp.buf[3] << "}, Buffer len[" << rbsp.len << "]" << endl;
 
       /* 6. 从RBSP中解析出SODB(未实现） */
       // nalu.parseSODB(rbsp, SODB);
@@ -70,8 +70,10 @@ int main() {
         frame = newEmptyPicture;
 
         /* 初始化bit处理器，填充slice的数据 */
-        bitStream = new BitStream(rbsp._buf, rbsp._len);
+        bitStream = new BitStream(rbsp.buf, rbsp.len);
         nalu.extractSliceparameters(*bitStream, *gop, *frame);
+        frame->decode(*bitStream, gop->m_DecodedPictureBuffer, gop->m_spss[0],
+                      gop->m_ppss[0]);
 
         cout << " }" << endl;
         break;
@@ -88,10 +90,14 @@ int main() {
         /* 11-1. 解码立即刷新帧 GOP[0] */
         cout << "IDR Slice -> {" << endl;
 
-        /* 初始化bit处理器，填充idr的数据 */
-        bitStream = new BitStream(rbsp._buf, rbsp._len);
-        nalu.extractIDRparameters(*bitStream, *gop, *frame);
+        /* 提供给外层程序一定是Frame，即一帧数据，而不是一个Slice，因为如果存在多个Slice为一帧的情况外层处理就很麻烦 */
 
+        /* 初始化bit处理器，填充idr的数据 */
+        bitStream = new BitStream(rbsp.buf, rbsp.len);
+        /* 这里通过解析SliceHeader后可以知道一个Frame到底是几个Slice，通过直接调用frame->decode，在内部对每个Slice->decode() （如果存在多个Slice的情况，可以通过first_mb_in_slice判断，如果每个Slice都为0,则表示每个Slice都是一帧数据，当first_mb_in_slice>0，则表示与前面的一个或多个Slice共同组成一个Frame） */
+        nalu.extractIDRparameters(*bitStream, *gop, *frame);
+        frame->decode(*bitStream, gop->m_DecodedPictureBuffer, gop->m_spss[0],
+                      gop->m_ppss[0]);
         cout << " }" << endl;
         break;
       case 6: /* SEI（补充信息）(VCL) */

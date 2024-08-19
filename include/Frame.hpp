@@ -3,14 +3,27 @@
 #include "GOP.hpp"
 #include "PictureBase.hpp"
 
+class Slice;
+
 class Frame {
  public:
+  //void addSlice(Slice *slice);
+
+  virtual void encode();
+  virtual void decode();
+
+  /* 开始解码图像 */
+  int decode(BitStream &bitStream, Frame *(&dpb)[16], SPS &sps, PPS &pps);
+
+  //protected:
+  //std::vector<Slice *> slices;
+
+ public:
   /* Slice */
-  SliceHeader slice_header;
-  SliceBody slice_body;
+  Slice *slice;
 
   /* IDR */
-  IDR idr;
+  //IDR idr;
 
   PictureBase m_picture_frame;
   PictureBase m_picture_top_filed;
@@ -27,6 +40,10 @@ class Frame {
 
   int32_t TopFieldOrderCnt;
   int32_t BottomFieldOrderCnt;
+  //private:
+  //Field topField;
+  //Field bottomField;
+
   int32_t PicOrderCntMsb;
   int32_t PicOrderCntLsb;
   int32_t FrameNumOffset;
@@ -39,11 +56,8 @@ class Frame {
   int32_t LongTermPicNum; // To each long-term reference picture 长期参考图像
   H264_PICTURE_MARKED_AS reference_marked_type; // I,P作为参考帧的mark状态
   int32_t m_is_decode_finished;                 // 本帧是否解码完毕;
-                                // 0-未解码完毕，1-已经解码完毕
+      // 0-未解码完毕，1-已经解码完毕
   int32_t m_is_in_use; // 本帧数据是否正在使用; 0-未使用，1-正在使用
-
-  /* 开始解码图像 */
-  int decode(BitStream &bitStream, Frame *(&dpb)[GOP_SIZE], SPS &sps, PPS &pps);
 
   int reset();
 };

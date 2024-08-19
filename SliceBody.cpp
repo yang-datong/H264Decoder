@@ -23,7 +23,7 @@ int SliceBody::DecodeCABAC(CH264Cabac &cabac, BitStream &bs,
 
 /* Rec. ITU-T H.264 (08/2021) 56 */
 int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
-  SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_slice.slice_header;
 
   /* CABAC编码 */
   CH264Cabac cabac;
@@ -64,7 +64,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
         if (picture.m_RefPicList0[i]) {
           sliceType = H264_SLIECE_TYPE_TO_STR(
               picture.m_RefPicList0[i]
-                  ->m_picture_frame.m_h264_slice_header.slice_type);
+                  ->m_picture_frame.m_slice.slice_header.slice_type);
           PicOrderCnt = picture.m_RefPicList0[i]->m_picture_frame.PicOrderCnt;
           PicNum = picture.m_RefPicList0[i]->m_picture_frame.PicNum;
           PicNumCnt = picture.m_RefPicList0[i]->m_picture_frame.m_PicNumCnt;
@@ -84,7 +84,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
         if (picture.m_RefPicList1[i]) {
           sliceType = H264_SLIECE_TYPE_TO_STR(
               picture.m_RefPicList1[i]
-                  ->m_picture_frame.m_h264_slice_header.slice_type);
+                  ->m_picture_frame.m_slice.slice_header.slice_type);
           PicOrderCnt = picture.m_RefPicList1[i]->m_picture_frame.PicOrderCnt;
           PicNum = picture.m_RefPicList1[i]->m_picture_frame.PicNum;
           PicNumCnt = picture.m_RefPicList1[i]->m_picture_frame.m_PicNumCnt;
@@ -171,7 +171,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
                 cabac.CABAC_decode_mb_field_decoding_flag(
                     picture, bs,
                     mb_field_decoding_flag); // 2 u(1) | ae(v)
-                                             // 再读取底场宏块的mb_field_decoding_flag
+                // 再读取底场宏块的mb_field_decoding_flag
 
                 //is_need_skip_read_mb_field_decoding_flag = true;
               } else // if (mb_skip_flag_next_mb == 1)
@@ -259,7 +259,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
       if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode == Intra_4x4) {
         isChroma = 0;
         isChromaCb = 0;
-        BitDepth = picture.m_h264_slice_header.m_sps.BitDepthY;
+        BitDepth = picture.m_slice.m_sps.BitDepthY;
 
         picture.transform_decoding_process_for_4x4_luma_residual_blocks(
             isChroma, isChromaCb, BitDepth, picWidthInSamplesL, pic_buff_luma);
@@ -276,7 +276,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
                  Intra_8x8) {
         isChroma = 0;
         isChromaCb = 0;
-        BitDepth = picture.m_h264_slice_header.m_sps.BitDepthY;
+        BitDepth = picture.m_slice.m_sps.BitDepthY;
 
         picture.transform_decoding_process_for_8x8_luma_residual_blocks(
             isChroma, isChromaCb, BitDepth, picWidthInSamplesL,
@@ -294,7 +294,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
                  Intra_16x16) {
         isChroma = 0;
         isChromaCb = 0;
-        BitDepth = picture.m_h264_slice_header.m_sps.BitDepthY;
+        BitDepth = picture.m_slice.m_sps.BitDepthY;
         int32_t QP1 = picture.m_mbs[picture.CurrMbAddr].QP1Y;
 
         picture
@@ -318,7 +318,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
         // P,B帧，I帧不会进这里
         picture.Inter_prediction_process(); // 帧间预测
 
-        BitDepth = picture.m_h264_slice_header.m_sps.BitDepthY;
+        BitDepth = picture.m_slice.m_sps.BitDepthY;
 
         //-------残差-----------
         if (picture.m_mbs[picture.CurrMbAddr].transform_size_8x8_flag == 0) {
@@ -361,8 +361,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
     CurrMbAddr = NextMbAddress(CurrMbAddr, slice_header);
   } while (moreDataFlag);
 
-  if (picture.mb_cnt == picture.PicSizeInMbs)
-    picture.m_is_decode_finished = 1;
+  if (picture.mb_cnt == picture.PicSizeInMbs) picture.m_is_decode_finished = 1;
 
   slice_id++;
   slice_number++;

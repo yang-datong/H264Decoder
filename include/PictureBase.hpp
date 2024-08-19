@@ -2,8 +2,8 @@
 #define PICTUREBASE_HPP_ZGHBMJIH
 #include "Common.hpp"
 #include "MacroBlock.hpp"
+#include "Slice.hpp"
 #include "SliceBody.hpp"
-#include "SliceHeader.hpp"
 #include "Type.hpp"
 
 class Frame;
@@ -25,7 +25,7 @@ class PictureBase {
                               // //解码后图片的宽度（单位：像素）
   int32_t PicWidthInSamplesC; // PicWidthInSamplesC = PicWidthInMbs * MbWidthC;
   int32_t PicHeightInSamplesL; // PicHeightInSamplesL = PicHeightInMbs * 16;
-                               // //解码后图片的高度（单位：像素）
+      // //解码后图片的高度（单位：像素）
   int32_t
       PicHeightInSamplesC; // PicHeightInSamplesC = PicHeightInMbs * MbHeightC;
   int32_t Chroma_Format;   // CHROMA_FORMAT_IDC_420
@@ -58,8 +58,9 @@ class PictureBase {
   int32_t memory_management_control_operation_6_flag;
   H264_PICTURE_MARKED_AS reference_marked_type; // I,P作为参考帧的mark状态
 
-  SliceHeader m_h264_slice_header;
-  SliceBody m_h264_slice_data; // 注意：一个picture中可能有多个slice data
+  Slice m_slice;
+  //SliceHeader m_h264_slice_header;
+  //SliceBody m_h264_slice_data; // 注意：一个picture中可能有多个slice data
   MacroBlock *m_mbs; // 存储当前图像的所有宏块 m_mbs[PicSizeInMbs] =
                      // m_mbs[PicWidthInMbs * PicHeightInMbs];
   int32_t LevelScale4x4[6][4][4];
@@ -84,7 +85,7 @@ class PictureBase {
   ~PictureBase();
   int printInfo();
   int reset();
-  int init(SliceHeader &slice_header);
+  int init(Slice &slice);
   int unInit();
   PictureBase &operator=(const PictureBase &src); // 重载等号运算符
   int copyData(const PictureBase &src, bool isMallocAndCopyData);

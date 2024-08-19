@@ -1188,8 +1188,8 @@ int CH264Cabac::
 
   // 6.4.11.1 Derivation process for neighbouring macroblocks
   ret = picture.Derivation_process_for_neighbouring_macroblocks(
-      picture.m_h264_slice_header.MbaffFrameFlag, _CurrMbAddr, mbAddrA, mbAddrB,
-      isChroma);
+      picture.m_slice.slice_header.MbaffFrameFlag, _CurrMbAddr, mbAddrA,
+      mbAddrB, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
 
   int32_t condTermFlagA = 0;
@@ -1273,7 +1273,7 @@ int CH264Cabac::Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_type(
 
   // 6.4.11.1 Derivation process for neighbouring macroblocks
   ret = picture.Derivation_process_for_neighbouring_macroblocks(
-      picture.m_h264_slice_header.MbaffFrameFlag, picture.CurrMbAddr, mbAddrA,
+      picture.m_slice.slice_header.MbaffFrameFlag, picture.CurrMbAddr, mbAddrA,
       mbAddrB, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
 
@@ -1384,8 +1384,8 @@ int CH264Cabac::
 
     // 6.4.11.1 Derivation process for neighbouring macroblocks
     ret = picture.Derivation_process_for_neighbouring_macroblocks(
-        picture.m_h264_slice_header.MbaffFrameFlag, picture.CurrMbAddr, mbAddrA,
-        mbAddrB, isChroma);
+        picture.m_slice.slice_header.MbaffFrameFlag, picture.CurrMbAddr,
+        mbAddrA, mbAddrB, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
 
     int32_t condTermFlagA = 0;
@@ -1440,8 +1440,9 @@ int CH264Cabac::
   // When the current macroblock is the first macroblock of a slice, prevMbAddr
   // is marked as not available.
 
-  int32_t FirstMbAddrOfSlice = picture.m_h264_slice_header.first_mb_in_slice *
-                               (1 + picture.m_h264_slice_header.MbaffFrameFlag);
+  int32_t FirstMbAddrOfSlice =
+      picture.m_slice.slice_header.first_mb_in_slice *
+      (1 + picture.m_slice.slice_header.MbaffFrameFlag);
   if (picture.CurrMbAddr == FirstMbAddrOfSlice) {
     prevMbAddr = -1;
   }
@@ -1565,7 +1566,7 @@ int CH264Cabac::
       int32_t SubMbPartHeight = 0;
 
       ret = MacroBlock::SubMbPredModeFunc(
-          picture.m_h264_slice_header.slice_type,
+          picture.m_slice.slice_header.slice_type,
           picture.m_mbs[mbAddrN_A].sub_mb_type[mbPartIdxN_A], NumSubMbPart,
           SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
       RETURN_IF_FAILED(ret != 0, ret);
@@ -1642,7 +1643,7 @@ int CH264Cabac::
       int32_t SubMbPartHeight = 0;
 
       ret = MacroBlock::SubMbPredModeFunc(
-          picture.m_h264_slice_header.slice_type,
+          picture.m_slice.slice_header.slice_type,
           picture.m_mbs[mbAddrN_B].sub_mb_type[mbPartIdxN_B], NumSubMbPart,
           SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
       RETURN_IF_FAILED(ret != 0, ret);
@@ -1780,7 +1781,7 @@ int CH264Cabac::
     int32_t SubMbPartHeight = 0;
 
     ret = MacroBlock::SubMbPredModeFunc(
-        picture.m_h264_slice_header.slice_type,
+        picture.m_slice.slice_header.slice_type,
         picture.m_mbs[mbAddrN_A].sub_mb_type[mbPartIdxN_A], NumSubMbPart,
         SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
     RETURN_IF_FAILED(ret != 0, ret);
@@ -1874,7 +1875,7 @@ int CH264Cabac::
     int32_t SubMbPartHeight = 0;
 
     ret = MacroBlock::SubMbPredModeFunc(
-        picture.m_h264_slice_header.slice_type,
+        picture.m_slice.slice_header.slice_type,
         picture.m_mbs[mbAddrN_B].sub_mb_type[mbPartIdxN_B], NumSubMbPart,
         SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
     RETURN_IF_FAILED(ret != 0, ret);
@@ -1981,7 +1982,7 @@ int CH264Cabac::
 
   // 6.4.11.1 Derivation process for neighbouring macroblocks
   ret = picture.Derivation_process_for_neighbouring_macroblocks(
-      picture.m_h264_slice_header.MbaffFrameFlag, picture.CurrMbAddr, mbAddrA,
+      picture.m_slice.slice_header.MbaffFrameFlag, picture.CurrMbAddr, mbAddrA,
       mbAddrB, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
 
@@ -2041,8 +2042,8 @@ int CH264Cabac::
 
     // 6.4.11.1 Derivation process for neighbouring macroblocks
     ret = picture.Derivation_process_for_neighbouring_macroblocks(
-        picture.m_h264_slice_header.MbaffFrameFlag, picture.CurrMbAddr, mbAddrA,
-        mbAddrB, isChroma);
+        picture.m_slice.slice_header.MbaffFrameFlag, picture.CurrMbAddr,
+        mbAddrA, mbAddrB, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
 
     // 1. If ctxBlockCat is equal to 0, the luma DC block of macroblock mbAddrN
@@ -2148,8 +2149,8 @@ int CH264Cabac::
 
     // 6.4.11.1 Derivation process for neighbouring macroblocks
     ret = picture.Derivation_process_for_neighbouring_macroblocks(
-        picture.m_h264_slice_header.MbaffFrameFlag, picture.CurrMbAddr, mbAddrA,
-        mbAddrB, isChroma);
+        picture.m_slice.slice_header.MbaffFrameFlag, picture.CurrMbAddr,
+        mbAddrA, mbAddrB, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
 
     //----------A------------
@@ -2502,8 +2503,8 @@ int CH264Cabac::
        mbAddrA >= 0 &&
        IS_INTRA_Prediction_Mode(picture.m_mbs[mbAddrA].m_mb_pred_mode) ==
            false &&
-       (picture.m_h264_slice_header.nal_unit_type >= 2 &&
-        picture.m_h264_slice_header.nal_unit_type <= 4))) {
+       (picture.m_slice.slice_header.nal_unit_type >= 2 &&
+        picture.m_slice.slice_header.nal_unit_type <= 4))) {
     condTermFlagA = 0;
   } else if ((mbAddrA < 0 &&
               (IS_INTRA_Prediction_Mode(
@@ -2528,8 +2529,8 @@ int CH264Cabac::
        mbAddrB >= 0 &&
        IS_INTRA_Prediction_Mode(picture.m_mbs[mbAddrB].m_mb_pred_mode) ==
            false &&
-       (picture.m_h264_slice_header.nal_unit_type >= 2 &&
-        picture.m_h264_slice_header.nal_unit_type <= 4))) {
+       (picture.m_slice.slice_header.nal_unit_type >= 2 &&
+        picture.m_slice.slice_header.nal_unit_type <= 4))) {
     condTermFlagB = 0;
   } else if ((mbAddrB < 0 &&
               (IS_INTRA_Prediction_Mode(
@@ -2561,7 +2562,7 @@ int CH264Cabac::
 
   // 6.4.11.1 Derivation process for neighbouring macroblocks
   ret = picture.Derivation_process_for_neighbouring_macroblocks(
-      picture.m_h264_slice_header.MbaffFrameFlag, picture.CurrMbAddr, mbAddrA,
+      picture.m_slice.slice_header.MbaffFrameFlag, picture.CurrMbAddr, mbAddrA,
       mbAddrB, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
 
@@ -2775,7 +2776,7 @@ int CH264Cabac::CABAC_decode_mb_type(PictureBase &picture, BitStream &bs,
   int ret = 0;
 
   H264_SLIECE_TYPE slice_type =
-      (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
+      (H264_SLIECE_TYPE)picture.m_slice.slice_header.slice_type;
 
   // Table 9-34 – Syntax elements and associated types of binarization,
   // maxBinIdxCtx, and ctxIdxOffset
@@ -2806,7 +2807,7 @@ int CH264Cabac::CABAC_decode_sub_mb_type(PictureBase &picture, BitStream &bs,
   int ret = 0;
 
   H264_SLIECE_TYPE slice_type =
-      (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
+      (H264_SLIECE_TYPE)picture.m_slice.slice_header.slice_type;
 
   // Table 9-34 – Syntax elements and associated types of binarization,
   // maxBinIdxCtx, and ctxIdxOffset
@@ -3186,7 +3187,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_SI_slices(PictureBase &picture,
   int ret = 0;
 
   H264_SLIECE_TYPE slice_type =
-      (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
+      (H264_SLIECE_TYPE)picture.m_slice.slice_header.slice_type;
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
@@ -3245,7 +3246,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_P_SP_slices(PictureBase &picture,
   int ret = 0;
 
   H264_SLIECE_TYPE slice_type =
-      (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
+      (H264_SLIECE_TYPE)picture.m_slice.slice_header.slice_type;
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
@@ -3334,7 +3335,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_B_slices(PictureBase &picture,
   int ret = 0;
 
   H264_SLIECE_TYPE slice_type =
-      (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
+      (H264_SLIECE_TYPE)picture.m_slice.slice_header.slice_type;
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
@@ -3620,7 +3621,7 @@ int CH264Cabac::CABAC_decode_sub_mb_type_in_P_SP_slices(PictureBase &picture,
   int ret = 0;
 
   H264_SLIECE_TYPE slice_type =
-      (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
+      (H264_SLIECE_TYPE)picture.m_slice.slice_header.slice_type;
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
@@ -3683,7 +3684,7 @@ int CH264Cabac::CABAC_decode_sub_mb_type_in_B_slices(PictureBase &picture,
   int ret = 0;
 
   H264_SLIECE_TYPE slice_type =
-      (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
+      (H264_SLIECE_TYPE)picture.m_slice.slice_header.slice_type;
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
@@ -3839,7 +3840,7 @@ int CH264Cabac::CABAC_decode_mb_skip_flag(PictureBase &picture, BitStream &bs,
   int ret = 0;
 
   H264_SLIECE_TYPE slice_type =
-      (H264_SLIECE_TYPE)picture.m_h264_slice_header.slice_type;
+      (H264_SLIECE_TYPE)picture.m_slice.slice_header.slice_type;
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
@@ -4361,7 +4362,7 @@ int CH264Cabac::CABAC_decode_coded_block_pattern(PictureBase &picture,
                                                  int32_t &synElVal) {
   int ret = 0;
 
-  int32_t ChromaArrayType = picture.m_h264_slice_header.m_sps.ChromaArrayType;
+  int32_t ChromaArrayType = picture.m_slice.m_sps.ChromaArrayType;
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
@@ -4510,8 +4511,8 @@ int CH264Cabac::CABAC_decode_coded_block_flag(PictureBase &picture,
                                               int32_t &synElVal) {
   int ret = 0;
 
-  int32_t NumC8x8 = 4 / (picture.m_h264_slice_header.m_sps.SubWidthC *
-                         picture.m_h264_slice_header.m_sps.SubHeightC);
+  int32_t NumC8x8 =
+      4 / (picture.m_slice.m_sps.SubWidthC * picture.m_slice.m_sps.SubHeightC);
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
@@ -4600,8 +4601,8 @@ int CH264Cabac::CABAC_decode_significant_coeff_flag(
     int32_t levelListIdx, int32_t last_flag, int32_t &synElVal) {
   int ret = 0;
 
-  int32_t NumC8x8 = 4 / (picture.m_h264_slice_header.m_sps.SubWidthC *
-                         picture.m_h264_slice_header.m_sps.SubHeightC);
+  int32_t NumC8x8 =
+      4 / (picture.m_slice.m_sps.SubWidthC * picture.m_slice.m_sps.SubHeightC);
   int32_t mb_field_decoding_flag =
       picture.m_mbs[picture.CurrMbAddr].mb_field_decoding_flag;
   // int32_t maxBinIdxCtx = 0;
@@ -4760,8 +4761,8 @@ int CH264Cabac::CABAC_decode_coeff_abs_level_minus1(
     int32_t &synElVal) {
   int ret = 0;
 
-  int32_t NumC8x8 = 4 / (picture.m_h264_slice_header.m_sps.SubWidthC *
-                         picture.m_h264_slice_header.m_sps.SubHeightC);
+  int32_t NumC8x8 =
+      4 / (picture.m_slice.m_sps.SubWidthC * picture.m_slice.m_sps.SubHeightC);
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
@@ -5024,7 +5025,7 @@ int CH264Cabac::residual_block_cabac(PictureBase &picture, BitStream &bs,
                                      int32_t &TotalCoeff) {
   int ret = 0;
 
-  int32_t ChromaArrayType = picture.m_h264_slice_header.m_sps.ChromaArrayType;
+  int32_t ChromaArrayType = picture.m_slice.m_sps.ChromaArrayType;
   int32_t i = 0;
   int32_t coded_block_flag = 1; // When coded_block_flag is not present, it
                                 // shall be inferred to be equal to 1.

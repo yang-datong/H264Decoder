@@ -104,7 +104,7 @@ int GOP::getOneOutPicture(Frame *newDecodedPic, Frame *&outPic) {
       outPic = NULL; // 说明缓存中彻底没有帧了
     }
   } else // if (newDecodedPic != NULL)
-         // //一般表示解码过程中的push_a_decoded_frame_and_get_a_display_frame操作
+  // //一般表示解码过程中的push_a_decoded_frame_and_get_a_display_frame操作
   {
     if (m_dpb_for_output_length <
         max_num_reorder_frames) // 说明m_dpb_index_for_output[]数组还没塞满，只push，不get
@@ -113,7 +113,7 @@ int GOP::getOneOutPicture(Frame *newDecodedPic, Frame *&outPic) {
       m_dpb_for_output_length++;
       outPic = NULL; // 目前还没有可输出的帧
     } else           // if (m_dpb_for_output_length >= max_num_reorder_frames)
-           // //说明m_dpb_index_for_output[]数组已满，先get，再push
+    // //说明m_dpb_index_for_output[]数组已满，先get，再push
     {
       RETURN_IF_FAILED(index < 0, -1);
 

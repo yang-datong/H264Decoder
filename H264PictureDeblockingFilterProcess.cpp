@@ -6,7 +6,7 @@ int PictureBase::Derivation_process_for_neighbouring_macroblocks(
     int32_t &mbAddrB, int32_t isChroma) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   int32_t xW = 0;
   int32_t yW = 0;
@@ -71,7 +71,7 @@ int PictureBase::Derivation_process_for_8x8_luma_block_indices(
 int PictureBase::Deblocking_filter_process() {
   int ret = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   int32_t i = 0;
   int32_t k = 0;
@@ -352,7 +352,7 @@ int PictureBase::Deblocking_filter_process() {
     // e. When ChromaArrayType is not equal to 0, for the filtering of both
     // chroma components, with iCbCr = 0 for Cb and iCbCr = 1 for Cr, the
     // following ordered steps are specified:
-    if (slice_header.m_sps.ChromaArrayType != 0) {
+    if (m_slice.m_sps.ChromaArrayType != 0) {
       // i. When filterLeftMbEdgeFlag is equal to 1, the left vertical chroma
       // edge is filtered
       if (filterLeftMbEdgeFlag == 1) {
@@ -402,7 +402,7 @@ int PictureBase::Deblocking_filter_process() {
         fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
         leftMbEdgeFlag = 0;
 
-        if (slice_header.m_sps.ChromaArrayType != 3 ||
+        if (m_slice.m_sps.ChromaArrayType != 3 ||
             m_mbs[CurrMbAddrTemp].transform_size_8x8_flag == 0) {
           for (k = 0; k <= MbHeightC - 1; k++) {
             E[k][0] = 4; //(xEk, yEk) = (4, k)
@@ -426,7 +426,7 @@ int PictureBase::Deblocking_filter_process() {
           RETURN_IF_FAILED(ret != 0, ret);
         }
 
-        if (slice_header.m_sps.ChromaArrayType == 3) {
+        if (m_slice.m_sps.ChromaArrayType == 3) {
           for (k = 0; k <= MbHeightC - 1; k++) {
             E[k][0] = 8; //(xEk, yEk) = (8, k)
             E[k][1] = k;
@@ -449,7 +449,7 @@ int PictureBase::Deblocking_filter_process() {
           RETURN_IF_FAILED(ret != 0, ret);
         }
 
-        if (slice_header.m_sps.ChromaArrayType == 3 &&
+        if (m_slice.m_sps.ChromaArrayType == 3 &&
             m_mbs[CurrMbAddrTemp].transform_size_8x8_flag == 0) {
           for (k = 0; k <= MbHeightC - 1; k++) {
             E[k][0] = 12; //(xEk, yEk) = (12, k)
@@ -569,7 +569,7 @@ int PictureBase::Deblocking_filter_process() {
         fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
         leftMbEdgeFlag = 0;
 
-        if (slice_header.m_sps.ChromaArrayType != 3 ||
+        if (m_slice.m_sps.ChromaArrayType != 3 ||
             m_mbs[CurrMbAddrTemp].transform_size_8x8_flag == 0) {
           for (k = 0; k <= MbWidthC - 1; k++) {
             E[k][0] = k; //(xEk, yEk) = (k, 4)
@@ -593,7 +593,7 @@ int PictureBase::Deblocking_filter_process() {
           RETURN_IF_FAILED(ret != 0, ret);
         }
 
-        if (slice_header.m_sps.ChromaArrayType != 1) {
+        if (m_slice.m_sps.ChromaArrayType != 1) {
           for (k = 0; k <= MbWidthC - 1; k++) {
             E[k][0] = k; //(xEk, yEk) = (k, 8)
             E[k][1] = 8;
@@ -616,7 +616,7 @@ int PictureBase::Deblocking_filter_process() {
           RETURN_IF_FAILED(ret != 0, ret);
         }
 
-        if (slice_header.m_sps.ChromaArrayType == 2) {
+        if (m_slice.m_sps.ChromaArrayType == 2) {
           for (k = 0; k <= MbWidthC - 1; k++) {
             E[k][0] = k; //(xEk, yEk) = (k, 12)
             E[k][1] = 12;
@@ -639,7 +639,7 @@ int PictureBase::Deblocking_filter_process() {
           RETURN_IF_FAILED(ret != 0, ret);
         }
 
-        if (slice_header.m_sps.ChromaArrayType == 3 &&
+        if (m_slice.m_sps.ChromaArrayType == 3 &&
             m_mbs[CurrMbAddrTemp].transform_size_8x8_flag == 0) {
           for (k = 0; k <= MbWidthC - 1; k++) {
             E[k][0] = k; //(xEk, yEk) = (k, 12)
@@ -667,10 +667,10 @@ int PictureBase::Deblocking_filter_process() {
   }
 
   //-----------------------
-  if (slice_header.m_sps.separate_colour_plane_flag == 0) {
+  if (m_slice.m_sps.separate_colour_plane_flag == 0) {
     // the arrays S′L, S′Cb, S′Cr are assigned to the arrays SL, SCb, SCr (which
     // represent the decoded picture), respectively.
-  } else // if (slice_header.m_sps.separate_colour_plane_flag == 1)
+  } else // if (m_slice.m_sps.separate_colour_plane_flag == 1)
          // //CHROMA_FORMAT_IDC_444
   {
     if (slice_header.colour_plane_id == 0) {
@@ -697,7 +697,7 @@ int PictureBase::Filtering_process_for_block_edges(
     int32_t leftMbEdgeFlag, int32_t (&E)[16][2]) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   //-----------------------
   uint8_t *pic_buff = NULL;
@@ -742,9 +742,8 @@ int PictureBase::Filtering_process_for_block_edges(
     xP = xI;
     yP = yI;
   } else {
-    xP = xI / slice_header.m_sps.SubWidthC;
-    yP = (yI + slice_header.m_sps.SubHeightC - 1) /
-         slice_header.m_sps.SubHeightC;
+    xP = xI / m_slice.m_sps.SubWidthC;
+    yP = (yI + m_slice.m_sps.SubHeightC - 1) / m_slice.m_sps.SubHeightC;
   }
 
   //---------------------------------
@@ -893,7 +892,7 @@ int PictureBase::
         uint8_t (&qq)[3]) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   int32_t bS = 0;
   int32_t mbAddr_p0 = mbAddrN;
@@ -916,10 +915,10 @@ int PictureBase::
     // inside the luma array of the same field, where ( x, y ) is the location
     // of the chroma sample q0 inside the chroma array for that field.
 
-    uint8_t mb_x_p0_chroma = m_h264_slice_header.m_sps.SubWidthC * mb_x_p0;
-    uint8_t mb_y_p0_chroma = m_h264_slice_header.m_sps.SubHeightC * mb_y_p0;
-    uint8_t mb_x_q0_chroma = m_h264_slice_header.m_sps.SubWidthC * mb_x_q0;
-    uint8_t mb_y_q0_chroma = m_h264_slice_header.m_sps.SubHeightC * mb_y_q0;
+    uint8_t mb_x_p0_chroma = m_slice.m_sps.SubWidthC * mb_x_p0;
+    uint8_t mb_y_p0_chroma = m_slice.m_sps.SubHeightC * mb_y_p0;
+    uint8_t mb_x_q0_chroma = m_slice.m_sps.SubWidthC * mb_x_q0;
+    uint8_t mb_y_q0_chroma = m_slice.m_sps.SubHeightC * mb_y_q0;
 
     // 8.7.2.1 Derivation process for the luma content dependent boundary
     // filtering strength
@@ -995,7 +994,7 @@ int PictureBase::
   RETURN_IF_FAILED(ret != 0, ret);
 
   int32_t chromaStyleFilteringFlag =
-      chromaEdgeFlag && (slice_header.m_sps.ChromaArrayType != 3);
+      chromaEdgeFlag && (m_slice.m_sps.ChromaArrayType != 3);
 
   if (filterSamplesFlag == 1) {
     if (bS < 4) {
@@ -1054,10 +1053,9 @@ int PictureBase::
     // the samples p0 or q0 is in a macroblock coded using an Intra macroblock
     // prediction mode,
     if ((m_mbs[mbAddr_p0].mb_field_decoding_flag == 0 &&
-            m_mbs[mbAddr_q0].mb_field_decoding_flag == 0 &&
-            (IS_INTRA_Prediction_Mode(m_mbs[mbAddr_p0].m_mb_pred_mode) ==
-                 true ||
-             IS_INTRA_Prediction_Mode(m_mbs[mbAddr_q0].m_mb_pred_mode) == true))
+         m_mbs[mbAddr_q0].mb_field_decoding_flag == 0 &&
+         (IS_INTRA_Prediction_Mode(m_mbs[mbAddr_p0].m_mb_pred_mode) == true ||
+          IS_INTRA_Prediction_Mode(m_mbs[mbAddr_q0].m_mb_pred_mode) == true))
 
         // the samples p0 and q0 are both in frame macroblocks and either or
         // both of the samples p0 or q0 is in a macroblock that is in a slice
@@ -1380,9 +1378,9 @@ int PictureBase::
       if ((ABS(MvL0_p0_x - MvL0_q0_x) >= 4 ||
            ABS(MvL0_p0_y - MvL0_q0_y) >= mv_y_diff) ||
           ((ABS(MvL1_p0_x - MvL1_q0_x) >= 4 ||
-           ABS(MvL1_p0_y - MvL1_q0_y) >= mv_y_diff)
-              && (ABS(MvL0_p0_x - MvL1_q0_x) >= 4 ||
-                  ABS(MvL0_p0_y - MvL1_q0_y) >= mv_y_diff)) ||
+            ABS(MvL1_p0_y - MvL1_q0_y) >= mv_y_diff) &&
+           (ABS(MvL0_p0_x - MvL1_q0_x) >= 4 ||
+            ABS(MvL0_p0_y - MvL1_q0_y) >= mv_y_diff)) ||
           (ABS(MvL1_p0_x - MvL0_q0_x) >= 4 ||
            ABS(MvL1_p0_y - MvL0_q0_y) >= mv_y_diff)) {
         bS = 1;
@@ -1404,7 +1402,7 @@ int PictureBase::Derivation_process_for_the_thresholds_for_each_block_edge(
     int32_t &beta) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   int32_t qPav = (qPp + qPq + 1) >> 1;
 
@@ -1429,14 +1427,14 @@ int PictureBase::Derivation_process_for_the_thresholds_for_each_block_edge(
   if (chromaEdgeFlag == 0) {
     // α = α′ * (1 << ( BitDepthY − 8 ) )
     // β = β′ * (1 << ( BitDepthY − 8 ) )
-    alpha = alpha2[indexA] * (1 << (slice_header.m_sps.BitDepthY - 8));
-    beta = beta2[indexB] * (1 << (slice_header.m_sps.BitDepthY - 8));
+    alpha = alpha2[indexA] * (1 << (m_slice.m_sps.BitDepthY - 8));
+    beta = beta2[indexB] * (1 << (m_slice.m_sps.BitDepthY - 8));
   } else // if (chromaEdgeFlag == 1)
   {
     // α = α′ * (1 << ( BitDepthC − 8 ) )
     // β = β′ * (1 << ( BitDepthC − 8 ) )
-    alpha = alpha2[indexA] * (1 << (slice_header.m_sps.BitDepthC - 8));
-    beta = beta2[indexB] * (1 << (slice_header.m_sps.BitDepthC - 8));
+    alpha = alpha2[indexA] * (1 << (m_slice.m_sps.BitDepthC - 8));
+    beta = beta2[indexB] * (1 << (m_slice.m_sps.BitDepthC - 8));
   }
 
   filterSamplesFlag = (bS != 0 && ABS(p0 - q0) < alpha && ABS(p1 - p0) < beta &&
@@ -1452,7 +1450,7 @@ int PictureBase::Filtering_process_for_edges_with_bS_less_than_4(
     uint8_t (&pp)[3], uint8_t (&qq)[3]) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   //-----------------
   // Table 8-17 – Value of variable t´C0 as a function of indexA and bS
@@ -1473,11 +1471,11 @@ int PictureBase::Filtering_process_for_edges_with_bS_less_than_4(
 
   if (chromaEdgeFlag == 0) {
     // tC0 = t′C0 * (1 << ( BitDepthY − 8 ) )
-    tC0 = ttC0[bS - 1][indexA] * (1 << (slice_header.m_sps.BitDepthY - 8));
+    tC0 = ttC0[bS - 1][indexA] * (1 << (m_slice.m_sps.BitDepthY - 8));
   } else // if (chromaEdgeFlag == 1)
   {
     // tC0 = t′C0 * (1 << ( BitDepthC − 8 ) )
-    tC0 = ttC0[bS - 1][indexA] * (1 << (slice_header.m_sps.BitDepthC - 8));
+    tC0 = ttC0[bS - 1][indexA] * (1 << (m_slice.m_sps.BitDepthC - 8));
   }
 
   int32_t ap = ABS(p[2] - p[0]);
@@ -1497,12 +1495,12 @@ int PictureBase::Filtering_process_for_edges_with_bS_less_than_4(
       CLIP3(-tC, tC, ((((q[0] - p[0]) << 2) + (p[1] - q[1]) + 4) >> 3));
 
   if (chromaEdgeFlag == 0) {
-    pp[0] = CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1, p[0] + delta);
-    qq[0] = CLIP3(0, (1 << slice_header.m_sps.BitDepthY) - 1, q[0] - delta);
+    pp[0] = CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1, p[0] + delta);
+    qq[0] = CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1, q[0] - delta);
   } else // if (chromaEdgeFlag == 1)
   {
-    pp[0] = CLIP3(0, (1 << slice_header.m_sps.BitDepthC) - 1, p[0] + delta);
-    qq[0] = CLIP3(0, (1 << slice_header.m_sps.BitDepthC) - 1, q[0] - delta);
+    pp[0] = CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1, p[0] + delta);
+    qq[0] = CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1, q[0] - delta);
   }
 
   //-------------------

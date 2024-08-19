@@ -969,14 +969,15 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
   int32_t mbPartIdx = 0;
   int32_t transform_size_8x8_flag_temp = 0;
 
-  SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_slice.slice_header;
 
   field_pic_flag = slice_header.field_pic_flag;
   bottom_field_flag = slice_header.bottom_field_flag;
   mb_skip_flag = slice_data.mb_skip_flag;
   mb_field_decoding_flag = slice_data.mb_field_decoding_flag;
   MbaffFrameFlag = slice_header.MbaffFrameFlag;
-  constrained_intra_pred_flag = slice_header.m_pps.constrained_intra_pred_flag;
+  constrained_intra_pred_flag =
+      picture.m_slice.m_pps.constrained_intra_pred_flag;
   disable_deblocking_filter_idc = slice_header.disable_deblocking_filter_idc;
   CurrMbAddr = slice_data.CurrMbAddr;
   slice_id = slice_data.slice_id;
@@ -991,7 +992,8 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
       picture.m_mbs[CurrMbAddr].m_mb_position_y);
   RETURN_IF_FAILED(ret != 0, ret);
 
-  int is_ae = slice_header.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
+  int is_ae =
+      picture.m_slice.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
 
   if (is_ae) // ae(v) 表示CABAC编码
   {
@@ -1023,14 +1025,14 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
     }
 
     for (i = 0; i < 256; i++) {
-      int32_t v = slice_header.m_sps.BitDepthY;
+      int32_t v = picture.m_slice.m_sps.BitDepthY;
       pcm_sample_luma[i] = bs.readUn(v); // 3 u(v)
     }
 
-    for (i = 0;
-         i < 2 * slice_header.m_sps.MbWidthC * slice_header.m_sps.MbHeightC;
+    for (i = 0; i < 2 * picture.m_slice.m_sps.MbWidthC *
+                        picture.m_slice.m_sps.MbHeightC;
          i++) {
-      int32_t v = slice_header.m_sps.BitDepthC;
+      int32_t v = picture.m_slice.m_sps.BitDepthC;
       pcm_sample_chroma[i] = bs.readUn(v); // 3 u(v)
     }
   } else {
@@ -1070,12 +1072,12 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
           if (NumSubMbPart > 1) {
             noSubMbPartSizeLessThan8x8Flag = 0;
           }
-        } else if (!slice_header.m_sps.direct_8x8_inference_flag) {
+        } else if (!picture.m_slice.m_sps.direct_8x8_inference_flag) {
           noSubMbPartSizeLessThan8x8Flag = 0;
         }
       }
     } else {
-      if (slice_header.m_pps.transform_8x8_mode_flag &&
+      if (picture.m_slice.m_pps.transform_8x8_mode_flag &&
           m_name_of_mb_type == I_NxN) {
 
         if (is_ae) // ae(v) 表示CABAC编码
@@ -1118,7 +1120,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
       } else // ue(v) 表示CAVLC编码
       {
         coded_block_pattern =
-            gb.get_me_golomb(bs, slice_header.m_sps.ChromaArrayType,
+            gb.get_me_golomb(bs, picture.m_slice.m_sps.ChromaArrayType,
                              m_mb_pred_mode); // 2 me(v) | ae(v)
       }
 
@@ -1126,10 +1128,10 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
       CodedBlockPatternChroma = coded_block_pattern / 16;
 
       if (CodedBlockPatternLuma > 0 &&
-          slice_header.m_pps.transform_8x8_mode_flag &&
+          picture.m_slice.m_pps.transform_8x8_mode_flag &&
           m_name_of_mb_type != I_NxN && noSubMbPartSizeLessThan8x8Flag &&
           (m_name_of_mb_type != B_Direct_16x16 ||
-           slice_header.m_sps.direct_8x8_inference_flag)) {
+           picture.m_slice.m_sps.direct_8x8_inference_flag)) {
         if (is_ae) // ae(v) 表示CABAC编码
         {
           ret = cabac.CABAC_decode_transform_size_8x8_flag(
@@ -1178,27 +1180,27 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
 
   //---------------------------------------------------
   if (mb_qp_delta <
-          (int32_t)(-(26 + (int32_t)slice_header.m_sps.QpBdOffsetY / 2)) ||
-      mb_qp_delta > (25 + (int32_t)slice_header.m_sps.QpBdOffsetY / 2)) {
+          (int32_t)(-(26 + (int32_t)picture.m_slice.m_sps.QpBdOffsetY / 2)) ||
+      mb_qp_delta > (25 + (int32_t)picture.m_slice.m_sps.QpBdOffsetY / 2)) {
     LOG_WARN("mb_qp_delta=(%d) is out of range [%d,%d].\n", mb_qp_delta,
-             (-(26 + (int32_t)slice_header.m_sps.QpBdOffsetY / 2)),
-             (25 + (int32_t)slice_header.m_sps.QpBdOffsetY / 2));
-    mb_qp_delta =
-        CLIP3((-(26 + (int32_t)slice_header.m_sps.QpBdOffsetY / 2)),
-              (25 + (int32_t)slice_header.m_sps.QpBdOffsetY / 2), mb_qp_delta);
+             (-(26 + (int32_t)picture.m_slice.m_sps.QpBdOffsetY / 2)),
+             (25 + (int32_t)picture.m_slice.m_sps.QpBdOffsetY / 2));
+    mb_qp_delta = CLIP3(
+        (-(26 + (int32_t)picture.m_slice.m_sps.QpBdOffsetY / 2)),
+        (25 + (int32_t)picture.m_slice.m_sps.QpBdOffsetY / 2), mb_qp_delta);
   }
 
   QPY = ((slice_header.QPY_prev + mb_qp_delta + 52 +
-          2 * slice_header.m_sps.QpBdOffsetY) %
-         (52 + slice_header.m_sps.QpBdOffsetY)) -
-        slice_header.m_sps.QpBdOffsetY; // (7-37)
-  QP1Y = QPY + slice_header.m_sps.QpBdOffsetY;
+          2 * picture.m_slice.m_sps.QpBdOffsetY) %
+         (52 + picture.m_slice.m_sps.QpBdOffsetY)) -
+        picture.m_slice.m_sps.QpBdOffsetY; // (7-37)
+  QP1Y = QPY + picture.m_slice.m_sps.QpBdOffsetY;
   slice_header.QPY_prev = QPY;
 
-  if (slice_header.m_sps.qpprime_y_zero_transform_bypass_flag == 1 &&
+  if (picture.m_slice.m_sps.qpprime_y_zero_transform_bypass_flag == 1 &&
       QP1Y == 0) {
     TransformBypassModeFlag = 1;
-  } else // if (slice_header.m_sps.qpprime_y_zero_transform_bypass_flag == 0 ||
+  } else // if (picture.m_slice.m_sps.qpprime_y_zero_transform_bypass_flag == 0 ||
          // QP1Y == 1)
   {
     TransformBypassModeFlag = 0;
@@ -1217,14 +1219,15 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
   CH264Golomb gb;
   // int32_t mbPartIdx = 0;
 
-  SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_slice.slice_header;
 
   field_pic_flag = slice_header.field_pic_flag;
   bottom_field_flag = slice_header.bottom_field_flag;
   mb_skip_flag = slice_data.mb_skip_flag;
   mb_field_decoding_flag = slice_data.mb_field_decoding_flag;
   MbaffFrameFlag = slice_header.MbaffFrameFlag;
-  constrained_intra_pred_flag = slice_header.m_pps.constrained_intra_pred_flag;
+  constrained_intra_pred_flag =
+      picture.m_slice.m_pps.constrained_intra_pred_flag;
   disable_deblocking_filter_idc = slice_header.disable_deblocking_filter_idc;
   CurrMbAddr = slice_data.CurrMbAddr;
   slice_id = slice_data.slice_id;
@@ -1239,7 +1242,7 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
       picture.m_mbs[CurrMbAddr].m_mb_position_y);
   RETURN_IF_FAILED(ret != 0, ret);
 
-  //    int is_ae = slice_header.m_pps.entropy_coding_mode_flag;
+  //    int is_ae = picture.m_slice.m_pps.entropy_coding_mode_flag;
   //    //ae(v)表示CABAC编码
 
   if (slice_header.slice_type == H264_SLIECE_TYPE_P ||
@@ -1273,10 +1276,10 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
   mb_qp_delta = 0;
 
   QPY = ((slice_header.QPY_prev + mb_qp_delta + 52 +
-          2 * slice_header.m_sps.QpBdOffsetY) %
-         (52 + slice_header.m_sps.QpBdOffsetY)) -
-        slice_header.m_sps.QpBdOffsetY; // (7-37)
-  QP1Y = QPY + slice_header.m_sps.QpBdOffsetY;
+          2 * picture.m_slice.m_sps.QpBdOffsetY) %
+         (52 + picture.m_slice.m_sps.QpBdOffsetY)) -
+        picture.m_slice.m_sps.QpBdOffsetY; // (7-37)
+  QP1Y = QPY + picture.m_slice.m_sps.QpBdOffsetY;
   slice_header.QPY_prev = QPY;
 
   ret =
@@ -1301,9 +1304,10 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
   int32_t mbPartIdx = 0;
   int32_t compIdx = 0;
 
-  SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_slice.slice_header;
 
-  int is_ae = slice_header.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
+  int is_ae =
+      picture.m_slice.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
 
   // if (MbPartPredMode(mb_type, 0) == Intra_4x4 || MbPartPredMode(mb_type, 0)
   // == Intra_8x8 || MbPartPredMode(mb_type, 0) == Intra_16x16)
@@ -1381,8 +1385,8 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
       }
     }
 
-    if (slice_header.m_sps.ChromaArrayType == 1 ||
-        slice_header.m_sps.ChromaArrayType == 2) {
+    if (picture.m_slice.m_sps.ChromaArrayType == 1 ||
+        picture.m_slice.m_sps.ChromaArrayType == 2) {
       if (is_ae) // ae(v) 表示CABAC编码
       {
         ret = cabac.CABAC_decode_intra_chroma_pred_mode(
@@ -1536,9 +1540,10 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
   int32_t subMbPartIdx = 0;
   int32_t compIdx = 0;
 
-  SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_slice.slice_header;
 
-  int is_ae = slice_header.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
+  int is_ae =
+      picture.m_slice.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
 
   //--------------------------
   for (mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
@@ -1729,11 +1734,12 @@ int MacroBlock::residual(BitStream &bs, PictureBase &picture, int32_t startIdx,
   int32_t TotalCoeff = 0; // 该 4x4 block的残差中，总共有多少个非零系数
   CH264ResidualBlockCavlc cavlc;
 
-  SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_slice.slice_header;
 
-  int is_ae = slice_header.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
+  int is_ae =
+      picture.m_slice.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
 
-  //    if (!slice_header.m_pps.entropy_coding_mode_flag)
+  //    if (!picture.m_slice.m_pps.entropy_coding_mode_flag)
   //    {
   //        residual_block = residual_block_cavlc;
   //    }
@@ -1753,10 +1759,10 @@ int MacroBlock::residual(BitStream &bs, PictureBase &picture, int32_t startIdx,
   memcpy(LumaLevel8x8, level8x8, sizeof(int32_t) * 4 * 64);
 
   //-----------------------
-  if (slice_header.m_sps.ChromaArrayType == 1 ||
-      slice_header.m_sps.ChromaArrayType == 2) {
-    int32_t NumC8x8 =
-        4 / (slice_header.m_sps.SubWidthC * slice_header.m_sps.SubHeightC);
+  if (picture.m_slice.m_sps.ChromaArrayType == 1 ||
+      picture.m_slice.m_sps.ChromaArrayType == 2) {
+    int32_t NumC8x8 = 4 / (picture.m_slice.m_sps.SubWidthC *
+                           picture.m_slice.m_sps.SubHeightC);
     for (iCbCr = 0; iCbCr < 2; iCbCr++) {
       if ((CodedBlockPatternChroma & 3) &&
           startIdx == 0) // chroma DC residual present
@@ -1830,7 +1836,7 @@ int MacroBlock::residual(BitStream &bs, PictureBase &picture, int32_t startIdx,
         }
       }
     }
-  } else if (slice_header.m_sps.ChromaArrayType == 3) {
+  } else if (picture.m_slice.m_sps.ChromaArrayType == 3) {
     ret = residual_luma(bs, picture, i16x16DClevel, i16x16AClevel, level4x4,
                         level8x8, startIdx, endIdx,
                         MB_RESIDUAL_CbIntra16x16DCLevel,
@@ -1876,9 +1882,10 @@ int MacroBlock::residual_luma(
   // H264_MB_TYPE name_of_mb_type2 = MB_TYPE_NA;
   CH264ResidualBlockCavlc cavlc;
 
-  SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_slice.slice_header;
 
-  int is_ae = slice_header.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
+  int is_ae =
+      picture.m_slice.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
 
   if (startIdx == 0 &&
       m_mb_pred_mode ==
@@ -1906,7 +1913,7 @@ int MacroBlock::residual_luma(
 
   for (i8x8 = 0; i8x8 < 4; i8x8++) {
     if (!transform_size_8x8_flag ||
-        !slice_header.m_pps.entropy_coding_mode_flag) {
+        !picture.m_slice.m_pps.entropy_coding_mode_flag) {
       for (i4x4 = 0; i4x4 < 4; i4x4++) {
         if (CodedBlockPatternLuma & (1 << i8x8)) {
           BlkIdx = i8x8 * 4 + i4x4;
@@ -1961,7 +1968,7 @@ int MacroBlock::residual_luma(
           }
         }
 
-        if (!slice_header.m_pps.entropy_coding_mode_flag &&
+        if (!picture.m_slice.m_pps.entropy_coding_mode_flag &&
             transform_size_8x8_flag) {
           for (i = 0; i < 16; i++) {
             level8x8[i8x8][4 * i + i4x4] = level4x4[i8x8 * 4 + i4x4][i];

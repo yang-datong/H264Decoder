@@ -251,6 +251,9 @@ class MacroBlock {
                     int32_t startIdx, int32_t endIdx,
                     MB_RESIDUAL_LEVEL mb_residual_level_dc,
                     MB_RESIDUAL_LEVEL mb_residual_level_ac, CH264Cabac &cabac);
+
+  //int encode();
+  //int decode();
 };
 
 #endif /* end of include guard: MACROBLOCK_HPP_FBNXLFQV */

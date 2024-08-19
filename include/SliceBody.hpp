@@ -7,14 +7,16 @@
 
 class PictureBase;
 class SliceBody {
- public:
-  // Slice();
-  //~Slice();
-
+ private:
   SPS m_sps;
   PPS m_pps;
   IDR m_idr;
 
+ public:
+  void setSPS(SPS &sps) { this->m_sps = sps; }
+  void setPPS(PPS &pps) { this->m_pps = pps; }
+
+ public:
   /* NOTE: 默认值应该设置为0,因为有时候就是需要使用到默认值为0的情况，
    * 如果将变量放在for中那么默认值为其他就会发生不可预知的错误 */
  public:
@@ -34,9 +36,7 @@ class SliceBody {
   bool moreDataFlag = 1;
 
   int parseSliceData(BitStream &bitStream, PictureBase &picture);
-
   int NextMbAddress(int n, SliceHeader &slice_header);
-
   int DecodeCABAC(CH264Cabac &cabac, BitStream &bs, SliceHeader &slice_header);
 };
 #endif /* end of include guard: SLICEBODY_HPP_OVHTPIZQ */

@@ -22,46 +22,48 @@ class Nalu {
   // Nalu(const Nalu &nalu);
   ~Nalu();
 
-  int _startCodeLenth = 0;
-  uint8_t *_buffer = nullptr;
-  int _len = 0;
-
+  int startCodeLenth = 0;
+  uint8_t *buffer = nullptr;
+  int len = 0;
   int setBuffer(uint8_t *buf, int len);
-  // 用于给外界传输buf进来
+
  public:
   class EBSP {
    public:
     EBSP();
     ~EBSP();
-    uint8_t *_buf = nullptr;
-    int _len = 0;
+    uint8_t *buf = nullptr;
+    int len = 0;
   };
   class RBSP {
    public:
     RBSP();
     ~RBSP();
-    uint8_t *_buf = nullptr;
-    int _len = 0;
+    uint8_t *buf = nullptr;
+    int len = 0;
   };
+
+ private:
+  int parseNALHeader(EBSP &rbsp);
+
+ public:
+  char forbidden_zero_bit = 0;
+  /* Nal单元的重要性，越大则说明该Nal越重要（不可随意丢弃），取值为[0-3] */
+  char nal_ref_idc = 0;
+  char nal_unit_type = 0;
 
  public:
   int parseEBSP(EBSP &ebsp);
   int parseRBSP(EBSP &ebsp, RBSP &rbsp);
 
-  char forbidden_zero_bit = 0;
-  char nal_ref_idc = 0;
-  char nal_unit_type = 0;
-
+  /* Non-VCL */
   int extractSPSparameters(RBSP &rbsp, SPS &sps);
   int extractPPSparameters(RBSP &rbsp, PPS &pps, uint32_t chroma_format_idc);
   int extractSEIparameters(RBSP &rbsp, SEI &sei, SPS &sps);
+
+  /* VCL */
   int extractSliceparameters(BitStream &bitStream, GOP &gop, Frame &frame);
   int extractIDRparameters(BitStream &bitStream, GOP &gop, Frame &frame);
-
-  int GetNaluType();
-
- private:
-  int parseNALHeader(EBSP &rbsp);
 };
 
 #endif /* end of include guard: NALU_HPP_YDI8RPRP */

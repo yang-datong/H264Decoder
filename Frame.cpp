@@ -1,47 +1,34 @@
 #include "Frame.hpp"
+#include "Slice.hpp"
+#include "SliceHeader.hpp"
 
-int Frame::decode(BitStream &bitStream, Frame *(&dpb)[GOP_SIZE], SPS &sps,
-                  PPS &pps) {
+//void Frame::addSlice(Slice *slice) { slices.push_back(slice); }
+
+void Frame::encode() {
+  // Implement frame encoding logic
+  //for (auto &slice : slices) {
+    //slice->encode();
+  //}
+}
+
+void Frame::decode() {}
+
+int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], SPS &sps, PPS &pps) {
   static int index = 0;
-
-  //----------------帧----------------------------------
-  m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
-  m_picture_frame.m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
-  m_picture_frame.m_parent = this;
-  memcpy(m_picture_frame.m_dpb, dpb, sizeof(Nalu *) * GOP_SIZE);
-  m_current_picture_ptr = &m_picture_frame;
-  m_picture_frame.init(slice_header);
-
-  //----------------顶场-------------------------------
-  m_picture_top_filed.m_picture_coded_type = H264_PICTURE_CODED_TYPE_TOP_FIELD;
-  m_picture_top_filed.m_parent = this;
-  m_picture_top_filed.init(slice_header);
-
-  //----------------底场-------------------------------
-  m_picture_bottom_filed.m_picture_coded_type =
-      H264_PICTURE_CODED_TYPE_BOTTOM_FIELD;
-  m_picture_bottom_filed.m_parent = this;
-  m_picture_bottom_filed.init(slice_header);
-
-  if (slice_header.field_pic_flag) // 场编码->顶场，底场
-    exit(0);
-    //std::cout << "\t场编码(暂不处理)" << std::endl;
-  //else  // 帧
-    //std::cout << "\t帧编码" << std::endl;
-
-  slice_body.parseSliceData(bitStream, m_picture_frame);
-
   string output_file;
-  if (slice_header.slice_type == SLICE_I)
-    output_file = "output_I_" + to_string(index++) + ".bmp";
-  else if (slice_header.slice_type == SLICE_P)
-    output_file = "output_P_" + to_string(index++) + ".bmp";
-  else if (slice_header.slice_type == SLICE_B)
-    output_file = "output_B_" + to_string(index++) + ".bmp";
-  else {
-    std::cerr << "未知帧" << std::endl;
-    exit(0);
-  }
+  //for (auto &slice : slices) {
+    slice->decode(bitStream, dpb, sps, pps, this);
+    if (slice->slice_header.slice_type == SLICE_I)
+      output_file = "output_I_" + to_string(index++) + ".bmp";
+    else if (slice->slice_header.slice_type == SLICE_P)
+      output_file = "output_P_" + to_string(index++) + ".bmp";
+    else if (slice->slice_header.slice_type == SLICE_B)
+      output_file = "output_B_" + to_string(index++) + ".bmp";
+    else {
+      std::cerr << "未知帧" << std::endl;
+      exit(0);
+    }
+  //}
   m_picture_frame.saveToBmpFile(output_file.c_str());
   return 0;
 }

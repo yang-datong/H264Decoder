@@ -7,15 +7,15 @@
 int PictureBase::Decoding_process_for_picture_order_count() {
   int ret = 0;
 
-  if (m_h264_slice_header.m_sps.pic_order_cnt_type == 0) {
+  if (m_slice.m_sps.pic_order_cnt_type == 0) {
     ret = Decoding_process_for_picture_order_count_type_0(
         m_parent->m_picture_previous_ref);
     RETURN_IF_FAILED(ret != 0, ret);
-  } else if (m_h264_slice_header.m_sps.pic_order_cnt_type == 1) {
+  } else if (m_slice.m_sps.pic_order_cnt_type == 1) {
     ret = Decoding_process_for_picture_order_count_type_1(
         m_parent->m_picture_previous);
     RETURN_IF_FAILED(ret != 0, ret);
-  } else if (m_h264_slice_header.m_sps.pic_order_cnt_type == 2) {
+  } else if (m_slice.m_sps.pic_order_cnt_type == 2) {
     ret = Decoding_process_for_picture_order_count_type_2(
         m_parent->m_picture_previous);
     RETURN_IF_FAILED(ret != 0, ret);
@@ -34,11 +34,11 @@ int PictureBase::Decoding_process_for_picture_order_count_type_0(
   int32_t prevPicOrderCntMsb = 0;
   int32_t prevPicOrderCntLsb = 0;
 
-  if (m_h264_slice_header.IdrPicFlag == 1) // IDR picture
+  if (m_slice.slice_header.IdrPicFlag == 1) // IDR picture
   {
     prevPicOrderCntMsb = 0;
     prevPicOrderCntLsb = 0;
-  } else // if (m_h264_slice_header.m_nal_unit.IdrPicFlag != 1)
+  } else // if (m_slice.slice_header.m_nal_unit.IdrPicFlag != 1)
   {
     RETURN_IF_FAILED(picture_previous_ref == NULL, -1);
 
@@ -65,21 +65,19 @@ int PictureBase::Decoding_process_for_picture_order_count_type_0(
     {
       prevPicOrderCntMsb = picture_previous_ref->PicOrderCntMsb;
       prevPicOrderCntLsb =
-          picture_previous_ref->m_h264_slice_header.pic_order_cnt_lsb;
+          picture_previous_ref->m_slice.slice_header.pic_order_cnt_lsb;
     }
   }
 
   //--------------------------
-  if ((m_h264_slice_header.pic_order_cnt_lsb < prevPicOrderCntLsb) &&
-      ((prevPicOrderCntLsb - m_h264_slice_header.pic_order_cnt_lsb) >=
-       (m_h264_slice_header.m_sps.MaxPicOrderCntLsb / 2))) {
-    PicOrderCntMsb =
-        prevPicOrderCntMsb + m_h264_slice_header.m_sps.MaxPicOrderCntLsb;
-  } else if ((m_h264_slice_header.pic_order_cnt_lsb > prevPicOrderCntLsb) &&
-             ((m_h264_slice_header.pic_order_cnt_lsb - prevPicOrderCntLsb) >
-              (m_h264_slice_header.m_sps.MaxPicOrderCntLsb / 2))) {
-    PicOrderCntMsb =
-        prevPicOrderCntMsb - m_h264_slice_header.m_sps.MaxPicOrderCntLsb;
+  if ((m_slice.slice_header.pic_order_cnt_lsb < prevPicOrderCntLsb) &&
+      ((prevPicOrderCntLsb - m_slice.slice_header.pic_order_cnt_lsb) >=
+       (m_slice.m_sps.MaxPicOrderCntLsb / 2))) {
+    PicOrderCntMsb = prevPicOrderCntMsb + m_slice.m_sps.MaxPicOrderCntLsb;
+  } else if ((m_slice.slice_header.pic_order_cnt_lsb > prevPicOrderCntLsb) &&
+             ((m_slice.slice_header.pic_order_cnt_lsb - prevPicOrderCntLsb) >
+              (m_slice.m_sps.MaxPicOrderCntLsb / 2))) {
+    PicOrderCntMsb = prevPicOrderCntMsb - m_slice.m_sps.MaxPicOrderCntLsb;
   } else {
     PicOrderCntMsb = prevPicOrderCntMsb;
   }
@@ -87,23 +85,23 @@ int PictureBase::Decoding_process_for_picture_order_count_type_0(
   //--------------------------
   if (m_picture_coded_type !=
       H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) // When the current picture is not a
-                                            // bottom field 当前图像为非底场
+  // bottom field 当前图像为非底场
   {
-    TopFieldOrderCnt = PicOrderCntMsb + m_h264_slice_header.pic_order_cnt_lsb;
+    TopFieldOrderCnt = PicOrderCntMsb + m_slice.slice_header.pic_order_cnt_lsb;
   }
 
   if (m_picture_coded_type !=
       H264_PICTURE_CODED_TYPE_TOP_FIELD) // When the current picture is not a
                                          // top field
   {
-    if (!m_h264_slice_header.field_pic_flag) // 当前图像为帧
+    if (!m_slice.slice_header.field_pic_flag) // 当前图像为帧
     {
       BottomFieldOrderCnt =
-          TopFieldOrderCnt + m_h264_slice_header.delta_pic_order_cnt_bottom;
+          TopFieldOrderCnt + m_slice.slice_header.delta_pic_order_cnt_bottom;
     } else // 当前图像为底场
     {
       BottomFieldOrderCnt =
-          PicOrderCntMsb + m_h264_slice_header.pic_order_cnt_lsb;
+          PicOrderCntMsb + m_slice.slice_header.pic_order_cnt_lsb;
     }
   }
 
@@ -115,13 +113,13 @@ int PictureBase::Decoding_process_for_picture_order_count_type_0(
 int PictureBase::Decoding_process_for_picture_order_count_type_1(
     const PictureBase *picture_previous) {
   RETURN_IF_FAILED(
-      m_h264_slice_header.IdrPicFlag != 1 && picture_previous == NULL, -1);
+      m_slice.slice_header.IdrPicFlag != 1 && picture_previous == NULL, -1);
 
   int ret = 0;
   int32_t prevFrameNumOffset = 0;
 
   //--------------prevFrameNumOffset----------------
-  if (m_h264_slice_header.IdrPicFlag != 1) // not IDR picture
+  if (m_slice.slice_header.IdrPicFlag != 1) // not IDR picture
   {
     if (picture_previous->memory_management_control_operation_5_flag ==
         1) // If the previous picture in decoding order included a
@@ -134,74 +132,69 @@ int PictureBase::Decoding_process_for_picture_order_count_type_1(
   }
 
   //--------------FrameNumOffset----------------
-  if (m_h264_slice_header.IdrPicFlag == 1) // IDR图像
+  if (m_slice.slice_header.IdrPicFlag == 1) // IDR图像
   {
     FrameNumOffset = 0;
-  } else if (picture_previous->m_h264_slice_header.frame_num >
-             m_h264_slice_header.frame_num) // 前一图像的帧号比当前图像大
+  } else if (picture_previous->m_slice.slice_header.frame_num >
+             m_slice.slice_header.frame_num) // 前一图像的帧号比当前图像大
   {
-    FrameNumOffset = prevFrameNumOffset + m_h264_slice_header.m_sps.MaxFrameNum;
+    FrameNumOffset = prevFrameNumOffset + m_slice.m_sps.MaxFrameNum;
   } else {
     FrameNumOffset = prevFrameNumOffset;
   }
 
   //--------------absFrameNum----------------
-  if (m_h264_slice_header.m_sps.num_ref_frames_in_pic_order_cnt_cycle != 0) {
-    absFrameNum = FrameNumOffset + m_h264_slice_header.frame_num;
+  if (m_slice.m_sps.num_ref_frames_in_pic_order_cnt_cycle != 0) {
+    absFrameNum = FrameNumOffset + m_slice.slice_header.frame_num;
   } else {
     absFrameNum = 0;
   }
 
-  if (m_h264_slice_header.nal_ref_idc == 0 && absFrameNum > 0) {
+  if (m_slice.slice_header.nal_ref_idc == 0 && absFrameNum > 0) {
     absFrameNum = absFrameNum - 1;
   }
 
   if (absFrameNum > 0) {
     picOrderCntCycleCnt =
-        (absFrameNum - 1) /
-        m_h264_slice_header.m_sps.num_ref_frames_in_pic_order_cnt_cycle;
+        (absFrameNum - 1) / m_slice.m_sps.num_ref_frames_in_pic_order_cnt_cycle;
     frameNumInPicOrderCntCycle =
-        (absFrameNum - 1) %
-        m_h264_slice_header.m_sps.num_ref_frames_in_pic_order_cnt_cycle;
+        (absFrameNum - 1) % m_slice.m_sps.num_ref_frames_in_pic_order_cnt_cycle;
   }
 
   //--------------expectedPicOrderCnt----------------
   if (absFrameNum > 0) {
     expectedPicOrderCnt =
-        picOrderCntCycleCnt *
-        m_h264_slice_header.m_sps.ExpectedDeltaPerPicOrderCntCycle;
+        picOrderCntCycleCnt * m_slice.m_sps.ExpectedDeltaPerPicOrderCntCycle;
     for (int i = 0; i <= frameNumInPicOrderCntCycle; i++) {
-      expectedPicOrderCnt = expectedPicOrderCnt +
-                            m_h264_slice_header.m_sps.offset_for_ref_frame[i];
+      expectedPicOrderCnt =
+          expectedPicOrderCnt + m_slice.m_sps.offset_for_ref_frame[i];
     }
   } else {
     expectedPicOrderCnt = 0;
   }
 
-  if (m_h264_slice_header.nal_ref_idc == 0) {
+  if (m_slice.slice_header.nal_ref_idc == 0) {
     expectedPicOrderCnt =
-        expectedPicOrderCnt + m_h264_slice_header.m_sps.offset_for_non_ref_pic;
+        expectedPicOrderCnt + m_slice.m_sps.offset_for_non_ref_pic;
   }
 
   //--------------TopFieldOrderCnt or BottomFieldOrderCnt----------------
-  if (!m_h264_slice_header.field_pic_flag) // 当前图像为帧
+  if (!m_slice.slice_header.field_pic_flag) // 当前图像为帧
   {
     TopFieldOrderCnt =
-        expectedPicOrderCnt + m_h264_slice_header.delta_pic_order_cnt[0];
-    BottomFieldOrderCnt =
-        TopFieldOrderCnt +
-        m_h264_slice_header.m_sps.offset_for_top_to_bottom_field +
-        m_h264_slice_header.delta_pic_order_cnt[1];
-  } else if (!m_h264_slice_header.bottom_field_flag) // 当前图像为顶场
+        expectedPicOrderCnt + m_slice.slice_header.delta_pic_order_cnt[0];
+    BottomFieldOrderCnt = TopFieldOrderCnt +
+                          m_slice.m_sps.offset_for_top_to_bottom_field +
+                          m_slice.slice_header.delta_pic_order_cnt[1];
+  } else if (!m_slice.slice_header.bottom_field_flag) // 当前图像为顶场
   {
     TopFieldOrderCnt =
-        expectedPicOrderCnt + m_h264_slice_header.delta_pic_order_cnt[0];
+        expectedPicOrderCnt + m_slice.slice_header.delta_pic_order_cnt[0];
   } else // 当前图像为底场
   {
-    BottomFieldOrderCnt =
-        expectedPicOrderCnt +
-        m_h264_slice_header.m_sps.offset_for_top_to_bottom_field +
-        m_h264_slice_header.delta_pic_order_cnt[0];
+    BottomFieldOrderCnt = expectedPicOrderCnt +
+                          m_slice.m_sps.offset_for_top_to_bottom_field +
+                          m_slice.slice_header.delta_pic_order_cnt[0];
   }
 
   return 0;
@@ -212,13 +205,13 @@ int PictureBase::Decoding_process_for_picture_order_count_type_1(
 int PictureBase::Decoding_process_for_picture_order_count_type_2(
     const PictureBase *picture_previous) {
   RETURN_IF_FAILED(
-      m_h264_slice_header.IdrPicFlag != 1 && picture_previous == NULL, -1);
+      m_slice.slice_header.IdrPicFlag != 1 && picture_previous == NULL, -1);
 
   int ret = 0;
   int32_t prevFrameNumOffset = 0;
 
   //--------------prevFrameNumOffset----------------
-  if (m_h264_slice_header.IdrPicFlag != 1) // not IDR picture
+  if (m_slice.slice_header.IdrPicFlag != 1) // not IDR picture
   {
     if (picture_previous->memory_management_control_operation_5_flag ==
         1) // If the previous picture in decoding order included a
@@ -231,11 +224,11 @@ int PictureBase::Decoding_process_for_picture_order_count_type_2(
   }
 
   //--------------FrameNumOffset----------------
-  if (m_h264_slice_header.IdrPicFlag == 1) {
+  if (m_slice.slice_header.IdrPicFlag == 1) {
     FrameNumOffset = 0;
-  } else if (picture_previous->m_h264_slice_header.frame_num >
-             m_h264_slice_header.frame_num) {
-    FrameNumOffset = prevFrameNumOffset + m_h264_slice_header.m_sps.MaxFrameNum;
+  } else if (picture_previous->m_slice.slice_header.frame_num >
+             m_slice.slice_header.frame_num) {
+    FrameNumOffset = prevFrameNumOffset + m_slice.m_sps.MaxFrameNum;
   } else {
     FrameNumOffset = prevFrameNumOffset;
   }
@@ -243,21 +236,21 @@ int PictureBase::Decoding_process_for_picture_order_count_type_2(
   //--------------tempPicOrderCnt----------------
   int32_t tempPicOrderCnt = 0;
 
-  if (m_h264_slice_header.IdrPicFlag == 1) {
+  if (m_slice.slice_header.IdrPicFlag == 1) {
     tempPicOrderCnt = 0;
-  } else if (m_h264_slice_header.nal_ref_idc == 0) // 当前图像为非参考图像
+  } else if (m_slice.slice_header.nal_ref_idc == 0) // 当前图像为非参考图像
   {
-    tempPicOrderCnt = 2 * (FrameNumOffset + m_h264_slice_header.frame_num) - 1;
+    tempPicOrderCnt = 2 * (FrameNumOffset + m_slice.slice_header.frame_num) - 1;
   } else {
-    tempPicOrderCnt = 2 * (FrameNumOffset + m_h264_slice_header.frame_num);
+    tempPicOrderCnt = 2 * (FrameNumOffset + m_slice.slice_header.frame_num);
   }
 
   //--------------TopFieldOrderCnt or BottomFieldOrderCnt----------------
-  if (!m_h264_slice_header.field_pic_flag) // 当前图像为帧
+  if (!m_slice.slice_header.field_pic_flag) // 当前图像为帧
   {
     TopFieldOrderCnt = tempPicOrderCnt;
     BottomFieldOrderCnt = tempPicOrderCnt;
-  } else if (m_h264_slice_header.bottom_field_flag) // 当前图像为底场
+  } else if (m_slice.slice_header.bottom_field_flag) // 当前图像为底场
   {
     BottomFieldOrderCnt = tempPicOrderCnt;
   } else // 当前图像为顶场
@@ -274,7 +267,7 @@ int PictureBase::Decoding_process_for_picture_order_count_type_2(
 int PictureBase::Decoding_process_for_reference_picture_lists_construction(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16]) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   // Decoded reference pictures are marked as "used for short-term reference" or
   // "used for long-term reference" as specified by the bitstream and specified
@@ -325,7 +318,7 @@ int PictureBase::Decoding_process_for_reference_picture_lists_construction(
 // 8.2.4.1 Decoding process for picture numbers
 int PictureBase::Decoding_process_for_picture_numbers(Frame *(&dpb)[16]) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
   int32_t size_dpb = 16;
   int32_t i = 0;
 
@@ -342,7 +335,7 @@ int PictureBase::Decoding_process_for_picture_numbers(Frame *(&dpb)[16]) {
       if (dpb[i]->m_picture_frame.FrameNum > slice_header.frame_num) {
         dpb[i]->m_picture_frame.FrameNumWrap =
             dpb[i]->m_picture_frame.FrameNum -
-            dpb[i]->m_picture_frame.m_h264_slice_header.m_sps.MaxFrameNum;
+            dpb[i]->m_picture_frame.m_slice.m_sps.MaxFrameNum;
       } else {
         dpb[i]->m_picture_frame.FrameNumWrap = dpb[i]->m_picture_frame.FrameNum;
       }
@@ -353,7 +346,7 @@ int PictureBase::Decoding_process_for_picture_numbers(Frame *(&dpb)[16]) {
       if (dpb[i]->m_picture_top_filed.FrameNum > slice_header.frame_num) {
         dpb[i]->m_picture_top_filed.FrameNumWrap =
             dpb[i]->m_picture_top_filed.FrameNum -
-            dpb[i]->m_picture_top_filed.m_h264_slice_header.m_sps.MaxFrameNum;
+            dpb[i]->m_picture_top_filed.m_slice.m_sps.MaxFrameNum;
       } else {
         dpb[i]->m_picture_top_filed.FrameNumWrap =
             dpb[i]->m_picture_top_filed.FrameNum;
@@ -365,8 +358,7 @@ int PictureBase::Decoding_process_for_picture_numbers(Frame *(&dpb)[16]) {
       if (dpb[i]->m_picture_bottom_filed.FrameNum > slice_header.frame_num) {
         dpb[i]->m_picture_bottom_filed.FrameNumWrap =
             dpb[i]->m_picture_bottom_filed.FrameNum -
-            dpb[i]
-                ->m_picture_bottom_filed.m_h264_slice_header.m_sps.MaxFrameNum;
+            dpb[i]->m_picture_bottom_filed.m_slice.m_sps.MaxFrameNum;
       } else {
         dpb[i]->m_picture_bottom_filed.FrameNumWrap =
             dpb[i]->m_picture_bottom_filed.FrameNum;
@@ -448,7 +440,7 @@ int PictureBase::Decoding_process_for_picture_numbers(Frame *(&dpb)[16]) {
         if (m_picture_coded_type ==
             H264_PICTURE_CODED_TYPE_TOP_FIELD) // If the reference field has the
                                                // same parity as the current
-                                               // field 参考场和当前场奇偶性相同
+        // field 参考场和当前场奇偶性相同
         {
           dpb[i]->m_picture_top_filed.PicNum =
               2 * dpb[i]->m_picture_top_filed.FrameNumWrap + 1;
@@ -469,7 +461,7 @@ int PictureBase::Decoding_process_for_picture_numbers(Frame *(&dpb)[16]) {
         if (m_picture_coded_type ==
             H264_PICTURE_CODED_TYPE_TOP_FIELD) // If the reference field has the
                                                // same parity as the current
-                                               // field 参考场和当前场奇偶性相同
+        // field 参考场和当前场奇偶性相同
         {
           dpb[i]->m_picture_bottom_filed.PicNum =
               2 * dpb[i]->m_picture_bottom_filed.FrameNumWrap + 1;
@@ -490,7 +482,7 @@ int PictureBase::Decoding_process_for_picture_numbers(Frame *(&dpb)[16]) {
         if (m_picture_coded_type ==
             H264_PICTURE_CODED_TYPE_TOP_FIELD) // If the reference field has the
                                                // same parity as the current
-                                               // field 参考场和当前场奇偶性相同
+        // field 参考场和当前场奇偶性相同
         {
           dpb[i]->m_picture_top_filed.LongTermPicNum =
               2 * dpb[i]->m_picture_top_filed.LongTermFrameIdx + 1;
@@ -511,7 +503,7 @@ int PictureBase::Decoding_process_for_picture_numbers(Frame *(&dpb)[16]) {
         if (m_picture_coded_type ==
             H264_PICTURE_CODED_TYPE_TOP_FIELD) // If the reference field has the
                                                // same parity as the current
-                                               // field 参考场和当前场奇偶性相同
+        // field 参考场和当前场奇偶性相同
         {
           dpb[i]->m_picture_bottom_filed.LongTermPicNum =
               2 * dpb[i]->m_picture_bottom_filed.LongTermFrameIdx + 1;
@@ -538,7 +530,7 @@ int PictureBase::Decoding_process_for_picture_numbers(Frame *(&dpb)[16]) {
 int PictureBase::Initialisation_process_for_reference_picture_lists(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16]) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   int32_t i = 0;
 
@@ -638,7 +630,7 @@ int PictureBase::
   int32_t indexTemp_long[16] = {0};
   //int32_t indexTemp3[16] = {0};
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   // 1.
   // 先把所有的短期参考帧放到数组的前半部分，把所有的长期参考帧放到数组的后半部分
@@ -652,14 +644,13 @@ int PictureBase::
     {
       indexTemp_short[short_refs_count] = i;
       short_refs_count++;
-    } else if (
-        dpb[i]->m_picture_frame.reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_long_term_reference) // reference
-                                                             // frame or
-                                                             // complementary
-                                                             // reference
-                                                             // field
-                                                             // pair
+    } else if (dpb[i]->m_picture_frame.reference_marked_type ==
+               H264_PICTURE_MARKED_AS_used_for_long_term_reference) // reference
+                                                                    // frame or
+    // complementary
+    // reference
+    // field
+    // pair
     {
       indexTemp_long[long_refs_count] = i;
       long_refs_count++;
@@ -871,7 +862,7 @@ int PictureBase::
   int32_t indexTemp_long[16] = {0};
   int32_t indexTemp3[16] = {0};
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   // For B slices, the order of short-term reference entries in the reference
   // picture lists RefPicList0 and RefPicList1 depends on output order, as given
@@ -901,14 +892,13 @@ int PictureBase::
         indexTemp_short_right[short_refs_count_right] = i;
         short_refs_count_right++;
       }
-    } else if (
-        dpb[i]->m_picture_frame.reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_long_term_reference) // reference
-                                                             // frame or
-                                                             // complementary
-                                                             // reference
-                                                             // field
-                                                             // pair
+    } else if (dpb[i]->m_picture_frame.reference_marked_type ==
+               H264_PICTURE_MARKED_AS_used_for_long_term_reference) // reference
+                                                                    // frame or
+    // complementary
+    // reference
+    // field
+    // pair
     {
       indexTemp_long[long_refs_count] = i;
       long_refs_count++;
@@ -1013,14 +1003,13 @@ int PictureBase::
         indexTemp_short_right[short_refs_count_right] = i;
         short_refs_count_right++;
       }
-    } else if (
-        dpb[i]->m_picture_frame.reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_long_term_reference) // reference
-                                                             // frame or
-                                                             // complementary
-                                                             // reference
-                                                             // field
-                                                             // pair
+    } else if (dpb[i]->m_picture_frame.reference_marked_type ==
+               H264_PICTURE_MARKED_AS_used_for_long_term_reference) // reference
+                                                                    // frame or
+    // complementary
+    // reference
+    // field
+    // pair
     {
       indexTemp_long[long_refs_count] = i;
       long_refs_count++;
@@ -1171,14 +1160,13 @@ int PictureBase::
         indexTemp_short_right[short_refs_count_right] = i;
         short_refs_count_right++;
       }
-    } else if (
-        dpb[i]->m_picture_frame.reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_long_term_reference) // reference
-                                                             // frame or
-                                                             // complementary
-                                                             // reference
-                                                             // field
-                                                             // pair
+    } else if (dpb[i]->m_picture_frame.reference_marked_type ==
+               H264_PICTURE_MARKED_AS_used_for_long_term_reference) // reference
+                                                                    // frame or
+    // complementary
+    // reference
+    // field
+    // pair
     {
       indexTemp_long[long_refs_count] = i;
       long_refs_count++;
@@ -1451,7 +1439,7 @@ int PictureBase::Initialisation_process_for_reference_picture_lists_in_fields(
 int PictureBase::Modification_process_for_reference_picture_lists(
     Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16]) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   if (slice_header.ref_pic_list_modification_flag_l0 == 1) {
     slice_header.refIdxL0 = 0;
@@ -1525,7 +1513,7 @@ int PictureBase::
   int32_t cIdx = 0;
   int32_t nIdx = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   if (modification_of_pic_nums_idc == 0) {
     if (picNumLXPred - (abs_diff_pic_num_minus1 + 1) < 0) {
@@ -1606,7 +1594,7 @@ int PictureBase::
   int32_t cIdx = 0;
   int32_t nIdx = 0;
 
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   for (cIdx = num_ref_idx_lX_active_minus1 + 1; cIdx > refIdxLX; cIdx--) {
     RefPicListX[cIdx] = RefPicListX[cIdx - 1];
@@ -1653,7 +1641,7 @@ int PictureBase::
     Sequence_of_operations_for_decoded_reference_picture_marking_process(
         Frame *(&dpb)[16]) {
   int ret = 0;
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
   int32_t size_dpb = 16;
 
   // 1. All slices of the current picture are decoded.
@@ -1672,7 +1660,7 @@ int PictureBase::
       if (dpb[i] != this->m_parent) {
         dpb[i]->m_picture_coded_type =
             H264_PICTURE_CODED_TYPE_UNKNOWN; // FIXME:
-                                             // 需要先将之前解码的所有帧输出去
+        // 需要先将之前解码的所有帧输出去
       }
     }
 
@@ -1770,7 +1758,7 @@ int PictureBase::Decoding_process_for_gaps_in_frame_num() { return 0; }
 // adaptive_ref_pic_marking_mode_flag is equal to 0.
 int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
     Frame *(&dpb)[16]) {
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   if (m_picture_coded_type ==
           H264_PICTURE_CODED_TYPE_BOTTOM_FIELD // If the current picture is a
@@ -1820,7 +1808,7 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
     }
 
     if (numShortTerm + numLongTerm ==
-            MAX(slice_header.m_sps.max_num_ref_frames, 1) &&
+            MAX(m_slice.m_sps.max_num_ref_frames, 1) &&
         numShortTerm > 0) {
       PictureBase *refPic = NULL;
       int32_t FrameNumWrap_smallest_index = -1;
@@ -1922,7 +1910,7 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
 int PictureBase::
     Adaptive_memory_control_decoded_reference_picture_marking_process(
         Frame *(&dpb)[16]) {
-  SliceHeader &slice_header = m_h264_slice_header;
+  SliceHeader &slice_header = m_slice.slice_header;
 
   int32_t size_dpb = 16;
   int32_t i = 0;

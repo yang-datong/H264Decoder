@@ -63,7 +63,7 @@ int AnnexBReader::readNalu(Nalu &nalu) {
       std::cerr << "\033[31m findStartcode() \033[0m" << std::endl;
       return -1;
     }
-    nalu._startCodeLenth = startcodeLen;
+    nalu.startCodeLenth = startcodeLen;
 
     for (int i = startcodeLen; i < _bufferLen; i++) {
       // 第二次就可以跳过前3-4个再开始找下一个startcode

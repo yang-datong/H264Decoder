@@ -240,13 +240,13 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
   int32_t yW = 0;
   int32_t isChroma = 0;
 
-  SliceHeader &slice_header = picture.m_h264_slice_header;
+  SliceHeader &slice_header = picture.m_slice.slice_header;
 
   if (mb_residual_level == MB_RESIDUAL_ChromaDCLevelCb ||
       mb_residual_level == MB_RESIDUAL_ChromaDCLevelCr) {
-    if (slice_header.m_sps.ChromaArrayType == 1) {
+    if (picture.m_slice.m_sps.ChromaArrayType == 1) {
       nC = -1;
-    } else // if (slice_header.m_sps.ChromaArrayType == 2)
+    } else // if (picture.m_slice.m_sps.ChromaArrayType == 2)
     {
       nC = -2;
     }
@@ -315,7 +315,7 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
                mb_residual_level == MB_RESIDUAL_CbLevel4x4) {
       // 6.4.11.6 Derivation process for neighbouring 4x4 chroma blocks for
       // ChromaArrayType equal to 3
-      RETURN_IF_FAILED(slice_header.m_sps.ChromaArrayType != 3, -1);
+      RETURN_IF_FAILED(picture.m_slice.m_sps.ChromaArrayType != 3, -1);
 
       // 6.4.11.4 Derivation process for neighbouring 4x4 luma blocks
       x = InverseRasterScan(cb4x4BlkIdx / 4, 8, 8, 16, 0) +
@@ -324,8 +324,8 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
           InverseRasterScan(cb4x4BlkIdx % 4, 4, 4, 8, 1);
 
       // 6.4.12 Derivation process for neighbouring locations
-      maxW = slice_header.m_sps.MbWidthC;
-      maxH = slice_header.m_sps.MbHeightC;
+      maxW = picture.m_slice.m_sps.MbWidthC;
+      maxH = picture.m_slice.m_sps.MbHeightC;
       isChroma = 0;
 
       if (slice_header.MbaffFrameFlag == 0) {
@@ -359,7 +359,7 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
                mb_residual_level == MB_RESIDUAL_CrLevel4x4) {
       // 6.4.11.6 Derivation process for neighbouring 4x4 chroma blocks for
       // ChromaArrayType equal to 3
-      RETURN_IF_FAILED(slice_header.m_sps.ChromaArrayType != 3, -1);
+      RETURN_IF_FAILED(picture.m_slice.m_sps.ChromaArrayType != 3, -1);
 
       // 6.4.11.4 Derivation process for neighbouring 4x4 luma blocks
       x = InverseRasterScan(cr4x4BlkIdx / 4, 8, 8, 16, 0) +
@@ -368,8 +368,8 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
           InverseRasterScan(cr4x4BlkIdx % 4, 4, 4, 8, 1);
 
       // 6.4.12 Derivation process for neighbouring locations
-      maxW = slice_header.m_sps.MbWidthC;
-      maxH = slice_header.m_sps.MbHeightC;
+      maxW = picture.m_slice.m_sps.MbWidthC;
+      maxH = picture.m_slice.m_sps.MbHeightC;
       isChroma = 0;
 
       if (slice_header.MbaffFrameFlag == 0) {
@@ -401,16 +401,16 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
     } else if (mb_residual_level == MB_RESIDUAL_ChromaACLevelCb ||
                mb_residual_level == MB_RESIDUAL_ChromaACLevelCr) {
       // 6.4.11.5 Derivation process for neighbouring 4x4 chroma blocks
-      RETURN_IF_FAILED(slice_header.m_sps.ChromaArrayType != 1 &&
-                           slice_header.m_sps.ChromaArrayType != 2,
+      RETURN_IF_FAILED(picture.m_slice.m_sps.ChromaArrayType != 1 &&
+                           picture.m_slice.m_sps.ChromaArrayType != 2,
                        -1);
 
       // 6.4.7 Inverse 4x4 chroma block scanning process
       x = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 0);
       y = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 1);
 
-      maxW = slice_header.m_sps.MbWidthC;
-      maxH = slice_header.m_sps.MbHeightC;
+      maxW = picture.m_slice.m_sps.MbWidthC;
+      maxH = picture.m_slice.m_sps.MbHeightC;
       isChroma = 1;
 
       if (slice_header.MbaffFrameFlag == 0) {
@@ -449,7 +449,7 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
         || (IS_INTRA_Prediction_Mode(
                 MbPartPredMode) // the current macroblock is coded using an
                                 // Intra macroblock prediction mode
-            && slice_header.m_pps.constrained_intra_pred_flag ==
+            && picture.m_slice.m_pps.constrained_intra_pred_flag ==
                    1 // constrained_intra_pred_flag is equal to 1
             && !IS_INTRA_Prediction_Mode(
                    picture.m_mbs[mbAddrN_A]
@@ -467,7 +467,7 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
 
     if (mbAddrN_B < 0 ||
         (IS_INTRA_Prediction_Mode(MbPartPredMode) &&
-         slice_header.m_pps.constrained_intra_pred_flag == 1 &&
+         picture.m_slice.m_pps.constrained_intra_pred_flag == 1 &&
          !IS_INTRA_Prediction_Mode(
              picture.m_mbs[mbAddrN_B]
                  .m_mb_pred_mode) // mbAddrN is coded using an Inter macroblock
