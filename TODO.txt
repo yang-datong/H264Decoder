@@ -1,2 +1,1 @@
-1. 新建一个Slice类，里面有两个内部类：SliceHeader,SliceData
-2. CABAC(上下文自适应二进制算术编码)
+1. CABAC(上下文自适应二进制算术编码)

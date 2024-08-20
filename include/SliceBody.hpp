@@ -14,7 +14,7 @@ class SliceBody {
 
  private:
   /* 私有化SliceBody，不提供给外界，只能通过Slice来访问本类 */
-  SliceBody() {}
+  SliceBody(SPS &sps, PPS &pps) : m_sps(sps), m_pps(pps) {}
 
  public:
   /* 允许Slice类访问 */

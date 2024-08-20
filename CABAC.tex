@@ -1,0 +1,36 @@
+%!TeX program = xelatex
+\documentclass{/home/hi/Study/template/code}
+%--------------------------------- Head -------------------------------------
+\title{CABAC}
+\author{\textcopyright Yang-datong }
+\date{2024-08-20 14:38}
+
+\begin{document}
+\makehead
+%--------------------------------- Body -------------------------------------
+\section{CABAC算法}
+CABAC（Context-Adaptive Binary Arithmetic Coding）是一种用于视频压缩的熵编码算法，广泛应用于H.264/AVC和HEVC（H.265）视频编码标准中。CABAC通过利用上下文信息来自适应地编码二进制符号，从而实现高效的压缩。其主要特点：
+\begin{itemize}
+	\item 上下文自适应：CABAC根据符号的上下文信息（如前面符号的统计特性）来选择概率模型，从而提高编码效率。
+	\item 二进制算术编码：CABAC使用算术编码对二进制符号进行编码，这种方法比传统的霍夫曼编码更接近熵极限，能更好地压缩数据。
+	\item 高压缩率：由于其自适应性和高效的算术编码，CABAC通常能比其他熵编码方法（如CAVLC）提供更高的压缩率。
+\end{itemize}
+
+CABAC编码过程主要包括以下几个步骤：
+\begin{itemize}
+	\item 二进制化：将非二进制符号（如运动矢量、残差系数等）转换为二进制符号。
+	\item 上下文建模：根据符号的上下文信息选择合适的概率模型。上下文信息可以包括前面符号的值、位置等。
+	\item 算术编码：使用选定的概率模型对二进制符号进行算术编码。
+\end{itemize}
+
+\subsection{文本算术编码}
+
+\subsection{二进制算术编码}
+
+%--------------------------------- Reference --------------------------------
+\newpage
+\begin{thebibliography}{1}
+	\bibitem{a} 作者. \emph{文献}[M]. 地点:出版社,年份.\url{www.google.com}
+\end{thebibliography}
+
+\end{document}

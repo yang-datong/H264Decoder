@@ -25,6 +25,7 @@ class Slice {
   SPS m_sps;
   PPS m_pps;
   IDR m_idr;
+  Slice();
 
   SliceHeader slice_header;
   SliceBody slice_body;

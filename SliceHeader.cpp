@@ -306,13 +306,12 @@ int SliceHeader::setMapUnitToSliceGroupMap() {
         xDir = 2 * m_pps.slice_group_change_direction_flag - 1;
         yDir = 0;
       } else {
-        (x, y) = (x + xDir, y + yDir);
+        //(x, y) = (x + xDir, y + yDir);
       }
     }
-  } else if (m_pps.slice_group_map_type ==
-             4) // 8.2.2.5 Specification for raster scan slice group map types
-                // 栅格扫描型 slice 组映射类型的描述
-  {
+  } else if (m_pps.slice_group_map_type == 4) {
+    // 8.2.2.5 Specification for raster scan slice group map types
+    // 栅格扫描型 slice 组映射类型的描述
     int32_t sizeOfUpperLeftGroup = 0;
     if (m_pps.num_slice_groups_minus1 == 1) {
       sizeOfUpperLeftGroup =
