@@ -7,6 +7,10 @@
 
 \begin{document}
 \makehead
+%我想让你扮演一名音视频编解码算法老师。我将提供一些音视频概念，你的工作是用易于理解的术语来解释它们。这可能包括提供解决问题的分步说明、用视觉演示各种技术或建议在线资源以供进一步研究。我的第一个请求是“文本算术编码中，如何对文本进行二进制化? 截断莱斯二元化是什么？K阶指数哥伦布二元化是什么？定长二元化是什么？”
+
+%CABAC 仅在标准的主要和更高配置文件（而不是扩展配置文件）中受支持，因为与称为上下文自适应的更简单方案相比，它需要大量的处理来解码标准的基线配置文件中使用的可变长度编码(CAVLC)。 CABAC 也很难并行化和矢量化，因此可以结合使用其他形式的并行性（例如空间区域并行性）。在 HEVC 中，CABAC 用于该标准的所有配置文件中。
+
 %--------------------------------- Body -------------------------------------
 \section{CABAC算法}
 CABAC（Context-Adaptive Binary Arithmetic Coding）是一种用于视频压缩的熵编码算法，广泛应用于H.264/AVC和HEVC（H.265）视频编码标准中。CABAC通过利用上下文信息来自适应地编码二进制符号，从而实现高效的压缩。其主要特点：
@@ -24,8 +28,110 @@ CABAC编码过程主要包括以下几个步骤：
 \end{itemize}
 
 \subsection{文本算术编码}
+\subsubsection{二进制化}
+\paragraph{定长二元化}
+定长二元化（Fixed-Length Coding）是一种简单的编码方法，其中每个符号都被分配一个固定长度的二进制代码。其特点包括：
+
+固定长度：每个字符或符号的二进制表示长度相同，例如，使用8位表示所有字符。
+
+简单性：由于每个符号的长度相同，解码过程非常简单。
+
+效率：在某些情况下，定长编码可能会导致空间浪费，尤其是当字符集较小而编码长度较大时。
+
+例如，在ASCII中，字符'A'的二进制表示是01000001。
+
+
+\paragraph{截断莱斯二元化}
+截断莱斯二元化（Truncated Rice Coding）是一种用于无损数据压缩的编码方法。它的基本思想是：
+\begin{serialNumber}
+	\item 分段编码：选择一个参数$k ( k > 0 , k \in N )$，由$k$决定编码的分段大小，从而将数据分成多个段，每个段的长度是可变的。
+	\item 商和余数：将要编码的数$ N $表示为商和余数的形式：\( N = q \cdot 2^k + r \)，其中\( q \)是商，\( r \)是余数。
+	\item 编码商：用一串\( q \)个1后跟一个0来表示商。如，$q = 3$则编码为"1110"
+	\item 编码余数：用\( k \)位二进制数来表示余数。如， 余数为2，但$k = 3$，则编码为"010"
+	\item 截断：在编码过程中，如果某个段的长度超过预设的最大值，则将其截断，以避免过长的编码。
+\end{serialNumber}
+C++实现代码见文末。
+
+
+
+\paragraph{K阶指数哥伦布二元化}
+%  TODO YangJing 你能详细讲解一下K阶指数哥伦布二元化吗？最好是能使用C++进行建模 <24-08-22 00:10:05> % 
+K阶指数哥伦布二元化（K-th Order Exponential Golomb Coding）是一种改进的哥伦布编码方法，也是一种变长编码方法，适用于无符号整数、具有特定概率分布的数据。其步骤包括：
+
+%  TODO YangJing 哥伦布熵编码学过？ <24-08-21 23:08:21> % 
+\begin{serialNumber}
+	\item 概率模型：根据数据的概率分布，选择合适的$k$值。
+	\item 编码过程：使用K阶指数函数来生成编码，通常用于表示较大的整数，比如要编码的数$N$表示为$( N + 2^{k} )$。
+	\item 输出二进制：将生成的编码转换为二进制形式。
+	\item 前缀和后缀：将二进制数分为前缀和后缀，前缀部分由一串0和一个1组成，后缀部分是剩余的二进制数。
+	\item 组合：将前缀和后缀组合起来，得到最终的编码。
+\end{serialNumber}
+
 
 \subsection{二进制算术编码}
+
+
+\newpage
+\section{代码实现}
+\subsection{截断莱斯二元化}
+\begin{lstlisting}[language=c++]
+#include <bitset>
+#include <iostream>
+
+using namespace std;
+
+// 编码函数
+string riceEncode(int N, int k) {
+  /* 0001 0111 >> 3 = 0010 = 2 */
+  int q = N >> k;             // 商
+                              /* 0001 0111 & 1000 - 1 = 111 = 3 */
+  int r = N & ((1 << k) - 1); // 余数
+
+  // 编码商
+  string encoded = string(q, '1') + "0";
+
+  // 编码余数
+  bitset<32> binaryR(r);
+  string binaryRStr = binaryR.to_string().substr(32 - k, k);
+  encoded += binaryRStr;
+
+  return encoded;
+}
+
+// 解码函数
+int riceDecode(const string &encoded, int k) {
+  int q = 0;
+  int readToZeor = 0;
+
+  // 解码商
+  while (encoded[readToZeor] == '1') {
+    q++;
+    readToZeor++;
+  }
+  readToZeor++; // 跳过 '0'
+
+  // 解码余数
+  int r = 0;
+  for (int i = 0; i < k; i++) {
+    /* 这里减去字符'0'是字符和整数之间的转换 */
+    r = (r << 1) | (encoded[readToZeor] - '0');
+    readToZeor++;
+  }
+
+  return (q << k) + r;
+}
+
+// 比如，对23进行编码，那么选定任意$k = 3$,则$23 = q * 2^3 + r$，得出q = 2 , r = 7，则q = "110" , r = "111"，则编码结果为"110111"
+// 反之，对"110111"进行解码，那么先读到第一个'0'，即"110"，解码为 q = 2, 根据参数k=3可知，再继续读取3位则为余数r = b'111' = 7, 故$2 * 2^3 + 7 = 23$
+
+const int k = 3; // 参数 k
+int main() {
+  int N = 23; // 要编码的数
+  cout << "Encoded: " << riceEncode(N, k) << endl;
+  cout << "Decoded: " << riceDecode("110111", k) << endl;
+  return 0;
+}
+\end{lstlisting}
 
 %--------------------------------- Reference --------------------------------
 \newpage

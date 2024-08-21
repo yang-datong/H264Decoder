@@ -389,7 +389,6 @@ int SliceHeader::setMbToSliceGroupMap() {
 /* Slice header syntax -> 51 page */
 int SliceHeader::parseSliceHeader(BitStream &bitStream) {
   first_mb_in_slice = bitStream.readUE();
-  std::cout << "\tSlice中第一个宏块的索引:" << first_mb_in_slice << std::endl;
   slice_type = bitStream.readUE() % 5;
   switch (slice_type % 5) {
   case SLICE_P:
@@ -408,6 +407,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream) {
     std::cout << "\tSI Slice" << std::endl;
     break;
   }
+  std::cout << "\tSlice中第一个宏块的索引:" << first_mb_in_slice << std::endl;
 
   pic_parameter_set_id = bitStream.readUE();
   std::cout << "\tPPS ID:" << pic_parameter_set_id << std::endl;
