@@ -301,6 +301,19 @@ typedef enum _H264_SLIECE_TYPE_ {
   H264_SLIECE_TYPE_SI2 = 9,
 } H264_SLIECE_TYPE;
 
+enum H264_SLICE_TYPE {
+  SLICE_P = 0,
+  SLICE_B,
+  SLICE_I,
+  SLICE_SP,
+  SLICE_SI,
+  SLICE_P2,
+  SLICE_B2,
+  SLICE_I2,
+  SLICE_SP2,
+  SLICE_SI2
+};
+
 // 宏块残差幅值类型
 typedef enum _MB_RESIDUAL_LEVEL_ {
   MB_RESIDUAL_UNKOWN = -1,
@@ -323,8 +336,6 @@ typedef enum _MB_RESIDUAL_LEVEL_ {
   MB_RESIDUAL_ChromaACLevelCb = 16,
   MB_RESIDUAL_ChromaACLevelCr = 17,
 } MB_RESIDUAL_LEVEL;
-
-enum H264_SLICE_TYPE { SLICE_P = 0, SLICE_B, SLICE_I, SLICE_SP, SLICE_SI };
 
 #define NA -1
 #define MB_WIDTH 16

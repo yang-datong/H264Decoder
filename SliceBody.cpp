@@ -3,21 +3,21 @@
 #include "Frame.hpp"
 #include "PictureBase.hpp"
 
-int SliceBody::DecodeCABAC(CH264Cabac &cabac, BitStream &bs,
-                           SliceHeader &header) {
+int SliceBody::initCABAC(CH264Cabac &cabac, BitStream &bs,
+                         SliceHeader &header) {
   if (m_pps.entropy_coding_mode_flag) {
     /* CABAC(上下文自适应二进制算术编码) */
 
     while (!bs.byte_aligned())
       bs.readU1(); //cabac_alignment_one_bit
 
-    cabac.Initialisation_process_for_context_variables(
-        (H264_SLIECE_TYPE)header.slice_type, header.cabac_init_idc,
-        header.SliceQPY);
     // cabac初始化环境变量
+    // 此过程的输出是由ctxIdx索引的初始化的CABAC上下文变量
+    cabac.init_of_context_variables((H264_SLICE_TYPE)header.slice_type,
+                                    header.cabac_init_idc, header.SliceQPY);
 
-    cabac.Initialisation_process_for_the_arithmetic_decoding_engine(bs);
     // cabac初始化解码引擎
+    cabac.init_of_decoding_engine(bs);
   }
   return 0;
 }
@@ -28,7 +28,9 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
 
   /* CABAC编码 */
   CH264Cabac cabac;
-  DecodeCABAC(cabac, bs, header);
+  /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
+  initCABAC(cabac, bs, header);
+  //TODO 看完了initCABAC，继续看CABAC如何解码的 <24-08-29 00:52:13, YangJing> 
 
   /* 是否MBAFF编码 */
   if (header.MbaffFrameFlag == 0)

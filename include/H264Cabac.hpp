@@ -2,35 +2,31 @@
 #define __H264_CABAC_H__
 
 #include "BitStream.hpp"
+#include "Constants.hpp"
 #include "Type.hpp"
 #include <stdint.h>
 #include <stdlib.h>
 
 class PictureBase;
-
 //------------------------------------------------------------
 // Context-Based Adaptive Binary Arithmetic Coding (CABAC)
 // 基于上下文自适应二进制算术熵编码
 class CH264Cabac {
+ private:
+  int32_t _codIRange = 0;
+  int32_t _codIOffset = 0;
+
+  int32_t _pStateIdxs[1024] = {0};
+  int32_t _valMPSs[1024] = {0};
+
  public:
-  int32_t m_codIRange;
-  int32_t m_codIOffset;
+  int init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
+               int32_t cabac_init_idc, int32_t &m, int32_t &n);
 
-  int32_t m_pStateIdxs[1024];
-  int32_t m_valMPSs[1024];
-
- public:
-  CH264Cabac();
-  ~CH264Cabac();
-
-  int get_m_and_n(int32_t ctxIdx, H264_SLIECE_TYPE slice_type,
-                  int32_t cabac_init_idc, int32_t &m, int32_t &n);
-
-  int Initialisation_process_for_context_variables(H264_SLIECE_TYPE slice_type,
-                                                   int32_t cabac_init_idc,
-                                                   int32_t SliceQPY); // 9.3.1.1
-  int Initialisation_process_for_the_arithmetic_decoding_engine(
-      BitStream &bs); // 9.3.1.2
+  int init_of_context_variables(H264_SLICE_TYPE slice_type,
+                                int32_t cabac_init_idc,
+                                int32_t SliceQPY); // 9.3.1.1
+  int init_of_decoding_engine(BitStream &bs);      // 9.3.1.2
 
   int Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_skip_flag(
       PictureBase &picture, int32_t _CurrMbAddr,
