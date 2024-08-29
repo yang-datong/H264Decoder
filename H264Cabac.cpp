@@ -1,10 +1,12 @@
 ﻿#include "H264Cabac.hpp"
+#include "Constants.hpp"
 #include "PictureBase.hpp"
 #include "Type.hpp"
 
 /* 对于P、SP和B Slice 类型，初始化还取决于cabac_init_idc语法元素的值 */
-int CH264Cabac::init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
-                         int32_t cabac_init_idc, int32_t &m, int32_t &n) {
+inline int CH264Cabac::init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
+                                int32_t cabac_init_idc, int32_t &m,
+                                int32_t &n) {
   if (ctxIdx < 0 || ctxIdx > 1024 || cabac_init_idc < 0 || cabac_init_idc > 2) {
     std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
               << std::endl;
@@ -248,8 +250,6 @@ int CH264Cabac::init_of_decoding_engine(BitStream &bs) {
   return 0;
 }
 
-// 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element
-// mb_skip_flag
 int CH264Cabac::
     Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_skip_flag(
         PictureBase &picture, int32_t _CurrMbAddr, int32_t &ctxIdxInc) {
@@ -2907,46 +2907,32 @@ int CH264Cabac::CABAC_decode_sub_mb_type_in_B_slices(PictureBase &picture,
   return 0;
 }
 
-//-------------------------------------------
-int CH264Cabac::CABAC_decode_mb_skip_flag(PictureBase &picture, BitStream &bs,
-                                          int32_t _CurrMbAddr,
-                                          int32_t &synElVal) {
+/* 9.3.3 Decoding process flow */
+/* 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element mb_skip_flag */
+int CH264Cabac::decode_mb_skip_flag(PictureBase &picture, BitStream &bs,
+                                    int32_t _CurrMbAddr, int32_t &synElVal) {
   int ret = 0;
 
-  H264_SLICE_TYPE slice_type =
-      (H264_SLICE_TYPE)picture.m_slice.slice_header.slice_type;
-  // int32_t maxBinIdxCtx = 0;
-  int32_t ctxIdxOffset = 0;
-  int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
-  int32_t binVal = 0;
-  int32_t ctxIdx = 0;
-  int32_t bypassFlag = 0;
+  const int slice_type = picture.m_slice.slice_header.slice_type;
 
-  // Table 9-34 – Syntax elements and associated types of binarization,
-  // maxBinIdxCtx, and ctxIdxOffset
-  if ((slice_type % 5) == SLICE_P || (slice_type % 5) == SLICE_SP) {
-    //------Table 9-34: ctxIdxOffset: 11--------
-    // maxBinIdxCtx = 0;
+  /* 9.3.2 Binarization process */
+  // Table 9-34 – Syntax elements and associated types of binarization,maxBinIdxCtx, and ctxIdxOffset
+  int maxBinIdxCtx = 0, ctxIdxOffset = 0;
+  int ctxIdxInc = 0, binIdx = -1, binVal = 0, ctxIdx = 0, bypassFlag = 0;
+
+  if (slice_type == SLICE_P || slice_type == SLICE_SP) {
+    maxBinIdxCtx = 0;
     ctxIdxOffset = 11;
-  } else if ((slice_type % 5) == SLICE_B) {
-    //------Table 9-34: ctxIdxOffset: 24--------
-    // maxBinIdxCtx = 0;
+  } else if (slice_type == SLICE_B) {
+    maxBinIdxCtx = 0;
     ctxIdxOffset = 24;
   } else {
-    RETURN_IF_FAILED(-1, -1);
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return -1;
   }
 
-  // 9.3.2.4 Fixed-length (FL) binarization process即固定长度二值化
-  // FL binarization is constructed by using a fixedLength-bit unsigned integer
-  // bin string of the syntax element value, where fixedLength = Ceil( Log2(
-  // cMax + 1 ) ). The indexing of bins for the FL binarization is such that the
-  // binIdx = 0 relates to the least significant bit with increasing values of
-  // binIdx towards the most significant bit.
-
-  // 0,1,2 (clause 9.3.3.1.1.1)
-  // 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element
-  // mb_skip_flag
+  /* TODO YangJing  <24-08-29 13:48:57> */
   ret = Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_skip_flag(
       picture, _CurrMbAddr, ctxIdxInc);
   RETURN_IF_FAILED(ret != 0, ret);

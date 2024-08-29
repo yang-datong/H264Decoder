@@ -28,9 +28,11 @@ using namespace std;
 // Ceil( x ) the smallest integer greater than or equal to x.
 #define CEIL(x) (int(x))
 
+/* CABAC function */
 #define CLIP(x, low, high)                                                     \
   (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 #define CLIP3(x, y, z) (((z) < (x)) ? (x) : (((z) > (y)) ? (y) : (z)))
+
 #define ROUND(x) ((int)((x) + 0.5))
 #define ABS(x) ((int)(((x) >= (0)) ? (x) : (-(x))))
 #define RETURN_IF_FAILED(condition, ret)                                       \

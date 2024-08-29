@@ -1,16 +1,12 @@
-#ifndef __H264_CABAC_H__
-#define __H264_CABAC_H__
+#ifndef H264CABAC_HPP_YF2ZLNUA
+#define H264CABAC_HPP_YF2ZLNUA
 
 #include "BitStream.hpp"
-#include "Constants.hpp"
 #include "Type.hpp"
 #include <stdint.h>
 #include <stdlib.h>
 
 class PictureBase;
-//------------------------------------------------------------
-// Context-Based Adaptive Binary Arithmetic Coding (CABAC)
-// 基于上下文自适应二进制算术熵编码
 class CH264Cabac {
  private:
   int32_t _codIRange = 0;
@@ -20,13 +16,12 @@ class CH264Cabac {
   int32_t _valMPSs[1024] = {0};
 
  public:
-  int init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
-               int32_t cabac_init_idc, int32_t &m, int32_t &n);
-
+  /* ============== 9.3.1 Initialization process ============== */
+  inline int init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
+                      int32_t cabac_init_idc, int32_t &m, int32_t &n);
   int init_of_context_variables(H264_SLICE_TYPE slice_type,
-                                int32_t cabac_init_idc,
-                                int32_t SliceQPY); // 9.3.1.1
-  int init_of_decoding_engine(BitStream &bs);      // 9.3.1.2
+                                int32_t cabac_init_idc, int32_t SliceQPY);
+  int init_of_decoding_engine(BitStream &bs);
 
   int Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_skip_flag(
       PictureBase &picture, int32_t _CurrMbAddr,
@@ -84,8 +79,8 @@ class CH264Cabac {
   int CABAC_decode_sub_mb_type_in_B_slices(PictureBase &picture, BitStream &bs,
                                            int32_t &synElVal);
 
-  int CABAC_decode_mb_skip_flag(PictureBase &picture, BitStream &bs,
-                                int32_t _CurrMbAddr, int32_t &synElVal);
+  int decode_mb_skip_flag(PictureBase &picture, BitStream &bs,
+                          int32_t _CurrMbAddr, int32_t &synElVal);
   int CABAC_decode_mvd_lX(PictureBase &picture, BitStream &bs, int32_t mvd_flag,
                           int32_t mbPartIdx, int32_t subMbPartIdx,
                           int32_t isChroma, int32_t &synElVal);
@@ -132,4 +127,4 @@ class CH264Cabac {
                            int32_t iCbCr, int32_t &TotalCoeff);
 };
 
-#endif
+#endif /* end of include guard: H264CABAC_HPP_YF2ZLNUA */

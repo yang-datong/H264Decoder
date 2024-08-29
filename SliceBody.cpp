@@ -3,6 +3,7 @@
 #include "Frame.hpp"
 #include "PictureBase.hpp"
 
+/* 9.3.1 Initialization process */
 int SliceBody::initCABAC(CH264Cabac &cabac, BitStream &bs,
                          SliceHeader &header) {
   if (m_pps.entropy_coding_mode_flag) {
@@ -30,7 +31,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
   CH264Cabac cabac;
   /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
   initCABAC(cabac, bs, header);
-  //TODO 看完了initCABAC，继续看CABAC如何解码的 <24-08-29 00:52:13, YangJing> 
+  //TODO 看完了initCABAC，继续看CABAC如何解码的 <24-08-29 00:52:13, YangJing>
 
   /* 是否MBAFF编码 */
   if (header.MbaffFrameFlag == 0)
@@ -144,7 +145,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
           exit(0);
           // mb_skip_flag = mb_skip_flag_next_mb;
         } else
-          cabac.CABAC_decode_mb_skip_flag(picture, bs, CurrMbAddr,
+          cabac.decode_mb_skip_flag(picture, bs, CurrMbAddr,
                                           mb_skip_flag);
 
         //------------------------------------
@@ -162,7 +163,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
               picture.m_mbs[picture.CurrMbAddr + 1].mb_field_decoding_flag =
                   mb_field_decoding_flag; // 特别注意：底场宏块和顶场宏块的mb_field_decoding_flag值是相同的
 
-              cabac.CABAC_decode_mb_skip_flag(
+              cabac.decode_mb_skip_flag(
                   picture, bs, CurrMbAddr + 1,
                   mb_skip_flag_next_mb); // 2 ae(v) 先读取底场宏块的mb_skip_flag
 
