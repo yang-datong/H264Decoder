@@ -1,43 +1,50 @@
 ﻿#include "PictureBase.hpp"
 
 // 6.4.11.1 Derivation process for neighbouring macroblocks
-int PictureBase::Derivation_process_for_neighbouring_macroblocks(
-    int32_t MbaffFrameFlag, int32_t _CurrMbAddr, int32_t &mbAddrA,
-    int32_t &mbAddrB, int32_t isChroma) {
-  int ret = 0;
+/* 该过程的输出为： 
+ * – mbAddrA：当前宏块左侧宏块的地址及其可用性状态， 
+ * – mbAddrB：当前宏块上方宏块的地址及其可用性状态。*/
+int PictureBase::derivation_for_neighbouring_macroblocks(
+    const int32_t MbaffFrameFlag, const int32_t currMbAddr,
+     int32_t &mbAddrA, int32_t &mbAddrB,const int32_t isChroma) {
 
-  SliceHeader &slice_header = m_slice.slice_header;
+  int32_t xW = 0, yW = 0;
 
-  int32_t xW = 0;
-  int32_t yW = 0;
+  /* mbAddrN（N 为 A 或 B）按照以下有序步骤指定导出： 
+ * 1. 根据表 6-2 设置亮度位置差 ( xD, yD )。  
+ * 2. 对于 ( xN, yN ) 等于 ( xD, yD ) 的亮度位置，调用第 6.4.12 节中指定的相邻位置的推导过程，并将输出分配给 mbAddrN。 */
 
-  //---------------mbAddrA---------------------
+  /* mbAddrA：当前宏块左侧宏块的地址及其可用性状态 */
   MB_ADDR_TYPE mbAddrA_type = MB_ADDR_TYPE_UNKOWN;
-  int32_t luma4x4BlkIdxA = 0;
-  int32_t luma8x8BlkIdxA = 0;
-  int32_t xA = -1;
-  int32_t yA = 0;
+  int32_t luma4x4BlkIdxA = 0, luma8x8BlkIdxA = 0;
+  int32_t xA = -1, yA = 0;
 
-  // 6.4.12 Derivation process for neighbouring locations
-  ret = Derivation_process_for_neighbouring_locations(
-      MbaffFrameFlag, xA, yA, _CurrMbAddr, mbAddrA_type, mbAddrA,
-      luma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma);
-  RETURN_IF_FAILED(ret != 0, ret);
+  // 6.4.12 Derivation process for neighbouring locations(A)
+  int ret = derivation_for_neighbouring_locations(
+      MbaffFrameFlag, xA, yA, currMbAddr, mbAddrA_type, mbAddrA, luma4x4BlkIdxA,
+      luma8x8BlkIdxA, xW, yW, isChroma);
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return ret;
+  }
 
-  //---------------mbAddrB---------------------
+  /* mbAddrB：当前宏块上方宏块的地址及其可用性状态 */
   MB_ADDR_TYPE mbAddrB_type = MB_ADDR_TYPE_UNKOWN;
-  int32_t luma4x4BlkIdxB = 0;
-  int32_t luma8x8BlkIdxB = 0;
-  int32_t xB = 0;
-  int32_t yB = -1;
+  int32_t luma4x4BlkIdxB = 0, luma8x8BlkIdxB = 0;
+  int32_t xB = 0, yB = -1;
 
-  // 6.4.12 Derivation process for neighbouring locations
-  ret = Derivation_process_for_neighbouring_locations(
-      MbaffFrameFlag, xB, yB, _CurrMbAddr, mbAddrB_type, mbAddrB,
-      luma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma);
-  RETURN_IF_FAILED(ret != 0, ret);
+  // 6.4.12 Derivation process for neighbouring locations(B)
+  ret = derivation_for_neighbouring_locations(
+      MbaffFrameFlag, xB, yB, currMbAddr, mbAddrB_type, mbAddrB, luma4x4BlkIdxB,
+      luma8x8BlkIdxB, xW, yW, isChroma);
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return ret;
+  }
 
-  return ret;
+  return 0;
 }
 
 // 6.4.13.1 Derivation process for 4x4 luma block indices
@@ -96,7 +103,7 @@ int PictureBase::Deblocking_filter_process() {
     // 1. The derivation process for neighbouring macroblocks specified in
     // clause 6.4.11.1 is invoked and the output is assigned to mbAddrA and
     // mbAddrB.
-    ret = Derivation_process_for_neighbouring_macroblocks(
+    ret = derivation_for_neighbouring_macroblocks(
         MbaffFrameFlag, CurrMbAddrTemp, mbAddrA, mbAddrB, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
 

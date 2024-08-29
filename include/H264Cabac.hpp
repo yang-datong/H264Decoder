@@ -23,9 +23,9 @@ class CH264Cabac {
                                 int32_t cabac_init_idc, int32_t SliceQPY);
   int init_of_decoding_engine(BitStream &bs);
 
-  int Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_skip_flag(
-      PictureBase &picture, int32_t _CurrMbAddr,
-      int32_t &ctxIdxInc); // 9.3.3.1.1.1
+  int derivation_of_ctxIdxInc_for_mb_skip_flag(PictureBase &picture,
+                                               const int32_t currMbAddr,
+                                               int32_t &ctxIdxInc);
   int Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_field_decoding_flag(
       PictureBase &picture, int32_t &ctxIdxInc); // 9.3.3.1.1.2
   int Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_type(

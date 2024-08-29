@@ -2688,7 +2688,7 @@ int PictureBase::Derivation_process_for_neighbouring_8x8_luma_block(
   int32_t yA = (luma8x8BlkIdx / 2) * 8 + 0;
 
   // 6.4.12 Derivation process for neighbouring locations
-  ret = Derivation_process_for_neighbouring_locations(
+  ret = derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xA, yA, CurrMbAddr, mbAddrA_type,
       mbAddrA, luma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -2707,7 +2707,7 @@ int PictureBase::Derivation_process_for_neighbouring_8x8_luma_block(
   int32_t yB = (luma8x8BlkIdx / 2) * 8 - 1;
 
   // 6.4.12 Derivation process for neighbouring locations
-  ret = Derivation_process_for_neighbouring_locations(
+  ret = derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xB, yB, CurrMbAddr, mbAddrB_type,
       mbAddrB, luma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -2778,7 +2778,7 @@ int PictureBase::Derivation_process_for_neighbouring_4x4_luma_blocks(
   int32_t yA = y + 0;
 
   // 6.4.12 Derivation process for neighbouring locations
-  ret = Derivation_process_for_neighbouring_locations(
+  ret = derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xA, yA, CurrMbAddr, mbAddrA_type,
       mbAddrA, luma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -2801,7 +2801,7 @@ int PictureBase::Derivation_process_for_neighbouring_4x4_luma_blocks(
   int32_t yB = y - 1;
 
   // 6.4.12 Derivation process for neighbouring locations
-  ret = Derivation_process_for_neighbouring_locations(
+  ret = derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xB, yB, CurrMbAddr, mbAddrB_type,
       mbAddrB, luma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -2857,7 +2857,7 @@ int PictureBase::Derivation_process_for_neighbouring_4x4_chroma_blocks(
   int32_t yA = y + 0;
 
   // 6.4.12 Derivation process for neighbouring locations
-  ret = Derivation_process_for_neighbouring_locations(
+  ret = derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xA, yA, CurrMbAddr, mbAddrA_type,
       mbAddrA, chroma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -2879,7 +2879,7 @@ int PictureBase::Derivation_process_for_neighbouring_4x4_chroma_blocks(
   int32_t yB = y - 1;
 
   // 6.4.12 Derivation process for neighbouring locations
-  ret = Derivation_process_for_neighbouring_locations(
+  ret = derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xB, yB, CurrMbAddr, mbAddrB_type,
       mbAddrB, chroma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -2897,135 +2897,201 @@ int PictureBase::Derivation_process_for_neighbouring_4x4_chroma_blocks(
 }
 
 // 6.4.12 Derivation process for neighbouring locations
-int PictureBase::Derivation_process_for_neighbouring_locations(
-    int32_t MbaffFrameFlag, int32_t xN, int32_t yN, int32_t _CurrMbAddr,
-    MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN, int32_t &_4x4BlkIdxN,
-    int32_t &_8x8BlkIdxN, int32_t &xW, int32_t &yW, int32_t isChroma) {
-  int ret = 0;
+/* 输入: 相对于当前宏块左上角表示的亮度或色度位置 ( xN, yN )
+ * 输出： 
+ * – mbAddrN：等于 CurrMbAddr 或等于包含 (xN, yN) 及其可用性状态的相邻宏块的地址， 
+ * – ( xW, yW )：相对于当前宏块表示的位置 (xN, yN) mbAddrN 宏块的左上角（而不是相对于当前宏块的左上角）。
+ * */
+int PictureBase::derivation_for_neighbouring_locations(
+    const int32_t MbaffFrameFlag, const int32_t xN, const int32_t yN,
+    const int32_t currMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
+    int32_t &b4x4BlkIdxN, int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW,
+    const int32_t isChroma) {
 
-  int32_t maxW = 0;
-  int32_t maxH = 0;
+  /* maxW 和 maxH 分别为指定位置分量 xN、xW 和 yN、yW 的最大值的变量 */
+  int32_t maxW = 0, maxH = 0;
 
-  if (isChroma == 0) {
-    maxW = 16;
-    maxH = 16;
-  } else {
+  /* 邻近的亮度位置调用此过程 */
+  if (isChroma == 0)
+    maxW = maxH = 16;
+  else {
+    /* 相邻色度位置调用此过程 */
     maxW = MbWidthC;
     maxH = MbHeightC;
   }
 
-  if (MbaffFrameFlag == 0) {
-    ret = getMbAddrN_non_MBAFF_frames(xN, yN, maxW, maxH, _CurrMbAddr,
-                                      mbAddrN_type, mbAddrN, _4x4BlkIdxN,
-                                      _8x8BlkIdxN, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else // if (MbaffFrameFlag == 1) //6.4.12.2 Specification for neighbouring
-         // locations in MBAFF frames
-  {
-    ret = getMbAddrN_MBAFF_frames(xN, yN, maxW, maxH, _CurrMbAddr, mbAddrN_type,
-                                  mbAddrN, _4x4BlkIdxN, _8x8BlkIdxN, xW, yW,
+  int ret = -1;
+
+  if (MbaffFrameFlag == 0)
+    /* 用第 6.4.12.1 节中描述的字段和非 MBAFF 帧中相邻位置的规范*/
+    ret = getMbAddrN_non_MBAFF_frames(xN, yN, maxW, maxH, currMbAddr,
+                                      mbAddrN_type, mbAddrN, b4x4BlkIdxN,
+                                      b8x8BlkIdxN, xW, yW, isChroma);
+  else
+    /* 反之，用第 6.4.12.2 节中描述的 MBAFF 帧中相邻位置的规范 */
+    /* TODO YangJing 做到这里来了，PDF -> 6.4.12.2 Specification for neighbouring locations in MBAFF frames <24-08-30 00:22:27> */
+    ret = getMbAddrN_MBAFF_frames(xN, yN, maxW, maxH, currMbAddr, mbAddrN_type,
+                                  mbAddrN, b4x4BlkIdxN, b8x8BlkIdxN, xW, yW,
                                   isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return ret;
   }
 
   return 0;
 }
 
-// 6.4.12.1 Specification for neighbouring locations in fields and non-MBAFF
-// frames Table 6-3 – Specification of mbAddrN
-int PictureBase::getMbAddrN_non_MBAFF_frames(
-    int32_t xN, int32_t yN, int32_t maxW, int32_t maxH, int32_t CurrMbAddr,
-    MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN, int32_t &_4x4BlkIdxN,
-    int32_t &_8x8BlkIdxN, int32_t &xW, int32_t &yW, int32_t isChroma) {
+/* 6.4.8 Derivation process of the availability for macroblock addresses */
+inline int PictureBase::derivation_of_availability_macroblock_addresses(
+    int32_t _mbAddr, int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type,
+    int32_t &mbAddrN) {
+
+  if (_mbAddr < 0 || _mbAddr > CurrMbAddr ||
+      m_mbs[_mbAddr].slice_number != m_mbs[CurrMbAddr].slice_number) {
+    //宏块被标记为不可用
+    mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
+    mbAddrN = -1;
+  } else {
+    //宏块被标记为可用
+    mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
+    mbAddrN = _mbAddr;
+  }
+  return 0;
+}
+
+/* 6.4.9 Derivation process for neighbouring macroblock addresses and their availability */
+/* 该过程的输出为： 
+ * – mbAddrA：当前宏块左侧宏块的地址和可用性状态， 
+ * – mbAddrB：当前宏块上方宏块的地址和可用性状态， 
+ * – mbAddrC：地址和可用性状态
+ * – mbAddrD：当前宏块左上宏块的地址和可用状态。
+  
+ Figure 6-12 – Neighbouring macroblocks for a given macroblock 
+    +-----+-----+-----+
+    |  D  |  B  |  C  |
+    +-----+-----+-----+
+    |  A  | Addr|     |
+    +-----+-----+-----+
+    |     |     |     |
+    +-----+-----+-----+
+*/
+int PictureBase::derivation_for_neighbouring_macroblock_addr_availability(
+    const int32_t xN, const int32_t yN, const int32_t maxW, const int32_t maxH,
+    const int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN) {
 
   mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
   mbAddrN = -1;
 
-  // 6.4.9 Derivation process for neighbouring macroblock addresses and their
-  // availability
-  if (xN < 0 && yN < 0) {
-    int32_t mbAddrD = CurrMbAddr - PicWidthInMbs - 1;
-    if (mbAddrD < 0 || mbAddrD > CurrMbAddr ||
-        m_mbs[mbAddrD].slice_number != m_mbs[CurrMbAddr].slice_number ||
-        CurrMbAddr % PicWidthInMbs == 0) {
-      mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-      mbAddrN = -1;
-    } else {
-      mbAddrN_type = MB_ADDR_TYPE_mbAddrD;
-      mbAddrN = mbAddrD;
-    }
-  } else if (xN < 0 && (yN >= 0 && yN <= maxH - 1)) {
-    int32_t mbAddrA = CurrMbAddr - 1;
-    if (mbAddrA < 0 || mbAddrA > CurrMbAddr ||
-        m_mbs[mbAddrA].slice_number != m_mbs[CurrMbAddr].slice_number ||
-        CurrMbAddr % PicWidthInMbs == 0) {
+  int32_t mbAddrA = CurrMbAddr - 1;
+  int32_t mbAddrB = CurrMbAddr - PicWidthInMbs;
+  int32_t mbAddrC = CurrMbAddr - PicWidthInMbs + 1;
+  int32_t mbAddrD = CurrMbAddr - PicWidthInMbs - 1;
+
+  /* Table 6-3 – Specification of mbAddrN */
+  /* 左宏快 */
+  if (xN < 0 && (yN >= 0 && yN <= maxH - 1)) {
+    /* 第 6.4.8 节中的过程的输入是 mbAddrA = CurrMbAddr − 1，输出是宏块 mbAddrA 是否可用。此外，当 CurrMbAddr % PicWidthInMbs 等于 0 时，mbAddrA 被标记为不可用。*/
+    derivation_of_availability_macroblock_addresses(mbAddrA, CurrMbAddr,
+                                                    mbAddrN_type, mbAddrN);
+    if (CurrMbAddr % PicWidthInMbs == 0) {
       mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
       mbAddrN = -1;
     } else {
       mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
       mbAddrN = mbAddrA;
     }
-  } else if ((xN >= 0 && xN <= maxW - 1) && yN < 0) {
-    int32_t mbAddrB = CurrMbAddr - PicWidthInMbs;
-    if (mbAddrB < 0 || mbAddrB > CurrMbAddr ||
-        m_mbs[mbAddrB].slice_number != m_mbs[CurrMbAddr].slice_number) {
-      mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-      mbAddrN = -1;
-    } else {
-      mbAddrN_type = MB_ADDR_TYPE_mbAddrB;
-      mbAddrN = mbAddrB;
-    }
-  } else if ((xN >= 0 && xN <= maxW - 1) && (yN >= 0 && yN <= maxH - 1)) {
-    mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr;
-    mbAddrN = CurrMbAddr;
-  } else if (xN > maxW - 1 && yN < 0) {
-    int32_t mbAddrC = CurrMbAddr - PicWidthInMbs + 1;
-    if (mbAddrC < 0 || mbAddrC > CurrMbAddr ||
-        m_mbs[mbAddrC].slice_number != m_mbs[CurrMbAddr].slice_number ||
-        (CurrMbAddr + 1) % PicWidthInMbs == 0) {
+  }
+  /* 上宏快 */
+  else if ((xN >= 0 && xN <= maxW - 1) && yN < 0) {
+    /* 第 6.4.8 节中的过程的输入是 mbAddrB = CurrMbAddr - PicWidthInMbs，输出是宏块 mbAddrB 是否可用。 */
+    derivation_of_availability_macroblock_addresses(mbAddrB, CurrMbAddr,
+                                                    mbAddrN_type, mbAddrN);
+  }
+  /* 右上宏快 */
+  else if (xN > maxW - 1 && yN < 0) {
+    /* 第 6.4.8 节中的过程的输入是 mbAddrC = CurrMbAddr − PicWidthInMbs + 1，输出是宏块 mbAddrC 是否可用。此外，当 (CurrMbAddr + 1) % PicWidthInMbs 等于 0 时，mbAddrC 被标记为不可用 */
+    derivation_of_availability_macroblock_addresses(mbAddrC, CurrMbAddr,
+                                                    mbAddrN_type, mbAddrN);
+    if ((CurrMbAddr + 1) % PicWidthInMbs == 0) {
       mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
       mbAddrN = -1;
     } else {
       mbAddrN_type = MB_ADDR_TYPE_mbAddrC;
       mbAddrN = mbAddrC;
     }
-  } else // not available
-  {
-    // return -1;
   }
+  /* 左上宏快 */
+  else if (xN < 0 && yN < 0) {
+    /* 第 6.4.8 节中的过程的输入是 mbAddrD = CurrMbAddr − PicWidthInMbs − 1，输出是宏块 mbAddrD 是否可用。此外，当 CurrMbAddr % PicWidthInMbs 等于 0 时，mbAddrD 被标记为不可用 */
+    derivation_of_availability_macroblock_addresses(mbAddrD, CurrMbAddr,
+                                                    mbAddrN_type, mbAddrN);
+    if (CurrMbAddr % PicWidthInMbs == 0) {
+      mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
+      mbAddrN = -1;
+    } else {
+      mbAddrN_type = MB_ADDR_TYPE_mbAddrD;
+      mbAddrN = mbAddrD;
+    }
+  } else if ((xN >= 0 && xN <= maxW - 1) && (yN >= 0 && yN <= maxH - 1)) {
+    /* 当前宏块 */
+    mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr;
+    mbAddrN = CurrMbAddr;
+  } else if ((xN > maxW - 1) && (yN >= 0 && yN <= maxH - 1)) {
+    /* not available */
+  } else if (yN > maxH - 1) {
+    /* not available */
+  }
+  return 0;
+}
 
-  //---------------------------
-  if (mbAddrN_type == MB_ADDR_TYPE_UNKOWN) {
-    _4x4BlkIdxN = NA;
-    _8x8BlkIdxN = NA;
-  } else {
+// 6.4.12.1 Specification for neighbouring locations in fields and non-MBAFF frames
+int PictureBase::getMbAddrN_non_MBAFF_frames(
+    const int32_t xN, const int32_t yN, const int32_t maxW, const int32_t maxH,
+    const int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
+    int32_t &b4x4BlkIdx, int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW,
+    const int32_t isChroma) {
+
+  mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
+  mbAddrN = -1;
+
+  /* 第 6.4.9 节中相邻宏块地址及其可用性的推导过程是通过 mbAddrA、mbAddrB、mbAddrC 和 mbAddrD 以及它们的可用性状态作为输出来调用的。 
+   * Table 6-3 specifies mbAddrN depending on ( xN, yN ). */
+  derivation_for_neighbouring_macroblock_addr_availability(
+      xN, yN, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN);
+
+  if (mbAddrN_type != MB_ADDR_TYPE_UNKOWN) {
+    /* 相对于宏块 mbAddrN 左上角的相邻位置 ( xW, yW )  */
     xW = (xN + maxW) % maxW;
     yW = (yN + maxH) % maxH;
 
-    if (isChroma == 1) {
-      // 6.4.13.2 Derivation process for 4x4 chroma block indices
-      _4x4BlkIdxN = 2 * (yW / 4) + (xW / 4); // chroma4x4BlkIdx
-    } else {
+    /* For 4x4 Block */
+    if (!isChroma)
       // 6.4.13.1 Derivation process for 4x4 luma block indices
-      _4x4BlkIdxN =
-          8 * (yW / 8) + 4 * (xW / 8) + 2 * ((yW % 8) / 4) +
-          ((xW % 8) / 4); // luma4x4BlkIdxN, cb4x4BlkIdxN, cr4x4BlkIdxN
-    }
+      b4x4BlkIdx =
+          8 * (yW / 8) + 4 * (xW / 8) + 2 * ((yW % 8) / 4) + ((xW % 8) / 4);
+    else
+      // 6.4.13.2 Derivation process for 4x4 chroma block indices
+      b4x4BlkIdx = 2 * (yW / 4) + (xW / 4);
 
-    _8x8BlkIdxN = 2 * (yW / 8) + (xW / 8);
-  }
+    /* For 8x8 Block */
+    // 6.4.13.3 Derivation process for 8x8 luma block indices
+    b8x8BlkIdxN = 2 * (yW / 8) + (xW / 8);
+  } else
+    b4x4BlkIdx = b8x8BlkIdxN = -1;
 
   return 0;
 }
 
 // 6.4.12.2 Specification for neighbouring locations in MBAFF frames
 // Table 6-4 – Specification of mbAddrN and yM
-int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
-                                         int32_t maxH, int32_t CurrMbAddr,
+int PictureBase::getMbAddrN_MBAFF_frames(const int32_t xN, const int32_t yN,
+                                         const int32_t maxW, const int32_t maxH,
+                                         const int32_t CurrMbAddr,
                                          MB_ADDR_TYPE &mbAddrN_type,
-                                         int32_t &mbAddrN, int32_t &_4x4BlkIdxN,
-                                         int32_t &_8x8BlkIdxN, int32_t &xW,
-                                         int32_t &yW, int32_t isChroma) {
+                                         int32_t &mbAddrN, int32_t &b4x4BlkIdxN,
+                                         int32_t &b8x8BlkIdxN, int32_t &xW,
+                                         int32_t &yW, const int32_t isChroma) {
   int32_t currMbFrameFlag = 0;
   int32_t mbIsTopMbFlag = 0;
   int32_t mbAddrXFrameFlag = 0;
@@ -3363,23 +3429,23 @@ int PictureBase::getMbAddrN_MBAFF_frames(int32_t xN, int32_t yN, int32_t maxW,
 
   //---------------------------
   if (mbAddrN_type == MB_ADDR_TYPE_UNKOWN) {
-    _4x4BlkIdxN = NA;
-    _8x8BlkIdxN = NA;
+    b4x4BlkIdxN = NA;
+    b8x8BlkIdxN = NA;
   } else {
     xW = (xN + maxW) % maxW;
     yW = (yM + maxH) % maxH;
 
     if (isChroma == 1) {
       // 6.4.13.2 Derivation process for 4x4 chroma block indices
-      _4x4BlkIdxN = 2 * (yW / 4) + (xW / 4); // chroma4x4BlkIdx
+      b4x4BlkIdxN = 2 * (yW / 4) + (xW / 4); // chroma4x4BlkIdx
     } else {
       // 6.4.13.1 Derivation process for 4x4 luma block indices
-      _4x4BlkIdxN =
+      b4x4BlkIdxN =
           8 * (yW / 8) + 4 * (xW / 8) + 2 * ((yW % 8) / 4) +
           ((xW % 8) / 4); // luma4x4BlkIdxN, cb4x4BlkIdxN, cr4x4BlkIdxN
     }
 
-    _8x8BlkIdxN = 2 * (yW / 8) + (xW / 8);
+    b8x8BlkIdxN = 2 * (yW / 8) + (xW / 8);
   }
 
   return 0;

@@ -250,26 +250,29 @@ int CH264Cabac::init_of_decoding_engine(BitStream &bs) {
   return 0;
 }
 
-int CH264Cabac::
-    Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_skip_flag(
-        PictureBase &picture, int32_t _CurrMbAddr, int32_t &ctxIdxInc) {
-  int ret = 0;
-
-  // When MbaffFrameFlag is equal to 1 and mb_field_decoding_flag has not been
-  // decoded (yet) for the current macroblock pair with top macroblock address 2
-  // * ( CurrMbAddr / 2 ), the inference rule for the syntax element
-  // mb_field_decoding_flag as specified in clause 7.4.4 is applied.
-
-  int32_t mbAddrA = 0;
-  int32_t mbAddrB = 0;
-
-  int32_t isChroma = 0;
+/* 当MbaffFrameFlag等于1并且mb_field_decoding_flag尚未针对具有顶部宏块地址2*(CurrMbAddr/2)的当前宏块对进行解码时，应用第7.4.4节中指定的语法元素mb_field_decoding_flag的推断规则。 */
+int CH264Cabac::derivation_of_ctxIdxInc_for_mb_skip_flag(
+    PictureBase &picture, const int32_t currMbAddr, int32_t &ctxIdxInc) {
+  /* 调用第 6.4.11.1 节中指定的相邻宏块的导出过程，并将输出分配给 mbAddrA 和 mbAddrB
+   *
+   * 让变量 condTermFlagN（N 为 A 或 B）按如下方式导出： 
+   * – 如果mbAddrN不可用或宏块mbAddrN的mb_skip_flag等于1，则condTermFlagN设置为等于 0
+   * – 否则，condTermFlagN 设置为等于 1   */
+  int mbAddrA = 0, mbAddrB = 0;
 
   // 6.4.11.1 Derivation process for neighbouring macroblocks
-  ret = picture.Derivation_process_for_neighbouring_macroblocks(
-      picture.m_slice.slice_header.MbaffFrameFlag, _CurrMbAddr, mbAddrA,
-      mbAddrB, isChroma);
-  RETURN_IF_FAILED(ret != 0, ret);
+  /* 该过程的输出为： 
+ * – mbAddrA：当前宏块左侧宏块的地址及其可用性状态， 
+ * – mbAddrB：当前宏块上方宏块的地址及其可用性状态。*/
+  int32_t isChroma = 0;
+  int ret = picture.derivation_for_neighbouring_macroblocks(
+      picture.m_slice.slice_header.MbaffFrameFlag, currMbAddr, mbAddrA, mbAddrB,
+      isChroma);
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return ret;
+  }
 
   int32_t condTermFlagA = 0;
   int32_t condTermFlagB = 0;
@@ -351,7 +354,7 @@ int CH264Cabac::Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_type(
   int32_t isChroma = 0;
 
   // 6.4.11.1 Derivation process for neighbouring macroblocks
-  ret = picture.Derivation_process_for_neighbouring_macroblocks(
+  ret = picture.derivation_for_neighbouring_macroblocks(
       picture.m_slice.slice_header.MbaffFrameFlag, picture.CurrMbAddr, mbAddrA,
       mbAddrB, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -462,7 +465,7 @@ int CH264Cabac::
     int32_t isChroma = 0;
 
     // 6.4.11.1 Derivation process for neighbouring macroblocks
-    ret = picture.Derivation_process_for_neighbouring_macroblocks(
+    ret = picture.derivation_for_neighbouring_macroblocks(
         picture.m_slice.slice_header.MbaffFrameFlag, picture.CurrMbAddr,
         mbAddrA, mbAddrB, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
@@ -1060,7 +1063,7 @@ int CH264Cabac::
   int32_t isChroma = 0;
 
   // 6.4.11.1 Derivation process for neighbouring macroblocks
-  ret = picture.Derivation_process_for_neighbouring_macroblocks(
+  ret = picture.derivation_for_neighbouring_macroblocks(
       picture.m_slice.slice_header.MbaffFrameFlag, picture.CurrMbAddr, mbAddrA,
       mbAddrB, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -1120,7 +1123,7 @@ int CH264Cabac::
     int32_t isChroma = (iCbCr < 0) ? 0 : 1;
 
     // 6.4.11.1 Derivation process for neighbouring macroblocks
-    ret = picture.Derivation_process_for_neighbouring_macroblocks(
+    ret = picture.derivation_for_neighbouring_macroblocks(
         picture.m_slice.slice_header.MbaffFrameFlag, picture.CurrMbAddr,
         mbAddrA, mbAddrB, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
@@ -1227,7 +1230,7 @@ int CH264Cabac::
     int32_t isChroma = 1;
 
     // 6.4.11.1 Derivation process for neighbouring macroblocks
-    ret = picture.Derivation_process_for_neighbouring_macroblocks(
+    ret = picture.derivation_for_neighbouring_macroblocks(
         picture.m_slice.slice_header.MbaffFrameFlag, picture.CurrMbAddr,
         mbAddrA, mbAddrB, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
@@ -1640,7 +1643,7 @@ int CH264Cabac::
   int32_t isChroma = 0;
 
   // 6.4.11.1 Derivation process for neighbouring macroblocks
-  ret = picture.Derivation_process_for_neighbouring_macroblocks(
+  ret = picture.derivation_for_neighbouring_macroblocks(
       picture.m_slice.slice_header.MbaffFrameFlag, picture.CurrMbAddr, mbAddrA,
       mbAddrB, isChroma);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -2910,21 +2913,20 @@ int CH264Cabac::CABAC_decode_sub_mb_type_in_B_slices(PictureBase &picture,
 /* 9.3.3 Decoding process flow */
 /* 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element mb_skip_flag */
 int CH264Cabac::decode_mb_skip_flag(PictureBase &picture, BitStream &bs,
-                                    int32_t _CurrMbAddr, int32_t &synElVal) {
-  int ret = 0;
+                                    int32_t currMbAddr, int32_t &synElVal) {
 
   const int slice_type = picture.m_slice.slice_header.slice_type;
 
   /* 9.3.2 Binarization process */
   // Table 9-34 – Syntax elements and associated types of binarization,maxBinIdxCtx, and ctxIdxOffset
-  int maxBinIdxCtx = 0, ctxIdxOffset = 0;
+  int /*maxBinIdxCtx = 0,*/ ctxIdxOffset = 0;
   int ctxIdxInc = 0, binIdx = -1, binVal = 0, ctxIdx = 0, bypassFlag = 0;
 
   if (slice_type == SLICE_P || slice_type == SLICE_SP) {
-    maxBinIdxCtx = 0;
+    //maxBinIdxCtx = 0;
     ctxIdxOffset = 11;
   } else if (slice_type == SLICE_B) {
-    maxBinIdxCtx = 0;
+    //maxBinIdxCtx = 0;
     ctxIdxOffset = 24;
   } else {
     std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
@@ -2932,9 +2934,10 @@ int CH264Cabac::decode_mb_skip_flag(PictureBase &picture, BitStream &bs,
     return -1;
   }
 
-  /* TODO YangJing  <24-08-29 13:48:57> */
-  ret = Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_skip_flag(
-      picture, _CurrMbAddr, ctxIdxInc);
+  /* 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element mb_skip_flag */
+  /* 此过程的输出是 ctxIdxInc */
+  int ret =
+      derivation_of_ctxIdxInc_for_mb_skip_flag(picture, currMbAddr, ctxIdxInc);
   RETURN_IF_FAILED(ret != 0, ret);
 
   //---------------注意是：FL, cMax=1------------------------
