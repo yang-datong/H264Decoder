@@ -294,48 +294,26 @@ int CH264Cabac::derivation_of_ctxIdxInc_for_mb_skip_flag(
 int CH264Cabac::derivation_of_ctxIdxInc_for_mb_field_decoding_flag(
     int32_t &ctxIdxInc) {
 
-  /* 调用第 6.4.10 节中指定的相邻宏块地址及其在 MBAFF 帧中的可用性的导出过程，并将输出分配给 mbAddrA 和 mbAddrB。  
-   * 当宏块mbAddrN和mbAddrN+1两者都具有等于P_Skip或B_Skip的mb_type时，将如第7.4.4节中指定的语法元素mb_field_decoding_flag的推断规则应用于宏块mbAddrN。  
+  /* 调用第 6.4.10 节中指定的相邻宏块地址及其在 MBAFF 帧中的可用性的导出过程，并将输出分配给 mbAddrA 和 mbAddrB。  */
+  int32_t mbAddrA, mbAddrB, mbAddrC, mbAddrD;
+  /* Table 6-4 – Specification of mbAddrN and yM */
+  picture.derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
+      mbAddrA, mbAddrB, mbAddrC, mbAddrD);
+
+  /* 当宏块mbAddrN和mbAddrN+1两者都具有等于P_Skip或B_Skip的mb_type时，将如第7.4.4节中指定的语法元素mb_field_decoding_flag的推断规则应用于宏块mbAddrN。  
    * 让变量 condTermFlagN（N 为 A 或 B）按如下方式导出： 
    * — 如果以下任一条件为真，则 condTermFlagN 设置为等于 0： 
       * — mbAddrN 不可用， 
       * — 宏块 mbAddrN 是帧宏块。  
-   * – 否则，condTermFlagN 设置为等于 1。
-   * 变量 ctxIdxInc 由以下公式得出： ctxIdxInc = condTermFlagA + condTermFlagB */
+   * – 否则，condTermFlagN 设置为等于 1。*/
 
-  int32_t mbAddrA = 0, mbAddrB = 0, mbAddrC = 0, mbAddrD = 0;
-  /* TODO YangJing 做到这里来了，先做工作的事情吧 <24-08-30 16:59:10> */
+  int32_t flagA = picture.m_mbs[mbAddrA].mb_field_decoding_flag;
+  int32_t flagB = picture.m_mbs[mbAddrB].mb_field_decoding_flag;
 
-  // 6.4.10 Derivation process for neighbouring macroblock addresses and their availability in MBAFF frames
-  int ret =
-      picture
-          .Derivation_process_for_neighbouring_macroblock_addresses_and_their_availability_in_MBAFF_frames(
-              picture.CurrMbAddr, mbAddrA, mbAddrB, mbAddrC, mbAddrD);
-  RETURN_IF_FAILED(ret != 0, -1);
+  int32_t condTermFlagA = (mbAddrA < 0 || flagA == 0) ? 0 : 1;
+  int32_t condTermFlagB = (mbAddrB < 0 || flagB == 0) ? 0 : 1;
 
-  // When both macroblocks mbAddrN and mbAddrN + 1 have mb_type equal to P_Skip
-  // or B_Skip, the inference rule for the syntax element mb_field_decoding_flag
-  // as specified in clause 7.4.4 is applied for the macroblock mbAddrN.
-
-  //------------------------
-  int32_t condTermFlagA = 0;
-  int32_t condTermFlagB = 0;
-
-  //---------A--------------
-  if (mbAddrA < 0 || picture.m_mbs[mbAddrA].mb_field_decoding_flag == 0) {
-    condTermFlagA = 0;
-  } else {
-    condTermFlagA = 1;
-  }
-
-  //---------B--------------
-  if (mbAddrB < 0 || picture.m_mbs[mbAddrB].mb_field_decoding_flag == 0) {
-    condTermFlagB = 0;
-  } else {
-    condTermFlagB = 1;
-  }
-
-  //---------------
+  // 变量 ctxIdxInc 由以下公式得出： ctxIdxInc = condTermFlagA + condTermFlagB
   ctxIdxInc = condTermFlagA + condTermFlagB;
 
   return 0;
@@ -1856,7 +1834,7 @@ int CH264Cabac::decode_sub_mb_type(int32_t &synElVal) {
 }
 
 int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
-                                                 int32_t &synElVal) {
+                                           int32_t &synElVal) {
   int ret = 0;
 
   int32_t maxBinIdxCtx = 0;
@@ -2900,8 +2878,8 @@ int CH264Cabac::decode_mb_skip_flag(const int32_t currMbAddr,
 }
 
 int CH264Cabac::decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
-                                    int32_t subMbPartIdx, int32_t isChroma,
-                                    int32_t &synElVal) {
+                              int32_t subMbPartIdx, int32_t isChroma,
+                              int32_t &synElVal) {
   int ret = 0;
 
   // int32_t maxBinIdxCtx = 0;
@@ -3037,7 +3015,7 @@ int CH264Cabac::decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
 }
 
 int CH264Cabac::decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
-                                        int32_t &synElVal) {
+                                  int32_t &synElVal) {
   int ret = 0;
 
   // int32_t maxBinIdxCtx = 0;
@@ -3348,8 +3326,6 @@ int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
               << std::endl;
     return -1;
   }
-
-  // fixedLength = Ceil( Log2( cMax + 1 ) ) = Ceil( Log2( 1 + 1 ) ) = 1;
   return 0;
 }
 
@@ -3499,8 +3475,8 @@ int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
 }
 
 int CH264Cabac::decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
-                                              int32_t BlkIdx, int32_t iCbCr,
-                                              int32_t &synElVal) {
+                                        int32_t BlkIdx, int32_t iCbCr,
+                                        int32_t &synElVal) {
   int ret = 0;
 
   int32_t NumC8x8 =
@@ -3588,9 +3564,10 @@ int CH264Cabac::decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
 }
 
 // 如果last_flag=1,则表示 CABAC_decode_last_significant_coeff_flag(...)
-int CH264Cabac::decode_significant_coeff_flag(
-    MB_RESIDUAL_LEVEL mb_block_level, int32_t levelListIdx, int32_t last_flag,
-    int32_t &synElVal) {
+int CH264Cabac::decode_significant_coeff_flag(MB_RESIDUAL_LEVEL mb_block_level,
+                                              int32_t levelListIdx,
+                                              int32_t last_flag,
+                                              int32_t &synElVal) {
   int ret = 0;
 
   int32_t NumC8x8 =
@@ -3747,9 +3724,10 @@ int CH264Cabac::decode_significant_coeff_flag(
   return 0;
 }
 
-int CH264Cabac::decode_coeff_abs_level_minus1(
-    MB_RESIDUAL_LEVEL mb_block_level, int32_t numDecodAbsLevelEq1,
-    int32_t numDecodAbsLevelGt1, int32_t &synElVal) {
+int CH264Cabac::decode_coeff_abs_level_minus1(MB_RESIDUAL_LEVEL mb_block_level,
+                                              int32_t numDecodAbsLevelEq1,
+                                              int32_t numDecodAbsLevelGt1,
+                                              int32_t &synElVal) {
   int ret = 0;
 
   int32_t NumC8x8 =
@@ -4026,7 +4004,7 @@ int CH264Cabac::residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
 
   if (maxNumCoeff != 64 || ChromaArrayType == 3) {
     ret = decode_coded_block_flag(mb_block_level, BlkIdx, iCbCr,
-                                        coded_block_flag); // 3 | 4 ae(v)
+                                  coded_block_flag); // 3 | 4 ae(v)
     RETURN_IF_FAILED(ret != 0, -1);
   }
 
@@ -4070,8 +4048,7 @@ int CH264Cabac::residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
         coeff_abs_level_minus1[numCoeff - 1]); // 3 | 4 ae(v)
     RETURN_IF_FAILED(ret != 0, -1);
 
-    ret = decode_coeff_sign_flag(
-        coeff_sign_flag[numCoeff - 1]); // 3 | 4 ae(v)
+    ret = decode_coeff_sign_flag(coeff_sign_flag[numCoeff - 1]); // 3 | 4 ae(v)
     RETURN_IF_FAILED(ret != 0, -1);
 
     coeffLevel[numCoeff - 1] = (coeff_abs_level_minus1[numCoeff - 1] + 1) *

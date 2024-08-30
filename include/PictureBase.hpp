@@ -5,6 +5,7 @@
 #include "Slice.hpp"
 #include "SliceBody.hpp"
 #include "Type.hpp"
+#include <vector>
 
 class Frame;
 
@@ -117,34 +118,38 @@ class PictureBase {
   int Decoding_process_for_picture_order_count_type_2(
       const PictureBase *picture_previous); // 8.2.1.3
 
-  int Decoding_process_for_reference_picture_lists_construction(
+  int decoding_reference_picture_lists_construction(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
       Frame *(&RefPicList1)[16]); // 8.2.4 参考图像列表的重排序过程
-  int Decoding_process_for_picture_numbers(Frame *(&dpb)[16]); // 8.2.4.1
+  int decoding_picture_numbers(Frame *(&dpb)[16]); // 8.2.4.1
 
-  int Initialisation_process_for_reference_picture_lists(
+  int init_reference_picture_lists(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
       Frame *(&RefPicList1)[16]); // 8.2.4.2
-  int Initialisation_process_for_the_reference_picture_list_for_P_and_SP_slices_in_frames(
+  int init_reference_picture_list_P_SP_slices_in_frames(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
       int32_t &RefPicList0Length); // 8.2.4.2.1
-  int Initialisation_process_for_the_reference_picture_list_for_P_and_SP_slices_in_fields(
+  int init_reference_picture_list_P_SP_slices_in_fields(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
       int32_t &RefPicList0Length); // 8.2.4.2.2
-  int Initialisation_process_for_reference_picture_lists_for_B_slices_in_frames(
+  int init_reference_picture_lists_B_slices_in_frames(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16],
       int32_t &RefPicList0Length,
       int32_t &RefPicList1Length); // 8.2.4.2.3
-  int Initialisation_process_for_reference_picture_lists_for_B_slices_in_fields(
+  int init_reference_picture_lists_B_slices_in_fields(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16],
       int32_t &RefPicList0Length,
       int32_t &RefPicList1Length); // 8.2.4.2.4
-  int Initialisation_process_for_reference_picture_lists_in_fields(
+  int init_reference_picture_lists_in_fields(
       Frame *(&refFrameListXShortTerm)[16], Frame *(&refFrameListXLongTerm)[16],
       Frame *(&RefPicListX)[16], int32_t &RefPicListXLength,
       int32_t listX); // 8.2.4.2.5
+  int init_reference_picture_lists_in_fields(
+      vector<Frame *>(&refFrameListXShortTerm), vector<Frame *>(&refFrameListXLongTerm),
+      Frame *(&RefPicListX)[16], int32_t &RefPicListXLength,
+      int32_t listX); // 8.2.4.2.5
 
-  int Modification_process_for_reference_picture_lists(
+  int modif_reference_picture_lists(
       Frame *(&RefPicList0)[16],
       Frame *(&RefPicList1)[16]); // 8.2.4.3 参考图像列表的重排序过程
   int Modification_process_of_reference_picture_lists_for_short_term_reference_pictures(
@@ -203,9 +208,6 @@ class PictureBase {
       int32_t &x, int32_t &y); // 6.4.2.2
   int Derivation_process_of_the_availability_for_macroblock_addresses(
       int32_t mbAddr, int32_t &is_mbAddr_available); // 6.4.8
-  int Derivation_process_for_neighbouring_macroblock_addresses_and_their_availability_in_MBAFF_frames(
-      int32_t CurrMbAddr, int32_t &mbAddrA, int32_t &mbAddrB, int32_t &mbAddrC,
-      int32_t &mbAddrD); // 6.4.10
 
   int derivation_for_neighbouring_macroblocks(const int32_t MbaffFrameFlag,
                                               const int32_t currMbAddr,
@@ -235,12 +237,12 @@ class PictureBase {
       const int32_t isChroma);
 
   int neighbouring_locations_non_MBAFF(const int32_t xN, const int32_t yN,
-                                  const int32_t maxW, const int32_t maxH,
-                                  const int32_t CurrMbAddr,
-                                  MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
-                                  int32_t &b4x4BlkIdx, int32_t &b8x8BlkIdxN,
-                                  int32_t &xW, int32_t &yW,
-                                  const int32_t isChroma);
+                                       const int32_t maxW, const int32_t maxH,
+                                       const int32_t CurrMbAddr,
+                                       MB_ADDR_TYPE &mbAddrN_type,
+                                       int32_t &mbAddrN, int32_t &b4x4BlkIdx,
+                                       int32_t &b8x8BlkIdxN, int32_t &xW,
+                                       int32_t &yW, const int32_t isChroma);
 
   int derivation_for_neighbouring_macroblock_addr_availability(
       const int32_t xN, const int32_t yN, const int32_t maxW,
@@ -252,15 +254,15 @@ class PictureBase {
       int32_t &mbAddrN);
 
   int neighbouring_locations_MBAFF(const int32_t xN, const int32_t yN,
-                              const int32_t maxW, const int32_t maxH,
-                              const int32_t CurrMbAddr,
-                              MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
-                              int32_t &b4x4BlkIdxN, int32_t &b8x8BlkIdxN,
-                              int32_t &xW, int32_t &yW, const int32_t isChroma);
+                                   const int32_t maxW, const int32_t maxH,
+                                   const int32_t CurrMbAddr,
+                                   MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
+                                   int32_t &b4x4BlkIdxN, int32_t &b8x8BlkIdxN,
+                                   int32_t &xW, int32_t &yW,
+                                   const int32_t isChroma);
 
-int derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
-      const int32_t xN, const int32_t yN, const int32_t maxW, const int32_t maxH,
-      const int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,int32_t &yM );
+  int derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
+      int32_t &mbAddrA, int32_t &mbAddrB, int32_t &mbAddrC, int32_t &mbAddrD);
 
   int Derivation_process_for_4x4_luma_block_indices(
       uint8_t xP, uint8_t yP, uint8_t &luma4x4BlkIdx); // 6.4.13.1

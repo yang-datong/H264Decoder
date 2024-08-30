@@ -48,7 +48,7 @@ class Nalu {
 
  public:
   char forbidden_zero_bit = 0;
-  /* Nal单元的重要性，越大则说明该Nal越重要（不可随意丢弃），取值为[0-3] */
+  /* Nal单元的重要性，越大则说明该Nal越重要（不可随意丢弃），取值为[0-3],不为0则表示为参考帧，而参考帧又分为短期参考帧和长期参考帧（这对于后面解码是非常重要的） */
   char nal_ref_idc = 0;
   char nal_unit_type = 0;
 

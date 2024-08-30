@@ -2621,46 +2621,6 @@ int PictureBase::
   return 0;
 }
 
-// 6.4.10 Derivation process for neighbouring macroblock addresses and their
-// availability in MBAFF frames This process can only be invoked when
-// MbaffFrameFlag is equal to 1
-int PictureBase::
-    Derivation_process_for_neighbouring_macroblock_addresses_and_their_availability_in_MBAFF_frames(
-        int32_t CurrMbAddr, int32_t &mbAddrA, int32_t &mbAddrB,
-        int32_t &mbAddrC, int32_t &mbAddrD) {
-  // the address and availability status of the top macroblock of the macroblock
-  // pair（特别需要注意这里的：top macroblock）
-  mbAddrA = 2 * (CurrMbAddr / 2 - 1);
-  mbAddrB = 2 * (CurrMbAddr / 2 - PicWidthInMbs);
-  mbAddrC = 2 * (CurrMbAddr / 2 - PicWidthInMbs + 1);
-  mbAddrD = 2 * (CurrMbAddr / 2 - PicWidthInMbs - 1);
-
-  if (mbAddrA < 0 || mbAddrA > CurrMbAddr ||
-      m_mbs[mbAddrA].slice_number != m_mbs[CurrMbAddr].slice_number ||
-      (CurrMbAddr / 2) % PicWidthInMbs == 0) {
-    mbAddrA = -2; // marked as not available
-  }
-
-  if (mbAddrB < 0 || mbAddrB > CurrMbAddr ||
-      m_mbs[mbAddrB].slice_number != m_mbs[CurrMbAddr].slice_number) {
-    mbAddrB = -2; // marked as not available
-  }
-
-  if (mbAddrC < 0 || mbAddrC > CurrMbAddr ||
-      m_mbs[mbAddrC].slice_number != m_mbs[CurrMbAddr].slice_number ||
-      (CurrMbAddr / 2 + 1) % PicWidthInMbs == 0) {
-    mbAddrC = -2; // marked as not available
-  }
-
-  if (mbAddrD < 0 || mbAddrD > CurrMbAddr ||
-      m_mbs[mbAddrD].slice_number != m_mbs[CurrMbAddr].slice_number ||
-      (CurrMbAddr / 2) % PicWidthInMbs == 0) {
-    mbAddrD = -2; // marked as not available
-  }
-
-  return 0;
-}
-
 // 6.4.11.2 Derivation process for neighbouring 8x8 luma block
 int PictureBase::Derivation_process_for_neighbouring_8x8_luma_block(
     int32_t luma8x8BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
@@ -3102,15 +3062,14 @@ int PictureBase::neighbouring_locations_non_MBAFF(
  */
 int PictureBase::
     derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
-        const int32_t xN, const int32_t yN, const int32_t maxW,
-        const int32_t maxH, const int32_t CurrMbAddr,
-        MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN, int32_t &yM) {
+        int32_t &mbAddrA, int32_t &mbAddrB, int32_t &mbAddrC,
+        int32_t &mbAddrD) {
 
   /* 第 6.4.8 节中的过程的输入是 mbAddrA = 2 * ( CurrMbAddr / 2 − 1 )，输出是宏块 mbAddrA 是否可用。此外，当 (CurrMbAddr / 2) % PicWidthInMbs 等于 0 时，mbAddrA 被标记为不可用。 */
-  int32_t mbAddrA = 2 * (CurrMbAddr / 2 - 1);
-  int32_t mbAddrB = 2 * (CurrMbAddr / 2 - PicWidthInMbs);
-  int32_t mbAddrC = 2 * (CurrMbAddr / 2 - PicWidthInMbs + 1);
-  int32_t mbAddrD = 2 * (CurrMbAddr / 2 - PicWidthInMbs - 1);
+  mbAddrA = 2 * (CurrMbAddr / 2 - 1);
+  mbAddrB = 2 * (CurrMbAddr / 2 - PicWidthInMbs);
+  mbAddrC = 2 * (CurrMbAddr / 2 - PicWidthInMbs + 1);
+  mbAddrD = 2 * (CurrMbAddr / 2 - PicWidthInMbs - 1);
 
   if (mbAddrA < 0 || mbAddrA > CurrMbAddr ||
       m_mbs[mbAddrA].slice_number != m_mbs[CurrMbAddr].slice_number ||
@@ -3131,7 +3090,26 @@ int PictureBase::
       (CurrMbAddr / 2) % PicWidthInMbs == 0)
     mbAddrD = -2;
 
-  /* NOTE:下面的部分应该是上层函数的内容，但是为了方便代码简洁所以将代码放在这个函数中 */
+  return 0;
+}
+
+// 6.4.12.2 Specification for neighbouring locations in MBAFF frames
+// Table 6-4 – Specification of mbAddrN and yM
+int PictureBase::neighbouring_locations_MBAFF(
+    const int32_t xN, const int32_t yN, const int32_t maxW, const int32_t maxH,
+    const int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
+    int32_t &b4x4BlkIdxN, int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW,
+    const int32_t isChroma) {
+
+  int32_t yM = 0;
+  mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
+  mbAddrN = -1;
+
+  /* 第 6.4.10 节中相邻宏块地址及其可用性的推导过程是通过 mbAddrA、mbAddrB、mbAddrC 和 mbAddrD 以及它们的可用性状态作为输出来调用的。 */
+  int32_t mbAddrA, mbAddrB, mbAddrC, mbAddrD;
+  /* Table 6-4 – Specification of mbAddrN and yM */
+  derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
+      mbAddrA, mbAddrB, mbAddrC, mbAddrD);
 
   /* 变量 currMbFrameFlag 的推导如下： 
    * – 如果地址为 CurrMbAddr 的宏块是帧宏块，则 currMbFrameFlag 设置为等于 1。 
@@ -3363,26 +3341,6 @@ int PictureBase::
     // not available
   }
   if (mbAddrN < 0) mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-
-  return 0;
-}
-
-// 6.4.12.2 Specification for neighbouring locations in MBAFF frames
-// Table 6-4 – Specification of mbAddrN and yM
-int PictureBase::neighbouring_locations_MBAFF(
-    const int32_t xN, const int32_t yN, const int32_t maxW, const int32_t maxH,
-    const int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
-    int32_t &b4x4BlkIdxN, int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW,
-    const int32_t isChroma) {
-
-  int32_t yM = 0;
-  mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-  mbAddrN = -1;
-
-  /* 第 6.4.10 节中相邻宏块地址及其可用性的推导过程是通过 mbAddrA、mbAddrB、mbAddrC 和 mbAddrD 以及它们的可用性状态作为输出来调用的。 */
-  /* Table 6-4 – Specification of mbAddrN and yM */
-  derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
-      xN, yN, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN, yM);
 
   if (mbAddrN_type != MB_ADDR_TYPE_UNKOWN) {
     xW = (xN + maxW) % maxW;

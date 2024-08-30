@@ -37,7 +37,6 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
     mb_field_decoding_flag = header.field_pic_flag;
 
   CurrMbAddr = header.first_mb_in_slice * (1 + header.MbaffFrameFlag);
-
   picture.CurrMbAddr = CurrMbAddr;
 
   header.picNumL0Pred = header.CurrPicNum;
@@ -55,7 +54,8 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
     // 只有当前帧为P帧，B帧时，才会对参考图像数列表组进行重排序
     if (header.slice_type == SLICE_P || header.slice_type == SLICE_SP ||
         header.slice_type == SLICE_B) {
-      picture.Decoding_process_for_reference_picture_lists_construction(
+      /* 在每个 P、SP 或 B 切片的解码过程开始时调用重排序 */
+      picture.decoding_reference_picture_lists_construction(
           picture.m_dpb, picture.m_RefPicList0, picture.m_RefPicList1);
 
       //--------------

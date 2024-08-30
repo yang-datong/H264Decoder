@@ -9,7 +9,10 @@ int main() {
   // std::ios::sync_with_stdio(false);
   // string filePath = "./source_cut_10_frames.h264";
   // string filePath = "./source_cut_10_frames_no_B.h264";
+  /* 帧编码 */
   string filePath = "./demo_10_frames.h264";
+  /* 场编码 */
+  //string filePath = "./demo_10_frames_interlace.h264";
 
   /* 1. 打开文件、读取NUL、存储NUL的操作 */
   AnnexBReader reader(filePath);

@@ -40,6 +40,7 @@ enum H264_SLICE_TYPE {
   SLICE_B,
   SLICE_I,
   SLICE_SP,
+  /* SP 帧是一种特殊类型的 P 帧，主要用于在编码过程中切换编码模式 */
   SLICE_SI,
   SLICE_P2,
   SLICE_B2,
