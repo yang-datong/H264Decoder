@@ -28,10 +28,25 @@ using namespace std;
 // Ceil( x ) the smallest integer greater than or equal to x.
 #define CEIL(x) (int(x))
 
+//=============================== CABAC ============================
 /* CABAC function */
 #define CLIP(x, low, high)                                                     \
   (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 #define CLIP3(x, y, z) (((z) < (x)) ? (x) : (((z) > (y)) ? (y) : (z)))
+
+// Table 7-6 – Name association to slice_type
+enum H264_SLICE_TYPE {
+  SLICE_P = 0,
+  SLICE_B,
+  SLICE_I,
+  SLICE_SP,
+  SLICE_SI,
+  SLICE_P2,
+  SLICE_B2,
+  SLICE_I2,
+  SLICE_SP2,
+  SLICE_SI2
+};
 
 #define ROUND(x) ((int)((x) + 0.5))
 #define ABS(x) ((int)(((x) >= (0)) ? (x) : (-(x))))
@@ -289,33 +304,6 @@ typedef struct _SUB_MB_TYPE_B_MBS_T_ {
   int32_t SubMbPartHeight;
 } SUB_MB_TYPE_B_MBS_T;
 
-// Table 7-6 – Name association to slice_type
-typedef enum _H264_SLIECE_TYPE_ {
-  H264_SLIECE_TYPE_P = 0,
-  H264_SLIECE_TYPE_B = 1,
-  H264_SLIECE_TYPE_I = 2,
-  H264_SLIECE_TYPE_SP = 3,
-  H264_SLIECE_TYPE_SI = 4,
-  H264_SLIECE_TYPE_P2 = 5,
-  H264_SLIECE_TYPE_B2 = 6,
-  H264_SLIECE_TYPE_I2 = 7,
-  H264_SLIECE_TYPE_SP2 = 8,
-  H264_SLIECE_TYPE_SI2 = 9,
-} H264_SLIECE_TYPE;
-
-enum H264_SLICE_TYPE {
-  SLICE_P = 0,
-  SLICE_B,
-  SLICE_I,
-  SLICE_SP,
-  SLICE_SI,
-  SLICE_P2,
-  SLICE_B2,
-  SLICE_I2,
-  SLICE_SP2,
-  SLICE_SI2
-};
-
 // 宏块残差幅值类型
 typedef enum _MB_RESIDUAL_LEVEL_ {
   MB_RESIDUAL_UNKOWN = -1,
@@ -390,17 +378,17 @@ typedef enum _MB_RESIDUAL_LEVEL_ {
 #define Prediction_Mode_Intra_Chroma_Plane 3
 
 #define H264_SLIECE_TYPE_TO_STR(slice_type)                                    \
-  (slice_type == H264_SLIECE_TYPE_P)     ? "P"                                 \
-  : (slice_type == H264_SLIECE_TYPE_B)   ? "B"                                 \
-  : (slice_type == H264_SLIECE_TYPE_I)   ? "I"                                 \
-  : (slice_type == H264_SLIECE_TYPE_SP)  ? "SP"                                \
-  : (slice_type == H264_SLIECE_TYPE_SI)  ? "SI"                                \
-  : (slice_type == H264_SLIECE_TYPE_P2)  ? "P2"                                \
-  : (slice_type == H264_SLIECE_TYPE_B2)  ? "B2"                                \
-  : (slice_type == H264_SLIECE_TYPE_I2)  ? "I2"                                \
-  : (slice_type == H264_SLIECE_TYPE_SP2) ? "SP2"                               \
-  : (slice_type == H264_SLIECE_TYPE_SI2) ? "SI2"                               \
-                                         : "UNKNOWN"
+  (slice_type == SLICE_P)     ? "P"                                            \
+  : (slice_type == SLICE_B)   ? "B"                                            \
+  : (slice_type == SLICE_I)   ? "I"                                            \
+  : (slice_type == SLICE_SP)  ? "SP"                                           \
+  : (slice_type == SLICE_SI)  ? "SI"                                           \
+  : (slice_type == SLICE_P2)  ? "P2"                                           \
+  : (slice_type == SLICE_B2)  ? "B2"                                           \
+  : (slice_type == SLICE_I2)  ? "I2"                                           \
+  : (slice_type == SLICE_SP2) ? "SP2"                                          \
+  : (slice_type == SLICE_SI2) ? "SI2"                                          \
+                              : "UNKNOWN"
 
 #define H264_MB_PART_PRED_MODE_TO_STR(pred_mode)                               \
   (pred_mode == MB_PRED_MODE_NA) ? "MB_PRED_MODE_NA"                           \

@@ -283,26 +283,26 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
           0) // 6.4.12.1 Specification for neighbouring locations in fields and
              // non-MBAFF frames
       {
-        ret = picture.getMbAddrN_non_MBAFF_frames(
+        ret = picture.neighbouring_locations_non_MBAFF(
             x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_A_type, mbAddrN_A,
             luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
 
-        ret = picture.getMbAddrN_non_MBAFF_frames(
+        ret = picture.neighbouring_locations_non_MBAFF(
             x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_B_type, mbAddrN_B,
             luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
       } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification
              // for neighbouring locations in MBAFF frames
       {
-        ret = picture.getMbAddrN_MBAFF_frames(
+        ret = picture.neighbouring_locations_MBAFF(
             x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_A_type, mbAddrN_A,
             luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
 
         //mb_type_neighbouring_A = I_NxN;
 
-        ret = picture.getMbAddrN_MBAFF_frames(
+        ret = picture.neighbouring_locations_MBAFF(
             x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_B_type, mbAddrN_B,
             luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
@@ -329,24 +329,24 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
       isChroma = 0;
 
       if (slice_header.MbaffFrameFlag == 0) {
-        ret = picture.getMbAddrN_non_MBAFF_frames(
+        ret = picture.neighbouring_locations_non_MBAFF(
             x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_A_type, mbAddrN_A,
             cb4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
 
-        ret = picture.getMbAddrN_non_MBAFF_frames(
+        ret = picture.neighbouring_locations_non_MBAFF(
             x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_B_type, mbAddrN_B,
             cb4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
       } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification
              // for neighbouring locations in MBAFF frames
       {
-        ret = picture.getMbAddrN_MBAFF_frames(
+        ret = picture.neighbouring_locations_MBAFF(
             x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_A_type, mbAddrN_A,
             cb4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
 
-        ret = picture.getMbAddrN_MBAFF_frames(
+        ret = picture.neighbouring_locations_MBAFF(
             x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_B_type, mbAddrN_B,
             cb4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
@@ -373,24 +373,24 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
       isChroma = 0;
 
       if (slice_header.MbaffFrameFlag == 0) {
-        ret = picture.getMbAddrN_non_MBAFF_frames(
+        ret = picture.neighbouring_locations_non_MBAFF(
             x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_A_type, mbAddrN_A,
             cr4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
 
-        ret = picture.getMbAddrN_non_MBAFF_frames(
+        ret = picture.neighbouring_locations_non_MBAFF(
             x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_B_type, mbAddrN_B,
             cr4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
       } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification
              // for neighbouring locations in MBAFF frames
       {
-        ret = picture.getMbAddrN_MBAFF_frames(
+        ret = picture.neighbouring_locations_MBAFF(
             x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_A_type, mbAddrN_A,
             cr4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
 
-        ret = picture.getMbAddrN_MBAFF_frames(
+        ret = picture.neighbouring_locations_MBAFF(
             x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_B_type, mbAddrN_B,
             cr4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
@@ -414,24 +414,24 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
       isChroma = 1;
 
       if (slice_header.MbaffFrameFlag == 0) {
-        ret = picture.getMbAddrN_non_MBAFF_frames(
+        ret = picture.neighbouring_locations_non_MBAFF(
             x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_A_type, mbAddrN_A,
             chroma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
 
-        ret = picture.getMbAddrN_non_MBAFF_frames(
+        ret = picture.neighbouring_locations_non_MBAFF(
             x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_B_type, mbAddrN_B,
             chroma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
       } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification
              // for neighbouring locations in MBAFF frames
       {
-        ret = picture.getMbAddrN_MBAFF_frames(
+        ret = picture.neighbouring_locations_MBAFF(
             x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_A_type, mbAddrN_A,
             chroma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);
 
-        ret = picture.getMbAddrN_MBAFF_frames(
+        ret = picture.neighbouring_locations_MBAFF(
             x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_B_type, mbAddrN_B,
             chroma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
         RETURN_IF_FAILED(ret != 0, ret);

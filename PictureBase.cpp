@@ -766,26 +766,26 @@ int PictureBase::getIntra4x4PredMode(
   }
 
   if (m_slice.slice_header.MbaffFrameFlag == 0) {
-    ret = getMbAddrN_non_MBAFF_frames(
+    ret = neighbouring_locations_non_MBAFF(
         x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_type_A, mbAddrN_A,
         luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
 
-    ret = getMbAddrN_non_MBAFF_frames(
+    ret = neighbouring_locations_non_MBAFF(
         x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_type_B, mbAddrN_B,
         luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
   } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification for
          // neighbouring locations in MBAFF frames
   {
-    ret = getMbAddrN_MBAFF_frames(x - 1, y + 0, maxW, maxH, CurrMbAddr,
-                                  mbAddrN_type_A, mbAddrN_A, luma4x4BlkIdxN_A,
-                                  luma8x8BlkIdxN_A, xW, yW, isChroma);
+    ret = neighbouring_locations_MBAFF(
+        x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_type_A, mbAddrN_A,
+        luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
 
-    ret = getMbAddrN_MBAFF_frames(x + 0, y - 1, maxW, maxH, CurrMbAddr,
-                                  mbAddrN_type_B, mbAddrN_B, luma4x4BlkIdxN_B,
-                                  luma8x8BlkIdxN_B, xW, yW, isChroma);
+    ret = neighbouring_locations_MBAFF(
+        x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_type_B, mbAddrN_B,
+        luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
   }
 
@@ -906,26 +906,26 @@ int PictureBase::getIntra8x8PredMode(
   y = (luma8x8BlkIdx / 2) * 8;
 
   if (m_slice.slice_header.MbaffFrameFlag == 0) {
-    ret = getMbAddrN_non_MBAFF_frames(
+    ret = neighbouring_locations_non_MBAFF(
         x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_type_A, mbAddrN_A,
         luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
 
-    ret = getMbAddrN_non_MBAFF_frames(
+    ret = neighbouring_locations_non_MBAFF(
         x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_type_B, mbAddrN_B,
         luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
   } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification for
          // neighbouring locations in MBAFF frames
   {
-    ret = getMbAddrN_MBAFF_frames(x - 1, y + 0, maxW, maxH, CurrMbAddr,
-                                  mbAddrN_type_A, mbAddrN_A, luma4x4BlkIdxN_A,
-                                  luma8x8BlkIdxN_A, xW, yW, isChroma);
+    ret = neighbouring_locations_MBAFF(
+        x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_type_A, mbAddrN_A,
+        luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
 
-    ret = getMbAddrN_MBAFF_frames(x + 0, y - 1, maxW, maxH, CurrMbAddr,
-                                  mbAddrN_type_B, mbAddrN_B, luma4x4BlkIdxN_B,
-                                  luma8x8BlkIdxN_B, xW, yW, isChroma);
+    ret = neighbouring_locations_MBAFF(
+        x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_type_B, mbAddrN_B,
+        luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
     RETURN_IF_FAILED(ret != 0, ret);
   }
 
@@ -1084,16 +1084,16 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
     int32_t y = neighbouring_samples_y[i];
 
     if (m_slice.slice_header.MbaffFrameFlag == 0) {
-      ret = getMbAddrN_non_MBAFF_frames(xO + x, yO + y, maxW, maxH, CurrMbAddr,
-                                        mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                        luma8x8BlkIdxN, xW, yW, isChroma);
+      ret = neighbouring_locations_non_MBAFF(
+          xO + x, yO + y, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN,
+          luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma);
       RETURN_IF_FAILED(ret != 0, ret);
     } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification for
            // neighbouring locations in MBAFF frames
     {
-      ret = getMbAddrN_MBAFF_frames(xO + x, yO + y, maxW, maxH, CurrMbAddr,
-                                    mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                    luma8x8BlkIdxN, xW, yW, isChroma);
+      ret = neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
+                                         mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
+                                         luma8x8BlkIdxN, xW, yW, isChroma);
       RETURN_IF_FAILED(ret != 0, ret);
     }
 
@@ -1449,16 +1449,16 @@ int PictureBase::Intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
     int32_t y = neighbouring_samples_y[i];
 
     if (m_slice.slice_header.MbaffFrameFlag == 0) {
-      ret = getMbAddrN_non_MBAFF_frames(xO + x, yO + y, maxW, maxH, CurrMbAddr,
-                                        mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                        luma8x8BlkIdxN, xW, yW, isChroma);
+      ret = neighbouring_locations_non_MBAFF(
+          xO + x, yO + y, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN,
+          luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma);
       RETURN_IF_FAILED(ret != 0, ret);
     } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification for
            // neighbouring locations in MBAFF frames
     {
-      ret = getMbAddrN_MBAFF_frames(xO + x, yO + y, maxW, maxH, CurrMbAddr,
-                                    mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                    luma8x8BlkIdxN, xW, yW, isChroma);
+      ret = neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
+                                         mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
+                                         luma8x8BlkIdxN, xW, yW, isChroma);
       RETURN_IF_FAILED(ret != 0, ret);
     }
 
@@ -1878,16 +1878,16 @@ int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
     int32_t y = neighbouring_samples_y[i];
 
     if (m_slice.slice_header.MbaffFrameFlag == 0) {
-      ret = getMbAddrN_non_MBAFF_frames(xO + x, yO + y, maxW, maxH, CurrMbAddr,
-                                        mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                        luma8x8BlkIdxN, xW, yW, isChroma);
+      ret = neighbouring_locations_non_MBAFF(
+          xO + x, yO + y, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN,
+          luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma);
       RETURN_IF_FAILED(ret != 0, ret);
     } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification for
            // neighbouring locations in MBAFF frames
     {
-      ret = getMbAddrN_MBAFF_frames(xO + x, yO + y, maxW, maxH, CurrMbAddr,
-                                    mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                    luma8x8BlkIdxN, xW, yW, isChroma);
+      ret = neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
+                                         mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
+                                         luma8x8BlkIdxN, xW, yW, isChroma);
       RETURN_IF_FAILED(ret != 0, ret);
     }
 
@@ -2176,16 +2176,16 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
     int32_t y = neighbouring_samples_y[i];
 
     if (m_slice.slice_header.MbaffFrameFlag == 0) {
-      ret = getMbAddrN_non_MBAFF_frames(xO + x, yO + y, maxW, maxH, CurrMbAddr,
-                                        mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                        luma8x8BlkIdxN, xW, yW, isChroma);
+      ret = neighbouring_locations_non_MBAFF(
+          xO + x, yO + y, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN,
+          luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma);
       RETURN_IF_FAILED(ret != 0, ret);
     } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification for
            // neighbouring locations in MBAFF frames
     {
-      ret = getMbAddrN_MBAFF_frames(xO + x, yO + y, maxW, maxH, CurrMbAddr,
-                                    mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                    luma8x8BlkIdxN, xW, yW, isChroma);
+      ret = neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
+                                         mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
+                                         luma8x8BlkIdxN, xW, yW, isChroma);
       RETURN_IF_FAILED(ret != 0, ret);
     }
 
@@ -2924,15 +2924,14 @@ int PictureBase::derivation_for_neighbouring_locations(
 
   if (MbaffFrameFlag == 0)
     /* 用第 6.4.12.1 节中描述的字段和非 MBAFF 帧中相邻位置的规范*/
-    ret = getMbAddrN_non_MBAFF_frames(xN, yN, maxW, maxH, currMbAddr,
-                                      mbAddrN_type, mbAddrN, b4x4BlkIdxN,
-                                      b8x8BlkIdxN, xW, yW, isChroma);
+    ret = neighbouring_locations_non_MBAFF(xN, yN, maxW, maxH, currMbAddr,
+                                           mbAddrN_type, mbAddrN, b4x4BlkIdxN,
+                                           b8x8BlkIdxN, xW, yW, isChroma);
   else
     /* 反之，用第 6.4.12.2 节中描述的 MBAFF 帧中相邻位置的规范 */
-    /* TODO YangJing 做到这里来了，PDF -> 6.4.12.2 Specification for neighbouring locations in MBAFF frames <24-08-30 00:22:27> */
-    ret = getMbAddrN_MBAFF_frames(xN, yN, maxW, maxH, currMbAddr, mbAddrN_type,
-                                  mbAddrN, b4x4BlkIdxN, b8x8BlkIdxN, xW, yW,
-                                  isChroma);
+    ret = neighbouring_locations_MBAFF(xN, yN, maxW, maxH, currMbAddr,
+                                       mbAddrN_type, mbAddrN, b4x4BlkIdxN,
+                                       b8x8BlkIdxN, xW, yW, isChroma);
   if (ret != 0) {
     std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
               << std::endl;
@@ -3046,7 +3045,7 @@ int PictureBase::derivation_for_neighbouring_macroblock_addr_availability(
 }
 
 // 6.4.12.1 Specification for neighbouring locations in fields and non-MBAFF frames
-int PictureBase::getMbAddrN_non_MBAFF_frames(
+int PictureBase::neighbouring_locations_non_MBAFF(
     const int32_t xN, const int32_t yN, const int32_t maxW, const int32_t maxH,
     const int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
     int32_t &b4x4BlkIdx, int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW,
@@ -3083,29 +3082,31 @@ int PictureBase::getMbAddrN_non_MBAFF_frames(
   return 0;
 }
 
-// 6.4.12.2 Specification for neighbouring locations in MBAFF frames
-// Table 6-4 – Specification of mbAddrN and yM
-int PictureBase::getMbAddrN_MBAFF_frames(const int32_t xN, const int32_t yN,
-                                         const int32_t maxW, const int32_t maxH,
-                                         const int32_t CurrMbAddr,
-                                         MB_ADDR_TYPE &mbAddrN_type,
-                                         int32_t &mbAddrN, int32_t &b4x4BlkIdxN,
-                                         int32_t &b8x8BlkIdxN, int32_t &xW,
-                                         int32_t &yW, const int32_t isChroma) {
-  int32_t currMbFrameFlag = 0;
-  int32_t mbIsTopMbFlag = 0;
-  int32_t mbAddrXFrameFlag = 0;
-  int32_t yM = 0;
-  // MB_ADDR_TYPE mbAddrX_type = MB_ADDR_TYPE_UNKOWN;
-  int32_t mbAddrX = -1;
+/* 6.4.10 Derivation process for neighbouring macroblock addresses and their availability in MBAFF frames */
+/* 该过程的输出为： 
+ * – mbAddrA：当前宏块对左侧宏块对顶部宏块的地址和可用性状态， 
+ * – mbAddrB：当前宏块对上方宏块对顶部宏块的地址和可用性状态当前宏块对， 
+ * – mbAddrC：当前宏块对右上方宏块对的顶部宏块的地址和可用性状态， 
+ * – mbAddrD：当前宏块对左上方宏块对的顶部宏块的地址和可用性状态当前宏块对。
+ 
+  Figure 6-13 – Neighbouring macroblocks for a given macroblock in MBAFF frames
+    +-----+-----+-----+
+    |  D  |  B  |  C  |
+    +-----+-----+-----+
+    |     |     |     |
+    +-----+-----+-----+
+    |  A  | Addr|     |
+    +-----+-----+-----+
+    |     | Addr|     |
+    +-----+-----+-----+
+ */
+int PictureBase::
+    derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
+        const int32_t xN, const int32_t yN, const int32_t maxW,
+        const int32_t maxH, const int32_t CurrMbAddr,
+        MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN, int32_t &yM) {
 
-  mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-  mbAddrN = -1;
-
-  //----------------------------------------------
-  // 6.4.10 Derivation process for neighbouring macroblock addresses and their
-  // availability in MBAFF frames the address and availability status of the top
-  // macroblock of the macroblock pair（特别需要注意这里的：top macroblock）
+  /* 第 6.4.8 节中的过程的输入是 mbAddrA = 2 * ( CurrMbAddr / 2 − 1 )，输出是宏块 mbAddrA 是否可用。此外，当 (CurrMbAddr / 2) % PicWidthInMbs 等于 0 时，mbAddrA 被标记为不可用。 */
   int32_t mbAddrA = 2 * (CurrMbAddr / 2 - 1);
   int32_t mbAddrB = 2 * (CurrMbAddr / 2 - PicWidthInMbs);
   int32_t mbAddrC = 2 * (CurrMbAddr / 2 - PicWidthInMbs + 1);
@@ -3113,99 +3114,78 @@ int PictureBase::getMbAddrN_MBAFF_frames(const int32_t xN, const int32_t yN,
 
   if (mbAddrA < 0 || mbAddrA > CurrMbAddr ||
       m_mbs[mbAddrA].slice_number != m_mbs[CurrMbAddr].slice_number ||
-      (CurrMbAddr / 2) % PicWidthInMbs == 0) {
-    mbAddrA = -2; // marked as not available
-  }
+      (CurrMbAddr / 2) % PicWidthInMbs == 0)
+    mbAddrA = -2;
 
   if (mbAddrB < 0 || mbAddrB > CurrMbAddr ||
-      m_mbs[mbAddrB].slice_number != m_mbs[CurrMbAddr].slice_number) {
-    mbAddrB = -2; // marked as not available
-  }
+      m_mbs[mbAddrB].slice_number != m_mbs[CurrMbAddr].slice_number)
+    mbAddrB = -2;
 
   if (mbAddrC < 0 || mbAddrC > CurrMbAddr ||
       m_mbs[mbAddrC].slice_number != m_mbs[CurrMbAddr].slice_number ||
-      (CurrMbAddr / 2 + 1) % PicWidthInMbs == 0) {
-    mbAddrC = -2; // marked as not available
-  }
+      (CurrMbAddr / 2 + 1) % PicWidthInMbs == 0)
+    mbAddrC = -2;
 
   if (mbAddrD < 0 || mbAddrD > CurrMbAddr ||
       m_mbs[mbAddrD].slice_number != m_mbs[CurrMbAddr].slice_number ||
-      (CurrMbAddr / 2) % PicWidthInMbs == 0) {
-    mbAddrD = -2; // marked as not available
-  }
+      (CurrMbAddr / 2) % PicWidthInMbs == 0)
+    mbAddrD = -2;
 
-  //------------------------------------------
-  if (m_mbs[CurrMbAddr].mb_field_decoding_flag ==
-      0) // If the macroblock with address CurrMbAddr is a frame macroblock
-  {
-    currMbFrameFlag = 1;
-  } else // the macroblock with address CurrMbAddr is a field macroblock
-  {
-    currMbFrameFlag = 0;
-  }
+  /* NOTE:下面的部分应该是上层函数的内容，但是为了方便代码简洁所以将代码放在这个函数中 */
 
-  if (CurrMbAddr % 2 == 0) // If the macroblock with address CurrMbAddr is a top
-                           // macroblock (i.e., CurrMbAddr % 2 is equal to 0)
-  {
-    mbIsTopMbFlag = 1;
-  } else // if (CurrMbAddr % 2 == 1) //the macroblock with address CurrMbAddr is
-         // a bottom macroblock, i.e., CurrMbAddr % 2 is equal to 1)
-  {
-    mbIsTopMbFlag = 0;
-  }
+  /* 变量 currMbFrameFlag 的推导如下： 
+   * – 如果地址为 CurrMbAddr 的宏块是帧宏块，则 currMbFrameFlag 设置为等于 1。 
+   * – 否则（地址为 CurrMbAddr 的宏块是场宏块），则 currMbFrameFlag 设置为等于 0 */
+  int32_t currMbFrameFlag =
+      m_mbs[CurrMbAddr].mb_field_decoding_flag == 0 ? 1 : 0;
 
-  //-----------------------------
+  /* 变量 mbIsTopMbFlag 的推导如下： 
+   * – 如果地址为 CurrMbAddr 的宏块是顶部宏块（即 CurrMbAddr % 2 等于 0），则 mbIsTopMbFlag 设置为等于 1。 
+   * – 否则（地址为 CurrMbAddr 的宏块是底部宏块） ，即 CurrMbAddr % 2 等于 1)，mbIsTopMbFlag 设置为等于 0。 */
+  int32_t mbIsTopMbFlag = CurrMbAddr % 2 == 0 ? 1 : 0;
+
+  /* Table 6-4 – Specification of mbAddrN and yM */
+  int32_t mbAddrX = -1, mbAddrXFrameFlag = 0;
   if (xN < 0 && yN < 0) {
     if (currMbFrameFlag == 1) {
       if (mbIsTopMbFlag == 1) {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrD;
         mbAddrX = mbAddrD;
         mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1;
         mbAddrN = mbAddrD + 1;
         yM = yN;
-      } else // if (mbIsTopMbFlag == 0)
-      {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
+      } else if (mbIsTopMbFlag == 0) {
         mbAddrX = mbAddrA;
-        if (mbAddrX >= 0) // marked as available
-        {
+        if (mbAddrX >= 0) {
           mbAddrXFrameFlag =
               (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
           if (mbAddrXFrameFlag == 1) {
             mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
             mbAddrN = mbAddrA;
             yM = yN;
-          } else // if (mbAddrXFrameFlag == 0)
-          {
+          } else if (mbAddrXFrameFlag == 0) {
             mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
             mbAddrN = mbAddrA + 1;
             yM = (yN + maxH) >> 1;
           }
         }
       }
-    } else // if (currMbFrameFlag == 0)
-    {
+    } else if (currMbFrameFlag == 0) {
       if (mbIsTopMbFlag == 1) {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrD;
         mbAddrX = mbAddrD;
-        if (mbAddrX >= 0) // marked as available
-        {
+        if (mbAddrX >= 0) {
           mbAddrXFrameFlag =
               (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
           if (mbAddrXFrameFlag == 1) {
             mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1;
             mbAddrN = mbAddrD + 1;
             yM = 2 * yN;
-          } else // if (mbAddrXFrameFlag == 0)
-          {
+          } else if (mbAddrXFrameFlag == 0) {
             mbAddrN_type = MB_ADDR_TYPE_mbAddrD;
             mbAddrN = mbAddrD;
             yM = yN;
           }
         }
-      } else // if (mbIsTopMbFlag == 0)
-      {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrD;
+      } else if (mbIsTopMbFlag == 0) {
         mbAddrX = mbAddrD;
         mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1;
         mbAddrN = mbAddrD + 1;
@@ -3215,50 +3195,41 @@ int PictureBase::getMbAddrN_MBAFF_frames(const int32_t xN, const int32_t yN,
   } else if (xN < 0 && (yN >= 0 && yN <= maxH - 1)) {
     if (currMbFrameFlag == 1) {
       if (mbIsTopMbFlag == 1) {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
         mbAddrX = mbAddrA;
-        if (mbAddrX >= 0) // marked as available
-        {
+        if (mbAddrX >= 0) {
           mbAddrXFrameFlag =
               (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
           if (mbAddrXFrameFlag == 1) {
             mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
             mbAddrN = mbAddrA;
             yM = yN;
-          } else // if (mbAddrXFrameFlag == 0)
-          {
+          } else if (mbAddrXFrameFlag == 0) {
             if (yN % 2 == 0) {
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
               mbAddrN = mbAddrA;
               yM = yN >> 1;
-            } else // if (yN % 2 != 0)
-            {
+            } else if (yN % 2 != 0) {
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
               mbAddrN = mbAddrA + 1;
               yM = yN >> 1;
             }
           }
         }
-      } else // if (mbIsTopMbFlag == 0)
-      {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
+      } else if (mbIsTopMbFlag == 0) {
         mbAddrX = mbAddrA;
-        if (mbAddrX >= 0) // marked as available
-        {
+        if (mbAddrX >= 0) {
           mbAddrXFrameFlag =
               (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
           if (mbAddrXFrameFlag == 1) {
             mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
             mbAddrN = mbAddrA + 1;
             yM = yN;
-          } else // if (mbAddrXFrameFlag == 0)
-          {
+          } else if (mbAddrXFrameFlag == 0) {
             if (yN % 2 == 0) {
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
               mbAddrN = mbAddrA;
               yM = (yN + maxH) >> 1;
-            } else // if (yN % 2 != 0)
-            {
+            } else if (yN % 2 != 0) {
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
               mbAddrN = mbAddrA + 1;
               yM = (yN + maxH) >> 1;
@@ -3266,13 +3237,10 @@ int PictureBase::getMbAddrN_MBAFF_frames(const int32_t xN, const int32_t yN,
           }
         }
       }
-    } else // if (currMbFrameFlag == 0)
-    {
+    } else if (currMbFrameFlag == 0) {
       if (mbIsTopMbFlag == 1) {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
         mbAddrX = mbAddrA;
-        if (mbAddrX >= 0) // marked as available
-        {
+        if (mbAddrX >= 0) {
           mbAddrXFrameFlag =
               (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
           if (mbAddrXFrameFlag == 1) {
@@ -3280,25 +3248,20 @@ int PictureBase::getMbAddrN_MBAFF_frames(const int32_t xN, const int32_t yN,
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
               mbAddrN = mbAddrA;
               yM = yN << 1;
-            } else // if (yN >= ( maxH / 2 ))
-            {
+            } else if (yN >= (maxH / 2)) {
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
               mbAddrN = mbAddrA + 1;
               yM = (yN << 1) - maxH;
             }
-          } else // if (mbAddrXFrameFlag == 0)
-          {
+          } else if (mbAddrXFrameFlag == 0) {
             mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
             mbAddrN = mbAddrA;
             yM = yN;
           }
         }
-      } else // if (mbIsTopMbFlag == 0)
-      {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrA;
+      } else if (mbIsTopMbFlag == 0) {
         mbAddrX = mbAddrA;
-        if (mbAddrX >= 0) // marked as available
-        {
+        if (mbAddrX >= 0) {
           mbAddrXFrameFlag =
               (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
           if (mbAddrXFrameFlag == 1) {
@@ -3306,14 +3269,12 @@ int PictureBase::getMbAddrN_MBAFF_frames(const int32_t xN, const int32_t yN,
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
               mbAddrN = mbAddrA;
               yM = (yN << 1) + 1;
-            } else // if (yN >= ( maxH / 2 ))
-            {
+            } else if (yN >= (maxH / 2)) {
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
               mbAddrN = mbAddrA + 1;
               yM = (yN << 1) + 1 - maxH;
             }
-          } else // if (mbAddrXFrameFlag == 0)
-          {
+          } else if (mbAddrXFrameFlag == 0) {
             mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
             mbAddrN = mbAddrA + 1;
             yM = yN;
@@ -3324,42 +3285,33 @@ int PictureBase::getMbAddrN_MBAFF_frames(const int32_t xN, const int32_t yN,
   } else if ((xN >= 0 && xN <= maxW - 1) && yN < 0) {
     if (currMbFrameFlag == 1) {
       if (mbIsTopMbFlag == 1) {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrB;
         mbAddrX = mbAddrB;
         mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1;
         mbAddrN = mbAddrB + 1;
         yM = yN;
-      } else // if (mbIsTopMbFlag == 0)
-      {
-        // mbAddrX_type = MB_ADDR_TYPE_CurrMbAddr;
+      } else if (mbIsTopMbFlag == 0) {
         mbAddrX = CurrMbAddr;
         mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr_minus_1;
         mbAddrN = CurrMbAddr - 1;
         yM = yN;
       }
-    } else // if (currMbFrameFlag == 0)
-    {
+    } else if (currMbFrameFlag == 0) {
       if (mbIsTopMbFlag == 1) {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrB;
         mbAddrX = mbAddrB;
-        if (mbAddrX >= 0) // marked as available
-        {
+        if (mbAddrX >= 0) {
           mbAddrXFrameFlag =
               (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
           if (mbAddrXFrameFlag == 1) {
             mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1;
             mbAddrN = mbAddrB + 1;
             yM = 2 * yN;
-          } else // if (mbAddrXFrameFlag == 0)
-          {
+          } else if (mbAddrXFrameFlag == 0) {
             mbAddrN_type = MB_ADDR_TYPE_mbAddrB;
             mbAddrN = mbAddrB;
             yM = yN;
           }
         }
-      } else // if (mbIsTopMbFlag == 0)
-      {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrB;
+      } else if (mbIsTopMbFlag == 0) {
         mbAddrX = mbAddrB;
         mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1;
         mbAddrN = mbAddrB + 1;
@@ -3367,7 +3319,6 @@ int PictureBase::getMbAddrN_MBAFF_frames(const int32_t xN, const int32_t yN,
       }
     }
   } else if ((xN >= 0 && xN <= maxW - 1) && (yN >= 0 && yN <= maxH - 1)) {
-    // mbAddrX_type = MB_ADDR_TYPE_CurrMbAddr;
     mbAddrX = CurrMbAddr;
     mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr;
     mbAddrN = CurrMbAddr;
@@ -3375,78 +3326,78 @@ int PictureBase::getMbAddrN_MBAFF_frames(const int32_t xN, const int32_t yN,
   } else if (xN > maxW - 1 && yN < 0) {
     if (currMbFrameFlag == 1) {
       if (mbIsTopMbFlag == 1) {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrC;
         mbAddrX = mbAddrC;
         mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1;
         mbAddrN = mbAddrC + 1;
         yM = yN;
-      } else // if (mbIsTopMbFlag == 0)
-      {
-        // mbAddrX_type = MB_ADDR_TYPE_UNKOWN;
+      } else if (mbIsTopMbFlag == 0) {
         mbAddrX = -2;
         mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
         mbAddrN = -2;
         yM = NA;
       }
-    } else // if (currMbFrameFlag == 0)
-    {
+    } else if (currMbFrameFlag == 0) {
       if (mbIsTopMbFlag == 1) {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrC;
         mbAddrX = mbAddrC;
-        if (mbAddrX >= 0) // marked as available
-        {
+        if (mbAddrX >= 0) {
           mbAddrXFrameFlag =
               (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
           if (mbAddrXFrameFlag == 1) {
             mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1;
             mbAddrN = mbAddrC + 1;
             yM = 2 * yN;
-          } else // if (mbAddrXFrameFlag == 0)
-          {
+          } else if (mbAddrXFrameFlag == 0) {
             mbAddrN_type = MB_ADDR_TYPE_mbAddrC;
             mbAddrN = mbAddrC;
             yM = yN;
           }
         }
-      } else // if (mbIsTopMbFlag == 0)
-      {
-        // mbAddrX_type = MB_ADDR_TYPE_mbAddrC;
+      } else if (mbIsTopMbFlag == 0) {
         mbAddrX = mbAddrC;
         mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1;
         mbAddrN = mbAddrC + 1;
         yM = yN;
       }
     }
-  } else // not available
-  {
-    // return -1;
-  }
-
-  //------------------------------
-  if (mbAddrN < 0) {
-    mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-  }
-
-  //---------------------------
-  if (mbAddrN_type == MB_ADDR_TYPE_UNKOWN) {
-    b4x4BlkIdxN = NA;
-    b8x8BlkIdxN = NA;
   } else {
+    // not available
+  }
+  if (mbAddrN < 0) mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
+
+  return 0;
+}
+
+// 6.4.12.2 Specification for neighbouring locations in MBAFF frames
+// Table 6-4 – Specification of mbAddrN and yM
+int PictureBase::neighbouring_locations_MBAFF(
+    const int32_t xN, const int32_t yN, const int32_t maxW, const int32_t maxH,
+    const int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
+    int32_t &b4x4BlkIdxN, int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW,
+    const int32_t isChroma) {
+
+  int32_t yM = 0;
+  mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
+  mbAddrN = -1;
+
+  /* 第 6.4.10 节中相邻宏块地址及其可用性的推导过程是通过 mbAddrA、mbAddrB、mbAddrC 和 mbAddrD 以及它们的可用性状态作为输出来调用的。 */
+  /* Table 6-4 – Specification of mbAddrN and yM */
+  derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
+      xN, yN, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN, yM);
+
+  if (mbAddrN_type != MB_ADDR_TYPE_UNKOWN) {
     xW = (xN + maxW) % maxW;
     yW = (yM + maxH) % maxH;
 
-    if (isChroma == 1) {
-      // 6.4.13.2 Derivation process for 4x4 chroma block indices
-      b4x4BlkIdxN = 2 * (yW / 4) + (xW / 4); // chroma4x4BlkIdx
-    } else {
-      // 6.4.13.1 Derivation process for 4x4 luma block indices
+    // 6.4.13.2 Derivation process for 4x4 chroma block indices
+    if (isChroma == 1) b4x4BlkIdxN = 2 * (yW / 4) + (xW / 4);
+    // 6.4.13.1 Derivation process for 4x4 luma block indices
+    else
       b4x4BlkIdxN =
-          8 * (yW / 8) + 4 * (xW / 8) + 2 * ((yW % 8) / 4) +
-          ((xW % 8) / 4); // luma4x4BlkIdxN, cb4x4BlkIdxN, cr4x4BlkIdxN
-    }
+          8 * (yW / 8) + 4 * (xW / 8) + 2 * ((yW % 8) / 4) + ((xW % 8) / 4);
 
     b8x8BlkIdxN = 2 * (yW / 8) + (xW / 8);
-  }
+  } else
+    b4x4BlkIdxN = b8x8BlkIdxN = NA;
 
   return 0;
 }
@@ -4215,8 +4166,8 @@ int PictureBase::Scaling_and_transformation_process_for_residual_4x4_blocks(
 
   // If mb_type is equal to SI or the macroblock prediction mode is equal to
   // Inter in an SP slice, sMbFlag is set equal to 1,
-  if (m_slice.slice_header.slice_type == H264_SLIECE_TYPE_SI ||
-      (m_slice.slice_header.slice_type % 5 == H264_SLIECE_TYPE_SP &&
+  if (m_slice.slice_header.slice_type == SLICE_SI ||
+      (m_slice.slice_header.slice_type % 5 == SLICE_SP &&
        IS_INTER_Prediction_Mode(m_mbs[CurrMbAddr].m_mb_pred_mode))) {
     sMbFlag = 1;
   } else {
@@ -4858,10 +4809,10 @@ int PictureBase::get_chroma_quantisation_parameters(int32_t isChromaCb) {
 
   // When the current slice is an SP or SI slice, QSC is derived using the above
   // process, substituting QPY with QSY and QPC with QSC.
-  if (m_slice.slice_header.slice_type == H264_SLIECE_TYPE_SP ||
-      m_slice.slice_header.slice_type == H264_SLIECE_TYPE_SI ||
-      m_slice.slice_header.slice_type == H264_SLIECE_TYPE_SP2 ||
-      m_slice.slice_header.slice_type == H264_SLIECE_TYPE_SI2) {
+  if (m_slice.slice_header.slice_type == SLICE_SP ||
+      m_slice.slice_header.slice_type == SLICE_SI ||
+      m_slice.slice_header.slice_type == SLICE_SP2 ||
+      m_slice.slice_header.slice_type == SLICE_SI2) {
     m_mbs[CurrMbAddr].QSY = m_mbs[CurrMbAddr].QPY;
 
     if (isChromaCb == 1) {

@@ -5,8 +5,8 @@
  * – mbAddrA：当前宏块左侧宏块的地址及其可用性状态， 
  * – mbAddrB：当前宏块上方宏块的地址及其可用性状态。*/
 int PictureBase::derivation_for_neighbouring_macroblocks(
-    const int32_t MbaffFrameFlag, const int32_t currMbAddr,
-     int32_t &mbAddrA, int32_t &mbAddrB,const int32_t isChroma) {
+    const int32_t MbaffFrameFlag, const int32_t currMbAddr, int32_t &mbAddrA,
+    int32_t &mbAddrB, const int32_t isChroma) {
 
   int32_t xW = 0, yW = 0;
 
@@ -704,9 +704,6 @@ int PictureBase::Filtering_process_for_block_edges(
     int32_t leftMbEdgeFlag, int32_t (&E)[16][2]) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_slice.slice_header;
-
-  //-----------------------
   uint8_t *pic_buff = NULL;
   int32_t PicWidthInSamples = 0;
   int32_t i = 0;
@@ -899,8 +896,6 @@ int PictureBase::
         uint8_t (&qq)[3]) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_slice.slice_header;
-
   int32_t bS = 0;
   int32_t mbAddr_p0 = mbAddrN;
   int32_t mbAddr_q0 = _CurrMbAddr;
@@ -1069,10 +1064,10 @@ int PictureBase::
         // with slice_type equal to SP or SI,
         || (m_mbs[mbAddr_p0].mb_field_decoding_flag == 0 &&
             m_mbs[mbAddr_q0].mb_field_decoding_flag == 0 &&
-            (m_mbs[mbAddr_p0].m_slice_type == H264_SLIECE_TYPE_SP ||
-             m_mbs[mbAddr_p0].m_slice_type == H264_SLIECE_TYPE_SI ||
-             m_mbs[mbAddr_q0].m_slice_type == H264_SLIECE_TYPE_SP ||
-             m_mbs[mbAddr_q0].m_slice_type == H264_SLIECE_TYPE_SI))
+            (m_mbs[mbAddr_p0].m_slice_type == SLICE_SP ||
+             m_mbs[mbAddr_p0].m_slice_type == SLICE_SI ||
+             m_mbs[mbAddr_q0].m_slice_type == SLICE_SP ||
+             m_mbs[mbAddr_q0].m_slice_type == SLICE_SI))
 
         // MbaffFrameFlag is equal to 1 or field_pic_flag is equal to 1, and
         // verticalEdgeFlag is equal to 1, and either or both of the samples p0
@@ -1090,10 +1085,10 @@ int PictureBase::
         // SP or SI.
         || ((MbaffFrameFlag == 1 || m_mbs[mbAddr_q0].field_pic_flag == 1) &&
             verticalEdgeFlag == 1 &&
-            (m_mbs[mbAddr_p0].m_slice_type == H264_SLIECE_TYPE_SP ||
-             m_mbs[mbAddr_p0].m_slice_type == H264_SLIECE_TYPE_SI ||
-             m_mbs[mbAddr_q0].m_slice_type == H264_SLIECE_TYPE_SP ||
-             m_mbs[mbAddr_q0].m_slice_type == H264_SLIECE_TYPE_SI))) {
+            (m_mbs[mbAddr_p0].m_slice_type == SLICE_SP ||
+             m_mbs[mbAddr_p0].m_slice_type == SLICE_SI ||
+             m_mbs[mbAddr_q0].m_slice_type == SLICE_SP ||
+             m_mbs[mbAddr_q0].m_slice_type == SLICE_SI))) {
       bS = 4;
       return 0;
     }
@@ -1108,11 +1103,11 @@ int PictureBase::
       // mixedModeEdgeFlag is equal to 0 and either or both of the samples p0 or
       // q0 is in a macroblock that is in a slice with slice_type equal to SP or
       // SI,
-      || (mixedModeEdgeFlag == 0 &&
-          (m_mbs[mbAddr_p0].m_slice_type == H264_SLIECE_TYPE_SP ||
-           m_mbs[mbAddr_p0].m_slice_type == H264_SLIECE_TYPE_SI ||
-           m_mbs[mbAddr_q0].m_slice_type == H264_SLIECE_TYPE_SP ||
-           m_mbs[mbAddr_q0].m_slice_type == H264_SLIECE_TYPE_SI))
+      ||
+      (mixedModeEdgeFlag == 0 && (m_mbs[mbAddr_p0].m_slice_type == SLICE_SP ||
+                                  m_mbs[mbAddr_p0].m_slice_type == SLICE_SI ||
+                                  m_mbs[mbAddr_q0].m_slice_type == SLICE_SP ||
+                                  m_mbs[mbAddr_q0].m_slice_type == SLICE_SI))
 
       // mixedModeEdgeFlag is equal to 1, verticalEdgeFlag is equal to 0,
       // and either or both of the samples p0 or q0 is in a macroblock coded
@@ -1125,10 +1120,10 @@ int PictureBase::
       // and either or both of the samples p0 or q0 is in a macroblock that is
       // in a slice with slice_type equal to SP or SI.
       || (mixedModeEdgeFlag == 1 && verticalEdgeFlag == 0 &&
-          (m_mbs[mbAddr_p0].m_slice_type == H264_SLIECE_TYPE_SP ||
-           m_mbs[mbAddr_p0].m_slice_type == H264_SLIECE_TYPE_SI ||
-           m_mbs[mbAddr_q0].m_slice_type == H264_SLIECE_TYPE_SP ||
-           m_mbs[mbAddr_q0].m_slice_type == H264_SLIECE_TYPE_SI))) {
+          (m_mbs[mbAddr_p0].m_slice_type == SLICE_SP ||
+           m_mbs[mbAddr_p0].m_slice_type == SLICE_SI ||
+           m_mbs[mbAddr_q0].m_slice_type == SLICE_SP ||
+           m_mbs[mbAddr_q0].m_slice_type == SLICE_SI))) {
     bS = 3;
     return 0;
   }
@@ -1409,8 +1404,6 @@ int PictureBase::Derivation_process_for_the_thresholds_for_each_block_edge(
     int32_t &beta) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_slice.slice_header;
-
   int32_t qPav = (qPp + qPq + 1) >> 1;
 
   indexA = CLIP3(0, 51, qPav + filterOffsetA);
@@ -1456,8 +1449,6 @@ int PictureBase::Filtering_process_for_edges_with_bS_less_than_4(
     int32_t chromaStyleFilteringFlag, int32_t bS, int32_t beta, int32_t indexA,
     uint8_t (&pp)[3], uint8_t (&qq)[3]) {
   int ret = 0;
-
-  SliceHeader &slice_header = m_slice.slice_header;
 
   //-----------------
   // Table 8-17 – Value of variable t´C0 as a function of indexA and bS

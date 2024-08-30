@@ -18,7 +18,7 @@ int SliceBody::initCABAC(CH264Cabac &cabac, BitStream &bs,
                                     header.cabac_init_idc, header.SliceQPY);
 
     // cabac初始化解码引擎
-    cabac.init_of_decoding_engine(bs);
+    cabac.init_of_decoding_engine();
   }
   return 0;
 }
@@ -28,10 +28,9 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
   SliceHeader &header = picture.m_slice.slice_header;
 
   /* CABAC编码 */
-  CH264Cabac cabac;
+  CH264Cabac cabac(bs, picture);
   /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
   initCABAC(cabac, bs, header);
-  //TODO 看完了initCABAC，继续看CABAC如何解码的 <24-08-29 00:52:13, YangJing>
 
   /* 是否MBAFF编码 */
   if (header.MbaffFrameFlag == 0)
@@ -54,9 +53,8 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
 
     //--------参考帧重排序------------
     // 只有当前帧为P帧，B帧时，才会对参考图像数列表组进行重排序
-    if (header.slice_type == H264_SLIECE_TYPE_P ||
-        header.slice_type == H264_SLIECE_TYPE_SP ||
-        header.slice_type == H264_SLIECE_TYPE_B) {
+    if (header.slice_type == SLICE_P || header.slice_type == SLICE_SP ||
+        header.slice_type == SLICE_B) {
       picture.Decoding_process_for_reference_picture_lists_construction(
           picture.m_dpb, picture.m_RefPicList0, picture.m_RefPicList1);
 
@@ -145,8 +143,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
           exit(0);
           // mb_skip_flag = mb_skip_flag_next_mb;
         } else
-          cabac.decode_mb_skip_flag(picture, bs, CurrMbAddr,
-                                          mb_skip_flag);
+          cabac.decode_mb_skip_flag(CurrMbAddr, mb_skip_flag);
 
         //------------------------------------
         if (mb_skip_flag == 1) {
@@ -164,13 +161,12 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
                   mb_field_decoding_flag; // 特别注意：底场宏块和顶场宏块的mb_field_decoding_flag值是相同的
 
               cabac.decode_mb_skip_flag(
-                  picture, bs, CurrMbAddr + 1,
+                  CurrMbAddr + 1,
                   mb_skip_flag_next_mb); // 2 ae(v) 先读取底场宏块的mb_skip_flag
 
               if (mb_skip_flag_next_mb == 0) // 如果底场宏块mb_skip_flag=0
               {
                 cabac.CABAC_decode_mb_field_decoding_flag(
-                    picture, bs,
                     mb_field_decoding_flag); // 2 u(1) | ae(v)
                 // 再读取底场宏块的mb_field_decoding_flag
 
@@ -345,8 +341,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
       // moreDataFlag = bs.more_rbsp_data();
       exit(0);
     } else {
-      if (header.slice_type != H264_SLIECE_TYPE_I &&
-          header.slice_type != H264_SLIECE_TYPE_SI) {
+      if (header.slice_type != SLICE_I && header.slice_type != SLICE_SI) {
         prevMbSkipped = mb_skip_flag;
       }
 
@@ -354,7 +349,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
         // moreDataFlag = 1;
         exit(0);
       } else {
-        cabac.CABAC_decode_end_of_slice_flag(picture, bs, end_of_slice_flag);
+        cabac.CABAC_decode_end_of_slice_flag(end_of_slice_flag);
         moreDataFlag = !end_of_slice_flag;
       }
     }

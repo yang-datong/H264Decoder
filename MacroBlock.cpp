@@ -3,6 +3,7 @@
 #include "H264ResidualBlockCavlc.hpp"
 #include "PictureBase.hpp"
 #include "SliceHeader.hpp"
+#include "Type.hpp"
 
 MB_TYPE_I_SLICES_T mb_type_I_slices_define[27] = {
     {0, I_NxN, 0, Intra_4x4, NA, -1, -1},
@@ -566,9 +567,9 @@ int MacroBlock::fix_mb_type(const int32_t slice_type_raw,
   slice_type_fixed = slice_type_raw;
   mb_type_fixed = mb_type_raw;
 
-  if ((slice_type_raw % 5) == H264_SLIECE_TYPE_I) {
+  if ((slice_type_raw % 5) == SLICE_I) {
     // 不需要修正
-  } else if ((slice_type_raw % 5) == H264_SLIECE_TYPE_SI) {
+  } else if ((slice_type_raw % 5) == SLICE_SI) {
     // The macroblock types for SI slices are specified in Tables 7-12 and 7-11.
     // The mb_type value 0 is specified in Table 7-12 and the mb_type values 1
     // to 26 are specified in Table 7-11, indexed by subtracting 1 from the
@@ -576,14 +577,14 @@ int MacroBlock::fix_mb_type(const int32_t slice_type_raw,
     if (mb_type_raw == 0) {
       // 不需要修正
     } else if (mb_type_raw >= 1 && mb_type_raw <= 26) {
-      slice_type_fixed = H264_SLIECE_TYPE_I;
+      slice_type_fixed = SLICE_I;
       mb_type_fixed = mb_type_raw - 1; // 说明 SI slices 中含有I宏块
     } else {
       printf("SI slices: mb_type_raw=%d; Must be in [0..26]\n", mb_type_raw);
       return -1;
     }
-  } else if ((slice_type_raw % 5) == H264_SLIECE_TYPE_P ||
-             (slice_type_raw % 5) == H264_SLIECE_TYPE_SP) {
+  } else if ((slice_type_raw % 5) == SLICE_P ||
+             (slice_type_raw % 5) == SLICE_SP) {
     // The macroblock types for P and SP slices are specified in Tables 7-13 and
     // 7-11. mb_type values 0 to 4 are specified in Table 7-13 and mb_type
     // values 5 to 30 are specified in Table 7-11, indexed by subtracting 5 from
@@ -591,14 +592,14 @@ int MacroBlock::fix_mb_type(const int32_t slice_type_raw,
     if (mb_type_raw >= 0 && mb_type_raw <= 4) {
       // 不需要修正
     } else if (mb_type_raw >= 5 && mb_type_raw <= 30) {
-      slice_type_fixed = H264_SLIECE_TYPE_I;
+      slice_type_fixed = SLICE_I;
       mb_type_fixed = mb_type_raw - 5; // 说明 P and SP slices 中含有I宏块
     } else {
       printf("P and SP slices: mb_type_raw=%d; Must be in [0..30]\n",
              mb_type_raw);
       return -1;
     }
-  } else if ((slice_type_raw % 5) == H264_SLIECE_TYPE_B) {
+  } else if ((slice_type_raw % 5) == SLICE_B) {
     // The macroblock types for B slices are specified in Tables 7-14 and 7-11.
     // The mb_type values 0 to 22 are specified in Table 7-14 and the mb_type
     // values 23 to 48 are specified in Table 7-11, indexed by subtracting 23
@@ -606,7 +607,7 @@ int MacroBlock::fix_mb_type(const int32_t slice_type_raw,
     if (mb_type_raw >= 0 && mb_type_raw <= 22) {
       // 不需要修正
     } else if (mb_type_raw >= 23 && mb_type_raw <= 48) {
-      slice_type_fixed = H264_SLIECE_TYPE_I;
+      slice_type_fixed = SLICE_I;
       mb_type_fixed = mb_type_raw - 23; // 说明 B slices 中含有I宏块
     } else {
       printf("B slices: mb_type_raw=%d; Must be in [0..48]\n", mb_type_raw);
@@ -656,7 +657,7 @@ int MacroBlock::MbPartPredMode(
     H264_MB_TYPE &name_of_mb_type, H264_MB_PART_PRED_MODE &mb_pred_mode) {
   int ret = 0;
 
-  if ((slice_type % 5) == H264_SLIECE_TYPE_I) {
+  if ((slice_type % 5) == SLICE_I) {
     if (_mb_type == 0) {
       if (transform_size_8x8_flag == 0) {
         name_of_mb_type = mb_type_I_slices_define[0].name_of_mb_type;
@@ -680,7 +681,7 @@ int MacroBlock::MbPartPredMode(
              _mb_type);
       return -1;
     }
-  } else if ((slice_type % 5) == H264_SLIECE_TYPE_SI) {
+  } else if ((slice_type % 5) == SLICE_SI) {
     if (_mb_type == 0) {
       name_of_mb_type = mb_type_SI_slices_define[0].name_of_mb_type;
       mb_pred_mode = mb_type_SI_slices_define[0].MbPartPredMode;
@@ -689,8 +690,7 @@ int MacroBlock::MbPartPredMode(
              _mb_type);
       return -1;
     }
-  } else if ((slice_type % 5) == H264_SLIECE_TYPE_P ||
-             (slice_type % 5) == H264_SLIECE_TYPE_SP) {
+  } else if ((slice_type % 5) == SLICE_P || (slice_type % 5) == SLICE_SP) {
     if (_mb_type >= 0 && _mb_type <= 5) {
       name_of_mb_type = mb_type_P_SP_slices_define[_mb_type].name_of_mb_type;
       NumMbPart = mb_type_P_SP_slices_define[_mb_type].NumMbPart;
@@ -705,7 +705,7 @@ int MacroBlock::MbPartPredMode(
              _mb_type);
       return -1;
     }
-  } else if ((slice_type % 5) == H264_SLIECE_TYPE_B) {
+  } else if ((slice_type % 5) == SLICE_B) {
     if (_mb_type >= 0 && _mb_type <= 23) {
       name_of_mb_type = mb_type_B_slices_define[_mb_type].name_of_mb_type;
       NumMbPart = mb_type_B_slices_define[_mb_type].NumMbPart;
@@ -840,10 +840,10 @@ int MacroBlock::SubMbPredModeFunc(int32_t slice_type, int32_t sub_mb_type,
                                   H264_MB_PART_PRED_MODE &SubMbPredMode,
                                   int32_t &SubMbPartWidth,
                                   int32_t &SubMbPartHeight) {
-  if (slice_type == H264_SLIECE_TYPE_I) {
+  if (slice_type == SLICE_I) {
     printf("Unknown slice_type=%d;\n", slice_type);
     return -1;
-  } else if (slice_type == H264_SLIECE_TYPE_P) {
+  } else if (slice_type == SLICE_P) {
     if (sub_mb_type >= 0 && sub_mb_type <= 4) {
       NumSubMbPart = sub_mb_type_P_mbs_define[sub_mb_type].NumSubMbPart;
       SubMbPredMode = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPredMode;
@@ -854,7 +854,7 @@ int MacroBlock::SubMbPredModeFunc(int32_t slice_type, int32_t sub_mb_type,
              sub_mb_type);
       return -1;
     }
-  } else if (slice_type == H264_SLIECE_TYPE_B) {
+  } else if (slice_type == SLICE_B) {
     if (sub_mb_type >= 0 && sub_mb_type <= 12) {
       NumSubMbPart = sub_mb_type_B_mbs_define[sub_mb_type].NumSubMbPart;
       SubMbPredMode = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPredMode;
@@ -876,7 +876,7 @@ int MacroBlock::SubMbPredModeFunc(int32_t slice_type, int32_t sub_mb_type,
 int MacroBlock::set_mb_type_X_slice_info() {
   // int32_t mbPartIdx = 0;
 
-  if ((m_slice_type_fixed % 5) == H264_SLIECE_TYPE_I) {
+  if ((m_slice_type_fixed % 5) == SLICE_I) {
     if (m_mb_type_fixed == 0) {
       if (transform_size_8x8_flag == 0) {
         mb_type_I_slice = mb_type_I_slices_define[0];
@@ -892,7 +892,7 @@ int MacroBlock::set_mb_type_X_slice_info() {
           m_mb_type_fixed);
       return -1;
     }
-  } else if ((m_slice_type_fixed % 5) == H264_SLIECE_TYPE_SI) {
+  } else if ((m_slice_type_fixed % 5) == SLICE_SI) {
     if (m_mb_type_fixed == 0) {
       mb_type_SI_slice = mb_type_SI_slices_define[0];
     } else {
@@ -901,8 +901,8 @@ int MacroBlock::set_mb_type_X_slice_info() {
           m_mb_type_fixed);
       return -1;
     }
-  } else if ((m_slice_type_fixed % 5) == H264_SLIECE_TYPE_P ||
-             (m_slice_type_fixed % 5) == H264_SLIECE_TYPE_SP) {
+  } else if ((m_slice_type_fixed % 5) == SLICE_P ||
+             (m_slice_type_fixed % 5) == SLICE_SP) {
     if (m_mb_type_fixed >= 0 && m_mb_type_fixed <= 5) {
       mb_type_P_SP_slice = mb_type_P_SP_slices_define[m_mb_type_fixed];
     } else {
@@ -926,7 +926,7 @@ int MacroBlock::set_mb_type_X_slice_info() {
     // mbPartIdx ]].SubMbPartWidth; SubMbPartHeight[mbPartIdx] =
     // sub_mb_type_P_mbs_define[sub_mb_type[ mbPartIdx ]].SubMbPartHeight;
     //}
-  } else if ((m_slice_type_fixed % 5) == H264_SLIECE_TYPE_B) {
+  } else if ((m_slice_type_fixed % 5) == SLICE_B) {
     if (m_mb_type_fixed >= 0 && m_mb_type_fixed <= 23) {
       mb_type_B_slice = mb_type_B_slices_define[m_mb_type_fixed];
     } else {
@@ -997,7 +997,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
 
   if (is_ae) // ae(v) 表示CABAC编码
   {
-    ret = cabac.CABAC_decode_mb_type(picture, bs, mb_type); // 2 ue(v) | ae(v)
+    ret = cabac.CABAC_decode_mb_type(mb_type); // 2 ue(v) | ae(v)
     RETURN_IF_FAILED(ret != 0, ret);
   } else // ue(v) 表示CAVLC编码
   {
@@ -1050,11 +1050,11 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
       for (mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
         if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8) {
           int NumSubMbPart = 0;
-          if (m_slice_type_fixed == H264_SLIECE_TYPE_P &&
-              sub_mb_type[mbPartIdx] >= 0 && sub_mb_type[mbPartIdx] <= 3) {
+          if (m_slice_type_fixed == SLICE_P && sub_mb_type[mbPartIdx] >= 0 &&
+              sub_mb_type[mbPartIdx] <= 3) {
             NumSubMbPart =
                 sub_mb_type_P_mbs_define[sub_mb_type[mbPartIdx]].NumSubMbPart;
-          } else if (m_slice_type_fixed == H264_SLIECE_TYPE_B &&
+          } else if (m_slice_type_fixed == SLICE_B &&
                      sub_mb_type[mbPartIdx] >= 0 &&
                      sub_mb_type[mbPartIdx] <= 3) {
             NumSubMbPart =
@@ -1083,7 +1083,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
         if (is_ae) // ae(v) 表示CABAC编码
         {
           ret = cabac.CABAC_decode_transform_size_8x8_flag(
-              picture, bs, transform_size_8x8_flag_temp); // 2 u(1) | ae(v)
+              transform_size_8x8_flag_temp); // 2 u(1) | ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
         } else // ue(v) 表示CAVLC编码
         {
@@ -1098,8 +1098,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
               Intra16x16PredMode, m_name_of_mb_type, m_mb_pred_mode);
           RETURN_IF_FAILED(ret != 0, ret);
 
-          if ((m_slice_type_fixed % 5) == H264_SLIECE_TYPE_I &&
-              m_mb_type_fixed == 0) {
+          if ((m_slice_type_fixed % 5) == SLICE_I && m_mb_type_fixed == 0) {
             mb_type_I_slice =
                 mb_type_I_slices_define[(transform_size_8x8_flag == 0) ? 0 : 1];
           }
@@ -1115,7 +1114,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
       if (is_ae) // ae(v) 表示CABAC编码
       {
         ret = cabac.CABAC_decode_coded_block_pattern(
-            picture, bs, coded_block_pattern); // 2 me(v) | ae(v)
+            coded_block_pattern); // 2 me(v) | ae(v)
         RETURN_IF_FAILED(ret != 0, ret);
       } else // ue(v) 表示CAVLC编码
       {
@@ -1135,7 +1134,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
         if (is_ae) // ae(v) 表示CABAC编码
         {
           ret = cabac.CABAC_decode_transform_size_8x8_flag(
-              picture, bs, transform_size_8x8_flag_temp); // 2 u(1) | ae(v)
+              transform_size_8x8_flag_temp); // 2 u(1) | ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
         } else // ue(v) 表示CAVLC编码
         {
@@ -1150,8 +1149,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
               Intra16x16PredMode, m_name_of_mb_type, m_mb_pred_mode);
           RETURN_IF_FAILED(ret != 0, ret);
 
-          if ((m_slice_type_fixed % 5) == H264_SLIECE_TYPE_I &&
-              m_mb_type_fixed == 0) {
+          if ((m_slice_type_fixed % 5) == SLICE_I && m_mb_type_fixed == 0) {
             mb_type_I_slice =
                 mb_type_I_slices_define[(transform_size_8x8_flag == 0) ? 0 : 1];
           }
@@ -1165,8 +1163,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
     {
       if (is_ae) // ae(v) 表示CABAC编码
       {
-        ret = cabac.CABAC_decode_mb_qp_delta(picture, bs,
-                                             mb_qp_delta); // 2 se(v) | ae(v)
+        ret = cabac.CABAC_decode_mb_qp_delta(mb_qp_delta); // 2 se(v) | ae(v)
         RETURN_IF_FAILED(ret != 0, ret);
       } else // ue(v) 表示CAVLC编码
       {
@@ -1245,11 +1242,11 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
   //    int is_ae = picture.m_slice.m_pps.entropy_coding_mode_flag;
   //    //ae(v)表示CABAC编码
 
-  if (slice_header.slice_type == H264_SLIECE_TYPE_P ||
-      slice_header.slice_type == H264_SLIECE_TYPE_SP) {
+  if (slice_header.slice_type == SLICE_P ||
+      slice_header.slice_type == SLICE_SP) {
     mb_type = 5; // inferred: P_Skip: no further data is present for the
                  // macroblock in the bitstream.
-  } else if (slice_header.slice_type == H264_SLIECE_TYPE_B) {
+  } else if (slice_header.slice_type == SLICE_B) {
     mb_type = 23; // inferred: B_Skip: no further data is present for the
                   // macroblock in the bitstream.
   }
@@ -1320,7 +1317,6 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
           ret =
               cabac
                   .CABAC_decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
-                      picture, bs,
                       prev_intra4x4_pred_mode_flag[luma4x4BlkIdx]); // 2 u(1) |
                                                                     // ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
@@ -1336,7 +1332,6 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
             ret =
                 cabac
                     .CABAC_decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
-                        picture, bs,
                         rem_intra4x4_pred_mode[luma4x4BlkIdx]); // 2 u(3) |
                                                                 // ae(v)
             RETURN_IF_FAILED(ret != 0, ret);
@@ -1356,7 +1351,6 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
           ret =
               cabac
                   .CABAC_decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
-                      picture, bs,
                       prev_intra8x8_pred_mode_flag[luma8x8BlkIdx]); // 2 u(1) |
                                                                     // ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
@@ -1372,7 +1366,6 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
             ret =
                 cabac
                     .CABAC_decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
-                        picture, bs,
                         rem_intra8x8_pred_mode[luma8x8BlkIdx]); // 2 u(3) |
                                                                 // ae(v)
             RETURN_IF_FAILED(ret != 0, ret);
@@ -1390,7 +1383,7 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
       if (is_ae) // ae(v) 表示CABAC编码
       {
         ret = cabac.CABAC_decode_intra_chroma_pred_mode(
-            picture, bs, intra_chroma_pred_mode); // 2 ue(v) | ae(v)
+            intra_chroma_pred_mode); // 2 ue(v) | ae(v)
         RETURN_IF_FAILED(ret != 0, ret);
       } else // ue(v) 表示CAVLC编码
       {
@@ -1415,7 +1408,7 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
           int32_t ref_idx_flag = 0;
 
           ret = cabac.CABAC_decode_ref_idx_lX(
-              picture, bs, ref_idx_flag, mbPartIdx,
+              ref_idx_flag, mbPartIdx,
               ref_idx_l0[mbPartIdx]); // 2 te(v) | ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
         } else // ue(v) 表示CAVLC编码
@@ -1450,7 +1443,7 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
           int32_t ref_idx_flag = 1;
 
           ret = cabac.CABAC_decode_ref_idx_lX(
-              picture, bs, ref_idx_flag, mbPartIdx,
+              ref_idx_flag, mbPartIdx,
               ref_idx_l1[mbPartIdx]); // 2 te(v) | ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
         } else // ue(v) 表示CAVLC编码
@@ -1485,7 +1478,7 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
             int32_t isChroma = 0;
 
             ret = cabac.CABAC_decode_mvd_lX(
-                picture, bs, mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
+                mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
                 mvd_l0[mbPartIdx][0][compIdx]); // 2 ue(v) | ae(v)
             RETURN_IF_FAILED(ret != 0, ret);
           } else // ue(v) 表示CAVLC编码
@@ -1512,7 +1505,7 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
             int32_t isChroma = 0;
 
             ret = cabac.CABAC_decode_mvd_lX(
-                picture, bs, mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
+                mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
                 mvd_l1[mbPartIdx][0][compIdx]); // 2 ue(v) | ae(v)
             RETURN_IF_FAILED(ret != 0, ret);
           } else // ue(v) 表示CAVLC编码
@@ -1550,7 +1543,7 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
     if (is_ae) // ae(v) 表示CABAC编码
     {
       ret = cabac.CABAC_decode_sub_mb_type(
-          picture, bs, sub_mb_type[mbPartIdx]); // 2 ue(v) | ae(v)
+          sub_mb_type[mbPartIdx]); // 2 ue(v) | ae(v)
       RETURN_IF_FAILED(ret != 0, ret);
     } else // ue(v) 表示CAVLC编码
     {
@@ -1558,8 +1551,8 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
     }
 
     //--------------------------------------------------
-    if (m_slice_type_fixed == H264_SLIECE_TYPE_P &&
-        sub_mb_type[mbPartIdx] >= 0 && sub_mb_type[mbPartIdx] <= 3) {
+    if (m_slice_type_fixed == SLICE_P && sub_mb_type[mbPartIdx] >= 0 &&
+        sub_mb_type[mbPartIdx] <= 3) {
       m_name_of_sub_mb_type[mbPartIdx] =
           sub_mb_type_P_mbs_define[sub_mb_type[mbPartIdx]].name_of_sub_mb_type;
       m_sub_mb_pred_mode[mbPartIdx] =
@@ -1570,8 +1563,8 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
           sub_mb_type_P_mbs_define[sub_mb_type[mbPartIdx]].SubMbPartWidth;
       SubMbPartHeight[mbPartIdx] =
           sub_mb_type_P_mbs_define[sub_mb_type[mbPartIdx]].SubMbPartHeight;
-    } else if (m_slice_type_fixed == H264_SLIECE_TYPE_B &&
-               sub_mb_type[mbPartIdx] >= 0 && sub_mb_type[mbPartIdx] <= 12) {
+    } else if (m_slice_type_fixed == SLICE_B && sub_mb_type[mbPartIdx] >= 0 &&
+               sub_mb_type[mbPartIdx] <= 12) {
       m_name_of_sub_mb_type[mbPartIdx] =
           sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]].name_of_sub_mb_type;
       m_sub_mb_pred_mode[mbPartIdx] =
@@ -1604,7 +1597,7 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
         int32_t ref_idx_flag = 0;
 
         ret = cabac.CABAC_decode_ref_idx_lX(
-            picture, bs, ref_idx_flag, mbPartIdx,
+            ref_idx_flag, mbPartIdx,
             ref_idx_l0[mbPartIdx]); // 2 te(v) | ae(v)
         RETURN_IF_FAILED(ret != 0, ret);
       } else // ue(v) 表示CAVLC编码
@@ -1636,7 +1629,7 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
         int32_t ref_idx_flag = 1;
 
         ret = cabac.CABAC_decode_ref_idx_lX(
-            picture, bs, ref_idx_flag, mbPartIdx,
+            ref_idx_flag, mbPartIdx,
             ref_idx_l1[mbPartIdx]); // 2 te(v) | ae(v)
         RETURN_IF_FAILED(ret != 0, ret);
       } else // ue(v) 表示CAVLC编码
@@ -1672,7 +1665,7 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
             int32_t isChroma = 0;
 
             ret = cabac.CABAC_decode_mvd_lX(
-                picture, bs, mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
+                mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
                 mvd_l0[mbPartIdx][subMbPartIdx][compIdx]); // 2 ue(v) | ae(v)
             RETURN_IF_FAILED(ret != 0, ret);
           } else // ue(v) 表示CAVLC编码
@@ -1702,7 +1695,7 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
             int32_t isChroma = 0;
 
             ret = cabac.CABAC_decode_mvd_lX(
-                picture, bs, mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
+                mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
                 mvd_l1[mbPartIdx][subMbPartIdx][compIdx]); // 2 ue(v) | ae(v)
             RETURN_IF_FAILED(ret != 0, ret);
           } else // ue(v) 表示CAVLC编码
@@ -1733,8 +1726,6 @@ int MacroBlock::residual(BitStream &bs, PictureBase &picture, int32_t startIdx,
   int32_t BlkIdx = 0;
   int32_t TotalCoeff = 0; // 该 4x4 block的残差中，总共有多少个非零系数
   CH264ResidualBlockCavlc cavlc;
-
-  SliceHeader &slice_header = picture.m_slice.slice_header;
 
   int is_ae =
       picture.m_slice.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
@@ -1772,10 +1763,9 @@ int MacroBlock::residual(BitStream &bs, PictureBase &picture, int32_t startIdx,
 
         if (is_ae) // ae(v) 表示CABAC编码
         {
-          ret = cabac.residual_block_cabac(picture, bs, ChromaDCLevel[iCbCr], 0,
-                                           4 * NumC8x8 - 1, 4 * NumC8x8,
-                                           MB_RESIDUAL_ChromaDCLevel, BlkIdx,
-                                           iCbCr, TotalCoeff); // 3 | 4
+          ret = cabac.residual_block_cabac(
+              ChromaDCLevel[iCbCr], 0, 4 * NumC8x8 - 1, 4 * NumC8x8,
+              MB_RESIDUAL_ChromaDCLevel, BlkIdx, iCbCr, TotalCoeff); // 3 | 4
           RETURN_IF_FAILED(ret != 0, ret);
         } else // ue(v) 表示CAVLC编码
         {
@@ -1809,9 +1799,8 @@ int MacroBlock::residual(BitStream &bs, PictureBase &picture, int32_t startIdx,
             if (is_ae) // ae(v) 表示CABAC编码
             {
               ret = cabac.residual_block_cabac(
-                  picture, bs, ChromaACLevel[iCbCr][i8x8 * 4 + i4x4],
-                  MAX(0, startIdx - 1), endIdx - 1, 15,
-                  MB_RESIDUAL_ChromaACLevel, BlkIdx, iCbCr,
+                  ChromaACLevel[iCbCr][i8x8 * 4 + i4x4], MAX(0, startIdx - 1),
+                  endIdx - 1, 15, MB_RESIDUAL_ChromaACLevel, BlkIdx, iCbCr,
                   TotalCoeff); // 3 | 4
               RETURN_IF_FAILED(ret != 0, ret);
             } else // ue(v) 表示CAVLC编码
@@ -1882,8 +1871,6 @@ int MacroBlock::residual_luma(
   // H264_MB_TYPE name_of_mb_type2 = MB_TYPE_NA;
   CH264ResidualBlockCavlc cavlc;
 
-  SliceHeader &slice_header = picture.m_slice.slice_header;
-
   int is_ae =
       picture.m_slice.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
 
@@ -1896,7 +1883,7 @@ int MacroBlock::residual_luma(
 
     if (is_ae) // ae(v) 表示CABAC编码
     {
-      ret = cabac.residual_block_cabac(picture, bs, i16x16DClevel, 0, 15, 16,
+      ret = cabac.residual_block_cabac(i16x16DClevel, 0, 15, 16,
                                        mb_residual_level_dc, BlkIdx, -1,
                                        TotalCoeff); // 3 | 4
       RETURN_IF_FAILED(ret != 0, ret);
@@ -1923,9 +1910,8 @@ int MacroBlock::residual_luma(
             if (is_ae) // ae(v) 表示CABAC编码
             {
               ret = cabac.residual_block_cabac(
-                  picture, bs, i16x16AClevel[i8x8 * 4 + i4x4],
-                  MAX(0, startIdx - 1), endIdx - 1, 15,
-                  MB_RESIDUAL_Intra16x16ACLevel, BlkIdx, -1,
+                  i16x16AClevel[i8x8 * 4 + i4x4], MAX(0, startIdx - 1),
+                  endIdx - 1, 15, MB_RESIDUAL_Intra16x16ACLevel, BlkIdx, -1,
                   TotalCoeff); // 3 | 4
               RETURN_IF_FAILED(ret != 0, ret);
             } else // ue(v) 表示CAVLC编码
@@ -1942,7 +1928,7 @@ int MacroBlock::residual_luma(
             if (is_ae) // ae(v) 表示CABAC编码
             {
               ret = cabac.residual_block_cabac(
-                  picture, bs, level4x4[i8x8 * 4 + i4x4], startIdx, endIdx, 16,
+                  level4x4[i8x8 * 4 + i4x4], startIdx, endIdx, 16,
                   MB_RESIDUAL_LumaLevel4x4, BlkIdx, -1, TotalCoeff); // 3 | 4
               RETURN_IF_FAILED(ret != 0, ret);
             } else // ue(v) 表示CAVLC编码
@@ -1984,7 +1970,7 @@ int MacroBlock::residual_luma(
       if (is_ae) // ae(v) 表示CABAC编码
       {
         ret = cabac.residual_block_cabac(
-            picture, bs, level8x8[i8x8], 4 * startIdx, 4 * endIdx + 3, 64,
+            level8x8[i8x8], 4 * startIdx, 4 * endIdx + 3, 64,
             MB_RESIDUAL_LumaLevel8x8, BlkIdx, -1, TotalCoeff); // 3 | 4
         RETURN_IF_FAILED(ret != 0, ret);
       } else // ue(v) 表示CAVLC编码

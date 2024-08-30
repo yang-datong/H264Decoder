@@ -114,7 +114,6 @@ int PictureBase::Decoding_process_for_picture_order_count_type_1(
   RETURN_IF_FAILED(
       m_slice.slice_header.IdrPicFlag != 1 && picture_previous == NULL, -1);
 
-  int ret = 0;
   int32_t prevFrameNumOffset = 0;
 
   //--------------prevFrameNumOffset----------------
@@ -206,7 +205,6 @@ int PictureBase::Decoding_process_for_picture_order_count_type_2(
   RETURN_IF_FAILED(
       m_slice.slice_header.IdrPicFlag != 1 && picture_previous == NULL, -1);
 
-  int ret = 0;
   int32_t prevFrameNumOffset = 0;
 
   //--------------prevFrameNumOffset----------------
@@ -316,7 +314,6 @@ int PictureBase::Decoding_process_for_reference_picture_lists_construction(
 
 // 8.2.4.1 Decoding process for picture numbers
 int PictureBase::Decoding_process_for_picture_numbers(Frame *(&dpb)[16]) {
-  int ret = 0;
   SliceHeader &slice_header = m_slice.slice_header;
   int32_t size_dpb = 16;
   int32_t i = 0;
@@ -535,8 +532,8 @@ int PictureBase::Initialisation_process_for_reference_picture_lists(
 
   // RefPicList0 and RefPicList1 have initial entries as specified in
   // clauses 8.2.4.2.1 through 8.2.4.2.5
-  if (slice_header.slice_type % 5 == H264_SLIECE_TYPE_P ||
-      slice_header.slice_type % 5 == H264_SLIECE_TYPE_SP) {
+  if (slice_header.slice_type % 5 == SLICE_P ||
+      slice_header.slice_type % 5 == SLICE_SP) {
     if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
       ret =
           Initialisation_process_for_the_reference_picture_list_for_P_and_SP_slices_in_frames(
@@ -549,7 +546,7 @@ int PictureBase::Initialisation_process_for_reference_picture_lists(
               dpb, RefPicList0, m_RefPicList0Length);
       RETURN_IF_FAILED(ret != 0, ret);
     }
-  } else if (slice_header.slice_type % 5 == H264_SLIECE_TYPE_B) {
+  } else if (slice_header.slice_type % 5 == SLICE_B) {
     if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
       ret =
           Initialisation_process_for_reference_picture_lists_for_B_slices_in_frames(
@@ -617,7 +614,6 @@ int PictureBase::
     Initialisation_process_for_the_reference_picture_list_for_P_and_SP_slices_in_frames(
         Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
         int32_t &RefPicList0Length) {
-  int ret = 0;
   int32_t size_dpb = 16;
   int32_t i = 0;
   int32_t j = 0;
@@ -847,7 +843,6 @@ int PictureBase::
     Initialisation_process_for_reference_picture_lists_for_B_slices_in_frames(
         Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16],
         int32_t &RefPicList0Length, int32_t &RefPicList1Length) {
-  int ret = 0;
   int32_t size_dpb = 16;
   int32_t i = 0;
   int32_t j = 0;
@@ -860,8 +855,6 @@ int PictureBase::
   int32_t indexTemp_short_right[16] = {0};
   int32_t indexTemp_long[16] = {0};
   int32_t indexTemp3[16] = {0};
-
-  SliceHeader &slice_header = m_slice.slice_header;
 
   // For B slices, the order of short-term reference entries in the reference
   // picture lists RefPicList0 and RefPicList1 depends on output order, as given
@@ -1293,7 +1286,6 @@ int PictureBase::
 int PictureBase::Initialisation_process_for_reference_picture_lists_in_fields(
     Frame *(&refFrameListXShortTerm)[16], Frame *(&refFrameListXLongTerm)[16],
     Frame *(&RefPicListX)[16], int32_t &RefPicListXLength, int32_t listX) {
-  int ret = 0;
   int32_t size = 16;
   int32_t i = 0;
   int32_t j = 0;
@@ -1468,7 +1460,7 @@ int PictureBase::Modification_process_for_reference_picture_lists(
     }
   }
 
-  if (slice_header.slice_type == H264_SLIECE_TYPE_B &&
+  if (slice_header.slice_type == SLICE_B &&
       slice_header.ref_pic_list_modification_flag_l1 == 1) {
     slice_header.refIdxL1 = 0;
 
@@ -1592,8 +1584,6 @@ int PictureBase::
         Frame *(&RefPicListX)[16]) {
   int32_t cIdx = 0;
   int32_t nIdx = 0;
-
-  SliceHeader &slice_header = m_slice.slice_header;
 
   for (cIdx = num_ref_idx_lX_active_minus1 + 1; cIdx > refIdxLX; cIdx--) {
     RefPicListX[cIdx] = RefPicListX[cIdx - 1];
@@ -1757,8 +1747,6 @@ int PictureBase::Decoding_process_for_gaps_in_frame_num() { return 0; }
 // adaptive_ref_pic_marking_mode_flag is equal to 0.
 int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
     Frame *(&dpb)[16]) {
-  SliceHeader &slice_header = m_slice.slice_header;
-
   if (m_picture_coded_type ==
           H264_PICTURE_CODED_TYPE_BOTTOM_FIELD // If the current picture is a
                                                // coded field that is the second

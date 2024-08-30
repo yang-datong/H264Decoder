@@ -234,7 +234,7 @@ class PictureBase {
       int32_t &b4x4BlkIdxN, int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW,
       const int32_t isChroma);
 
-  int getMbAddrN_non_MBAFF_frames(const int32_t xN, const int32_t yN,
+  int neighbouring_locations_non_MBAFF(const int32_t xN, const int32_t yN,
                                   const int32_t maxW, const int32_t maxH,
                                   const int32_t CurrMbAddr,
                                   MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
@@ -251,12 +251,16 @@ class PictureBase {
       int32_t _mbAddr, int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type,
       int32_t &mbAddrN);
 
-  int getMbAddrN_MBAFF_frames(const int32_t xN, const int32_t yN,
+  int neighbouring_locations_MBAFF(const int32_t xN, const int32_t yN,
                               const int32_t maxW, const int32_t maxH,
                               const int32_t CurrMbAddr,
                               MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
                               int32_t &b4x4BlkIdxN, int32_t &b8x8BlkIdxN,
                               int32_t &xW, int32_t &yW, const int32_t isChroma);
+
+int derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
+      const int32_t xN, const int32_t yN, const int32_t maxW, const int32_t maxH,
+      const int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,int32_t &yM );
 
   int Derivation_process_for_4x4_luma_block_indices(
       uint8_t xP, uint8_t yP, uint8_t &luma4x4BlkIdx); // 6.4.13.1
