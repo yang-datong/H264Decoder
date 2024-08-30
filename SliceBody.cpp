@@ -114,7 +114,6 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
         std::cout << "hi~" << __LINE__ << std::endl;
         exit(0);
       } else {
-        /* CABAC编码开始 */
         picture.mb_x = (CurrMbAddr %
                         (picture.PicWidthInMbs * (1 + header.MbaffFrameFlag))) /
                        (1 + header.MbaffFrameFlag);
@@ -132,6 +131,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
         // 因为解码mb_skip_flag需要事先知道slice_id的值（从0开始）
 
         if (header.MbaffFrameFlag) {
+          /* 当前帧使用MBAFF编码模式。在这种模式下，每个宏块对（MB pair）可以独立地选择是作为帧宏块对还是场宏块对进行编码。 */
           std::cout << "hi~" << __LINE__ << std::endl;
           exit(0);
         }
@@ -151,23 +151,23 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
           // 首个IDR帧不会进这里，紧跟其后的P帧会进这里（可能会进）
           picture.mb_cnt++;
           if (header.MbaffFrameFlag) {
-            if (CurrMbAddr % 2 == 0) // 只需要处理top field macroblock
-            {
-              picture.m_mbs[picture.CurrMbAddr].mb_skip_flag =
-                  mb_skip_flag; // 因为解码mb_skip_flag_next_mb需要事先知道前面顶场宏块的mb_skip_flag值
-              picture.m_mbs[picture.CurrMbAddr + 1].slice_number =
-                  slice_number; // 因为解码mb_skip_flag需要事先知道slice_id的值
+            if (CurrMbAddr % 2 == 0) {
+              // 只需要处理top field macroblock
+              picture.m_mbs[picture.CurrMbAddr].mb_skip_flag = mb_skip_flag;
+              // 因为解码mb_skip_flag_next_mb需要事先知道前面顶场宏块的mb_skip_flag值
+              picture.m_mbs[picture.CurrMbAddr + 1].slice_number = slice_number;
+              // 因为解码mb_skip_flag需要事先知道slice_id的值
               picture.m_mbs[picture.CurrMbAddr + 1].mb_field_decoding_flag =
-                  mb_field_decoding_flag; // 特别注意：底场宏块和顶场宏块的mb_field_decoding_flag值是相同的
+                  mb_field_decoding_flag;
+              // 特别注意：底场宏块和顶场宏块的mb_field_decoding_flag值是相同的
 
-              cabac.decode_mb_skip_flag(
-                  CurrMbAddr + 1,
-                  mb_skip_flag_next_mb); // 2 ae(v) 先读取底场宏块的mb_skip_flag
+              cabac.decode_mb_skip_flag(CurrMbAddr + 1, mb_skip_flag_next_mb);
+              // 2 ae(v) 先读取底场宏块的mb_skip_flag
 
-              if (mb_skip_flag_next_mb == 0) // 如果底场宏块mb_skip_flag=0
-              {
-                cabac.CABAC_decode_mb_field_decoding_flag(
-                    mb_field_decoding_flag); // 2 u(1) | ae(v)
+              if (mb_skip_flag_next_mb == 0) {
+                // 如果底场宏块mb_skip_flag=0
+                cabac.decode_mb_field_decoding_flag(mb_field_decoding_flag);
+                // 2 u(1) | ae(v)
                 // 再读取底场宏块的mb_field_decoding_flag
 
                 //is_need_skip_read_mb_field_decoding_flag = true;
@@ -349,7 +349,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
         // moreDataFlag = 1;
         exit(0);
       } else {
-        cabac.CABAC_decode_end_of_slice_flag(end_of_slice_flag);
+        cabac.decode_end_of_slice_flag(end_of_slice_flag);
         moreDataFlag = !end_of_slice_flag;
       }
     }

@@ -997,7 +997,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
 
   if (is_ae) // ae(v) 表示CABAC编码
   {
-    ret = cabac.CABAC_decode_mb_type(mb_type); // 2 ue(v) | ae(v)
+    ret = cabac.decode_mb_type(mb_type); // 2 ue(v) | ae(v)
     RETURN_IF_FAILED(ret != 0, ret);
   } else // ue(v) 表示CAVLC编码
   {
@@ -1082,7 +1082,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
 
         if (is_ae) // ae(v) 表示CABAC编码
         {
-          ret = cabac.CABAC_decode_transform_size_8x8_flag(
+          ret = cabac.decode_transform_size_8x8_flag(
               transform_size_8x8_flag_temp); // 2 u(1) | ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
         } else // ue(v) 表示CAVLC编码
@@ -1113,7 +1113,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
     if (m_mb_pred_mode != Intra_16x16) {
       if (is_ae) // ae(v) 表示CABAC编码
       {
-        ret = cabac.CABAC_decode_coded_block_pattern(
+        ret = cabac.decode_coded_block_pattern(
             coded_block_pattern); // 2 me(v) | ae(v)
         RETURN_IF_FAILED(ret != 0, ret);
       } else // ue(v) 表示CAVLC编码
@@ -1133,7 +1133,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
            picture.m_slice.m_sps.direct_8x8_inference_flag)) {
         if (is_ae) // ae(v) 表示CABAC编码
         {
-          ret = cabac.CABAC_decode_transform_size_8x8_flag(
+          ret = cabac.decode_transform_size_8x8_flag(
               transform_size_8x8_flag_temp); // 2 u(1) | ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
         } else // ue(v) 表示CAVLC编码
@@ -1163,7 +1163,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
     {
       if (is_ae) // ae(v) 表示CABAC编码
       {
-        ret = cabac.CABAC_decode_mb_qp_delta(mb_qp_delta); // 2 se(v) | ae(v)
+        ret = cabac.decode_mb_qp_delta(mb_qp_delta); // 2 se(v) | ae(v)
         RETURN_IF_FAILED(ret != 0, ret);
       } else // ue(v) 表示CAVLC编码
       {
@@ -1316,7 +1316,7 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
         {
           ret =
               cabac
-                  .CABAC_decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
+                  .decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
                       prev_intra4x4_pred_mode_flag[luma4x4BlkIdx]); // 2 u(1) |
                                                                     // ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
@@ -1329,11 +1329,9 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
         if (!prev_intra4x4_pred_mode_flag[luma4x4BlkIdx]) {
           if (is_ae) // ae(v) 表示CABAC编码
           {
-            ret =
-                cabac
-                    .CABAC_decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
-                        rem_intra4x4_pred_mode[luma4x4BlkIdx]); // 2 u(3) |
-                                                                // ae(v)
+            ret = cabac.decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
+                rem_intra4x4_pred_mode[luma4x4BlkIdx]); // 2 u(3) |
+                                                        // ae(v)
             RETURN_IF_FAILED(ret != 0, ret);
           } else // ue(v) 表示CAVLC编码
           {
@@ -1350,7 +1348,7 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
         {
           ret =
               cabac
-                  .CABAC_decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
+                  .decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
                       prev_intra8x8_pred_mode_flag[luma8x8BlkIdx]); // 2 u(1) |
                                                                     // ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
@@ -1363,11 +1361,9 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
         if (!prev_intra8x8_pred_mode_flag[luma8x8BlkIdx]) {
           if (is_ae) // ae(v) 表示CABAC编码
           {
-            ret =
-                cabac
-                    .CABAC_decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
-                        rem_intra8x8_pred_mode[luma8x8BlkIdx]); // 2 u(3) |
-                                                                // ae(v)
+            ret = cabac.decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
+                rem_intra8x8_pred_mode[luma8x8BlkIdx]); // 2 u(3) |
+                                                        // ae(v)
             RETURN_IF_FAILED(ret != 0, ret);
           } else // ue(v) 表示CAVLC编码
           {
@@ -1382,7 +1378,7 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
         picture.m_slice.m_sps.ChromaArrayType == 2) {
       if (is_ae) // ae(v) 表示CABAC编码
       {
-        ret = cabac.CABAC_decode_intra_chroma_pred_mode(
+        ret = cabac.decode_intra_chroma_pred_mode(
             intra_chroma_pred_mode); // 2 ue(v) | ae(v)
         RETURN_IF_FAILED(ret != 0, ret);
       } else // ue(v) 表示CAVLC编码
@@ -1407,9 +1403,9 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
         {
           int32_t ref_idx_flag = 0;
 
-          ret = cabac.CABAC_decode_ref_idx_lX(
-              ref_idx_flag, mbPartIdx,
-              ref_idx_l0[mbPartIdx]); // 2 te(v) | ae(v)
+          ret =
+              cabac.decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
+                                      ref_idx_l0[mbPartIdx]); // 2 te(v) | ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
         } else // ue(v) 表示CAVLC编码
         {
@@ -1442,9 +1438,9 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
         {
           int32_t ref_idx_flag = 1;
 
-          ret = cabac.CABAC_decode_ref_idx_lX(
-              ref_idx_flag, mbPartIdx,
-              ref_idx_l1[mbPartIdx]); // 2 te(v) | ae(v)
+          ret =
+              cabac.decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
+                                      ref_idx_l1[mbPartIdx]); // 2 te(v) | ae(v)
           RETURN_IF_FAILED(ret != 0, ret);
         } else // ue(v) 表示CAVLC编码
         {
@@ -1477,7 +1473,7 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
             int32_t subMbPartIdx = 0;
             int32_t isChroma = 0;
 
-            ret = cabac.CABAC_decode_mvd_lX(
+            ret = cabac.decode_mvd_lX(
                 mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
                 mvd_l0[mbPartIdx][0][compIdx]); // 2 ue(v) | ae(v)
             RETURN_IF_FAILED(ret != 0, ret);
@@ -1504,7 +1500,7 @@ int MacroBlock::mb_pred(BitStream &bs, PictureBase &picture,
             int32_t subMbPartIdx = 0;
             int32_t isChroma = 0;
 
-            ret = cabac.CABAC_decode_mvd_lX(
+            ret = cabac.decode_mvd_lX(
                 mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
                 mvd_l1[mbPartIdx][0][compIdx]); // 2 ue(v) | ae(v)
             RETURN_IF_FAILED(ret != 0, ret);
@@ -1542,8 +1538,7 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
   for (mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
     if (is_ae) // ae(v) 表示CABAC编码
     {
-      ret = cabac.CABAC_decode_sub_mb_type(
-          sub_mb_type[mbPartIdx]); // 2 ue(v) | ae(v)
+      ret = cabac.decode_sub_mb_type(sub_mb_type[mbPartIdx]); // 2 ue(v) | ae(v)
       RETURN_IF_FAILED(ret != 0, ret);
     } else // ue(v) 表示CAVLC编码
     {
@@ -1596,9 +1591,8 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
       {
         int32_t ref_idx_flag = 0;
 
-        ret = cabac.CABAC_decode_ref_idx_lX(
-            ref_idx_flag, mbPartIdx,
-            ref_idx_l0[mbPartIdx]); // 2 te(v) | ae(v)
+        ret = cabac.decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
+                                      ref_idx_l0[mbPartIdx]); // 2 te(v) | ae(v)
         RETURN_IF_FAILED(ret != 0, ret);
       } else // ue(v) 表示CAVLC编码
       {
@@ -1628,9 +1622,8 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
       {
         int32_t ref_idx_flag = 1;
 
-        ret = cabac.CABAC_decode_ref_idx_lX(
-            ref_idx_flag, mbPartIdx,
-            ref_idx_l1[mbPartIdx]); // 2 te(v) | ae(v)
+        ret = cabac.decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
+                                      ref_idx_l1[mbPartIdx]); // 2 te(v) | ae(v)
         RETURN_IF_FAILED(ret != 0, ret);
       } else // ue(v) 表示CAVLC编码
       {
@@ -1664,7 +1657,7 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
             int32_t mvd_flag = compIdx;
             int32_t isChroma = 0;
 
-            ret = cabac.CABAC_decode_mvd_lX(
+            ret = cabac.decode_mvd_lX(
                 mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
                 mvd_l0[mbPartIdx][subMbPartIdx][compIdx]); // 2 ue(v) | ae(v)
             RETURN_IF_FAILED(ret != 0, ret);
@@ -1694,7 +1687,7 @@ int MacroBlock::sub_mb_pred(BitStream &bs, PictureBase &picture,
             int32_t mvd_flag = 2 + compIdx;
             int32_t isChroma = 0;
 
-            ret = cabac.CABAC_decode_mvd_lX(
+            ret = cabac.decode_mvd_lX(
                 mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
                 mvd_l1[mbPartIdx][subMbPartIdx][compIdx]); // 2 ue(v) | ae(v)
             RETURN_IF_FAILED(ret != 0, ret);

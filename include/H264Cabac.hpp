@@ -36,7 +36,7 @@ class CH264Cabac {
 
   int derivation_of_ctxIdxInc_for_mb_skip_flag(const int32_t currMbAddr,
                                                int32_t &ctxIdxInc);
-  int Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_field_decoding_flag(
+  int derivation_of_ctxIdxInc_for_mb_field_decoding_flag(
       int32_t &ctxIdxInc); // 9.3.3.1.1.2
   int Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_type(
       int32_t ctxIdxOffset,
@@ -68,45 +68,47 @@ class CH264Cabac {
   int DecodeTerminate(int32_t &binVal); // 9.3.3.2.4
   inline int RenormD();
 
+  int decode_mb_type_in_I_slices(int32_t ctxIdxOffset, int32_t &synElVal);
+  int decode_mb_type_in_SI_slices(int32_t &synElVal);
+  int decode_mb_type_in_P_SP_slices(int32_t &synElVal);
+  int decode_mb_type_in_B_slices(int32_t &synElVal);
+  int decode_sub_mb_type_in_P_SP_slices(int32_t &synElVal);
+  int decode_sub_mb_type_in_B_slices(int32_t &synElVal);
+
  public:
-  int CABAC_decode_mb_type(int32_t &synElVal);
-  int CABAC_decode_sub_mb_type(int32_t &synElVal);
-  int CABAC_decode_mb_type_in_I_slices(int32_t ctxIdxOffset, int32_t &synElVal);
-  int CABAC_decode_mb_type_in_SI_slices(int32_t &synElVal);
-  int CABAC_decode_mb_type_in_P_SP_slices(int32_t &synElVal);
-  int CABAC_decode_mb_type_in_B_slices(int32_t &synElVal);
-  int CABAC_decode_sub_mb_type_in_P_SP_slices(int32_t &synElVal);
-  int CABAC_decode_sub_mb_type_in_B_slices(int32_t &synElVal);
-
   int decode_mb_skip_flag(const int32_t currMbAddr, int32_t &synElVal);
-  int CABAC_decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
-                          int32_t subMbPartIdx, int32_t isChroma,
-                          int32_t &synElVal);
+  int decode_mb_field_decoding_flag(int32_t &synElVal);
 
-  int CABAC_decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
-                              int32_t &synElVal);
-  int CABAC_decode_mb_qp_delta(int32_t &synElVal);
-  int CABAC_decode_intra_chroma_pred_mode(int32_t &synElVal);
-  int CABAC_decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
+  int decode_mb_type(int32_t &synElVal);
+  int decode_sub_mb_type(int32_t &synElVal);
+  int decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx, int32_t subMbPartIdx,
+                    int32_t isChroma, int32_t &synElVal);
+  int decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
+                        int32_t &synElVal);
+  int decode_mb_qp_delta(int32_t &synElVal);
+  int decode_intra_chroma_pred_mode(int32_t &synElVal);
+  int decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
       int32_t &synElVal);
-  int CABAC_decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
+  int decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
       int32_t &synElVal);
-  int CABAC_decode_mb_field_decoding_flag(int32_t &synElVal);
-  int CABAC_decode_coded_block_pattern(int32_t &synElVal);
-  int CABAC_decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
-                                    int32_t BlkIdx, int32_t iCbCr,
+  int decode_coded_block_pattern(int32_t &synElVal);
+
+ private:
+  int decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level, int32_t BlkIdx,
+                              int32_t iCbCr, int32_t &synElVal);
+  int decode_significant_coeff_flag(MB_RESIDUAL_LEVEL mb_block_level,
+                                    int32_t levelListIdx, int32_t last_flag,
                                     int32_t &synElVal);
-  int CABAC_decode_significant_coeff_flag(MB_RESIDUAL_LEVEL mb_block_level,
-                                          int32_t levelListIdx,
-                                          int32_t last_flag, int32_t &synElVal);
-  int CABAC_decode_coeff_abs_level_minus1(MB_RESIDUAL_LEVEL mb_block_level,
-                                          int32_t numDecodAbsLevelEq1,
-                                          int32_t numDecodAbsLevelGt1,
-                                          int32_t &synElVal);
-  int CABAC_decode_coeff_sign_flag(int32_t &synElVal);
-  int CABAC_decode_transform_size_8x8_flag(int32_t &synElVal);
+  int decode_coeff_abs_level_minus1(MB_RESIDUAL_LEVEL mb_block_level,
+                                    int32_t numDecodAbsLevelEq1,
+                                    int32_t numDecodAbsLevelGt1,
+                                    int32_t &synElVal);
+  int decode_coeff_sign_flag(int32_t &synElVal);
 
-  int CABAC_decode_end_of_slice_flag(int32_t &synElVal);
+ public:
+  int decode_transform_size_8x8_flag(int32_t &synElVal);
+
+  int decode_end_of_slice_flag(int32_t &synElVal);
 
   int residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
                            int32_t endIdx, int32_t maxNumCoeff,

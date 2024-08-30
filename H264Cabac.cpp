@@ -290,21 +290,24 @@ int CH264Cabac::derivation_of_ctxIdxInc_for_mb_skip_flag(
   return 0;
 }
 
-// 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element
-// mb_field_decoding_flag
-int CH264Cabac::
-    Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_field_decoding_flag(
-        int32_t &ctxIdxInc) {
-  int ret = 0;
+// 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element mb_field_decoding_flag
+int CH264Cabac::derivation_of_ctxIdxInc_for_mb_field_decoding_flag(
+    int32_t &ctxIdxInc) {
 
-  int32_t mbAddrA = 0;
-  int32_t mbAddrB = 0;
-  int32_t mbAddrC = 0;
-  int32_t mbAddrD = 0;
+  /* 调用第 6.4.10 节中指定的相邻宏块地址及其在 MBAFF 帧中的可用性的导出过程，并将输出分配给 mbAddrA 和 mbAddrB。  
+   * 当宏块mbAddrN和mbAddrN+1两者都具有等于P_Skip或B_Skip的mb_type时，将如第7.4.4节中指定的语法元素mb_field_decoding_flag的推断规则应用于宏块mbAddrN。  
+   * 让变量 condTermFlagN（N 为 A 或 B）按如下方式导出： 
+   * — 如果以下任一条件为真，则 condTermFlagN 设置为等于 0： 
+      * — mbAddrN 不可用， 
+      * — 宏块 mbAddrN 是帧宏块。  
+   * – 否则，condTermFlagN 设置为等于 1。
+   * 变量 ctxIdxInc 由以下公式得出： ctxIdxInc = condTermFlagA + condTermFlagB */
 
-  // 6.4.10 Derivation process for neighbouring macroblock addresses and their
-  // availability in MBAFF frames
-  ret =
+  int32_t mbAddrA = 0, mbAddrB = 0, mbAddrC = 0, mbAddrD = 0;
+  /* TODO YangJing 做到这里来了，先做工作的事情吧 <24-08-30 16:59:10> */
+
+  // 6.4.10 Derivation process for neighbouring macroblock addresses and their availability in MBAFF frames
+  int ret =
       picture
           .Derivation_process_for_neighbouring_macroblock_addresses_and_their_availability_in_MBAFF_frames(
               picture.CurrMbAddr, mbAddrA, mbAddrB, mbAddrC, mbAddrD);
@@ -1802,7 +1805,7 @@ int CH264Cabac::DecodeBin(const int32_t bypassFlag, const int32_t ctxIdx,
 }
 
 //-------------------------------------------
-int CH264Cabac::CABAC_decode_mb_type(int32_t &synElVal) {
+int CH264Cabac::decode_mb_type(int32_t &synElVal) {
   int ret = 0;
 
   H264_SLICE_TYPE slice_type =
@@ -1811,18 +1814,18 @@ int CH264Cabac::CABAC_decode_mb_type(int32_t &synElVal) {
   // Table 9-34 – Syntax elements and associated types of binarization,
   // maxBinIdxCtx, and ctxIdxOffset
   if ((slice_type % 5) == SLICE_SI) {
-    ret = CABAC_decode_mb_type_in_SI_slices(synElVal);
+    ret = decode_mb_type_in_SI_slices(synElVal);
     RETURN_IF_FAILED(ret != 0, -1);
   } else if ((slice_type % 5) == SLICE_I) {
     int32_t ctxIdxOffset = 3; // Table 9-34
 
-    ret = CABAC_decode_mb_type_in_I_slices(ctxIdxOffset, synElVal);
+    ret = decode_mb_type_in_I_slices(ctxIdxOffset, synElVal);
     RETURN_IF_FAILED(ret != 0, -1);
   } else if ((slice_type % 5) == SLICE_P || (slice_type % 5) == SLICE_SP) {
-    ret = CABAC_decode_mb_type_in_P_SP_slices(synElVal);
+    ret = decode_mb_type_in_P_SP_slices(synElVal);
     RETURN_IF_FAILED(ret != 0, -1);
   } else if ((slice_type % 5) == SLICE_B) {
-    ret = CABAC_decode_mb_type_in_B_slices(synElVal);
+    ret = decode_mb_type_in_B_slices(synElVal);
     RETURN_IF_FAILED(ret != 0, -1);
   } else {
     RETURN_IF_FAILED(-1, -1);
@@ -1831,7 +1834,7 @@ int CH264Cabac::CABAC_decode_mb_type(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_sub_mb_type(int32_t &synElVal) {
+int CH264Cabac::decode_sub_mb_type(int32_t &synElVal) {
   int ret = 0;
 
   H264_SLICE_TYPE slice_type =
@@ -1840,10 +1843,10 @@ int CH264Cabac::CABAC_decode_sub_mb_type(int32_t &synElVal) {
   // Table 9-34 – Syntax elements and associated types of binarization,
   // maxBinIdxCtx, and ctxIdxOffset
   if ((slice_type % 5) == SLICE_P || (slice_type % 5) == SLICE_SP) {
-    ret = CABAC_decode_sub_mb_type_in_P_SP_slices(synElVal);
+    ret = decode_sub_mb_type_in_P_SP_slices(synElVal);
     RETURN_IF_FAILED(ret != 0, -1);
   } else if ((slice_type % 5) == SLICE_B) {
-    ret = CABAC_decode_sub_mb_type_in_B_slices(synElVal);
+    ret = decode_sub_mb_type_in_B_slices(synElVal);
     RETURN_IF_FAILED(ret != 0, -1);
   } else {
     RETURN_IF_FAILED(-1, -1);
@@ -1852,7 +1855,7 @@ int CH264Cabac::CABAC_decode_sub_mb_type(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
+int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
                                                  int32_t &synElVal) {
   int ret = 0;
 
@@ -2204,7 +2207,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_mb_type_in_SI_slices(int32_t &synElVal) {
+int CH264Cabac::decode_mb_type_in_SI_slices(int32_t &synElVal) {
   int ret = 0;
 
   H264_SLICE_TYPE slice_type =
@@ -2250,7 +2253,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_SI_slices(int32_t &synElVal) {
     // maxBinIdxCtx = 6;
     ctxIdxOffset = 3;
 
-    ret = CABAC_decode_mb_type_in_I_slices(ctxIdxOffset, synElVal);
+    ret = decode_mb_type_in_I_slices(ctxIdxOffset, synElVal);
     RETURN_IF_FAILED(ret != 0, -1);
 
     // the suffix bit string as specified in Table 9-36 for macroblock type in I
@@ -2261,7 +2264,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_SI_slices(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_mb_type_in_P_SP_slices(int32_t &synElVal) {
+int CH264Cabac::decode_mb_type_in_P_SP_slices(int32_t &synElVal) {
   int ret = 0;
 
   H264_SLICE_TYPE slice_type =
@@ -2333,7 +2336,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_P_SP_slices(int32_t &synElVal) {
     // maxBinIdxCtx = 5;
     ctxIdxOffset = 17;
 
-    ret = CABAC_decode_mb_type_in_I_slices(ctxIdxOffset, synElVal);
+    ret = decode_mb_type_in_I_slices(ctxIdxOffset, synElVal);
     RETURN_IF_FAILED(ret != 0, -1);
 
     // The bin string for I macroblock types in P and SP slices corresponding to
@@ -2347,7 +2350,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_P_SP_slices(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_mb_type_in_B_slices(int32_t &synElVal) {
+int CH264Cabac::decode_mb_type_in_B_slices(int32_t &synElVal) {
   int ret = 0;
 
   H264_SLICE_TYPE slice_type =
@@ -2598,7 +2601,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_B_slices(int32_t &synElVal) {
               // maxBinIdxCtx = 5;
               ctxIdxOffset = 32;
 
-              ret = CABAC_decode_mb_type_in_I_slices(ctxIdxOffset, synElVal);
+              ret = decode_mb_type_in_I_slices(ctxIdxOffset, synElVal);
               RETURN_IF_FAILED(ret != 0, -1);
 
               // For I macroblock types in B slices (mb_type values 23 to 48)
@@ -2630,7 +2633,7 @@ int CH264Cabac::CABAC_decode_mb_type_in_B_slices(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_sub_mb_type_in_P_SP_slices(int32_t &synElVal) {
+int CH264Cabac::decode_sub_mb_type_in_P_SP_slices(int32_t &synElVal) {
   int ret = 0;
 
   H264_SLICE_TYPE slice_type =
@@ -2690,7 +2693,7 @@ int CH264Cabac::CABAC_decode_sub_mb_type_in_P_SP_slices(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_sub_mb_type_in_B_slices(int32_t &synElVal) {
+int CH264Cabac::decode_sub_mb_type_in_B_slices(int32_t &synElVal) {
   int ret = 0;
 
   H264_SLICE_TYPE slice_type =
@@ -2896,7 +2899,7 @@ int CH264Cabac::decode_mb_skip_flag(const int32_t currMbAddr,
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
+int CH264Cabac::decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
                                     int32_t subMbPartIdx, int32_t isChroma,
                                     int32_t &synElVal) {
   int ret = 0;
@@ -3033,7 +3036,7 @@ int CH264Cabac::CABAC_decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
+int CH264Cabac::decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
                                         int32_t &synElVal) {
   int ret = 0;
 
@@ -3097,7 +3100,7 @@ int CH264Cabac::CABAC_decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_mb_qp_delta(int32_t &synElVal) {
+int CH264Cabac::decode_mb_qp_delta(int32_t &synElVal) {
   int ret = 0;
 
   // int32_t maxBinIdxCtx = 0;
@@ -3177,7 +3180,7 @@ int CH264Cabac::CABAC_decode_mb_qp_delta(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_intra_chroma_pred_mode(int32_t &synElVal) {
+int CH264Cabac::decode_intra_chroma_pred_mode(int32_t &synElVal) {
   int ret = 0;
 
   // int32_t maxBinIdxCtx = 0;
@@ -3245,7 +3248,7 @@ int CH264Cabac::CABAC_decode_intra_chroma_pred_mode(int32_t &synElVal) {
 }
 
 int CH264Cabac::
-    CABAC_decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
+    decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
         int32_t &synElVal) {
   int ret = 0;
 
@@ -3277,7 +3280,7 @@ int CH264Cabac::
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
+int CH264Cabac::decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
     int32_t &synElVal) {
   int ret = 0;
 
@@ -3320,44 +3323,37 @@ int CH264Cabac::CABAC_decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_mb_field_decoding_flag(int32_t &synElVal) {
-  int ret = 0;
+/* 9.3.3 Decoding process flow */
+int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
+  // Table 9-34 – Syntax elements and associated types of binarization,maxBinIdxCtx, and ctxIdxOffset
+  // int maxBinIdxCtx = 0;
+  int ctxIdxOffset = 70;
+  int ctxIdxInc = 0;
 
-  // int32_t maxBinIdxCtx = 0;
-  int32_t ctxIdxOffset = 0;
-  int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
-  int32_t binVal = 0;
-  int32_t ctxIdx = 0;
-  int32_t bypassFlag = 0;
+  // 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element mb_field_decoding_flag
+  int ret = derivation_of_ctxIdxInc_for_mb_field_decoding_flag(ctxIdxInc);
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return -1;
+  }
 
-  //------Table 9-34: ctxIdxOffset: 70--------
-  // maxBinIdxCtx = 0;
-  ctxIdxOffset = 70;
+  int bypassFlag = (ctxIdxOffset == -1) ? 1 : 0;
+  int ctxIdx = ctxIdxOffset + ctxIdxInc;
 
-  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values
-  // except those related to the syntax elements coded_block_flag,
-  // significant_coeff_flag, last_significant_coeff_flag, and
-  // coeff_abs_level_minus1
-
-  // 0,1,2 (clause 9.3.3.1.1.2)
-  ret =
-      Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_field_decoding_flag(
-          ctxIdxInc);
-  RETURN_IF_FAILED(ret != 0, ret);
-
-  //---------------注意是：FL, cMax=1------------------------
-  ctxIdx = ctxIdxOffset + ctxIdxInc;
-  ret = DecodeBin(bypassFlag, ctxIdx, binVal); // binIdx = 0;
-  RETURN_IF_FAILED(ret != 0, -1);
+  int &bin = synElVal;
+  ret = DecodeBin(bypassFlag, ctxIdx, bin); // binIdx = 0;
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return -1;
+  }
 
   // fixedLength = Ceil( Log2( cMax + 1 ) ) = Ceil( Log2( 1 + 1 ) ) = 1;
-  synElVal = binVal;
-
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_coded_block_pattern(int32_t &synElVal) {
+int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
   int ret = 0;
 
   int32_t ChromaArrayType = picture.m_slice.m_sps.ChromaArrayType;
@@ -3502,7 +3498,7 @@ int CH264Cabac::CABAC_decode_coded_block_pattern(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
+int CH264Cabac::decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
                                               int32_t BlkIdx, int32_t iCbCr,
                                               int32_t &synElVal) {
   int ret = 0;
@@ -3592,7 +3588,7 @@ int CH264Cabac::CABAC_decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
 }
 
 // 如果last_flag=1,则表示 CABAC_decode_last_significant_coeff_flag(...)
-int CH264Cabac::CABAC_decode_significant_coeff_flag(
+int CH264Cabac::decode_significant_coeff_flag(
     MB_RESIDUAL_LEVEL mb_block_level, int32_t levelListIdx, int32_t last_flag,
     int32_t &synElVal) {
   int ret = 0;
@@ -3751,7 +3747,7 @@ int CH264Cabac::CABAC_decode_significant_coeff_flag(
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_coeff_abs_level_minus1(
+int CH264Cabac::decode_coeff_abs_level_minus1(
     MB_RESIDUAL_LEVEL mb_block_level, int32_t numDecodAbsLevelEq1,
     int32_t numDecodAbsLevelGt1, int32_t &synElVal) {
   int ret = 0;
@@ -3902,7 +3898,7 @@ int CH264Cabac::CABAC_decode_coeff_abs_level_minus1(
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_coeff_sign_flag(int32_t &synElVal) {
+int CH264Cabac::decode_coeff_sign_flag(int32_t &synElVal) {
   int ret = 0;
 
   // int32_t maxBinIdxCtx = 0;
@@ -3932,7 +3928,7 @@ int CH264Cabac::CABAC_decode_coeff_sign_flag(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_end_of_slice_flag(int32_t &synElVal) {
+int CH264Cabac::decode_end_of_slice_flag(int32_t &synElVal) {
   int ret = 0;
 
   // int32_t maxBinIdxCtx = 0;
@@ -3963,7 +3959,7 @@ int CH264Cabac::CABAC_decode_end_of_slice_flag(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::CABAC_decode_transform_size_8x8_flag(int32_t &synElVal) {
+int CH264Cabac::decode_transform_size_8x8_flag(int32_t &synElVal) {
   int ret = 0;
 
   // int32_t maxBinIdxCtx = 0;
@@ -4029,7 +4025,7 @@ int CH264Cabac::residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
   TotalCoeff = 0;
 
   if (maxNumCoeff != 64 || ChromaArrayType == 3) {
-    ret = CABAC_decode_coded_block_flag(mb_block_level, BlkIdx, iCbCr,
+    ret = decode_coded_block_flag(mb_block_level, BlkIdx, iCbCr,
                                         coded_block_flag); // 3 | 4 ae(v)
     RETURN_IF_FAILED(ret != 0, -1);
   }
@@ -4045,14 +4041,14 @@ int CH264Cabac::residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
     while (i < numCoeff - 1) {
       int32_t &levelListIdx = i;
 
-      ret = CABAC_decode_significant_coeff_flag(
+      ret = decode_significant_coeff_flag(
           mb_block_level, levelListIdx, 0,
           significant_coeff_flag[i]); // 3 | 4 ae(v)
       RETURN_IF_FAILED(ret != 0, -1);
 
       if (significant_coeff_flag[i]) // position i has a non-zero value.
       {
-        ret = CABAC_decode_significant_coeff_flag(
+        ret = decode_significant_coeff_flag(
             mb_block_level, levelListIdx, 1,
             last_significant_coeff_flag[i]); // 3 | 4 ae(v)
         RETURN_IF_FAILED(ret != 0, -1);
@@ -4069,12 +4065,12 @@ int CH264Cabac::residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
     }
 
     //-----------------------------------
-    ret = CABAC_decode_coeff_abs_level_minus1(
+    ret = decode_coeff_abs_level_minus1(
         mb_block_level, numDecodAbsLevelEq1, numDecodAbsLevelGt1,
         coeff_abs_level_minus1[numCoeff - 1]); // 3 | 4 ae(v)
     RETURN_IF_FAILED(ret != 0, -1);
 
-    ret = CABAC_decode_coeff_sign_flag(
+    ret = decode_coeff_sign_flag(
         coeff_sign_flag[numCoeff - 1]); // 3 | 4 ae(v)
     RETURN_IF_FAILED(ret != 0, -1);
 
@@ -4097,12 +4093,12 @@ int CH264Cabac::residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
         index[TotalCoeff] = i;
         TotalCoeff++;
 
-        ret = CABAC_decode_coeff_abs_level_minus1(
+        ret = decode_coeff_abs_level_minus1(
             mb_block_level, numDecodAbsLevelEq1, numDecodAbsLevelGt1,
             coeff_abs_level_minus1[i]); // 3 | 4 ae(v)
         RETURN_IF_FAILED(ret != 0, -1);
 
-        ret = CABAC_decode_coeff_sign_flag(coeff_sign_flag[i]); // 3 | 4 ae(v)
+        ret = decode_coeff_sign_flag(coeff_sign_flag[i]); // 3 | 4 ae(v)
         RETURN_IF_FAILED(ret != 0, -1);
 
         coeffLevel[i] =
