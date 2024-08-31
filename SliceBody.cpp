@@ -257,7 +257,6 @@ int SliceBody::do_macroblock_layer(PictureBase &picture, BitStream &bs,
 
   //--------熵解码------------
   picture.m_mbs[picture.CurrMbAddr].macroblock_layer(bs, picture, *this, cabac);
-  // 2 | 3 | 4
 
   //--------帧内/间预测------------
   //--------反量化------------

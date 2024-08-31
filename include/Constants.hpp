@@ -1,6 +1,7 @@
 #ifndef CONSTANTS_HPP_RZ5JBQ6O
 #define CONSTANTS_HPP_RZ5JBQ6O
 
+#include "Type.hpp"
 #include <cstdint>
 
 /* CABAC of 'm' and 'n' Tables */
@@ -907,5 +908,143 @@ const int32_t rangeTabLPS[64][4] = {
     {6, 8, 9, 11},        {6, 7, 9, 10},        {6, 7, 8, 9},
     {2, 2, 2, 2},
 };
+
+//----------------------------------------------- Macroblock ---------------------------------------------
+const MB_TYPE_I_SLICES_T mb_type_I_slices_define[27] = {
+    {0, I_NxN, 0, Intra_4x4, NA, -1, -1},
+    {0, I_NxN, 1, Intra_8x8, NA, -1, -1},
+    {1, I_16x16_0_0_0, NA, Intra_16x16, 0, 0, 0},
+    {2, I_16x16_1_0_0, NA, Intra_16x16, 1, 0, 0},
+    {3, I_16x16_2_0_0, NA, Intra_16x16, 2, 0, 0},
+    {4, I_16x16_3_0_0, NA, Intra_16x16, 3, 0, 0},
+    {5, I_16x16_0_1_0, NA, Intra_16x16, 0, 1, 0},
+    {6, I_16x16_1_1_0, NA, Intra_16x16, 1, 1, 0},
+    {7, I_16x16_2_1_0, NA, Intra_16x16, 2, 1, 0},
+    {8, I_16x16_3_1_0, NA, Intra_16x16, 3, 1, 0},
+    {9, I_16x16_0_2_0, NA, Intra_16x16, 0, 2, 0},
+    {10, I_16x16_1_2_0, NA, Intra_16x16, 1, 2, 0},
+    {11, I_16x16_2_2_0, NA, Intra_16x16, 2, 2, 0},
+    {12, I_16x16_3_2_0, NA, Intra_16x16, 3, 2, 0},
+    {13, I_16x16_0_0_1, NA, Intra_16x16, 0, 0, 15},
+    {14, I_16x16_1_0_1, NA, Intra_16x16, 1, 0, 15},
+    {15, I_16x16_2_0_1, NA, Intra_16x16, 2, 0, 15},
+    {16, I_16x16_3_0_1, NA, Intra_16x16, 3, 0, 15},
+    {17, I_16x16_0_1_1, NA, Intra_16x16, 0, 1, 15},
+    {18, I_16x16_1_1_1, NA, Intra_16x16, 1, 1, 15},
+    {19, I_16x16_2_1_1, NA, Intra_16x16, 2, 1, 15},
+    {20, I_16x16_3_1_1, NA, Intra_16x16, 3, 1, 15},
+    {21, I_16x16_0_2_1, NA, Intra_16x16, 0, 2, 15},
+    {22, I_16x16_1_2_1, NA, Intra_16x16, 1, 2, 15},
+    {23, I_16x16_2_2_1, NA, Intra_16x16, 2, 2, 15},
+    {24, I_16x16_3_2_1, NA, Intra_16x16, 3, 2, 15},
+    {25, I_PCM, NA, Intra_NA, NA, NA, NA}};
+
+const MB_TYPE_SI_SLICES_T mb_type_SI_slices_define[1] = {
+    {0, SI, Intra_4x4, NA, NA, NA}};
+
+const MB_TYPE_P_SP_SLICES_T mb_type_P_SP_slices_define[6] = {
+    {0, P_L0_16x16, 1, Pred_L0, Pred_NA, 16, 16},
+    {
+        1,
+        P_L0_L0_16x8,
+        2,
+        Pred_L0,
+        Pred_L0,
+        16,
+        8,
+    },
+    {2, P_L0_L0_8x16, 2, Pred_L0, Pred_L0, 8, 16},
+    {3, P_8x8, 4, Pred_NA, Pred_NA, 8, 8},
+    {4, P_8x8ref0, 4, Pred_NA, Pred_NA, 8, 8},
+    {5, P_Skip, 1, Pred_L0, Pred_NA, 16, 16}};
+
+/*
+//Table 7-14 – Macroblock type values 0 to 22 for B slices
+//mb_type    Name of mb_type    NumMbPart(mb_type)    MbPartPredMode(mb_type, 0)
+MbPartPredMode(mb_type, 1)    MbPartWidth(mb_type)    MbPartHeight(mb_type)
+struct MB_TYPE_B_SLICES_T
+{
+    int32_t                   mb_type;
+    H264_MB_TYPE              name_of_mb_type;
+    int32_t                   NumMbPart;
+    H264_MB_PART_PRED_MODE    MbPartPredMode0;
+    H264_MB_PART_PRED_MODE    MbPartPredMode1;
+    int32_t                   MbPartWidth;
+    int32_t                   MbPartHeight;
+};
+*/
+const MB_TYPE_B_SLICES_T mb_type_B_slices_define[24] = {
+    {0, B_Direct_16x16, NA, Direct, Pred_NA, 8, 8},
+    {1, B_L0_16x16, 1, Pred_L0, Pred_NA, 16, 16},
+    {2, B_L1_16x16, 1, Pred_L1, Pred_NA, 16, 16},
+    {3, B_Bi_16x16, 1, BiPred, Pred_NA, 16, 16},
+    {4, B_L0_L0_16x8, 2, Pred_L0, Pred_L0, 16, 8},
+    {5, B_L0_L0_8x16, 2, Pred_L0, Pred_L0, 8, 16},
+    {6, B_L1_L1_16x8, 2, Pred_L1, Pred_L1, 16, 8},
+    {7, B_L1_L1_8x16, 2, Pred_L1, Pred_L1, 8, 16},
+    {8, B_L0_L1_16x8, 2, Pred_L0, Pred_L1, 16, 8},
+    {9, B_L0_L1_8x16, 2, Pred_L0, Pred_L1, 8, 16},
+    {10, B_L1_L0_16x8, 2, Pred_L1, Pred_L0, 16, 8},
+    {11, B_L1_L0_8x16, 2, Pred_L1, Pred_L0, 8, 16},
+    {12, B_L0_Bi_16x8, 2, Pred_L0, BiPred, 16, 8},
+    {13, B_L0_Bi_8x16, 2, Pred_L0, BiPred, 8, 16},
+    {14, B_L1_Bi_16x8, 2, Pred_L1, BiPred, 16, 8},
+    {15, B_L1_Bi_8x16, 2, Pred_L1, BiPred, 8, 16},
+    {16, B_Bi_L0_16x8, 2, BiPred, Pred_L0, 16, 8},
+    {17, B_Bi_L0_8x16, 2, BiPred, Pred_L0, 8, 16},
+    {18, B_Bi_L1_16x8, 2, BiPred, Pred_L1, 16, 8},
+    {19, B_Bi_L1_8x16, 2, BiPred, Pred_L1, 8, 16},
+    {20, B_Bi_Bi_16x8, 2, BiPred, BiPred, 16, 8},
+    {21, B_Bi_Bi_8x16, 2, BiPred, BiPred, 8, 16},
+    {22, B_8x8, 4, Pred_NA, Pred_NA, 8, 8},
+    {23, B_Skip, NA, Direct, Pred_NA, 8, 8}};
+
+/*
+//--------------------------------------
+//Table 7-17 – Sub-macroblock types in P macroblocks
+//sub_mb_type[mbPartIdx]    Name of sub_mb_type[mbPartIdx]
+NumSubMbPart(sub_mb_type[mbPartIdx])    SubMbPredMode(sub_mb_type[mbPartIdx])
+SubMbPartWidth(sub_mb_type[ mbPartIdx]) SubMbPartHeight(sub_mb_type[mbPartIdx])
+struct SUB_MB_TYPE_P_MBS_T
+{
+    int32_t                   sub_mb_type;
+    H264_MB_TYPE              name_of_sub_mb_type;
+    int32_t                   NumSubMbPart;
+    H264_MB_PART_PRED_MODE    SubMbPredMode;
+    int32_t                   SubMbPartWidth;
+    int32_t                   SubMbPartHeight;
+};
+*/
+const SUB_MB_TYPE_P_MBS_T sub_mb_type_P_mbs_define[4] = {
+    //    { inferred,    NA,         NA,   NA,         NA,   NA },
+    {0, P_L0_8x8, 1, Pred_L0, 8, 8},
+    {1, P_L0_8x4, 2, Pred_L0, 8, 4},
+    {2, P_L0_4x8, 2, Pred_L0, 4, 8},
+    {3, P_L0_4x4, 4, Pred_L0, 4, 4}};
+
+/*
+//Table 7-18 – Sub-macroblock types in B macroblocks
+//sub_mb_type[mbPartIdx]    Name of sub_mb_type[mbPartIdx]
+NumSubMbPart(sub_mb_type[mbPartIdx])    SubMbPredMode(sub_mb_type[mbPartIdx])
+SubMbPartWidth(sub_mb_type[mbPartIdx]) SubMbPartHeight(sub_mb_type[mbPartIdx])
+struct SUB_MB_TYPE_B_MBS_T
+{
+    int32_t                   sub_mb_type;
+    H264_MB_TYPE              name_of_sub_mb_type;
+    int32_t                   NumSubMbPart;
+    H264_MB_PART_PRED_MODE    SubMbPredMode;
+    int32_t                   SubMbPartWidth;
+    int32_t                   SubMbPartHeight;
+};
+*/
+const SUB_MB_TYPE_B_MBS_T sub_mb_type_B_mbs_define[13] = {
+    //    { inferred,    mb_type,    4,    Direct,    4,    4 },
+    {0, B_Direct_8x8, 4, Direct, 4, 4}, {1, B_L0_8x8, 1, Pred_L0, 8, 8},
+    {2, B_L1_8x8, 1, Pred_L1, 8, 8},    {3, B_Bi_8x8, 1, BiPred, 8, 8},
+    {4, B_L0_8x4, 2, Pred_L0, 8, 4},    {5, B_L0_4x8, 2, Pred_L0, 4, 8},
+    {6, B_L1_8x4, 2, Pred_L1, 8, 4},    {7, B_L1_4x8, 2, Pred_L1, 4, 8},
+    {8, B_Bi_8x4, 2, BiPred, 8, 4},     {9, B_Bi_4x8, 2, BiPred, 4, 8},
+    {10, B_L0_4x4, 4, Pred_L0, 4, 4},   {11, B_L1_4x4, 4, Pred_L1, 4, 4},
+    {12, B_Bi_4x4, 4, BiPred, 4, 4}};
 
 #endif /* end of include guard: CONSTANTS_HPP_RZ5JBQ6O */
