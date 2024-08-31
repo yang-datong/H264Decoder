@@ -43,5 +43,7 @@ class SliceBody {
   int parseSliceData(BitStream &bitStream, PictureBase &picture);
   int NextMbAddress(int n, SliceHeader &slice_header);
   int initCABAC(CH264Cabac &cabac, BitStream &bs, SliceHeader &slice_header);
+
+  void printFrameReorderPriorityInfo(PictureBase &picture);
 };
 #endif /* end of include guard: SLICEBODY_HPP_OVHTPIZQ */

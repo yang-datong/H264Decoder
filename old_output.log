@@ -1,0 +1,352 @@
+Reading a NAL[1]{0 0 0 1}, Buffer len[33]   --->   EBSP[1]{103 100 0 31}, Buffer len[29]  --->   RBSP[1]{100 0 31 172}, Buffer len[27]
+SPS -> {
+	SPS ID:0
+	level_idc:31
+	profile_idc:High
+	chroma_format_idc:YUV420
+	亮度分量位深:8,色度分量位深:8
+	解码器需要支持的最大参考帧数:4
+	仅有帧编码:1
+	帧裁剪左偏移量:0,帧裁剪右偏移量:0,帧裁剪顶偏移量:0,帧裁剪底偏移量:0
+	存在视频用户界面(VUI)参数:1
+	VUI -> {
+		视频格式标识符，视频的类型（如未压缩、压缩等）:5
+		视频使用全范围色彩（0-255）或限范围色彩（16-235）:0
+		颜色原色的类型（如BT.709、BT.601等）:1
+		传输特性（如线性、伽马等）:1
+		矩阵系数，用于颜色空间转换:1
+		顶场色度样本位置类型:2,底场色度样本位置类型:2
+		每个时钟周期的单位数:1,每秒的单位数(时间尺度):60
+		使用固定帧率:0
+		存在NAL HRD（网络提取率控制）参数:0,存在VCL HRD参数:0
+		存在图像结构信息:0
+		存在比特流限制:1
+		允许运动矢量跨越图像边界:1
+		每帧最大字节数的分母:0
+		每个宏块最大比特数的分母:0
+		水平运动矢量的最大长度的对数值:11,垂直运动矢量的最大长度的对数值:11
+		最大重排序帧数:2
+		最大解码帧缓冲区大小:4
+	 }
+	prediction width:720, prediction height:624
+ }
+
+Reading a NAL[2]{0 0 0 1}, Buffer len[10]   --->   EBSP[2]{104 235 227 203}, Buffer len[6]  --->   RBSP[2]{235 227 203 34}, Buffer len[5]
+PPS -> {
+	PPS ID:0,SPS ID:0
+	熵编码模式:CABAC(上下文自适应二进制算术编码)
+	存在场序信息:0
+	存在加权预测:0
+	加权双向预测类型:2
+	图像的初始量化参数:23
+	图像的初始 QP 步长:26
+	色度量化参数索引偏移:-2
+	存在去块滤波器控制信息:1
+	存在约束的帧内预测:0
+	存在冗余图像计数:0
+	存在 8x8 变换模式:1
+	存在图像缩放矩阵:0
+ }
+
+Reading a NAL[3]{0 0 1 6}, Buffer len[690]   --->   EBSP[3]{6 5 255 255}, Buffer len[687]  --->   RBSP[3]{5 255 255 171}, Buffer len[686]
+SEI -> {
+	x264 - core 164 r3108 31e19f9 - H.264/MPEG-4 AVC codec - Copyleft 2003-2023 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=12 lookahead_threads=2 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=25 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+ }
+
+Reading a NAL[4]{0 0 1 101}, Buffer len[13751]   --->   EBSP[4]{101 136 132 0}, Buffer len[13748]  --->   RBSP[4]{136 132 0 223}, Buffer len[13741]
+IDR Slice -> {
+	I Slice
+	Slice中第一个宏块的索引:0
+	PPS ID:0
+	当前帧的编号:0
+	IDR图像ID:0
+	图像顺序计数LSB:0
+	禁用去块效应滤波器标志:0
+	去块效应滤波器的Alpha偏移值:0,去块效应滤波器的Beta偏移值:0
+	Slice的量化参数:26
+	宏块自适应帧场标志:0
+	图像高度（宏块数）:39,图像高度（亮度样本）:624,图像高度（色度样本）:312
+	图像大小（宏块数）:1755
+	最大图像编号:16,当前图像编号:0
+	Slice组0中的映射单元数:0
+	Slice的量化参数（色度）:26
+	去块效应滤波器的A偏移值:0,去块效应滤波器的B偏移值:0
+	映射单元到Slice组的映射表(size):1755
+	宏块到Slice组的映射表:1755
+ }
+
+Reading a NAL[5]{0 0 0 1}, Buffer len[412]   --->   EBSP[5]{65 154 36 108}, Buffer len[408]  --->   RBSP[5]{154 36 108 68}, Buffer len[407]
+Original Slice -> {
+	P Slice
+	Slice中第一个宏块的索引:0
+	PPS ID:0
+	当前帧的编号:1
+	图像顺序计数LSB:8
+	覆盖活动参考帧数标志:1
+	亮度权重的对数基数:0,色度权重的对数基数:0
+	CABAC初始化索引:0
+	禁用去块效应滤波器标志:0
+	去块效应滤波器的Alpha偏移值:0,去块效应滤波器的Beta偏移值:0
+	Slice的量化参数:27
+	宏块自适应帧场标志:0
+	图像高度（宏块数）:39,图像高度（亮度样本）:624,图像高度（色度样本）:312
+	图像大小（宏块数）:1755
+	最大图像编号:16,当前图像编号:1
+	Slice组0中的映射单元数:0
+	Slice的量化参数（色度）:26
+	去块效应滤波器的A偏移值:0,去块效应滤波器的B偏移值:0
+	映射单元到Slice组的映射表(size):1755
+	宏块到Slice组的映射表:1755
+	m_PicNumCnt=1(P); PicOrderCnt=8; m_RefPicList0[0]: I; PicOrderCnt=0; PicNum=0; PicNumCnt=0;
+ }
+
+Reading a NAL[6]{0 0 0 1}, Buffer len[288]   --->   EBSP[6]{65 158 66 120}, Buffer len[284]  --->   RBSP[6]{158 66 120 132}, Buffer len[283]
+Original Slice -> {
+	B Slice
+	Slice中第一个宏块的索引:0
+	PPS ID:0
+	当前帧的编号:2
+	图像顺序计数LSB:4
+	直接空间运动矢量预测标志:1
+	覆盖活动参考帧数标志:1
+	参考帧列表0的活动参考帧数减1:0,参考帧列表1的活动参考帧数减1:0
+	CABAC初始化索引:0
+	禁用去块效应滤波器标志:0
+	去块效应滤波器的Alpha偏移值:0,去块效应滤波器的Beta偏移值:0
+	Slice的量化参数:31
+	宏块自适应帧场标志:0
+	图像高度（宏块数）:39,图像高度（亮度样本）:624,图像高度（色度样本）:312
+	图像大小（宏块数）:1755
+	最大图像编号:16,当前图像编号:2
+	Slice组0中的映射单元数:0
+	Slice的量化参数（色度）:26
+	去块效应滤波器的A偏移值:0,去块效应滤波器的B偏移值:0
+	映射单元到Slice组的映射表(size):1755
+	宏块到Slice组的映射表:1755
+	m_PicNumCnt=2(B); PicOrderCnt=4; m_RefPicList0[0]: I; PicOrderCnt=0; PicNum=0; PicNumCnt=0;
+	m_PicNumCnt=2; PicOrderCnt=4; m_RefPicList1[0]: P; PicOrderCnt=8; PicNum=1; PicNumCnt=1;
+ }
+
+Reading a NAL[7]{0 0 0 1}, Buffer len[88]   --->   EBSP[7]{1 158 97 116}, Buffer len[84]  --->   RBSP[7]{158 97 116 66}, Buffer len[81]
+Original Slice -> {
+	B Slice
+	Slice中第一个宏块的索引:0
+	PPS ID:0
+	当前帧的编号:3
+	图像顺序计数LSB:2
+	直接空间运动矢量预测标志:1
+	覆盖活动参考帧数标志:1
+	参考帧列表0的活动参考帧数减1:0,参考帧列表1的活动参考帧数减1:1
+	CABAC初始化索引:0
+	禁用去块效应滤波器标志:0
+	去块效应滤波器的Alpha偏移值:0,去块效应滤波器的Beta偏移值:0
+	Slice的量化参数:33
+	宏块自适应帧场标志:0
+	图像高度（宏块数）:39,图像高度（亮度样本）:624,图像高度（色度样本）:312
+	图像大小（宏块数）:1755
+	最大图像编号:16,当前图像编号:3
+	Slice组0中的映射单元数:0
+	Slice的量化参数（色度）:26
+	去块效应滤波器的A偏移值:0,去块效应滤波器的B偏移值:0
+	映射单元到Slice组的映射表(size):1755
+	宏块到Slice组的映射表:1755
+	m_PicNumCnt=3(B); PicOrderCnt=2; m_RefPicList0[0]: I; PicOrderCnt=0; PicNum=0; PicNumCnt=0;
+	m_PicNumCnt=3; PicOrderCnt=2; m_RefPicList1[0]: B; PicOrderCnt=4; PicNum=2; PicNumCnt=2;
+	m_PicNumCnt=3; PicOrderCnt=2; m_RefPicList1[1]: P; PicOrderCnt=8; PicNum=1; PicNumCnt=1;
+ }
+
+Reading a NAL[8]{0 0 0 1}, Buffer len[171]   --->   EBSP[8]{1 158 99 106}, Buffer len[167]  --->   RBSP[8]{158 99 106 66}, Buffer len[166]
+Original Slice -> {
+	B Slice
+	Slice中第一个宏块的索引:0
+	PPS ID:0
+	当前帧的编号:3
+	图像顺序计数LSB:6
+	直接空间运动矢量预测标志:1
+	覆盖活动参考帧数标志:1
+	参考帧列表0的活动参考帧数减1:1,参考帧列表1的活动参考帧数减1:0
+	CABAC初始化索引:0
+	禁用去块效应滤波器标志:0
+	去块效应滤波器的Alpha偏移值:0,去块效应滤波器的Beta偏移值:0
+	Slice的量化参数:33
+	宏块自适应帧场标志:0
+	图像高度（宏块数）:39,图像高度（亮度样本）:624,图像高度（色度样本）:312
+	图像大小（宏块数）:1755
+	最大图像编号:16,当前图像编号:3
+	Slice组0中的映射单元数:0
+	Slice的量化参数（色度）:26
+	去块效应滤波器的A偏移值:0,去块效应滤波器的B偏移值:0
+	映射单元到Slice组的映射表(size):1755
+	宏块到Slice组的映射表:1755
+	m_PicNumCnt=4(B); PicOrderCnt=6; m_RefPicList0[0]: B; PicOrderCnt=4; PicNum=2; PicNumCnt=2;
+	m_PicNumCnt=4(B); PicOrderCnt=6; m_RefPicList0[1]: I; PicOrderCnt=0; PicNum=0; PicNumCnt=0;
+	m_PicNumCnt=4; PicOrderCnt=6; m_RefPicList1[0]: P; PicOrderCnt=8; PicNum=1; PicNumCnt=1;
+ }
+
+Reading a NAL[9]{0 0 0 1}, Buffer len[495]   --->   EBSP[9]{65 154 102 73}, Buffer len[491]  --->   RBSP[9]{154 102 73 168}, Buffer len[490]
+Original Slice -> {
+	P Slice
+	Slice中第一个宏块的索引:0
+	PPS ID:0
+	当前帧的编号:3
+	图像顺序计数LSB:12
+	覆盖活动参考帧数标志:1
+	亮度权重的对数基数:0,色度权重的对数基数:0
+	CABAC初始化索引:0
+	禁用去块效应滤波器标志:0
+	去块效应滤波器的Alpha偏移值:0,去块效应滤波器的Beta偏移值:0
+	Slice的量化参数:28
+	宏块自适应帧场标志:0
+	图像高度（宏块数）:39,图像高度（亮度样本）:624,图像高度（色度样本）:312
+	图像大小（宏块数）:1755
+	最大图像编号:16,当前图像编号:3
+	Slice组0中的映射单元数:0
+	Slice的量化参数（色度）:26
+	去块效应滤波器的A偏移值:0,去块效应滤波器的B偏移值:0
+	映射单元到Slice组的映射表(size):1755
+	宏块到Slice组的映射表:1755
+	m_PicNumCnt=5(P); PicOrderCnt=12; m_RefPicList0[0]: P; PicOrderCnt=8; PicNum=1; PicNumCnt=1;
+	m_PicNumCnt=5(P); PicOrderCnt=12; m_RefPicList0[1]: P; PicOrderCnt=8; PicNum=1; PicNumCnt=1;
+	m_PicNumCnt=5(P); PicOrderCnt=12; m_RefPicList0[2]: B; PicOrderCnt=4; PicNum=2; PicNumCnt=2;
+	m_PicNumCnt=5(P); PicOrderCnt=12; m_RefPicList0[3]: I; PicOrderCnt=0; PicNum=0; PicNumCnt=0;
+ }
+
+Reading a NAL[10]{0 0 0 1}, Buffer len[216]   --->   EBSP[10]{1 158 133 106}, Buffer len[212]  --->   RBSP[10]{158 133 106 66}, Buffer len[209]
+Original Slice -> {
+	B Slice
+	Slice中第一个宏块的索引:0
+	PPS ID:0
+	当前帧的编号:4
+	图像顺序计数LSB:10
+	直接空间运动矢量预测标志:1
+	覆盖活动参考帧数标志:1
+	参考帧列表0的活动参考帧数减1:1,参考帧列表1的活动参考帧数减1:0
+	CABAC初始化索引:0
+	禁用去块效应滤波器标志:0
+	去块效应滤波器的Alpha偏移值:0,去块效应滤波器的Beta偏移值:0
+	Slice的量化参数:33
+	宏块自适应帧场标志:0
+	图像高度（宏块数）:39,图像高度（亮度样本）:624,图像高度（色度样本）:312
+	图像大小（宏块数）:1755
+	最大图像编号:16,当前图像编号:4
+	Slice组0中的映射单元数:0
+	Slice的量化参数（色度）:26
+	去块效应滤波器的A偏移值:0,去块效应滤波器的B偏移值:0
+	映射单元到Slice组的映射表(size):1755
+	宏块到Slice组的映射表:1755
+	m_PicNumCnt=6(B); PicOrderCnt=10; m_RefPicList0[0]: P; PicOrderCnt=8; PicNum=1; PicNumCnt=1;
+	m_PicNumCnt=6(B); PicOrderCnt=10; m_RefPicList0[1]: B; PicOrderCnt=4; PicNum=2; PicNumCnt=2;
+	m_PicNumCnt=6; PicOrderCnt=10; m_RefPicList1[0]: P; PicOrderCnt=12; PicNum=3; PicNumCnt=5;
+ }
+
+Reading a NAL[11]{0 0 0 1}, Buffer len[287]   --->   EBSP[11]{65 154 136 73}, Buffer len[283]  --->   RBSP[11]{154 136 73 225}, Buffer len[279]
+Original Slice -> {
+	P Slice
+	Slice中第一个宏块的索引:0
+	PPS ID:0
+	当前帧的编号:4
+	图像顺序计数LSB:16
+	覆盖活动参考帧数标志:1
+	亮度权重的对数基数:0,色度权重的对数基数:0
+	CABAC初始化索引:0
+	禁用去块效应滤波器标志:0
+	去块效应滤波器的Alpha偏移值:0,去块效应滤波器的Beta偏移值:0
+	Slice的量化参数:30
+	宏块自适应帧场标志:0
+	图像高度（宏块数）:39,图像高度（亮度样本）:624,图像高度（色度样本）:312
+	图像大小（宏块数）:1755
+	最大图像编号:16,当前图像编号:4
+	Slice组0中的映射单元数:0
+	Slice的量化参数（色度）:26
+	去块效应滤波器的A偏移值:0,去块效应滤波器的B偏移值:0
+	映射单元到Slice组的映射表(size):1755
+	宏块到Slice组的映射表:1755
+	m_PicNumCnt=7(P); PicOrderCnt=16; m_RefPicList0[0]: P; PicOrderCnt=12; PicNum=3; PicNumCnt=5;
+	m_PicNumCnt=7(P); PicOrderCnt=16; m_RefPicList0[1]: P; PicOrderCnt=12; PicNum=3; PicNumCnt=5;
+	m_PicNumCnt=7(P); PicOrderCnt=16; m_RefPicList0[2]: P; PicOrderCnt=8; PicNum=1; PicNumCnt=1;
+	m_PicNumCnt=7(P); PicOrderCnt=16; m_RefPicList0[3]: B; PicOrderCnt=4; PicNum=2; PicNumCnt=2;
+ }
+
+Reading a NAL[12]{0 0 0 1}, Buffer len[264]   --->   EBSP[12]{1 158 167 106}, Buffer len[260]  --->   RBSP[12]{158 167 106 66}, Buffer len[256]
+Original Slice -> {
+	B Slice
+	Slice中第一个宏块的索引:0
+	PPS ID:0
+	当前帧的编号:5
+	图像顺序计数LSB:14
+	直接空间运动矢量预测标志:1
+	覆盖活动参考帧数标志:1
+	参考帧列表0的活动参考帧数减1:1,参考帧列表1的活动参考帧数减1:0
+	CABAC初始化索引:0
+	禁用去块效应滤波器标志:0
+	去块效应滤波器的Alpha偏移值:0,去块效应滤波器的Beta偏移值:0
+	Slice的量化参数:33
+	宏块自适应帧场标志:0
+	图像高度（宏块数）:39,图像高度（亮度样本）:624,图像高度（色度样本）:312
+	图像大小（宏块数）:1755
+	最大图像编号:16,当前图像编号:5
+	Slice组0中的映射单元数:0
+	Slice的量化参数（色度）:26
+	去块效应滤波器的A偏移值:0,去块效应滤波器的B偏移值:0
+	映射单元到Slice组的映射表(size):1755
+	宏块到Slice组的映射表:1755
+	m_PicNumCnt=8(B); PicOrderCnt=14; m_RefPicList0[0]: P; PicOrderCnt=12; PicNum=3; PicNumCnt=5;
+	m_PicNumCnt=8(B); PicOrderCnt=14; m_RefPicList0[1]: P; PicOrderCnt=8; PicNum=1; PicNumCnt=1;
+	m_PicNumCnt=8; PicOrderCnt=14; m_RefPicList1[0]: P; PicOrderCnt=16; PicNum=4; PicNumCnt=7;
+ }
+
+Reading a NAL[13]{0 0 0 1}, Buffer len[438]   --->   EBSP[13]{65 154 170 73}, Buffer len[434]  --->   RBSP[13]{154 170 73 225}, Buffer len[433]
+Original Slice -> {
+	P Slice
+	Slice中第一个宏块的索引:0
+	PPS ID:0
+	当前帧的编号:5
+	图像顺序计数LSB:20
+	覆盖活动参考帧数标志:1
+	亮度权重的对数基数:0,色度权重的对数基数:0
+	CABAC初始化索引:0
+	禁用去块效应滤波器标志:0
+	去块效应滤波器的Alpha偏移值:0,去块效应滤波器的Beta偏移值:0
+	Slice的量化参数:33
+	宏块自适应帧场标志:0
+	图像高度（宏块数）:39,图像高度（亮度样本）:624,图像高度（色度样本）:312
+	图像大小（宏块数）:1755
+	最大图像编号:16,当前图像编号:5
+	Slice组0中的映射单元数:0
+	Slice的量化参数（色度）:26
+	去块效应滤波器的A偏移值:0,去块效应滤波器的B偏移值:0
+	映射单元到Slice组的映射表(size):1755
+	宏块到Slice组的映射表:1755
+	m_PicNumCnt=9(P); PicOrderCnt=20; m_RefPicList0[0]: P; PicOrderCnt=16; PicNum=4; PicNumCnt=7;
+	m_PicNumCnt=9(P); PicOrderCnt=20; m_RefPicList0[1]: P; PicOrderCnt=16; PicNum=4; PicNumCnt=7;
+	m_PicNumCnt=9(P); PicOrderCnt=20; m_RefPicList0[2]: P; PicOrderCnt=12; PicNum=3; PicNumCnt=5;
+	m_PicNumCnt=9(P); PicOrderCnt=20; m_RefPicList0[3]: B; PicOrderCnt=4; PicNum=2; PicNumCnt=2;
+ }
+
+Reading a NAL[14]{0 0 0 1}, Buffer len[188]   --->   EBSP[14]{1 158 201 106}, Buffer len[184]  --->   RBSP[14]{158 201 106 66}, Buffer len[182]
+Original Slice -> {
+	B Slice
+	Slice中第一个宏块的索引:0
+	PPS ID:0
+	当前帧的编号:6
+	图像顺序计数LSB:18
+	直接空间运动矢量预测标志:1
+	覆盖活动参考帧数标志:1
+	参考帧列表0的活动参考帧数减1:1,参考帧列表1的活动参考帧数减1:0
+	CABAC初始化索引:0
+	禁用去块效应滤波器标志:0
+	去块效应滤波器的Alpha偏移值:0,去块效应滤波器的Beta偏移值:0
+	Slice的量化参数:33
+	宏块自适应帧场标志:0
+	图像高度（宏块数）:39,图像高度（亮度样本）:624,图像高度（色度样本）:312
+	图像大小（宏块数）:1755
+	最大图像编号:16,当前图像编号:6
+	Slice组0中的映射单元数:0
+	Slice的量化参数（色度）:26
+	去块效应滤波器的A偏移值:0,去块效应滤波器的B偏移值:0
+	映射单元到Slice组的映射表(size):1755
+	宏块到Slice组的映射表:1755
+	m_PicNumCnt=10(B); PicOrderCnt=18; m_RefPicList0[0]: P; PicOrderCnt=16; PicNum=4; PicNumCnt=7;
+	m_PicNumCnt=10(B); PicOrderCnt=18; m_RefPicList0[1]: P; PicOrderCnt=12; PicNum=3; PicNumCnt=5;
+	m_PicNumCnt=10; PicOrderCnt=18; m_RefPicList1[0]: P; PicOrderCnt=20; PicNum=5; PicNumCnt=9;
+ }

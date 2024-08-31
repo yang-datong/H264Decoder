@@ -3249,40 +3249,6 @@ int PictureBase::
   return 0;
 }
 
-// 8.2.1 Decoding process for picture order count
-int PictureBase::PicOrderCntFunc(
-    PictureBase *picX) // POC: picture order count 图像序列号
-{
-  if (picX->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME ||
-      picX->m_picture_coded_type ==
-          H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) // picX is a frame
-                                                            // or a
-                                                            // complementary
-                                                            // field pair
-  // //当前图像为帧
-  {
-    picX->PicOrderCnt =
-        MIN(picX->TopFieldOrderCnt,
-            picX->BottomFieldOrderCnt); // of the frame or complementary field
-                                        // pair picX
-  } else if (picX->m_picture_coded_type ==
-             H264_PICTURE_CODED_TYPE_TOP_FIELD) // 当前图像为顶场 (picX is a top
-                                                // field)
-  {
-    picX->PicOrderCnt = picX->TopFieldOrderCnt; // of field picX
-  } else if (picX->m_picture_coded_type ==
-             H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) // 当前图像为底场 if (picX is
-                                                   // a bottom field)
-  {
-    picX->PicOrderCnt = picX->BottomFieldOrderCnt; // of field picX
-  } else {
-    RETURN_IF_FAILED(-1, -1);
-  }
-
-  return picX->PicOrderCnt;
-}
-
 int PictureBase::DiffPicOrderCnt(PictureBase *picA, PictureBase *picB) {
-  int32_t DiffPicOrderCnt = PicOrderCntFunc(picA) - PicOrderCntFunc(picB);
-  return DiffPicOrderCnt;
+  return PicOrderCntFunc(picA) - PicOrderCntFunc(picB);
 }

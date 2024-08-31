@@ -434,6 +434,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream) {
     idr_pic_id = bitStream.readUE();
     std::cout << "\tIDR图像ID:" << idr_pic_id << std::endl;
   }
+
   if (m_sps.pic_order_cnt_type == 0) {
     pic_order_cnt_lsb =
         bitStream.readUn(m_sps.log2_max_pic_order_cnt_lsb_minus4 + 4);
@@ -447,12 +448,17 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream) {
 
   if (m_sps.pic_order_cnt_type == 1 &&
       !m_sps.delta_pic_order_always_zero_flag) {
+    std::cout << "\t存在B帧和P帧混合的情况:" << m_sps.pic_order_cnt_type
+              << std::endl;
     delta_pic_order_cnt[0] = bitStream.readSE();
     std::cout << "\t图像顺序计数增量1:" << delta_pic_order_cnt[0] << std::endl;
     if (m_pps.bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
       delta_pic_order_cnt[1] = bitStream.readSE();
     std::cout << "\t图像顺序计数增量2:" << delta_pic_order_cnt[1] << std::endl;
   }
+
+  if (m_sps.pic_order_cnt_type == 2)
+    std::cout << "\t是否存在B帧:0" << std::endl;
 
   if (m_pps.redundant_pic_cnt_present_flag) {
     redundant_pic_cnt = bitStream.readUE();

@@ -1,159 +1,167 @@
 ﻿#include "Frame.hpp"
 #include "PictureBase.hpp"
+#include "SliceHeader.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <vector>
 
 //--------------参考帧列表重排序------------------------
-// 8.2.1 Decoding process for picture order count (only needed to be invoked for one slice of a picture)
-int PictureBase::Decoding_process_for_picture_order_count() {
+
+// 8.2.1 Decoding process for picture order count
+/* 此过程的输出为 TopFieldOrderCnt（如果适用）和 BottomFieldOrderCnt（如果适用）*/
+int PictureBase::decoding_picture_order_count() {
+  /* 为每个帧、场（无论是从编码场解码还是作为解码帧的一部分）或互补场对导出图像顺序计数信息，如下所示： 
+   * – 每个编码帧与两个图像顺序计数相关联，称为 TopFieldOrderCnt 和BottomFieldOrderCnt 分别表示其顶部字段和底部字段。  
+   * – 每个编码字段都与图片顺序计数相关联，对于编码顶部字段称为 TopFieldOrderCnt，对于底部字段称为 BottomFieldOrderCnt。  
+   * – 每个互补字段对与两个图像顺序计数相关联，分别是其编码的顶部字段的 TopFieldOrderCnt 和其编码的底部字段的 BottomFieldOrderCnt。 */
+
+  /* 比特流不应包含导致解码过程中使用的 TopFieldOrderCnt、BottomFieldOrderCnt、PicOrderCntMsb 或 FrameNumOffset 值（如第 8.2.1.1 至 8.2.1.3 条规定）超出从 -231 到 231 - 1（含）的值范围的数据。 */
   int ret = 0;
+  if (m_slice.m_sps.pic_order_cnt_type == 0)
+    //8.2.1.1
+    ret = decoding_picture_order_count_type_0(m_parent->m_picture_previous_ref);
+  else if (m_slice.m_sps.pic_order_cnt_type == 1)
+    //8.2.1.2
+    ret = decoding_picture_order_count_type_1(m_parent->m_picture_previous);
+  else if (m_slice.m_sps.pic_order_cnt_type == 2)
+    //8.2.1.3
+    ret = decoding_picture_order_count_type_2(m_parent->m_picture_previous);
 
-  if (m_slice.m_sps.pic_order_cnt_type == 0) {
-    ret = Decoding_process_for_picture_order_count_type_0(
-        m_parent->m_picture_previous_ref);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else if (m_slice.m_sps.pic_order_cnt_type == 1) {
-    ret = Decoding_process_for_picture_order_count_type_1(
-        m_parent->m_picture_previous);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else if (m_slice.m_sps.pic_order_cnt_type == 2) {
-    ret = Decoding_process_for_picture_order_count_type_2(
-        m_parent->m_picture_previous);
-    RETURN_IF_FAILED(ret != 0, ret);
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return ret;
   }
+  /* 函数 PicOrderCnt( picX ) 指定如下： */
+  PicOrderCntFunc(this);
+  return 0;
+}
 
-  PicOrderCntFunc(this); // 设置this->PicOrderCnt字段值
+int PictureBase::PicOrderCntFunc(PictureBase *picX) {
+  if (picX->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME ||
+      picX->m_picture_coded_type ==
+          H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR)
+    //当前图像为帧、互补场对
+    picX->PicOrderCnt = MIN(picX->TopFieldOrderCnt, picX->BottomFieldOrderCnt);
+  else if (picX->m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
+    // 当前图像为顶场
+    picX->PicOrderCnt = picX->TopFieldOrderCnt;
+  else if (picX->m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
+    // 当前图像为底场
+    picX->PicOrderCnt = picX->BottomFieldOrderCnt;
 
-  return ret;
+  return picX->PicOrderCnt;
 }
 
 // 8.2.1.1 Decoding process for picture order count type 0
-// This process is invoked when pic_order_cnt_type is equal to 0.
-int PictureBase::Decoding_process_for_picture_order_count_type_0(
+/* 当 pic_order_cnt_type 等于 0 时调用此过程。*/
+/* 输入: 按照本节中指定的解码顺序的先前参考图片的PicOrderCntMsb。  
+ * 输出: TopFieldOrderCnt 或 BottomFieldOrderCnt 之一或两者。 */
+int PictureBase::decoding_picture_order_count_type_0(
     const PictureBase *picture_previous_ref) {
-  int32_t prevPicOrderCntMsb = 0;
-  int32_t prevPicOrderCntLsb = 0;
 
-  if (m_slice.slice_header.IdrPicFlag == 1) // IDR picture
-  {
-    prevPicOrderCntMsb = 0;
-    prevPicOrderCntLsb = 0;
-  } else // if (m_slice.slice_header.m_nal_unit.IdrPicFlag != 1)
-  {
-    RETURN_IF_FAILED(picture_previous_ref == NULL, -1);
+  const SliceHeader &header = m_slice.slice_header;
 
-    if (picture_previous_ref->memory_management_control_operation_5_flag ==
-        1) // If the previous reference picture in decoding order included a
-           // memory_management_control_operation equal to 5
-    {
+  int32_t prevPicOrderCntMsb, prevPicOrderCntLsb;
+  /* 变量 prevPicOrderCntMsb 和 prevPicOrderCntLsb 的推导如下： 
+   * – 如果当前图片是 IDR 图片，则 prevPicOrderCntMsb 设置为等于 0，并且 prevPicOrderCntLsb 设置为等于 0。 */
+  /* 否则（当前图片不是 IDR 图片），则适用以下规则： */
+  /* – 如果解码顺序中的前一个参考图片包含等于 5 的 memory_management_control_operation，则适用以下规则： */
+  /* – 如果解码顺序中的前一个参考图片不是底场， prevPicOrderCntMsb 被设置为等于 0，并且 prevPicOrderCntLsb 被设置为等于按照解码顺序的前一个参考图片的 TopFieldOrderCnt 的值。  */
+  /* – 否则（解码顺序中的前一个参考图像是底场），prevPicOrderCntMsb 设置为等于 0，并且 prevPicOrderCntLsb 设置为等于 0。 */
+  /* – 否则（解码顺序中的前一个参考图片不包括等于5的memory_management_control_operation），prevPicOrderCntMsb设置为等于解码顺序中的前一个参考图片的PicOrderCntMsb，并且设置prevPicOrderCntLsb等于解码顺序中前一个参考图片的 pic_order_cnt_lsb 的值。 */
+  if (header.IdrPicFlag == 1)
+    prevPicOrderCntMsb = prevPicOrderCntLsb = 0;
+  else if (picture_previous_ref) {
+    if (picture_previous_ref->memory_management_control_operation_5_flag) {
       if (picture_previous_ref->m_picture_coded_type !=
-          H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) // If the previous reference
-                                                // picture in decoding order is
-                                                // not a bottom field
-      {
+          H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) {
         prevPicOrderCntMsb = 0;
         prevPicOrderCntLsb = picture_previous_ref->TopFieldOrderCnt;
-      } else // if (picture_previous_ref.m_picture_coded_type ==
-             // H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) //the previous reference
-             // picture in decoding order is a bottom field
-      {
-        prevPicOrderCntMsb = 0;
-        prevPicOrderCntLsb = 0;
-      }
-    } else // the previous reference picture in decoding order did not include a
-           // memory_management_control_operation equal to 5
-    {
+      } else
+        prevPicOrderCntMsb = prevPicOrderCntLsb = 0;
+    } else {
       prevPicOrderCntMsb = picture_previous_ref->PicOrderCntMsb;
       prevPicOrderCntLsb =
           picture_previous_ref->m_slice.slice_header.pic_order_cnt_lsb;
     }
-  }
-
-  //--------------------------
-  if ((m_slice.slice_header.pic_order_cnt_lsb < prevPicOrderCntLsb) &&
-      ((prevPicOrderCntLsb - m_slice.slice_header.pic_order_cnt_lsb) >=
-       (m_slice.m_sps.MaxPicOrderCntLsb / 2))) {
-    PicOrderCntMsb = prevPicOrderCntMsb + m_slice.m_sps.MaxPicOrderCntLsb;
-  } else if ((m_slice.slice_header.pic_order_cnt_lsb > prevPicOrderCntLsb) &&
-             ((m_slice.slice_header.pic_order_cnt_lsb - prevPicOrderCntLsb) >
-              (m_slice.m_sps.MaxPicOrderCntLsb / 2))) {
-    PicOrderCntMsb = prevPicOrderCntMsb - m_slice.m_sps.MaxPicOrderCntLsb;
   } else {
+    /* 没有参考帧 */
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return -1;
+  }
+
+  /* 当前图片的 PicOrderCntMsb 是由以下伪代码指定的： */
+  if ((header.pic_order_cnt_lsb < prevPicOrderCntLsb) &&
+      ((prevPicOrderCntLsb - header.pic_order_cnt_lsb) >=
+       (m_slice.m_sps.MaxPicOrderCntLsb / 2)))
+    PicOrderCntMsb = prevPicOrderCntMsb + m_slice.m_sps.MaxPicOrderCntLsb;
+
+  else if ((header.pic_order_cnt_lsb > prevPicOrderCntLsb) &&
+           ((header.pic_order_cnt_lsb - prevPicOrderCntLsb) >
+            (m_slice.m_sps.MaxPicOrderCntLsb / 2)))
+    PicOrderCntMsb = prevPicOrderCntMsb - m_slice.m_sps.MaxPicOrderCntLsb;
+
+  else
     PicOrderCntMsb = prevPicOrderCntMsb;
-  }
 
-  //--------------------------
-  if (m_picture_coded_type !=
-      H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) // When the current picture is not a
-  // bottom field 当前图像为非底场
-  {
-    TopFieldOrderCnt = PicOrderCntMsb + m_slice.slice_header.pic_order_cnt_lsb;
-  }
+  /* 当前图片不是底场时，TopFieldOrderCnt 导出为 */
+  if (m_picture_coded_type != H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
+    TopFieldOrderCnt = PicOrderCntMsb + header.pic_order_cnt_lsb;
 
-  if (m_picture_coded_type !=
-      H264_PICTURE_CODED_TYPE_TOP_FIELD) // When the current picture is not a
-                                         // top field
-  {
-    if (!m_slice.slice_header.field_pic_flag) // 当前图像为帧
-    {
-      BottomFieldOrderCnt =
-          TopFieldOrderCnt + m_slice.slice_header.delta_pic_order_cnt_bottom;
-    } else // 当前图像为底场
-    {
-      BottomFieldOrderCnt =
-          PicOrderCntMsb + m_slice.slice_header.pic_order_cnt_lsb;
-    }
-  }
+  /* 当前图片不是顶场时，按以下伪代码指定BottomFieldOrderCnt导出为 */
+  //TODO 注释了
+  //if (m_picture_coded_type != H264_PICTURE_CODED_TYPE_TOP_FIELD) {
+  if (!m_slice.slice_header.field_pic_flag)
+    BottomFieldOrderCnt = TopFieldOrderCnt + header.delta_pic_order_cnt_bottom;
+  else
+    BottomFieldOrderCnt = PicOrderCntMsb + header.pic_order_cnt_lsb;
+  //}
 
   return 0;
 }
 
 // 8.2.1.2 Decoding process for picture order count type 1
-// This process is invoked when pic_order_cnt_type is equal to 1.
-int PictureBase::Decoding_process_for_picture_order_count_type_1(
+/* 当 pic_order_cnt_type 等于 1 时，调用此过程 */
+/* 输入: 按照本节中指定的解码顺序的前一个图片的 FrameNumOffset。  
+ * 输出: TopFieldOrderCnt 或 BottomFieldOrderCnt 之一或两者。 
+ * TopFieldOrderCnt 和 BottomFieldOrderCnt 的值是按照本节中指定的方式导出的。令 prevFrameNum 等于解码顺序中前一个图片的frame_num。  */
+int PictureBase::decoding_picture_order_count_type_1(
     const PictureBase *picture_previous) {
-  RETURN_IF_FAILED(
-      m_slice.slice_header.IdrPicFlag != 1 && picture_previous == NULL, -1);
+
+  /* 当当前图片不是 IDR 图片时，变量 prevFrameNumOffset 的推导如下： 
+   * – 如果解码顺序中的前一个图片包含等于 5 的memory_management_control_operation_5_flag，则 prevFrameNumOffset 设置为等于 0。 
+   * – 否则（解码顺序中的前一个图片没有不包括等于5的memory_management_control_operation)，prevFrameNumOffset被设置为等于解码顺序中的前一个图片的FrameNumOffset的值。 */
+  SliceHeader &header = m_slice.slice_header;
 
   int32_t prevFrameNumOffset = 0;
-
-  //--------------prevFrameNumOffset----------------
-  if (m_slice.slice_header.IdrPicFlag != 1) // not IDR picture
-  {
-    if (picture_previous->memory_management_control_operation_5_flag ==
-        1) // If the previous picture in decoding order included a
-           // memory_management_control_operation equal to 5
-    {
+  /* 当前帧不是 IDR */
+  if (!header.IdrPicFlag) {
+    if (picture_previous->memory_management_control_operation_5_flag)
       prevFrameNumOffset = 0;
-    } else {
+    else
       prevFrameNumOffset = picture_previous->FrameNumOffset;
-    }
   }
 
-  //--------------FrameNumOffset----------------
-  if (m_slice.slice_header.IdrPicFlag == 1) // IDR图像
-  {
+  /* 当前帧是IDR */
+  if (header.IdrPicFlag)
     FrameNumOffset = 0;
-  } else if (picture_previous->m_slice.slice_header.frame_num >
-             m_slice.slice_header.frame_num) // 前一图像的帧号比当前图像大
-  {
+  else if (picture_previous->m_slice.slice_header.frame_num > header.frame_num)
+    // 前一图像的帧号比当前图像大
     FrameNumOffset = prevFrameNumOffset + m_slice.m_sps.MaxFrameNum;
-  } else {
+  else
     FrameNumOffset = prevFrameNumOffset;
-  }
 
-  //--------------absFrameNum----------------
-  if (m_slice.m_sps.num_ref_frames_in_pic_order_cnt_cycle != 0) {
-    absFrameNum = FrameNumOffset + m_slice.slice_header.frame_num;
-  } else {
+  /* 变量 absFrameNum 是由以下伪代码指定导出的： */
+  if (m_slice.m_sps.num_ref_frames_in_pic_order_cnt_cycle != 0)
+    absFrameNum = FrameNumOffset + header.frame_num;
+  else
     absFrameNum = 0;
-  }
 
-  if (m_slice.slice_header.nal_ref_idc == 0 && absFrameNum > 0) {
-    absFrameNum = absFrameNum - 1;
-  }
+  if (header.nal_ref_idc == 0 && absFrameNum > 0) absFrameNum--;
 
+  /* 当absFrameNum > 0时，picOrderCntCycleCnt和frameNumInPicOrderCntCycle导出为 */
   if (absFrameNum > 0) {
     picOrderCntCycleCnt =
         (absFrameNum - 1) / m_slice.m_sps.num_ref_frames_in_pic_order_cnt_cycle;
@@ -161,101 +169,84 @@ int PictureBase::Decoding_process_for_picture_order_count_type_1(
         (absFrameNum - 1) % m_slice.m_sps.num_ref_frames_in_pic_order_cnt_cycle;
   }
 
-  //--------------expectedPicOrderCnt----------------
+  /* 变量预期PicOrderCnt是由以下伪代码指定导出的： */
   if (absFrameNum > 0) {
     expectedPicOrderCnt =
         picOrderCntCycleCnt * m_slice.m_sps.ExpectedDeltaPerPicOrderCntCycle;
-    for (int i = 0; i <= frameNumInPicOrderCntCycle; i++) {
-      expectedPicOrderCnt =
-          expectedPicOrderCnt + m_slice.m_sps.offset_for_ref_frame[i];
-    }
-  } else {
+    for (int i = 0; i <= frameNumInPicOrderCntCycle; i++)
+      expectedPicOrderCnt += m_slice.m_sps.offset_for_ref_frame[i];
+  } else
     expectedPicOrderCnt = 0;
-  }
 
-  if (m_slice.slice_header.nal_ref_idc == 0) {
-    expectedPicOrderCnt =
-        expectedPicOrderCnt + m_slice.m_sps.offset_for_non_ref_pic;
-  }
+  if (header.nal_ref_idc == 0)
+    expectedPicOrderCnt += m_slice.m_sps.offset_for_non_ref_pic;
 
-  //--------------TopFieldOrderCnt or BottomFieldOrderCnt----------------
-  if (!m_slice.slice_header.field_pic_flag) // 当前图像为帧
-  {
-    TopFieldOrderCnt =
-        expectedPicOrderCnt + m_slice.slice_header.delta_pic_order_cnt[0];
+  /* 变量 TopFieldOrderCnt 或 BottomFieldOrderCnt 是按以下伪代码指定导出的： */
+  if (!header.field_pic_flag) {
+    // 当前图像为帧
+    TopFieldOrderCnt = expectedPicOrderCnt + header.delta_pic_order_cnt[0];
     BottomFieldOrderCnt = TopFieldOrderCnt +
                           m_slice.m_sps.offset_for_top_to_bottom_field +
-                          m_slice.slice_header.delta_pic_order_cnt[1];
-  } else if (!m_slice.slice_header.bottom_field_flag) // 当前图像为顶场
-  {
-    TopFieldOrderCnt =
-        expectedPicOrderCnt + m_slice.slice_header.delta_pic_order_cnt[0];
-  } else // 当前图像为底场
-  {
+                          header.delta_pic_order_cnt[1];
+  } else if (!header.bottom_field_flag)
+    // 当前图像为顶场
+    TopFieldOrderCnt = expectedPicOrderCnt + header.delta_pic_order_cnt[0];
+  else // 当前图像为底场
     BottomFieldOrderCnt = expectedPicOrderCnt +
                           m_slice.m_sps.offset_for_top_to_bottom_field +
-                          m_slice.slice_header.delta_pic_order_cnt[0];
-  }
+                          header.delta_pic_order_cnt[0];
 
   return 0;
 }
 
 // 8.2.1.3 Decoding process for picture order count type 2
-// This process is invoked when pic_order_cnt_type is equal to 2.
-int PictureBase::Decoding_process_for_picture_order_count_type_2(
+/* 当 pic_order_cnt_type 等于 2 时，调用此过程。
+ * 输出: TopFieldOrderCnt 或 BottomFieldOrderCnt 之一或两者。  
+ * 令 prevFrameNum 等于解码顺序中前一个图片的frame_num */
+int PictureBase::decoding_picture_order_count_type_2(
     const PictureBase *picture_previous) {
-  RETURN_IF_FAILED(
-      m_slice.slice_header.IdrPicFlag != 1 && picture_previous == NULL, -1);
 
+  /* 当前图片不是 IDR 图片时，变量 prevFrameNumOffset 的推导如下： 
+   * – 如果解码顺序中的前一个图片包含等于 5 的内存_管理_控制_操作，则 prevFrameNumOffset 设置为等于 0。 
+   * – 否则（解码顺序中的前一个图片没有不包括等于5的memory_management_control_operation)，prevFrameNumOffset被设置为等于解码顺序中的前一个图片的FrameNumOffset的值。 */
   int32_t prevFrameNumOffset = 0;
-
-  //--------------prevFrameNumOffset----------------
-  if (m_slice.slice_header.IdrPicFlag != 1) // not IDR picture
-  {
-    if (picture_previous->memory_management_control_operation_5_flag ==
-        1) // If the previous picture in decoding order included a
-           // memory_management_control_operation equal to 5
-    {
+  if (m_slice.slice_header.IdrPicFlag == 0) {
+    if (picture_previous->memory_management_control_operation_5_flag)
       prevFrameNumOffset = 0;
-    } else {
+    else
       prevFrameNumOffset = picture_previous->FrameNumOffset;
-    }
   }
 
-  //--------------FrameNumOffset----------------
-  if (m_slice.slice_header.IdrPicFlag == 1) {
+  /* 当gaps_in_frame_num_value_allowed_flag等于1时，解码顺序中的前一个图片可能是由第8.2.5.2节中指定的frame_num中的间隙的解码过程推断的“不存在”帧。 */
+
+  /* 变量 FrameNumOffset 是由以下伪代码指定导出的： */
+  if (m_slice.slice_header.IdrPicFlag == 1)
     FrameNumOffset = 0;
-  } else if (picture_previous->m_slice.slice_header.frame_num >
-             m_slice.slice_header.frame_num) {
+  else if (picture_previous->m_slice.slice_header.frame_num >
+           m_slice.slice_header.frame_num)
     FrameNumOffset = prevFrameNumOffset + m_slice.m_sps.MaxFrameNum;
-  } else {
+  else
     FrameNumOffset = prevFrameNumOffset;
-  }
 
-  //--------------tempPicOrderCnt----------------
+  /* 变量 tempPicOrderCnt 是按以下伪代码指定导出的：*/
   int32_t tempPicOrderCnt = 0;
-
-  if (m_slice.slice_header.IdrPicFlag == 1) {
+  if (m_slice.slice_header.IdrPicFlag == 1)
     tempPicOrderCnt = 0;
-  } else if (m_slice.slice_header.nal_ref_idc == 0) // 当前图像为非参考图像
-  {
+  else if (m_slice.slice_header.nal_ref_idc == 0) // 当前图像为非参考图像
     tempPicOrderCnt = 2 * (FrameNumOffset + m_slice.slice_header.frame_num) - 1;
-  } else {
+  else
     tempPicOrderCnt = 2 * (FrameNumOffset + m_slice.slice_header.frame_num);
-  }
 
-  //--------------TopFieldOrderCnt or BottomFieldOrderCnt----------------
-  if (!m_slice.slice_header.field_pic_flag) // 当前图像为帧
-  {
-    TopFieldOrderCnt = tempPicOrderCnt;
+  /* 变量 TopFieldOrderCnt 或 BottomFieldOrderCnt 是按以下伪代码指定导出的：*/
+  if (!m_slice.slice_header.field_pic_flag)
+    // 当前图像为帧
+    TopFieldOrderCnt = BottomFieldOrderCnt = tempPicOrderCnt;
+  else if (m_slice.slice_header.bottom_field_flag)
+    // 当前图像为底场
     BottomFieldOrderCnt = tempPicOrderCnt;
-  } else if (m_slice.slice_header.bottom_field_flag) // 当前图像为底场
-  {
-    BottomFieldOrderCnt = tempPicOrderCnt;
-  } else // 当前图像为顶场
-  {
+  else
+    // 当前图像为顶场
     TopFieldOrderCnt = tempPicOrderCnt;
-  }
 
   return 0;
 }

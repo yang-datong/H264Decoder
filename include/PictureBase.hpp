@@ -46,7 +46,8 @@ class PictureBase {
   int32_t picOrderCntCycleCnt;
   int32_t frameNumInPicOrderCntCycle;
   int32_t expectedPicOrderCnt;
-  int32_t PicOrderCnt;
+  int32_t
+      PicOrderCnt; //(Picture Order Count）用于表示图像顺序的计数器，用于确定图像的显示顺序
   int32_t FrameNum;     // To each short-term reference picture 短期参考帧
   int32_t FrameNumWrap; // To each short-term reference picture 短期参考帧
   int32_t LongTermFrameIdx; // Each long-term reference picture 长期参考帧
@@ -110,12 +111,12 @@ class PictureBase {
       Frame *&newEmptyPicture);
 
   //--------------参考帧列表重排序------------------------
-  int Decoding_process_for_picture_order_count();
-  int Decoding_process_for_picture_order_count_type_0(
+  int decoding_picture_order_count();
+  int decoding_picture_order_count_type_0(
       const PictureBase *picture_previous_ref); // 8.2.1.1
-  int Decoding_process_for_picture_order_count_type_1(
+  int decoding_picture_order_count_type_1(
       const PictureBase *picture_previous); // 8.2.1.2
-  int Decoding_process_for_picture_order_count_type_2(
+  int decoding_picture_order_count_type_2(
       const PictureBase *picture_previous); // 8.2.1.3
 
   int decoding_reference_picture_lists_construction(

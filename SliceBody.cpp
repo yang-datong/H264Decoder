@@ -42,74 +42,32 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
   header.picNumL0Pred = header.CurrPicNum;
   header.picNumL1Pred = header.CurrPicNum;
 
+  /* 设为0是防止在场编码时可能存在多个slice data，那么就只需要对首个slice data进行定位，防止对附属的slice data进行再次解码工作 */
   if (picture.m_slice_cnt == 0) {
-    picture.Decoding_process_for_picture_order_count(); // 解码POC
+    /* 解码参考帧重排序(POC) */
+    picture.decoding_picture_order_count();
     if (m_sps.frame_mbs_only_flag == 0) {
       /* 场编码 */
-      std::cout << "hi~" << __LINE__ << std::endl;
+      std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m" << std::endl;
       exit(0);
     }
-
-    // 只有当前帧为P帧，B帧时，才会对参考图像数列表组进行重排序
     if (header.slice_type == SLICE_P || header.slice_type == SLICE_SP ||
         header.slice_type == SLICE_B) {
-      /* 在每个 P、SP 或 B 切片的解码过程开始时调用重排序 */
+      /* 当前帧需要参考帧预测，则需要进行参考帧重排序 */
       picture.decoding_reference_picture_lists_construction(
           picture.m_dpb, picture.m_RefPicList0, picture.m_RefPicList1);
-
-      string sliceType = "UNKNOWN";
-      int PicOrderCnt = -1, PicNum = -1, PicNumCnt = -1;
-
-      for (int i = 0; i < picture.m_RefPicList0Length; ++i) {
-        if (picture.m_RefPicList0[i]) {
-          sliceType = H264_SLIECE_TYPE_TO_STR(
-              picture.m_RefPicList0[i]
-                  ->m_picture_frame.m_slice.slice_header.slice_type);
-          PicOrderCnt = picture.m_RefPicList0[i]->m_picture_frame.PicOrderCnt;
-          PicNum = picture.m_RefPicList0[i]->m_picture_frame.PicNum;
-          PicNumCnt = picture.m_RefPicList0[i]->m_picture_frame.m_PicNumCnt;
-
-          printf("\tm_PicNumCnt=%d(%s); PicOrderCnt=%d; "
-                 "m_RefPicList0[%d]: %s; "
-                 "PicOrderCnt=%d; PicNum=%d; PicNumCnt=%d;\n",
-                 picture.m_PicNumCnt,
-                 H264_SLIECE_TYPE_TO_STR(header.slice_type),
-                 picture.PicOrderCnt, i, sliceType.c_str(), PicOrderCnt, PicNum,
-                 PicNumCnt);
-        }
-      }
-
-      PicOrderCnt = -1, PicNum = -1, PicNumCnt = -1;
-      for (int i = 0; i < picture.m_RefPicList1Length; ++i) {
-        if (picture.m_RefPicList1[i]) {
-          sliceType = H264_SLIECE_TYPE_TO_STR(
-              picture.m_RefPicList1[i]
-                  ->m_picture_frame.m_slice.slice_header.slice_type);
-          PicOrderCnt = picture.m_RefPicList1[i]->m_picture_frame.PicOrderCnt;
-          PicNum = picture.m_RefPicList1[i]->m_picture_frame.PicNum;
-          PicNumCnt = picture.m_RefPicList1[i]->m_picture_frame.m_PicNumCnt;
-
-          printf("\tm_PicNumCnt=%d(%s); PicOrderCnt=%d; "
-                 "m_RefPicList1[%d]: %s; "
-                 "PicOrderCnt=%d; PicNum=%d; PicNumCnt=%d;\n",
-                 picture.m_PicNumCnt,
-                 H264_SLIECE_TYPE_TO_STR(header.slice_type),
-                 picture.PicOrderCnt, i, sliceType.c_str(), PicOrderCnt, PicNum,
-                 PicNumCnt);
-        }
-      }
+      /* (m_RefPicList0,m_RefPicList1为m_dpb排序后的前后参考列表）打印帧重排序先后信息 */
+      printFrameReorderPriorityInfo(picture);
     }
   }
-
   picture.m_slice_cnt++;
-
-  //-------------------------------
-  //bool is_need_skip_read_mb_field_decoding_flag = false;
 
   do {
     if (header.slice_type != SLICE_I && header.slice_type != SLICE_SI) {
-      if (!m_pps.entropy_coding_mode_flag) {
-        std::cout << "hi~" << __LINE__ << std::endl;
+      if (m_pps.entropy_coding_mode_flag == 0) {
+        /* CAVLC熵编码，暂时不处理 */
+        std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m"
+                  << std::endl;
         exit(0);
       } else {
         picture.mb_x = (CurrMbAddr %
@@ -130,16 +88,17 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
 
         if (header.MbaffFrameFlag) {
           /* 当前帧使用MBAFF编码模式。在这种模式下，每个宏块对（MB pair）可以独立地选择是作为帧宏块对还是场宏块对进行编码。 */
-          std::cout << "hi~" << __LINE__ << std::endl;
+          std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m"
+                    << std::endl;
           exit(0);
         }
 
         //-------------解码mb_skip_flag-----------------------
         if (header.MbaffFrameFlag && CurrMbAddr % 2 == 1 && prevMbSkipped) {
-          // 如果是bottom field macroblock
-          std::cout << "hi~" << __LINE__ << std::endl;
+          /* 当前帧使用MBAFF编码模式。在这种模式下，每个宏块对（MB pair）可以独立地选择是作为帧宏块对还是场宏块对进行编码。 */
+          std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m"
+                    << std::endl;
           exit(0);
-          // mb_skip_flag = mb_skip_flag_next_mb;
         } else
           cabac.decode_mb_skip_flag(CurrMbAddr, mb_skip_flag);
 
@@ -367,4 +326,56 @@ int SliceBody::NextMbAddress(int n, SliceHeader &slice_header) {
          slice_header.MbToSliceGroupMap[i] != slice_header.MbToSliceGroupMap[n])
     i++;
   return i;
+}
+
+void SliceBody::printFrameReorderPriorityInfo(PictureBase &picture) {
+  string sliceType = "UNKNOWN";
+  std::cout << "\tGOP[" << picture.m_PicNumCnt + 1 << "] -> {" << std::endl;
+  for (int i = 0; i < picture.m_PicNumCnt + 1; ++i) {
+    const auto &refPic = picture.m_dpb[i];
+    if (refPic) {
+      auto &frame = refPic->m_picture_frame;
+      auto &sliceHeader = frame.m_slice.slice_header;
+
+      sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader.slice_type);
+      std::cout << "\t\t m_RefPicList0[" << i << "]: " << sliceType
+                << "; PicOrderCnt(显示顺序)=" << frame.PicOrderCnt
+                << "; PicNum(帧编号)=" << frame.PicNum
+                << "; PicNumCnt(位置)=" << frame.m_PicNumCnt << ";\n";
+    }
+  }
+  std::cout << "\t}" << std::endl;
+
+  std::cout << "\t当前帧所参考帧列表(已排序) -> {" << std::endl;
+  for (int i = 0; i < picture.m_RefPicList0Length; ++i) {
+    const auto &refPic = picture.m_RefPicList0[i];
+    if (refPic) {
+      auto &frame = refPic->m_picture_frame;
+      auto &sliceHeader = frame.m_slice.slice_header;
+
+      sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader.slice_type);
+      std::cout << "\t\t(前参考)m_RefPicList0[" << i << "]: " << sliceType
+                << "; PicOrderCnt(参考帧显示顺序)=" << frame.PicOrderCnt
+                << "; PicNum(参考帧编号)=" << frame.PicNum
+                << "; PicNumCnt(原参考列表中的位置)=" << frame.m_PicNumCnt
+                << ";\n";
+    }
+  }
+
+  /* TODO YangJing m_RefPicList1好像并不是后参考帧，后面再确认一下 <24-08-31 18:19:22> */
+  for (int i = 0; i < picture.m_RefPicList1Length; ++i) {
+    const auto &refPic = picture.m_RefPicList1[i];
+    if (refPic) {
+      auto &frame = refPic->m_picture_frame;
+      auto &sliceHeader = frame.m_slice.slice_header;
+
+      sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader.slice_type);
+      std::cout << "\t\t(后参考)m_RefPicList1[" << i << "]: " << sliceType
+                << "; PicOrderCnt(参考帧显示顺序)=" << frame.PicOrderCnt
+                << "; PicNum(参考帧编号)=" << frame.PicNum
+                << "; PicNumCnt(原参考列表中的位置)=" << frame.m_PicNumCnt
+                << ";\n";
+    }
+  }
+  std::cout << "\t}" << std::endl;
 }

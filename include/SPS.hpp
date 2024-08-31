@@ -6,10 +6,10 @@
 #define Extended_SAR 255
 
 #define H264_MAX_SPS_COUNT                                                     \
-  32 // 7.4.2.1.1: seq_parameter_set_id shall be in the range of 0 to 31,
-     // inclusive.
+  32 // 7.4.2.1.1: seq_parameter_set_id shall be in the range of 0 to 31,     \
+      // inclusive.
 #define H264_MAX_OFFSET_REF_FRAME_COUNT                                        \
-  256 // 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle shall be in the range
+  256 // 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle shall be in the range \
       // of 0 to 255, inclusive.
 
 struct CHROMA_FORMAT_IDC_T {
@@ -42,8 +42,12 @@ class SPS {
   uint32_t log2_max_pic_order_cnt_lsb_minus4 = 0;
   /* 最大帧号减去 4 的对数 */
   uint32_t log2_max_frame_num_minus4 = 0;
-  /* 用于指定图像顺序计数的方法(一般处理 B 帧插入) */
+  /* 用于指定图像顺序计数的方法：
+   * 0:使用帧号和帧场号来计算POC(图像顺序计数)( 适用于大多数情况，特别是需要精确控制POC的场景)
+   * 1:使用增量计数来计算POC(复杂，如B帧和P帧混合的情况)
+   * 2:使用帧号来计算POC(简单，如仅有I帧和P帧的情况)*/
   uint32_t pic_order_cnt_type = 0;
+
   /* 表示解码器需要支持的最大参考帧数 */
   uint32_t max_num_ref_frames = 0;
   /* 宏块（MB）单位的图像宽度减 1。（用于计算原图像正常情况下的宽）*/
