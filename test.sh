@@ -3,21 +3,57 @@
 declare -A  ALL_MD5
 
 #第一次成功解码后的输出文件MD5
-ALL_MD5['output_B_10.bmp']=391abc0f9c384605eb7b133087728148
-ALL_MD5['output_B_2.bmp']=8133475fd7fc44f1c64ebaf0dbe2e183
-ALL_MD5['output_B_3.bmp']=7a9d805a3e4f64343671262d676c2714
-ALL_MD5['output_B_4.bmp']=8b2666e71a6fd52e356e18bbd2e70609
-ALL_MD5['output_B_6.bmp']=3fa63ff2db87644e76ac28ff76b6956e
-ALL_MD5['output_B_8.bmp']=ab9a2eb73d8bbfd6057e25ea091e7e12
-ALL_MD5['output_I_0.bmp']=14708835fa62b30c2b337deb9ca23649
-ALL_MD5['output_P_1.bmp']=18eadb2bfb6e4638a3b00d3aef71266f
-ALL_MD5['output_P_5.bmp']=cc7a55f1c502d173c0adaecebca0323b
-ALL_MD5['output_P_7.bmp']=79f19718c2e71fea525ccad412e80b9b
-ALL_MD5['output_P_9.bmp']=9d01acc7f12aa62073a8596b2f79747c
+
+demo_10_frames_h264(){
+	index=11
+	ALL_MD5['output_I_0.bmp']=14708835fa62b30c2b337deb9ca23649
+	ALL_MD5['output_P_1.bmp']=18eadb2bfb6e4638a3b00d3aef71266f
+	ALL_MD5['output_B_2.bmp']=8133475fd7fc44f1c64ebaf0dbe2e183
+	ALL_MD5['output_B_3.bmp']=7a9d805a3e4f64343671262d676c2714
+	ALL_MD5['output_B_4.bmp']=8b2666e71a6fd52e356e18bbd2e70609
+	ALL_MD5['output_P_5.bmp']=cc7a55f1c502d173c0adaecebca0323b
+	ALL_MD5['output_B_6.bmp']=3fa63ff2db87644e76ac28ff76b6956e
+	ALL_MD5['output_P_7.bmp']=79f19718c2e71fea525ccad412e80b9b
+	ALL_MD5['output_B_8.bmp']=ab9a2eb73d8bbfd6057e25ea091e7e12
+	ALL_MD5['output_P_9.bmp']=9d01acc7f12aa62073a8596b2f79747c
+	ALL_MD5['output_B_10.bmp']=391abc0f9c384605eb7b133087728148
+}
+
+demo_10_frames_interlace_h264(){
+	echo -e "\033[31m不支持\033[0m"
+}
+
+
+source_cut_10_frames_h264(){
+	index=9
+	ALL_MD5['output_I_0.bmp']=08d314916c72caa09e813b43f1744acb
+	ALL_MD5['output_P_1.bmp']=e1484970d133814bc3bf3b57ab6cd38d
+	ALL_MD5['output_B_2.bmp']=da76145e1ac64642fce3e894b3305768
+	ALL_MD5['output_P_3.bmp']=cb64a877bf973895c15300aca827307d
+	ALL_MD5['output_B_4.bmp']=5082ac48879db9e703c945297ea09f6b
+	ALL_MD5['output_P_5.bmp']=d4b1cb390a8a3e021494a7d91ddd7388
+	ALL_MD5['output_B_6.bmp']=a8db64316dfcdcb2df63408916c6342e
+	ALL_MD5['output_B_7.bmp']=313134ec104972481fc4d0264ed91b5b
+	ALL_MD5['output_P_8.bmp']=b7e55f6d5399a9624d21a0c24e34f658
+}
+
+
+source_cut_10_frames_no_B_h264(){
+	index=9
+	ALL_MD5['output_I_0.bmp']=74e36a035b8d75b31a02278450b42447
+	ALL_MD5['output_P_1.bmp']=d5a671c3df0c3600783f590962c77ed3
+	ALL_MD5['output_P_2.bmp']=82b44ef5ffe29fa4400284f49baf5120
+	ALL_MD5['output_P_3.bmp']=e2721d4ada9293326a453f790709b820
+	ALL_MD5['output_P_4.bmp']=432b32e64d62525aba0a1447a020ede9
+	ALL_MD5['output_P_5.bmp']=2dcb311b2a1d6f6b1eafc7912788ee5e
+	ALL_MD5['output_P_6.bmp']=b201424c985c0ab2a598d0ea796bdda6
+	ALL_MD5['output_P_7.bmp']=d32d5a3172b47d51d90877b9bd355f5c
+	ALL_MD5['output_P_8.bmp']=41a3278a459c9eae41d3bbb5ee139800
+}
 
 
 main(){
-	if [ 11 != $(ls *.bmp | wc -l) ];then
+	if [ ${index} != $(ls *.bmp | wc -l) ];then
 		echo "Output file is bad"
 		return -1
 	fi
@@ -34,12 +70,24 @@ main(){
 		done
 	done
 
-	if [ 11 != $count ];then
+	if [ ${index} != $count ];then
 		echo "Output file md5 is changed , count:${count}/11"
 		return -1
 	fi
 
 	echo "Test success!"
 }
+
+if [ "$1" == "demo_10_frames.h264" ];then
+	demo_10_frames_h264
+elif [ "$1" == "demo_10_frames_interlace.h264" ];then
+	demo_10_frames_interlace_h264
+elif [ "$1" == "source_cut_10_frames.h264" ];then
+	source_cut_10_frames_h264
+elif [ "$1" == "source_cut_10_frames_no_B.h264" ];then
+	source_cut_10_frames_no_B_h264
+else
+	echo -e "\033[31mInputFile ???\033[0m";exit
+fi
 
 main $@

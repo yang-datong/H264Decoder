@@ -123,9 +123,8 @@ class PictureBase {
       Frame *(&RefPicList1)[16]); // 8.2.4 参考图像列表的重排序过程
   int decoding_picture_numbers(Frame *(&dpb)[16]); // 8.2.4.1
 
-  int init_reference_picture_lists(
-      Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
-      Frame *(&RefPicList1)[16]); // 8.2.4.2
+  int init_reference_picture_lists(Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
+                                   Frame *(&RefPicList1)[16]); // 8.2.4.2
   int init_reference_picture_list_P_SP_slices_in_frames(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
       int32_t &RefPicList0Length); // 8.2.4.2.1
@@ -141,26 +140,27 @@ class PictureBase {
       int32_t &RefPicList0Length,
       int32_t &RefPicList1Length); // 8.2.4.2.4
   //int init_reference_picture_lists_in_fields(
-      //Frame *(&refFrameListXShortTerm)[16], Frame *(&refFrameListXLongTerm)[16],
-      //Frame *(&RefPicListX)[16], int32_t &RefPicListXLength,
-      //int32_t listX); // 8.2.4.2.5
+  //Frame *(&refFrameListXShortTerm)[16], Frame *(&refFrameListXLongTerm)[16],
+  //Frame *(&RefPicListX)[16], int32_t &RefPicListXLength,
+  //int32_t listX); // 8.2.4.2.5
   int init_reference_picture_lists_in_fields(
-      vector<Frame *>(&refFrameListXShortTerm), vector<Frame *>(&refFrameListXLongTerm),
-      Frame *(&RefPicListX)[16], int32_t &RefPicListXLength,
+      vector<Frame *>(&refFrameListXShortTerm),
+      vector<Frame *>(&refFrameListXLongTerm), Frame *(&RefPicListX)[16],
+      int32_t &RefPicListXLength,
       int32_t listX); // 8.2.4.2.5
 
   int modif_reference_picture_lists(
       Frame *(&RefPicList0)[16],
       Frame *(&RefPicList1)[16]); // 8.2.4.3 参考图像列表的重排序过程
-  int Modification_process_of_reference_picture_lists_for_short_term_reference_pictures(
-      int32_t &refIdxLX, int32_t &picNumLXPred,
-      int32_t modification_of_pic_nums_idc, int32_t abs_diff_pic_num_minus1,
-      int32_t num_ref_idx_lX_active_minus1,
-      Frame *(&RefPicListX)[16]); // 8.2.4.3.1
-  int Modification_process_of_reference_picture_lists_for_long_term_reference_pictures(
-      int32_t &refIdxLX, int32_t picNumLXPred,
-      int32_t num_ref_idx_lX_active_minus1, int32_t long_term_pic_num,
-      Frame *(&RefPicListX)[16]); // 8.2.4.3.2
+
+  int modif_reference_picture_lists_for_short_ref_pictures(
+      int32_t &refIdxLX, int32_t &picNumLXPred, const int32_t modif_idc,
+      const int32_t abs_diff_pic_num_minus1,
+      const int32_t num_ref_idx_lX_active_minus1, Frame *(&RefPicListX)[16]);
+
+  int modif_reference_picture_lists_for_long_ref_pictures(
+      int32_t &refIdxLX, const int32_t num_ref_idx_lX_active_minus1,
+      const int32_t long_term_pic_num, Frame *(&RefPicListX)[16]);
 
   int Decoded_reference_picture_marking_process(Frame *(
       &dpb)[16]); // 8.2.5 每一张图片解码完成后，都需要标记一次图像参考列表
@@ -301,10 +301,12 @@ class PictureBase {
       int32_t *u, int32_t nW, int32_t nH, int32_t BlkIdx, int32_t isChroma,
       int32_t PicWidthInSamples, uint8_t *pic_buff); // 8.5.14
   int Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
-      int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag); // 8.5.6
+      int32_t values[16], int32_t (&c)[4][4],
+      int32_t field_scan_flag); // 8.5.6
   int Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
-      int32_t values[64], int32_t (&c)[8][8], int32_t field_scan_flag); // 8.5.7
-  int get_chroma_quantisation_parameters(int32_t isChromaCb);           // 8.5.8
+      int32_t values[64], int32_t (&c)[8][8],
+      int32_t field_scan_flag);                               // 8.5.7
+  int get_chroma_quantisation_parameters(int32_t isChromaCb); // 8.5.8
   int get_chroma_quantisation_parameters2(int32_t QPY, int32_t isChromaCb,
                                           int32_t &QPC);       // 8.5.8
   int scaling_functions(int32_t isChroma, int32_t isChromaCb); // 8.5.9
@@ -334,7 +336,8 @@ class PictureBase {
   int Derivation_process_for_luma_motion_vectors_for_B_Skip_or_B_Direct_16x16_or_B_Direct_8x8(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
       int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
-      int32_t &subMvCnt, int32_t &predFlagL0, int32_t &predFlagL1); // 8.4.1.2
+      int32_t &subMvCnt, int32_t &predFlagL0,
+      int32_t &predFlagL1); // 8.4.1.2
   int Derivation_process_for_the_co_located_4x4_sub_macroblock_partitions(
       int32_t mbPartIdx, int32_t subMbPartIdx, PictureBase *&colPic,
       int32_t &mbAddrCol, int32_t (&mvCol)[2], int32_t &refIdxCol,
@@ -342,14 +345,17 @@ class PictureBase {
   int Derivation_process_for_spatial_direct_luma_motion_vector_and_reference_index_prediction_mode(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
       int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
-      int32_t &subMvCnt, int32_t &predFlagL0, int32_t &predFlagL1); // 8.4.1.2.2
+      int32_t &subMvCnt, int32_t &predFlagL0,
+      int32_t &predFlagL1); // 8.4.1.2.2
   int Derivation_process_for_temporal_direct_luma_motion_vector_and_reference_index_prediction_mode(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
       int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
-      int32_t &subMvCnt, int32_t &predFlagL0, int32_t &predFlagL1); // 8.4.1.2.3
+      int32_t &subMvCnt, int32_t &predFlagL0,
+      int32_t &predFlagL1); // 8.4.1.2.3
   int Derivation_process_for_luma_motion_vector_prediction(
       int32_t mbPartIdx, int32_t subMbPartIdx, H264_MB_TYPE currSubMbType,
-      int32_t listSuffixFlag, int32_t refIdxLX, int32_t (&mvpLX)[2]); // 8.4.1.3
+      int32_t listSuffixFlag, int32_t refIdxLX,
+      int32_t (&mvpLX)[2]); // 8.4.1.3
   int Derivation_process_for_motion_data_of_neighbouring_partitions(
       int32_t mbPartIdx, int32_t subMbPartIdx, H264_MB_TYPE currSubMbType,
       int32_t listSuffixFlag, int32_t &mbAddrN_A, int32_t (&mvLXN_A)[2],
@@ -414,7 +420,8 @@ class PictureBase {
       int32_t predFlagL1, int32_t &logWDL, int32_t &w0L, int32_t &w1L,
       int32_t &o0L, int32_t &o1L, int32_t &logWDCb, int32_t &w0Cb,
       int32_t &w1Cb, int32_t &o0Cb, int32_t &o1Cb, int32_t &logWDCr,
-      int32_t &w0Cr, int32_t &w1Cr, int32_t &o0Cr, int32_t &o1Cr); // 8.4.3
+      int32_t &w0Cr, int32_t &w1Cr, int32_t &o0Cr,
+      int32_t &o1Cr); // 8.4.3
   int Default_weighted_sample_prediction_process(
       int32_t predFlagL0, int32_t predFlagL1, int32_t partWidth,
       int32_t partHeight, int32_t partWidthC, int32_t partHeightC,

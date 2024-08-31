@@ -50,7 +50,6 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
       exit(0);
     }
 
-    //--------参考帧重排序------------
     // 只有当前帧为P帧，B帧时，才会对参考图像数列表组进行重排序
     if (header.slice_type == SLICE_P || header.slice_type == SLICE_SP ||
         header.slice_type == SLICE_B) {
@@ -58,7 +57,6 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
       picture.decoding_reference_picture_lists_construction(
           picture.m_dpb, picture.m_RefPicList0, picture.m_RefPicList1);
 
-      //--------------
       string sliceType = "UNKNOWN";
       int PicOrderCnt = -1, PicNum = -1, PicNumCnt = -1;
 

@@ -4,15 +4,23 @@
 
 int32_t g_PicNumCnt = 0;
 
-int main() {
+int main(int argc, char *argv[]) {
   /* 关闭io输出同步 */
   // std::ios::sync_with_stdio(false);
-  // string filePath = "./source_cut_10_frames.h264";
-  // string filePath = "./source_cut_10_frames_no_B.h264";
-  /* 帧编码 */
-  string filePath = "./demo_10_frames.h264";
-  /* 场编码 */
-  //string filePath = "./demo_10_frames_interlace.h264";
+
+  string filePath;
+  if (argc > 1 && argv[1] != NULL)
+    filePath = argv[1];
+  else {
+    /* 1920x1080 */
+    //filePath = "./source_cut_10_frames.h264";
+    /* 1920x1080 无B帧*/
+    //filePath = "./source_cut_10_frames_no_B.h264";
+    /* 714x624 帧编码 */
+    filePath = "./demo_10_frames.h264";
+    /* 714x624 场编码 */
+    //filePath = "./demo_10_frames_interlace.h264";
+  }
 
   /* 1. 打开文件、读取NUL、存储NUL的操作 */
   AnnexBReader reader(filePath);
