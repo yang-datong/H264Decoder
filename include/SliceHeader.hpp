@@ -83,10 +83,6 @@ class SliceHeader {
   bool MbaffFrameFlag = 0;
   /* 场图像标志 */
   bool field_pic_flag = 0;
-  //uint32_t mb_skip_run = 0;
-  //int32_t mb_skip_flag = 0;
-  //int32_t mb_skip_flag_next_mb = 0;
-  //int32_t end_of_slice_flag = 0;
 
   /* 颜色平面ID */
   uint8_t colour_plane_id = 0;
