@@ -1,5 +1,6 @@
 ﻿#include "Frame.hpp"
 #include "PictureBase.hpp"
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -603,35 +604,17 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
   }
 
   /* 2. 短期参考帧和互补参考场对从具有最高PicNum值的帧或互补场对开始排序，并按降序进行到具有最低PicNum值的帧或互补场对。 */
-  //sort(indexTemp_short.begin(), indexTemp_short.end(), greater<int32_t>());
-  /* TODO YangJing 错了 <24-08-31 01:23:34> */
-  for (int i = 0; i < (int)indexTemp_short.size() - 1; i++) {
-    for (int j = 0; j < (int)indexTemp_short.size() - i - 1; j++) {
-      if (dpb[indexTemp_short[j]]->m_picture_frame.PicNum <
-          dpb[indexTemp_short[j + 1]]->m_picture_frame.PicNum) // 降序排列
-      {
-        int32_t temp = indexTemp_short[j];
-        indexTemp_short[j] = indexTemp_short[j + 1];
-        indexTemp_short[j + 1] = temp;
-      }
-    }
-  }
+  sort(indexTemp_short.begin(), indexTemp_short.end(),
+       [&dpb](int32_t a, int32_t b) {
+         return dpb[a]->m_picture_frame.PicNum > dpb[b]->m_picture_frame.PicNum;
+       });
 
   /* 3. 长期参考帧和互补参考字段对从具有最低LongTermPicNum值的帧或互补字段对开始排序，并按升序进行到具有最高LongTermPicNum值的帧或互补字段对。*/
-  //sort(indexTemp_long.begin(), indexTemp_long.end());
-  /* TODO YangJing 错了 <24-08-31 01:23:34> */
-  for (int i = 0; i < (int)indexTemp_long.size() - 1; i++) {
-    for (int j = 0; j < (int)indexTemp_long.size() - i - 1; j++) {
-      if (dpb[indexTemp_long[j]]->m_picture_frame.LongTermPicNum >
-          dpb[indexTemp_long[j + 1]]
-              ->m_picture_frame.LongTermPicNum) // 升序排列
-      {
-        int32_t temp = indexTemp_long[j];
-        indexTemp_long[j] = indexTemp_long[j + 1];
-        indexTemp_long[j + 1] = temp;
-      }
-    }
-  }
+  sort(indexTemp_long.begin(), indexTemp_long.end(),
+       [&dpb](int32_t a, int32_t b) {
+         return dpb[a]->m_picture_frame.LongTermPicNum <
+                dpb[b]->m_picture_frame.LongTermPicNum;
+       });
 
   // 4. 生成排序后的参考序列
   int j = 0;
@@ -664,20 +647,6 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
   return 0;
 }
 
-//bool compareByLongTermFrameIdx(const Frame *f1, const Frame *f2) {
-//  return (f1->m_picture_top_filed.LongTermFrameIdx >
-//          f2->m_picture_top_filed.LongTermFrameIdx) ||
-//         (f1->m_picture_bottom_filed.LongTermFrameIdx >
-//          f2->m_picture_bottom_filed.LongTermFrameIdx);
-//}
-
-//bool compareByFrameNumWrap(const Frame *f1, const Frame *f2) {
-//  return (f1->m_picture_top_filed.FrameNumWrap <
-//          f2->m_picture_top_filed.FrameNumWrap) ||
-//         (f1->m_picture_bottom_filed.FrameNumWrap <
-//          f2->m_picture_bottom_filed.FrameNumWrap);
-//}
-
 //8.2.4.2.2 Initialization process for the reference picture list for P and SP slices in fields
 /* 与PictureBase::init_reference_picture_list_P_SP_slices_in_frames同理 */
 /* 注 – 当对场进行解码时，可供参考的图片数量实际上至少是对解码顺序中相同位置的帧进行解码时的两倍。*/
@@ -698,6 +667,7 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_fields(
         pict_b.reference_marked_type ==
             H264_PICTURE_MARKED_AS_used_for_short_term_reference)
       refFrameList0ShortTerm.push_back(dpb[index]);
+
     else if (dpb[index]->m_picture_top_filed.reference_marked_type ==
                  H264_PICTURE_MARKED_AS_used_for_long_term_reference ||
              dpb[index]->m_picture_bottom_filed.reference_marked_type ==
@@ -711,6 +681,7 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_fields(
     if (curPic->m_picture_top_filed.reference_marked_type ==
         H264_PICTURE_MARKED_AS_used_for_short_term_reference)
       refFrameList0ShortTerm.push_back(curPic);
+
     else if (curPic->m_picture_top_filed.reference_marked_type ==
              H264_PICTURE_MARKED_AS_used_for_long_term_reference)
       refFrameList0LongTerm.push_back(curPic);
@@ -724,43 +695,22 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_fields(
   }
 
   /* 3. refFrameList0ShortTerm 从具有最高 FrameNumWrap 值的参考帧开始排序，并按降序继续到具有最低 FrameNumWrap 值的参考帧。 */
-  //sort(refFrameList0ShortTerm.begin(), refFrameList0ShortTerm.end(),
-  //compareByFrameNumWrap);
-  //TODO  <24-08-31 02:50:26, YangJing>
-  for (int i = 0; i < refFrameList0ShortTerm.size() - 1; i++) {
-    for (int j = 0; j < refFrameList0ShortTerm.size() - i - 1; j++) {
-      if (refFrameList0ShortTerm[j]->m_picture_top_filed.FrameNumWrap <
-              refFrameList0ShortTerm[j + 1]->m_picture_top_filed.FrameNumWrap ||
-          refFrameList0ShortTerm[j]->m_picture_bottom_filed.FrameNumWrap <
-              refFrameList0ShortTerm[j + 1]
-                  ->m_picture_bottom_filed.FrameNumWrap) // 降序排列
-      {
-        Frame *temp = refFrameList0ShortTerm[j];
-        refFrameList0ShortTerm[j] = refFrameList0ShortTerm[j + 1];
-        refFrameList0ShortTerm[j + 1] = temp;
-      }
-    }
-  }
+  sort(refFrameList0ShortTerm.begin(), refFrameList0ShortTerm.end(),
+       [](Frame *a, Frame *b) {
+         return (a->m_picture_top_filed.FrameNumWrap <
+                 b->m_picture_top_filed.FrameNumWrap) ||
+                (a->m_picture_bottom_filed.FrameNumWrap <
+                 b->m_picture_bottom_filed.FrameNumWrap);
+       });
 
   /* 4. refFrameList0LongTerm 从具有最低 LongTermFrameIdx 值的参考帧开始排序，并按升序继续到具有最高 LongTermFrameIdx 值的参考帧。 */
-  //sort(refFrameList0LongTerm.begin(), refFrameList0LongTerm.end(),
-  //compareByLongTermFrameIdx);
-  //TODO  <24-08-31 02:50:22, YangJing>
-  for (int i = 0; i < refFrameList0LongTerm.size() - 1; i++) {
-    for (int j = 0; j < refFrameList0LongTerm.size() - i - 1; j++) {
-      if (refFrameList0LongTerm[j]->m_picture_top_filed.LongTermFrameIdx >
-              refFrameList0LongTerm[j + 1]
-                  ->m_picture_top_filed.LongTermFrameIdx ||
-          refFrameList0LongTerm[j]->m_picture_top_filed.LongTermFrameIdx >
-              refFrameList0LongTerm[j + 1]
-                  ->m_picture_top_filed.LongTermFrameIdx) // 升序排列
-      {
-        Frame *temp = refFrameList0LongTerm[j];
-        refFrameList0LongTerm[j] = refFrameList0LongTerm[j + 1];
-        refFrameList0LongTerm[j + 1] = temp;
-      }
-    }
-  }
+  sort(refFrameList0LongTerm.begin(), refFrameList0LongTerm.end(),
+       [](Frame *a, Frame *b) {
+         return (a->m_picture_top_filed.LongTermFrameIdx <
+                 b->m_picture_top_filed.LongTermFrameIdx) ||
+                (a->m_picture_bottom_filed.LongTermFrameIdx <
+                 b->m_picture_bottom_filed.LongTermFrameIdx);
+       });
 
   /* 第 8.2.4.2.5 节中指定的过程是用 refFrameList0ShortTerm 和 refFrameList0LongTerm 作为输入来调用的，并且输出被分配给 RefPicList0。*/
   int ret = init_reference_picture_lists_in_fields(
@@ -770,19 +720,15 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_fields(
   return ret;
 }
 
-//bool compareByPicOrderCnt(const Frame *f1, const Frame *f2) {}
-
 // 8.2.4.2.3 Initialisation process for reference picture lists for B slices in frames
 /* 当解码编码帧中的 B 切片时，会调用此初始化过程。*/
 /* 为了形成参考图片列表RefPicList0和RefPicList1，指的是解码的参考帧或互补参考字段对。 */
-/* TODO YangJing 做到这个函数来了。。。。。！！！！气死我了，以后一定要看警告 <24-08-31 03:01:42> */
 int PictureBase::init_reference_picture_lists_B_slices_in_frames(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16],
     int32_t &RefPicList0Length, int32_t &RefPicList1Length) {
 
   const int32_t size_dpb = 16;
-  vector<int32_t> indexTemp_short_left, indexTemp_short_right, indexTemp_long,
-      indexTemp3;
+  vector<int32_t> indexTemp_short_left, indexTemp_short_right, indexTemp_long;
 
   /* 对于B切片，参考图片列表RefPicList0和RefPicList1中的短期参考条目的顺序取决于输出顺序，如由PicOrderCnt()给出的。当 pic_order_cnt_type 等于 0 时，如第 8.2.5.2 节中指定的被标记为“不存在”的参考图片不包括在 RefPicList0 或 RefPicList1 中 */
 
@@ -792,25 +738,19 @@ int PictureBase::init_reference_picture_lists_B_slices_in_frames(
    * 1. 令entryShortTerm 为变量，其范围涵盖当前标记为“用于短期参考”的所有参考条目。当存在PicOrderCnt(entryShortTerm)小于PicOrderCnt(CurrPic)的entryShortTerm的某些值时，entryShortTerm的这些值按照PicOrderCnt(entryShortTerm)的降序放置在refPicList0的开头。然后，entryShortTerm 的所有剩余值（当存在时）按照 PicOrderCnt(entryShortTerm ) 的升序被附加到 refPicList0。
    * 2.对长期参考条目进行排序，从具有最低LongTermPicNum值的长期参考条目开始，并按升序进行到具有最高LongTermPicNum值的长期参考条目。 */
 
-  int index = 0;
-  //-------------RefPicList0----------------
-  // 1. 先把所有的短期参考帧放到数组的前半部分，把所有的长期参考帧放到数组的后半部分
-  for (index = 0; index < size_dpb; index++) {
-    auto &pict_f = dpb[index]->m_picture_frame;
+  for (int i = 0; i < size_dpb; i++) {
+    auto &pict_f = dpb[i]->m_picture_frame;
     if (pict_f.reference_marked_type ==
         H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
 
       if (pict_f.PicOrderCnt < PicOrderCnt)
-        indexTemp_short_left.push_back(index);
+        indexTemp_short_left.push_back(i);
       else
-        indexTemp_short_right.push_back(index);
+        indexTemp_short_right.push_back(i);
 
     } else if (pict_f.reference_marked_type ==
                H264_PICTURE_MARKED_AS_used_for_long_term_reference)
-      indexTemp_long.push_back(index);
-
-    else
-      indexTemp3.push_back(index);
+      indexTemp_long.push_back(i);
   }
 
   /* 当调用该过程时，应至少有一个参考条目当前被标记为“用于参考”（即“用于短期参考”或“用于长期参考”）并且未被标记为“不存在” */
@@ -822,85 +762,52 @@ int PictureBase::init_reference_picture_lists_B_slices_in_frames(
     return -1;
   }
 
-  // 2. 按帧号(PicOrderCnt)按顺序排列短期参考帧(冒泡排序)
-  //sort(indexTemp_short_left.begin(),indexTemp_short_left.end(),compareByPicOrderCnt);
-  //TODO  <24-08-31 02:59:25, YangJing>
-  for (index = 0; index < (int)indexTemp_short_left.size() - 1; index++) {
-    for (int j = 0; j < (int)indexTemp_short_left.size() - index - 1; j++) {
-      if (dpb[indexTemp_short_left[j]]->m_picture_frame.PicOrderCnt <
-          dpb[indexTemp_short_left[j + 1]]
-              ->m_picture_frame.PicOrderCnt) // 降序排列
-      {
-        int32_t temp = indexTemp_short_left[j];
-        indexTemp_short_left[j] = indexTemp_short_left[j + 1];
-        indexTemp_short_left[j + 1] = temp;
-      }
-    }
-  }
+  sort(indexTemp_short_left.begin(), indexTemp_short_left.end(),
+       [&dpb](int32_t a, int32_t b) {
+         return dpb[a]->m_picture_frame.PicOrderCnt >
+                dpb[b]->m_picture_frame.PicOrderCnt;
+       });
+  sort(indexTemp_short_right.begin(), indexTemp_short_right.end(),
+       [&dpb](int32_t a, int32_t b) {
+         return dpb[a]->m_picture_frame.PicOrderCnt <
+                dpb[b]->m_picture_frame.PicOrderCnt;
+       });
+  sort(indexTemp_long.begin(), indexTemp_long.end(),
+       [&dpb](int32_t a, int32_t b) {
+         return dpb[a]->m_picture_frame.LongTermPicNum <
+                dpb[b]->m_picture_frame.LongTermPicNum;
+       });
 
-  for (index = 0; index < (int)indexTemp_short_right.size() - 1; index++) {
-    for (int j = 0; j < (int)indexTemp_short_right.size() - index - 1; j++) {
-      if (dpb[indexTemp_short_right[j]]->m_picture_frame.PicOrderCnt >
-          dpb[indexTemp_short_right[j + 1]]
-              ->m_picture_frame.PicOrderCnt) // 升序排列
-      {
-        int32_t temp = indexTemp_short_right[j]; // 交换元素值
-        indexTemp_short_right[j] = indexTemp_short_right[j + 1];
-        indexTemp_short_right[j + 1] = temp;
-      }
-    }
-  }
+  RefPicList0Length = 0;
+  for (int i = 0; i < indexTemp_short_left.size(); i++)
+    RefPicList0[RefPicList0Length++] = dpb[indexTemp_short_left[i]];
+  for (int i = 0; i < indexTemp_short_right.size(); i++)
+    RefPicList0[RefPicList0Length++] = dpb[indexTemp_short_right[i]];
+  for (int i = 0; i < indexTemp_long.size(); i++)
+    RefPicList0[RefPicList0Length++] = dpb[indexTemp_long[i]];
 
-  // 3. 按帧号(LongTermPicNum)升序排列长期参考帧(冒泡排序)
-  for (index = 0; index < (int)indexTemp_long.size() - 1; index++) {
-    for (int j = 0; j < (int)indexTemp_long.size() - index - 1; j++) {
-      if (dpb[indexTemp_long[j]]->m_picture_frame.LongTermPicNum >
-          dpb[indexTemp_long[j + 1]]
-              ->m_picture_frame.LongTermPicNum) // 升序排列
-      {
-        int32_t temp = indexTemp_long[j]; // 交换元素值
-        indexTemp_long[j] = indexTemp_long[j + 1];
-        indexTemp_long[j + 1] = temp;
-      }
-    }
-  }
-
-  // 4. 生成排序后的参考序列
-  int len = 0;
-  for (index = 0; index < indexTemp_short_left.size(); index++)
-    RefPicList0[len++] = dpb[indexTemp_short_left[index]];
-
-  for (index = 0; index < indexTemp_short_right.size(); index++)
-    RefPicList0[len++] = dpb[indexTemp_short_right[index]];
-
-  for (index = 0; index < indexTemp_long.size(); index++)
-    RefPicList0[len++] = dpb[indexTemp_long[index]];
-
-  RefPicList0Length = len;
-
-  //-------------RefPicList1----------------
   indexTemp_short_left.clear();
   indexTemp_short_right.clear();
   indexTemp_long.clear();
-  indexTemp3.clear();
 
-  // 1.
-  // 先把所有的短期参考帧放到数组的前半部分，把所有的长期参考帧放到数组的后半部分
-  for (index = 0; index < size_dpb; index++) {
-    auto &pict_f = dpb[index]->m_picture_frame;
+  /* 参考图片列表RefPicList1被排序，使得短期参考条目具有比长期参考条目更低的索引。其排序： 
+   * 1. 令entryShortTerm 为变量，其范围涵盖当前标记为“用于短期参考”的所有参考条目。当存在PicOrderCnt(entryShortTerm)大于PicOrderCnt(CurrPic)的entryShortTerm的某些值时，entryShortTerm的这些值按照PicOrderCnt(entryShortTerm)的升序放置在refPicList1的开头。然后，entryShortTerm 的所有剩余值（当存在时）按照 PicOrderCnt(entryShortTerm ) 的降序被附加到 refPicList1。  
+   * 2. 长期参考条目从具有最低 LongTermPicNum 值的长期参考帧或互补参考字段对开始排序，并按升序继续到具有最高 LongTermPicNum 值的长期参考条目。  
+   * 注 2 – 非配对参考字段不用于帧间预测（与 MbaffFrameFlag 的值无关）。 */
+
+  for (int i = 0; i < size_dpb; i++) {
+    auto &pict_f = dpb[i]->m_picture_frame;
     if (pict_f.reference_marked_type ==
         H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
 
       if (pict_f.PicOrderCnt > PicOrderCnt)
-        indexTemp_short_left.push_back(index);
+        indexTemp_short_left.push_back(i);
       else
-        indexTemp_short_right.push_back(index);
+        indexTemp_short_right.push_back(i);
 
     } else if (pict_f.reference_marked_type ==
                H264_PICTURE_MARKED_AS_used_for_long_term_reference)
-      indexTemp_long.push_back(index);
-    else
-      indexTemp3.push_back(index);
+      indexTemp_long.push_back(i);
   }
 
   /* 当调用该过程时，应至少有一个参考条目当前被标记为“用于参考”（即“用于短期参考”或“用于长期参考”）并且未被标记为“不存在” */
@@ -912,259 +819,163 @@ int PictureBase::init_reference_picture_lists_B_slices_in_frames(
     return -1;
   }
 
-  // 2. 按帧号(PicOrderCnt)按顺序排列短期参考帧(冒泡排序)
-  for (index = 0; index < (int)indexTemp_short_left.size() - 1; index++) {
-    for (len = 0; len < (int)indexTemp_short_left.size() - index - 1; len++) {
-      if (dpb[indexTemp_short_left[len]]->m_picture_frame.PicOrderCnt >
-          dpb[indexTemp_short_left[len + 1]]
-              ->m_picture_frame.PicOrderCnt) // 升序排列
-      {
-        int32_t temp = indexTemp_short_left[len]; // 交换元素值
-        indexTemp_short_left[len] = indexTemp_short_left[len + 1];
-        indexTemp_short_left[len + 1] = temp;
-      }
-    }
-  }
+  sort(indexTemp_short_left.begin(), indexTemp_short_left.end(),
+       [&dpb](int32_t a, int32_t b) {
+         return dpb[a]->m_picture_frame.PicOrderCnt <
+                dpb[b]->m_picture_frame.PicOrderCnt;
+       });
+  sort(indexTemp_short_right.begin(), indexTemp_short_right.end(),
+       [&dpb](int32_t a, int32_t b) {
+         return dpb[a]->m_picture_frame.PicOrderCnt >
+                dpb[b]->m_picture_frame.PicOrderCnt;
+       });
+  sort(indexTemp_long.begin(), indexTemp_long.end(),
+       [&dpb](int32_t a, int32_t b) {
+         return dpb[a]->m_picture_frame.LongTermPicNum <
+                dpb[b]->m_picture_frame.LongTermPicNum;
+       });
 
-  for (index = 0; index < (int)indexTemp_short_right.size() - 1; index++) {
-    for (len = 0; len < (int)indexTemp_short_right.size() - index - 1; len++) {
-      if (dpb[indexTemp_short_right[len]]->m_picture_frame.PicOrderCnt <
-          dpb[indexTemp_short_right[len + 1]]
-              ->m_picture_frame.PicOrderCnt) // 降序排列
-      {
-        int32_t temp = indexTemp_short_right[len]; // 交换元素值
-        indexTemp_short_right[len] = indexTemp_short_right[len + 1];
-        indexTemp_short_right[len + 1] = temp;
-      }
-    }
-  }
+  RefPicList1Length = 0;
+  for (int i = 0; i < indexTemp_short_left.size(); i++)
+    RefPicList1[RefPicList1Length++] = dpb[indexTemp_short_left[i]];
 
-  // 3. 按帧号(LongTermPicNum)升序排列长期参考帧(冒泡排序)
-  for (index = 0; index < (int)indexTemp_long.size() - 1; index++) {
-    for (len = 0; len < (int)indexTemp_long.size() - index - 1; len++) {
-      if (dpb[indexTemp_long[len]]->m_picture_frame.LongTermPicNum >
-          dpb[indexTemp_long[len + 1]]
-              ->m_picture_frame.LongTermPicNum) // 升序排列
-      {
-        int32_t temp = indexTemp_long[len];
-        indexTemp_long[len] = indexTemp_long[len + 1];
-        indexTemp_long[len + 1] = temp;
-      }
-    }
-  }
+  for (int i = 0; i < indexTemp_short_right.size(); i++)
+    RefPicList1[RefPicList1Length++] = dpb[indexTemp_short_right[i]];
 
-  // 4. 生成排序后的参考序列
-  len = 0;
-  for (index = 0; index < indexTemp_short_left.size(); index++)
-    RefPicList1[len++] = dpb[indexTemp_short_left[index]];
+  for (int i = 0; i < indexTemp_long.size(); i++)
+    RefPicList1[RefPicList1Length++] = dpb[indexTemp_long[i]];
 
-  for (index = 0; index < indexTemp_short_right.size(); index++)
-    RefPicList1[len++] = dpb[indexTemp_short_right[index]];
-
-  for (index = 0; index < indexTemp_long.size(); index++)
-    RefPicList1[len++] = dpb[indexTemp_long[index]];
-
-  RefPicList1Length = len;
-
-  //--------------------------
-  // When the reference picture list RefPicList1 has more than one entry and
-  // RefPicList1 is identical to the reference picture list RefPicList0, the
-  // first two entries RefPicList1[ 0 ] and RefPicList1[ 1 ] are switched
-  int flag = 0;
-  if (indexTemp_short_left.size() + indexTemp_short_right.size() +
-          indexTemp_long.size() >
-      1) {
-    for (index = 0; index < size_dpb; index++) {
-      if (RefPicList1[index] != RefPicList0[index]) {
+  /* 3、当参考图片列表RefPicList1具有多于一个条目并且RefPicList1与参考图片列表RefPicList0相同时，交换前两个条目RefPicList1[0]和RefPicList1[1]。*/
+  bool flag = 0;
+  if (RefPicList1Length > 1) {
+    for (int i = 0; i < size_dpb; i++)
+      if (RefPicList1[i] != RefPicList0[i]) {
         flag = 1;
         break;
       }
-    }
   }
-
-  if (flag == 0) // the first two entries RefPicList1[ 0 ] and RefPicList1[ 1 ]
-                 // are switched
-  {
-    Frame *tmp = RefPicList1[0];
-    RefPicList1[0] = RefPicList1[1];
-    RefPicList1[1] = tmp;
-  }
+  if (!flag) swap(RefPicList1[0], RefPicList1[1]);
 
   return 0;
 }
 
-// 8.2.4.2.4 Initialisation process for reference picture lists for B slices in
-// fields This initialisation process is invoked when decoding a B slice in a
-// coded field.
+// 8.2.4.2.4 Initialization process for reference picture lists for B slices in fields
+// 当对编码字段中的 B 切片进行解码时，会调用此初始化过程。
+/* 当调用这一过程时，应该有至少一个参考字段（可以是参考帧的字段）当前被标记为“用于参考”（即，“用于短期参考”或“用于参考”）。供长期参考”）并且没有标记为“不存在”。 */
+/* TODO YangJing 未经测试 <24-08-31 15:06:47> */
 int PictureBase::init_reference_picture_lists_B_slices_in_fields(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16],
     int32_t &RefPicList0Length, int32_t &RefPicList1Length) {
 
-  int ret = 0;
-  int32_t size_dpb = 16;
-  int32_t i = 0;
-  int32_t j = 0;
-  int32_t short_refs_count_left = 0;
-  int32_t short_refs_count_right = 0;
-  int32_t long_refs_count = 0;
-  //int32_t not_refs_count = 0;
-
-  int32_t indexTemp_short_left[16] = {0};
-  int32_t indexTemp_short_right[16] = {0};
-  int32_t indexTemp_long[16] = {0};
-  //int32_t indexTemp3[16] = {0};
-
+  const int32_t size_dpb = 16;
+  vector<int32_t> indexTemp_short_left, indexTemp_short_right, indexTemp_long;
   Frame *refFrameList0ShortTerm[16] = {NULL};
   Frame *refFrameList1ShortTerm[16] = {NULL};
   Frame *refFrameListLongTerm[16] = {NULL};
 
-  // FIXME: When pic_order_cnt_type is equal to 0, reference pictures that are
-  // marked as "non-existing" as specified
-  //        in clause 8.2.5.2 are not included in either RefPicList0 or
-  //        RefPicList1.
+  /* 当解码场时，存储的参考帧的每个场被识别为具有唯一索引的单独的参考图片。参考图片列表RefPicList0和RefPicList1中的短期参考图片的顺序取决于输出顺序，如由PicOrderCnt()给出的。当pic_order_cnt_type等于0时，如条款8.2.5.2中指定的被标记为“不存在”的参考图片不包括在RefPicList0或RefPicList1中。 */
 
-  //-------------RefPicList0----------------
-  // 1.
-  // 先把所有的短期参考帧放到数组的前半部分，把所有的长期参考帧放到数组的后半部分
-  for (i = 0; i < size_dpb; i++) {
-    if (dpb[i]->m_picture_frame.reference_marked_type ==
+  /* 如下导出参考帧的三个有序列表：refFrameList0ShortTerm、refFrameList1ShortTerm 和refFrameListLongTerm。为了形成这些帧列表的目的，术语参考条目在下文中指的是解码参考帧、互补参考字段对或非配对参考字段。当 pic_order_cnt_type 等于 0 时，术语参考条目不指第 8.2.5.2 节中指定的标记为“不存在”的帧 */
+
+  /* 1. 令entryShortTerm 为一个变量，范围涵盖当前标记为“用于短期参考”的所有参考条目。当存在PicOrderCnt(entryShortTerm)小于或等于PicOrderCnt(CurrPic)的entryShortTerm的某些值时，entryShortTerm的这些值按照PicOrderCnt(entryShortTerm)的降序放置在refFrameList0ShortTerm的开头。然后，entryShortTerm 的所有剩余值（如果存在）将按 PicOrderCnt(entryShortTerm ) 的升序附加到 refFrameList0ShortTerm。 */
+  for (int i = 0; i < size_dpb; i++) {
+    auto &pict_f = dpb[i]->m_picture_frame;
+    if (pict_f.reference_marked_type ==
         H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
-      if (dpb[i]->m_picture_frame.PicOrderCnt < PicOrderCnt) {
-        indexTemp_short_left[short_refs_count_left] = i;
-        short_refs_count_left++;
-      } else // if (RefPicList0[i].m_picture_frame.PicOrderCnt >= PicOrderCnt)
-      {
-        indexTemp_short_right[short_refs_count_right] = i;
-        short_refs_count_right++;
-      }
-    } else if (dpb[i]->m_picture_frame.reference_marked_type ==
-               H264_PICTURE_MARKED_AS_used_for_long_term_reference) // reference
-                                                                    // frame or
-    // complementary
-    // reference
-    // field
-    // pair
-    {
-      indexTemp_long[long_refs_count] = i;
-      long_refs_count++;
-    } else {
-      //indexTemp3[not_refs_count] = i;
-      //not_refs_count++;
-    }
+
+      if (pict_f.PicOrderCnt < PicOrderCnt)
+        indexTemp_short_left.push_back(i);
+      else
+        indexTemp_short_right.push_back(i);
+
+    } else if (pict_f.reference_marked_type ==
+               H264_PICTURE_MARKED_AS_used_for_long_term_reference)
+      indexTemp_long.push_back(i);
   }
 
-  // there shall be at least one reference frame or complementary reference
-  // field pair that is currently marked as "used for reference"
-  RETURN_IF_FAILED(
-      short_refs_count_left + short_refs_count_right + long_refs_count == 0,
-      -1);
-
-  // 2. 按帧号降序排列短期参考帧(冒泡排序)
-  for (i = 0; i < short_refs_count_left - 1; i++) {
-    for (j = 0; j < short_refs_count_left - i - 1; j++) {
-      if (dpb[indexTemp_short_left[j]]->m_picture_frame.PicOrderCnt <
-          dpb[indexTemp_short_left[j + 1]]
-              ->m_picture_frame.PicOrderCnt) // 降序排列
-      {
-        int32_t temp = indexTemp_short_left[j];
-        indexTemp_short_left[j] = indexTemp_short_left[j + 1];
-        indexTemp_short_left[j + 1] = temp;
-      }
-    }
+  /* 当调用该过程时，应至少有一个参考条目当前被标记为“用于参考”（即“用于短期参考”或“用于长期参考”）并且未被标记为“不存在” */
+  if (indexTemp_short_left.size() + indexTemp_short_right.size() +
+          indexTemp_long.size() <=
+      0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return -1;
   }
 
-  for (i = 0; i < short_refs_count_right - 1; i++) {
-    for (j = 0; j < short_refs_count_right - i - 1; j++) {
-      if (dpb[indexTemp_short_right[j]]->m_picture_frame.PicOrderCnt >
-          dpb[indexTemp_short_right[j + 1]]
-              ->m_picture_frame.PicOrderCnt) // 升序排列
-      {
-        int32_t temp = indexTemp_short_right[j];
-        indexTemp_short_right[j] = indexTemp_short_right[j + 1];
-        indexTemp_short_right[j + 1] = temp;
-      }
-    }
-  }
+  sort(indexTemp_short_left.begin(), indexTemp_short_left.end(),
+       [&dpb](int32_t a, int32_t b) {
+         return dpb[a]->m_picture_frame.PicOrderCnt >
+                dpb[b]->m_picture_frame.PicOrderCnt;
+       });
+  sort(indexTemp_short_right.begin(), indexTemp_short_right.end(),
+       [&dpb](int32_t a, int32_t b) {
+         return dpb[a]->m_picture_frame.PicOrderCnt <
+                dpb[b]->m_picture_frame.PicOrderCnt;
+       });
 
-  // 3. 按帧号升序排列长期参考帧(冒泡排序)
-  for (i = 0; i < long_refs_count - 1; i++) {
-    for (j = 0; j < long_refs_count - i - 1; j++) {
-      if (dpb[indexTemp_long[j]]->m_picture_frame.LongTermFrameIdx >
-          dpb[indexTemp_long[j + 1]]
-              ->m_picture_frame.LongTermFrameIdx) // 升序排列
-      {
-        int32_t temp = indexTemp_long[j];
-        indexTemp_long[j] = indexTemp_long[j + 1];
-        indexTemp_long[j + 1] = temp;
-      }
-    }
-  }
+  sort(indexTemp_long.begin(), indexTemp_long.end(),
+       [&dpb](int32_t a, int32_t b) {
+         return dpb[a]->m_picture_frame.LongTermFrameIdx <
+                dpb[b]->m_picture_frame.LongTermFrameIdx;
+       });
 
   // 4. 生成排序后的参考序列
-  j = 0;
+  int j0 = 0;
 
-  for (i = 0; i < short_refs_count_left; i++) {
-    refFrameList0ShortTerm[j++] = dpb[indexTemp_short_left[i]];
+  for (int i = 0; i < indexTemp_short_left.size(); i++)
+    refFrameList0ShortTerm[j0++] = dpb[indexTemp_short_left[i]];
+
+  for (int i = 0; i < indexTemp_short_right.size(); i++)
+    refFrameList0ShortTerm[j0++] = dpb[indexTemp_short_right[i]];
+
+  for (int i = 0; i < indexTemp_long.size(); i++)
+    refFrameListLongTerm[j0++] = dpb[indexTemp_long[i]];
+
+  /* 令entryShortTerm 为一个变量，范围涵盖当前标记为“用于短期参考”的所有参考条目。当存在具有大于PicOrderCnt(CurrPic)的PicOrderCnt(entryShortTerm)的某些entryShortTerm值时，entryShortTerm的这些值按照PicOrderCnt(entryShortTerm)的升序放置在refFrameList1ShortTerm的开头。 Rec 的所有剩余值。然后，ITU-T H.264 (08/2021) 125entryShortTerm（当存在时）按照 PicOrderCnt(entryShortTerm ) 的降序被附加到 refFrameList1ShortTerm。*/
+  /* refFrameListLongTerm 从具有最低 LongTermFrameIdx 值的参考条目开始排序，并按升序继续到具有最高 LongTermFrameIdx 值的参考条目。 */
+  int j1 = 0;
+  for (int i = 0; i < indexTemp_short_right.size(); i++)
+    refFrameList1ShortTerm[j1++] = dpb[indexTemp_short_right[i]];
+
+  for (int i = 0; i < indexTemp_short_left.size(); i++)
+    refFrameList1ShortTerm[j1++] = dpb[indexTemp_short_left[i]];
+
+  /* 第 8.2.4.2.5 节中指定的过程通过作为输入给出的 refFrameList0ShortTerm 和 refFrameListLongTerm 进行调用，并将输出分配给 RefPicList0。*/
+  vector<Frame *> frameLong(begin(refFrameListLongTerm),
+                            end(refFrameListLongTerm));
+
+  vector<Frame *> frame0Short(begin(refFrameList0ShortTerm),
+                              end(refFrameList0ShortTerm));
+  int ret = init_reference_picture_lists_in_fields(
+      frame0Short, frameLong, RefPicList0, RefPicList0Length, 0);
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return ret;
   }
 
-  for (i = 0; i < short_refs_count_right; i++) {
-    refFrameList0ShortTerm[j++] = dpb[indexTemp_short_right[i]];
+  /* 第 8.2.4.2.5 节中指定的过程通过作为输入给出的 refFrameList1ShortTerm 和 refFrameListLongTerm 进行调用，并将输出分配给 RefPicList1。 */
+  vector<Frame *> frame1Short(begin(refFrameList1ShortTerm),
+                              end(refFrameList1ShortTerm));
+  ret = init_reference_picture_lists_in_fields(
+      frame1Short, frameLong, RefPicList1, RefPicList0Length, 1);
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return ret;
   }
 
-  for (i = 0; i < long_refs_count; i++) {
-    refFrameListLongTerm[j++] = dpb[indexTemp_long[i]];
-  }
-
-  //-------------RefPicList1----------------
-  j = 0;
-
-  for (i = 0; i < short_refs_count_right; i++) {
-    refFrameList1ShortTerm[j++] = dpb[indexTemp_short_right[i]];
-  }
-
-  for (i = 0; i < short_refs_count_left; i++) {
-    refFrameList1ShortTerm[j++] = dpb[indexTemp_short_left[i]];
-  }
-
-  //-------------------------
-  // 8.2.4.2.5 Initialisation process for reference picture lists in fields
-  // TODO 严重注意，这里要记得关闭注释，这里是暂时性注释掉 <24-08-31 00:51:59, YangJing>
-  //ret = init_reference_picture_lists_in_fields(
-  //refFrameList0ShortTerm, refFrameListLongTerm, RefPicList0,
-  //RefPicList0Length, 0);
-  RETURN_IF_FAILED(ret != 0, -1);
-
-  // 8.2.4.2.5 Initialisation process for reference picture lists in fields
-  // TODO 严重注意，这里要记得关闭注释，这里是暂时性注释掉 <24-08-31 00:51:59, YangJing>
-  //ret = init_reference_picture_lists_in_fields(
-  //refFrameList1ShortTerm, refFrameListLongTerm, RefPicList1,
-  //RefPicList0Length, 1);
-  RETURN_IF_FAILED(ret != 0, -1);
-
-  //--------------------------
-  // When the reference picture list RefPicList1 has more than one entry and
-  // RefPicList1 is identical to the reference picture list RefPicList0, the
-  // first two entries RefPicList1[ 0 ] and RefPicList1[ 1 ] are switched
+  /* 当参考图片列表RefPicList1具有多于一个条目并且RefPicList1与参考图片列表RefPicList0相同时，前两个条目RefPicList1[0]和RefPicList1[1]被交换。 */
   int flag = 0;
-  if (short_refs_count_left + short_refs_count_right + long_refs_count > 1) {
-    for (i = 0; i < size_dpb; i++) {
-      if (RefPicList1[i] !=
-          RefPicList0[i]) // FIXME: RefPicList1 is identical to the reference
-                          // picture list RefPicList0
-      {
+  if (j0 > 1) {
+    for (int i = 0; i < size_dpb; i++)
+      if (RefPicList1[i] != RefPicList0[i]) {
         flag = 1;
         break;
       }
-    }
   }
 
-  if (flag == 0) // the first two entries RefPicList1[ 0 ] and RefPicList1[ 1 ]
-                 // are switched
-  {
-    Frame *tmp = RefPicList1[0];
-    RefPicList1[0] = RefPicList1[1];
-    RefPicList1[1] = tmp;
-  }
+  if (!flag) swap(RefPicList1[0], RefPicList1[1]);
 
   return 0;
 }

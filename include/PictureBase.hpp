@@ -140,10 +140,10 @@ class PictureBase {
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16],
       int32_t &RefPicList0Length,
       int32_t &RefPicList1Length); // 8.2.4.2.4
-  int init_reference_picture_lists_in_fields(
-      Frame *(&refFrameListXShortTerm)[16], Frame *(&refFrameListXLongTerm)[16],
-      Frame *(&RefPicListX)[16], int32_t &RefPicListXLength,
-      int32_t listX); // 8.2.4.2.5
+  //int init_reference_picture_lists_in_fields(
+      //Frame *(&refFrameListXShortTerm)[16], Frame *(&refFrameListXLongTerm)[16],
+      //Frame *(&RefPicListX)[16], int32_t &RefPicListXLength,
+      //int32_t listX); // 8.2.4.2.5
   int init_reference_picture_lists_in_fields(
       vector<Frame *>(&refFrameListXShortTerm), vector<Frame *>(&refFrameListXLongTerm),
       Frame *(&RefPicListX)[16], int32_t &RefPicListXLength,
