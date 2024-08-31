@@ -1243,7 +1243,7 @@ int PictureBase::
     refIdxCol = -1;
   } else {
     int32_t predFlagL0Col = colPic->m_mbs[mbAddrCol].m_PredFlagL0[mbPartIdxCol];
-    int32_t predFlagL1Col = colPic->m_mbs[mbAddrCol].m_PredFlagL1[mbPartIdxCol];
+    //int32_t predFlagL1Col = colPic->m_mbs[mbAddrCol].m_PredFlagL1[mbPartIdxCol];
 
     if (predFlagL0Col == 1) {
       mvCol[0] = colPic->m_mbs[mbAddrCol]
@@ -3062,8 +3062,8 @@ int PictureBase::Derivation_process_for_prediction_weights(
 int PictureBase::Inverse_sub_macroblock_partition_scanning_process(
     MacroBlock *mb, int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &x,
     int32_t &y) {
-  int32_t MbPartWidth = mb->MbPartWidth;
-  int32_t MbPartHeight = mb->MbPartHeight;
+  //int32_t MbPartWidth = mb->MbPartWidth;
+  //int32_t MbPartHeight = mb->MbPartHeight;
   int32_t SubMbPartWidth = mb->SubMbPartWidth[mbPartIdx];
   int32_t SubMbPartHeight = mb->SubMbPartHeight[mbPartIdx];
 

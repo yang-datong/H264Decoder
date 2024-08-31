@@ -5,6 +5,79 @@
 #include "SliceHeader.hpp"
 #include <cstdint>
 
+/* 7.3.4 Slice data syntax */
+int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
+  SliceHeader &header = picture.m_slice.slice_header;
+
+  /* CABAC编码 */
+  CH264Cabac cabac(bs, picture);
+  /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
+  initCABAC(cabac, bs, header);
+
+  if (header.MbaffFrameFlag == 0)
+    /* 如果当前帧不使用MBAFF编码模式。所有宏块都作为帧宏块进行编码 */
+    mb_field_decoding_flag = header.field_pic_flag;
+
+  picture.CurrMbAddr = CurrMbAddr =
+      header.first_mb_in_slice * (1 + header.MbaffFrameFlag);
+
+  /* 更新参考帧列表0,1的预测图像编号 */
+  header.picNumL0Pred = header.picNumL1Pred = header.CurrPicNum;
+
+  /* 处理帧间控制变量（主要是针对帧间解码情况） */
+  do_decoding_picture_order_count(picture, header);
+
+  bool moreDataFlag = 1;
+  int32_t prevMbSkipped = 0;
+
+  do {
+    if (header.slice_type != SLICE_I && header.slice_type != SLICE_SI) {
+      if (m_pps.entropy_coding_mode_flag == 0) {
+        /* CAVLC熵编码，暂时不处理 */
+        process_mb_skip_run();
+        prevMbSkipped = (mb_skip_run > 0);
+        for (int i = 0; i < mb_skip_run; i++)
+          CurrMbAddr = NextMbAddress(CurrMbAddr, header);
+        if (mb_skip_run > 0) moreDataFlag = bs.more_rbsp_data();
+
+      } else {
+        /* CABAC熵编码 */
+        process_mb_skip_flag(picture, header, cabac, prevMbSkipped);
+        moreDataFlag = !mb_skip_flag;
+      }
+    }
+
+    if (moreDataFlag) {
+      if (header.MbaffFrameFlag &&
+          (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
+        /* 表示本宏块是属于一个宏块对中的一个 */
+        process_mb_field_decoding_flag();
+
+      do_macroblock_layer(picture, bs, cabac, header);
+    }
+
+    if (!m_pps.entropy_coding_mode_flag)
+      moreDataFlag = bs.more_rbsp_data();
+    else {
+      if (header.slice_type != SLICE_I && header.slice_type != SLICE_SI)
+        prevMbSkipped = mb_skip_flag;
+      if (header.MbaffFrameFlag && CurrMbAddr % 2 == 0)
+        moreDataFlag = 1;
+      else {
+        process_end_of_slice_flag(cabac);
+        moreDataFlag = !end_of_slice_flag;
+      }
+    }
+    CurrMbAddr = NextMbAddress(CurrMbAddr, header);
+  } while (moreDataFlag);
+
+  if (picture.mb_cnt == picture.PicSizeInMbs) picture.m_is_decode_finished = 1;
+
+  slice_id++;
+  slice_number++;
+  return 0;
+}
+
 /* 9.3.1 Initialization process */
 int SliceBody::initCABAC(CH264Cabac &cabac, BitStream &bs,
                          SliceHeader &header) {
@@ -281,79 +354,6 @@ int SliceBody::do_macroblock_layer(PictureBase &picture, BitStream &bs,
         isChromaCb, picWidthInSamplesC, pic_buff_cr);
   }
 
-  return 0;
-}
-
-/* 7.3.4 Slice data syntax */
-int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
-  SliceHeader &header = picture.m_slice.slice_header;
-
-  /* CABAC编码 */
-  CH264Cabac cabac(bs, picture);
-  /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
-  initCABAC(cabac, bs, header);
-
-  if (header.MbaffFrameFlag == 0)
-    /* 如果当前帧不使用MBAFF编码模式。所有宏块都作为帧宏块进行编码 */
-    mb_field_decoding_flag = header.field_pic_flag;
-
-  picture.CurrMbAddr = CurrMbAddr =
-      header.first_mb_in_slice * (1 + header.MbaffFrameFlag);
-
-  /* 更新参考帧列表0,1的预测图像编号 */
-  header.picNumL0Pred = header.picNumL1Pred = header.CurrPicNum;
-
-  /* 处理帧间控制变量（主要是针对帧间解码情况） */
-  do_decoding_picture_order_count(picture, header);
-
-  bool moreDataFlag = 1;
-  int32_t prevMbSkipped = 0;
-
-  do {
-    if (header.slice_type != SLICE_I && header.slice_type != SLICE_SI) {
-      if (m_pps.entropy_coding_mode_flag == 0) {
-        /* CAVLC熵编码，暂时不处理 */
-        process_mb_skip_run();
-        prevMbSkipped = (mb_skip_run > 0);
-        for (int i = 0; i < mb_skip_run; i++)
-          CurrMbAddr = NextMbAddress(CurrMbAddr, header);
-        if (mb_skip_run > 0) moreDataFlag = bs.more_rbsp_data();
-
-      } else {
-        /* CABAC熵编码 */
-        process_mb_skip_flag(picture, header, cabac, prevMbSkipped);
-        moreDataFlag = !mb_skip_flag;
-      }
-    }
-
-    if (moreDataFlag) {
-      if (header.MbaffFrameFlag &&
-          (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
-        /* 表示本宏块是属于一个宏块对中的一个 */
-        process_mb_field_decoding_flag();
-
-      do_macroblock_layer(picture, bs, cabac, header);
-    }
-
-    if (!m_pps.entropy_coding_mode_flag)
-      moreDataFlag = bs.more_rbsp_data();
-    else {
-      if (header.slice_type != SLICE_I && header.slice_type != SLICE_SI)
-        prevMbSkipped = mb_skip_flag;
-      if (header.MbaffFrameFlag && CurrMbAddr % 2 == 0)
-        moreDataFlag = 1;
-      else {
-        process_end_of_slice_flag(cabac);
-        moreDataFlag = !end_of_slice_flag;
-      }
-    }
-    CurrMbAddr = NextMbAddress(CurrMbAddr, header);
-  } while (moreDataFlag);
-
-  if (picture.mb_cnt == picture.PicSizeInMbs) picture.m_is_decode_finished = 1;
-
-  slice_id++;
-  slice_number++;
   return 0;
 }
 

@@ -3,17 +3,6 @@
 #include <iostream>
 #include <ostream>
 
-SPS::SPS() {
-  //if (pic_order_cnt_type == 1) {
-    //ExpectedDeltaPerPicOrderCntCycle = 0;
-    //for (int i = 0; i < (int32_t)num_ref_frames_in_pic_order_cnt_cycle; i++) {
-      //ExpectedDeltaPerPicOrderCntCycle += offset_for_ref_frame[i];
-    //}
-  //}
-}
-
-SPS::~SPS() {}
-
 void SPS::vui_parameters(BitStream &bitStream) {
   std::cout << "\tVUI -> {" << std::endl;
   aspect_ratio_info_present_flag = bitStream.readU1();
@@ -360,12 +349,12 @@ The value of log2_max_frame_num_minus4 shall be in the range of 0 to
   MaxPicOrderCntLsb = pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
 
   /* 计算预期图像顺序计数周期增量 */
-  if (pic_order_cnt_type == 1) {
-    int expectedDeltaPerPicOrderCntCycle = 0;
-    for (int i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++) {
-      expectedDeltaPerPicOrderCntCycle += offset_for_ref_frame[i];
-    }
-  }
+  //if (pic_order_cnt_type == 1) {
+    //int expectedDeltaPerPicOrderCntCycle = 0;
+    //for (int i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++) {
+      //expectedDeltaPerPicOrderCntCycle += offset_for_ref_frame[i];
+    //}
+  //}
 
   return 0;
 }

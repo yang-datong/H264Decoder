@@ -46,8 +46,8 @@ int CH264ResidualBlockCavlc::residual_block_cavlc(
       TotalCoeff); // 直接查表找到对应的TrailingOnes, TotalCoeff值
   RETURN_IF_FAILED(ret != 0, -1);
 
-  uint16_t coeff_token2 = bs.readUn(
-      coeff_token_bit_length); // 此处才是读取coeff_token_bit_length bit数据
+  /*uint16_t coeff_token2 =*/bs.readUn(coeff_token_bit_length);
+  // 此处才是读取coeff_token_bit_length bit数据
 
   //-------------------------------------------
   if (TotalCoeff > 0) {
@@ -207,7 +207,7 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
   int32_t cb4x4BlkIdx = BlkIdx;
   int32_t cr4x4BlkIdx = BlkIdx;
   //int32_t mb_type_neighbouring_A = 0;
-  int32_t mb_type_neighbouring_B = 0;
+  //int32_t mb_type_neighbouring_B = 0;
 
   MB_ADDR_TYPE mbAddrN_A_type = MB_ADDR_TYPE_UNKOWN;
   MB_ADDR_TYPE mbAddrN_B_type = MB_ADDR_TYPE_UNKOWN;
@@ -228,10 +228,10 @@ int CH264ResidualBlockCavlc::get_nC(PictureBase &picture,
 
   // Table 6-2 – Specification of input and output assignments for
   // clauses 6.4.11.1 to 6.4.11.7
-  int32_t xD_A = -1;
-  int32_t yD_A = 0;
-  int32_t xD_B = 0;
-  int32_t yD_B = -1;
+  //int32_t xD_A = -1;
+  //int32_t yD_A = 0;
+  //int32_t xD_B = 0;
+  //int32_t yD_B = -1;
   int32_t x = 0;
   int32_t y = 0;
   int32_t maxW = 0;

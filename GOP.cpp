@@ -2,13 +2,11 @@
 #include "Frame.hpp"
 #include "Nalu.hpp"
 
-GOP::GOP() { int ret = init(); }
+GOP::GOP() { init(); }
 
-GOP::~GOP() { int ret = unInit(); }
+GOP::~GOP() {unInit(); }
 
 int GOP::init() {
-  int ret = 0;
-
   m_gop_size = 0;
   m_dpb_for_output_length = 0;
   max_num_reorder_frames = 0;
@@ -29,7 +27,6 @@ int GOP::init() {
 }
 
 int GOP::unInit() {
-  int ret = 0;
   int32_t size_dpb = H264_MAX_DECODED_PICTURE_BUFFER_COUNT;
 
   m_dpb_for_output_length = 0;
@@ -43,7 +40,6 @@ int GOP::unInit() {
 }
 
 int GOP::getOneEmptyPicture(Frame *&pic) {
-  int ret = 0;
   int32_t size_dpb = H264_MAX_DECODED_PICTURE_BUFFER_COUNT;
 
   for (int i = 0; i < size_dpb; i++) {

@@ -50,7 +50,7 @@ int Nalu::parseEBSP(EBSP &ebsp) {
 int Nalu::parseRBSP(EBSP &ebsp, RBSP &rbsp) {
   parseNALHeader(ebsp); // RBSP的头也是EBSP的头
 
-  bool NumBytesInRBSP = 0;
+  //bool NumBytesInRBSP = 0;
   bool nalUnitHeaderBytes = 1; // nalUnitHeaderBytes的默认head大小为1字节
 
   if (nal_unit_type == 14 || nal_unit_type == 20 || nal_unit_type == 21) {

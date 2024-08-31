@@ -55,7 +55,6 @@ int CHrdParameters::printInfo() {
 
 // E.1.2 HRD parameters syntax
 int CHrdParameters::hrd_parameters(BitStream &bs) {
-  int ret = 0;
   CH264Golomb gb;
 
   this->cpb_cnt_minus1 = gb.get_ue_golomb(bs); // 0 | 5 ue(v)

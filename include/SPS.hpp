@@ -22,8 +22,6 @@ struct CHROMA_FORMAT_IDC_T {
 
 class SPS {
  public:
-  SPS();
-  ~SPS();
   uint8_t *_buf = nullptr;
   int _len = 0;
   int extractParameters();

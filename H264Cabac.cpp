@@ -1086,7 +1086,6 @@ int CH264Cabac::
   int32_t transBlockB = -1;
   int32_t transBlockA_coded_block_flag = 0;
   int32_t transBlockB_coded_block_flag = 0;
-  int32_t non_zero_count_coeff = 0;
 
   if (ctxBlockCat == 0     // MB_RESIDUAL_Intra16x16DCLevel
       || ctxBlockCat == 6  // MB_RESIDUAL_CbIntra16x16DCLevel
@@ -1837,9 +1836,7 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
                                            int32_t &synElVal) {
   int ret = 0;
 
-  int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -2193,7 +2190,6 @@ int CH264Cabac::decode_mb_type_in_SI_slices(int32_t &synElVal) {
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -2249,8 +2245,6 @@ int CH264Cabac::decode_mb_type_in_P_SP_slices(int32_t &synElVal) {
       (H264_SLICE_TYPE)picture.m_slice.slice_header.slice_type;
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
-  int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -2336,7 +2330,6 @@ int CH264Cabac::decode_mb_type_in_B_slices(int32_t &synElVal) {
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -2618,8 +2611,6 @@ int CH264Cabac::decode_sub_mb_type_in_P_SP_slices(int32_t &synElVal) {
       (H264_SLICE_TYPE)picture.m_slice.slice_header.slice_type;
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
-  int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -2678,8 +2669,6 @@ int CH264Cabac::decode_sub_mb_type_in_B_slices(int32_t &synElVal) {
       (H264_SLICE_TYPE)picture.m_slice.slice_header.slice_type;
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
-  int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -2885,7 +2874,6 @@ int CH264Cabac::decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -3164,7 +3152,6 @@ int CH264Cabac::decode_intra_chroma_pred_mode(int32_t &synElVal) {
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -3232,8 +3219,6 @@ int CH264Cabac::
 
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
-  int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -3264,8 +3249,6 @@ int CH264Cabac::decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
 
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
-  int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -3479,38 +3462,35 @@ int CH264Cabac::decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
                                         int32_t &synElVal) {
   int ret = 0;
 
-  int32_t NumC8x8 =
-      4 / (picture.m_slice.m_sps.SubWidthC * picture.m_slice.m_sps.SubHeightC);
+  //int32_t NumC8x8 = 4 / (picture.m_slice.m_sps.SubWidthC * picture.m_slice.m_sps.SubHeightC);
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
-  int32_t maxNumCoeff = 0;
   int32_t ctxBlockCat = 0;
 
   //--------1.先计算出ctxBlockCat的值------------
   // Table 9-42 – Specification of ctxBlockCat for the different blocks
   // ctxBlockCats[][0] = ctxBlockCat;
   // ctxBlockCats[][1] = maxNumCoeff;
-  int32_t ctxBlockCats[14][2] = {
-      {0, 16},          // MB_RESIDUAL_Intra16x16DCLevel
-      {1, 15},          // MB_RESIDUAL_Intra16x16ACLevel
-      {2, 16},          // MB_RESIDUAL_LumaLevel4x4
-      {3, 4 * NumC8x8}, // MB_RESIDUAL_ChromaDCLevel
-      {4, 15},          // MB_RESIDUAL_ChromaACLevel
-      {5, 64},          // MB_RESIDUAL_LumaLevel8x8
-      {6, 16},          // MB_RESIDUAL_CbIntra16x16DCLevel
-      {7, 15},          // MB_RESIDUAL_CbIntra16x16ACLevel
-      {8, 16},          // MB_RESIDUAL_CbLevel4x4
-      {9, 64},          // MB_RESIDUAL_CbLevel8x8
-      {10, 16},         // MB_RESIDUAL_CrIntra16x16DCLevel
-      {11, 15},         // MB_RESIDUAL_CrIntra16x16ACLevel
-      {12, 16},         // MB_RESIDUAL_CrLevel4x4
-      {13, 64},         // MB_RESIDUAL_CrLevel8x8
-  };
+  //int32_t ctxBlockCats[14][2] = {
+  //    {0, 16},          // MB_RESIDUAL_Intra16x16DCLevel
+  //    {1, 15},          // MB_RESIDUAL_Intra16x16ACLevel
+  //    {2, 16},          // MB_RESIDUAL_LumaLevel4x4
+  //    {3, 4 * NumC8x8}, // MB_RESIDUAL_ChromaDCLevel
+  //    {4, 15},          // MB_RESIDUAL_ChromaACLevel
+  //    {5, 64},          // MB_RESIDUAL_LumaLevel8x8
+  //    {6, 16},          // MB_RESIDUAL_CbIntra16x16DCLevel
+  //    {7, 15},          // MB_RESIDUAL_CbIntra16x16ACLevel
+  //    {8, 16},          // MB_RESIDUAL_CbLevel4x4
+  //    {9, 64},          // MB_RESIDUAL_CbLevel8x8
+  //    {10, 16},         // MB_RESIDUAL_CrIntra16x16DCLevel
+  //    {11, 15},         // MB_RESIDUAL_CrIntra16x16ACLevel
+  //    {12, 16},         // MB_RESIDUAL_CrLevel4x4
+  //    {13, 64},         // MB_RESIDUAL_CrLevel8x8
+  //};
 
   // ctxBlockCat = ctxBlockCats[mb_block_level][0];
   // maxNumCoeff = ctxBlockCats[mb_block_level][1];
@@ -3577,11 +3557,9 @@ int CH264Cabac::decode_significant_coeff_flag(MB_RESIDUAL_LEVEL mb_block_level,
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
-  int32_t maxNumCoeff = 0;
   int32_t ctxBlockCat = 0;
 
   //--------1.先计算出ctxBlockCat的值------------
@@ -3730,16 +3708,13 @@ int CH264Cabac::decode_coeff_abs_level_minus1(MB_RESIDUAL_LEVEL mb_block_level,
                                               int32_t &synElVal) {
   int ret = 0;
 
-  int32_t NumC8x8 =
-      4 / (picture.m_slice.m_sps.SubWidthC * picture.m_slice.m_sps.SubHeightC);
+  //int32_t NumC8x8 = 4 / (picture.m_slice.m_sps.SubWidthC * picture.m_slice.m_sps.SubHeightC);
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
-  int32_t maxNumCoeff = 0;
   int32_t ctxBlockCat = 0;
 
   //--------1.先计算出ctxBlockCat的值------------
@@ -3881,11 +3856,7 @@ int CH264Cabac::decode_coeff_sign_flag(int32_t &synElVal) {
 
   // int32_t maxBinIdxCtx = 0;
   // int32_t ctxIdxOffset = 0;
-  int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
-  int32_t ctxIdx = 0;
-  int32_t bypassFlag = 0;
 
   //------Table 9-34: ctxIdxOffset: (uses DecodeBypass)--------
   // maxBinIdxCtx = 0;
@@ -3911,8 +3882,6 @@ int CH264Cabac::decode_end_of_slice_flag(int32_t &synElVal) {
 
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
-  int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;
@@ -3943,7 +3912,6 @@ int CH264Cabac::decode_transform_size_8x8_flag(int32_t &synElVal) {
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
-  int32_t binIdx = -1;
   int32_t binVal = 0;
   int32_t ctxIdx = 0;
   int32_t bypassFlag = 0;

@@ -726,14 +726,18 @@ void SliceHeader::dec_ref_pic_marking(BitStream &bitStream) {
         memory_management_control_operation = bitStream.readUE();
         if (memory_management_control_operation == 1 ||
             memory_management_control_operation == 3)
-          uint32_t difference_of_pic_nums_minus1 = bitStream.readUE();
+          /*uint32_t difference_of_pic_nums_minus1 = */bitStream.readUE();
+        /* TODO YangJing 应该还需要进一步写入到结构体中 <24-09-01 00:38:22> */
         if (memory_management_control_operation == 2)
-          uint32_t long_term_pic_num = bitStream.readUE();
+          /*uint32_t long_term_pic_num = */bitStream.readUE();
+        /* TODO YangJing 应该还需要进一步写入到结构体中 <24-09-01 00:38:22> */
         if (memory_management_control_operation == 3 ||
             memory_management_control_operation == 6)
-          uint32_t long_term_frame_idx = bitStream.readUE();
+          /*uint32_t long_term_frame_idx = */bitStream.readUE();
+        /* TODO YangJing 应该还需要进一步写入到结构体中 <24-09-01 00:38:22> */
         if (memory_management_control_operation == 4)
-          uint32_t max_long_term_frame_idx_plus1 = bitStream.readUE();
+          /*uint32_t max_long_term_frame_idx_plus1 = */bitStream.readUE();
+        /* TODO YangJing 应该还需要进一步写入到结构体中 <24-09-01 00:38:22> */
       } while (memory_management_control_operation != 0);
     }
   }

@@ -785,7 +785,7 @@ int PictureBase::Filtering_process_for_block_edges(
 
     //-----------用于查找4x4或8x8非零系数数目------------------
     int32_t mbAddr_p0 = _CurrMbAddr;
-    int32_t mbAddr_q0 = _CurrMbAddr;
+    //int32_t mbAddr_q0 = _CurrMbAddr;
 
     int8_t mb_x_p0 = 0;
     int8_t mb_y_p0 = 0;

@@ -1,7 +1,9 @@
 #ifndef MACROBLOCK_HPP_FBNXLFQV
 #define MACROBLOCK_HPP_FBNXLFQV
 #include "BitStream.hpp"
+#include "CH264Golomb.hpp"
 #include "H264Cabac.hpp"
+#include "SliceHeader.hpp"
 #include "Type.hpp"
 
 class PictureBase;
@@ -232,8 +234,41 @@ class MacroBlock {
 
   inline int set_mb_type_X_slice_info();
 
+  void initFromSlice(SliceHeader &header, const SliceBody &slice_data);
   int macroblock_layer(BitStream &bs, PictureBase &picture,
                        const SliceBody &slice_data, CH264Cabac &cabac);
+  int process_decode_mb_type(PictureBase &picture, SliceHeader &header,
+                             const bool is_cabac, CH264Cabac &cabac,
+                             BitStream &bs, CH264Golomb &gb,
+                             const int32_t slice_type);
+  int process_transform_size_8x8_flag(const bool is_cabac, CH264Cabac &cabac,
+                                      BitStream &bs,
+                                      int32_t &transform_size_8x8_flag_temp);
+  int process_coded_block_pattern(const bool is_cabac, CH264Cabac &cabac,
+                                  CH264Golomb &gb, BitStream &bs,
+                                  const uint32_t ChromaArrayType);
+  int process_mb_qp_delta(const bool is_cabac, CH264Cabac &cabac,
+                          CH264Golomb &gb, BitStream &bs);
+
+  int process_prev_intra4x4_pred_mode_flag(const bool is_cabac,
+                                           CH264Cabac &cabac, CH264Golomb &gb,
+                                           BitStream &bs,
+                                           const int luma4x4BlkIdx);
+  int process_rem_intra4x4_pred_mode(const bool is_cabac, CH264Cabac &cabac,
+                                     CH264Golomb &gb, BitStream &bs,
+                                     const int luma4x4BlkIdx);
+  int process_prev_intra8x8_pred_mode_flag(const bool is_cabac,
+                                           CH264Cabac &cabac, CH264Golomb &gb,
+                                           BitStream &bs,
+                                           const int luma8x8BlkIdx);
+  int process_rem_intra8x8_pred_mode(const bool is_cabac, CH264Cabac &cabac,
+                                     CH264Golomb &gb, BitStream &bs,
+                                     const int luma8x8BlkIdx);
+  int process_intra_chroma_pred_mode(const bool is_cabac, CH264Cabac &cabac,
+                                     CH264Golomb &gb, BitStream &bs);
+
+  int NumSubMbPartFunc(int mbPartIdx);
+
   int macroblock_layer_mb_skip(PictureBase &picture,
                                const SliceBody &slice_data, CH264Cabac &cabac);
   int mb_pred(BitStream &bs, PictureBase &picture, const SliceBody &slice_data,

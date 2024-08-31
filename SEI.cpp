@@ -8,7 +8,7 @@
 void SEI::sei_message() {
   payloadType = 0;
   while (_bs->readUn(8) == 0xFF) {
-    int8_t ff_byte = _bs->readUn(8);
+    _bs->readUn(8);
     payloadType += 255;
   }
   uint8_t last_payload_type_byte = _bs->readUn(8);
@@ -16,7 +16,7 @@ void SEI::sei_message() {
 
   payloadSize = 0;
   while (_bs->readUn(8) == 0xFF) {
-    int8_t ff_byte = _bs->readUn(8);
+    _bs->readUn(8);
     payloadSize += 255;
   }
   uint8_t last_payload_size_byte = _bs->readUn(8);
@@ -32,7 +32,7 @@ void SEI::buffering_period() {
   if (sps->vcl_hrd_parameters_present_flag == 1)
     VclHrdBpPresentFlag = 1;
 
-  int seq_parameter_set_id = _bs->readUE();
+  /*int seq_parameter_set_id =*/ _bs->readUE();
   if (NalHrdBpPresentFlag) {
     initial_cpb_removal_delay = new uint32_t[sps->cpb_cnt_minus1 + 1]{0};
     initial_cpb_removal_delay_offset = new uint32_t[sps->cpb_cnt_minus1 + 1]{0};
@@ -109,9 +109,9 @@ void SEI::sei_payload() {
     reserved_sei_message();
 
   if (!_bs->byte_aligned()) {
-    int8_t bit_equal_to_one = _bs->readU1();
+     _bs->readU1();
     while (!_bs->byte_aligned())
-      int8_t bit_equal_to_zero = _bs->readU1();
+       _bs->readU1();
   }
 }
 
