@@ -3,7 +3,7 @@
 #include "Common.hpp"
 #include "MacroBlock.hpp"
 #include "Slice.hpp"
-#include "SliceBody.hpp"
+#include "SliceData.hpp"
 #include "Type.hpp"
 #include <vector>
 

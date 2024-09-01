@@ -8,11 +8,9 @@
 #include "SliceHeader.hpp"
 #include "Type.hpp"
 
-/* TODO  <24-09-01 02:44:59, YangJing> 再把这个类的内容整理一下，然后理解一下 */
-
 // 7.3.5 Macroblock layer syntax
 int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
-                                 const SliceBody &slice_data,
+                                 const SliceData &slice_data,
                                  CH264Cabac &cabac) {
   /* ------------------ 设置别名 ------------------ */
   SliceHeader &header = picture.m_slice.slice_header;
@@ -80,24 +78,25 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
     }
   }
 
-  /* TODO YangJing 下面是干嘛？ <24-09-01 00:03:51> */
-  //---------------------------------------------------
+  /* 7.4.5 Macroblock layer semantics , page 105 */
+  /* mb_qp_delta可以改变宏块层中QPY的值。 mb_qp_delta 的解码值应在 -( 26 + QpBdOffsetY / 2) 至 +( 25 + QpBdOffsetY / 2 ) 的范围内，包括端值。当 mb_qp_delta 对于任何宏块（包括 P_Skip 和 B_Skip 宏块类型）不存在时，应推断其等于 0。如果 mb_qp_delta 超出了范围，它会被修正到合法范围内。 */
   if (mb_qp_delta < (int32_t)(-(26 + (int32_t)sps.QpBdOffsetY / 2)) ||
       mb_qp_delta > (25 + (int32_t)sps.QpBdOffsetY / 2)) {
-    LOG_WARN("mb_qp_delta=(%d) is out of range [%d,%d].\n", mb_qp_delta,
-             (-(26 + (int32_t)sps.QpBdOffsetY / 2)),
-             (25 + (int32_t)sps.QpBdOffsetY / 2));
+    /* 如果 mb_qp_delta 超出范围，使用 CLIP3 函数将其限制在合法范围内 */
     mb_qp_delta = CLIP3((-(26 + (int32_t)sps.QpBdOffsetY / 2)),
                         (25 + (int32_t)sps.QpBdOffsetY / 2), mb_qp_delta);
   }
 
+  /* 计算当前宏块的量化参数 QPY */
   QPY = ((header.QPY_prev + mb_qp_delta + 52 + 2 * sps.QpBdOffsetY) %
          (52 + sps.QpBdOffsetY)) -
         sps.QpBdOffsetY;
 
   QP1Y = QPY + sps.QpBdOffsetY;
+  /* 更新前一个宏块的量化参数（也就是当前宏快，对于下一个宏快来说就是前一个） */
   header.QPY_prev = QPY;
 
+  /* 是否启用变换旁路模式 */
   TransformBypassModeFlag =
       (sps.qpprime_y_zero_transform_bypass_flag == 1 && QP1Y == 0) ? 1 : 0;
 
@@ -105,34 +104,21 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
 }
 
 int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
-                                         const SliceBody &slice_data,
+                                         const SliceData &slice_data,
                                          CH264Cabac &cabac) {
   int ret = 0;
-  // int32_t mbPartIdx = 0;
-
   /* TODO YangJing 初始化 <24-09-01 02:07:46> */
   this->_cabac = &cabac;
   this->_gb = new CH264Golomb();
 
-  SliceHeader &slice_header = picture.m_slice.slice_header;
+  SliceHeader &header = picture.m_slice.slice_header;
 
-  field_pic_flag = slice_header.field_pic_flag;
-  bottom_field_flag = slice_header.bottom_field_flag;
-  mb_skip_flag = slice_data.mb_skip_flag;
-  mb_field_decoding_flag = slice_data.mb_field_decoding_flag;
-  MbaffFrameFlag = slice_header.MbaffFrameFlag;
+  initFromSlice(header, slice_data);
   constrained_intra_pred_flag =
       picture.m_slice.m_pps.constrained_intra_pred_flag;
-  disable_deblocking_filter_idc = slice_header.disable_deblocking_filter_idc;
-  CurrMbAddr = slice_data.CurrMbAddr;
-  slice_id = slice_data.slice_id;
-  slice_number = slice_data.slice_number;
-  m_slice_type = slice_header.slice_type;
-  FilterOffsetA = slice_header.FilterOffsetA;
-  FilterOffsetB = slice_header.FilterOffsetB;
 
   ret = picture.Inverse_macroblock_scanning_process(
-      slice_header.MbaffFrameFlag, CurrMbAddr, mb_field_decoding_flag,
+      header.MbaffFrameFlag, CurrMbAddr, mb_field_decoding_flag,
       picture.m_mbs[CurrMbAddr].m_mb_position_x,
       picture.m_mbs[CurrMbAddr].m_mb_position_y);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -140,20 +126,14 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
   //    int is_ae = picture.m_slice.m_pps.entropy_coding_mode_flag;
   //    //ae(v)表示CABAC编码
 
-  if (slice_header.slice_type == SLICE_P ||
-      slice_header.slice_type == SLICE_SP) {
-    mb_type = 5; // inferred: P_Skip: no further data is present for the
-                 // macroblock in the bitstream.
-  } else if (slice_header.slice_type == SLICE_B) {
-    mb_type = 23; // inferred: B_Skip: no further data is present for the
-                  // macroblock in the bitstream.
-  }
+  if (header.slice_type == SLICE_P || header.slice_type == SLICE_SP)
+    /* P_Skip：比特流中不存在宏块的更多数据。 */
+    mb_type = 5;
+  else if (header.slice_type == SLICE_B)
+    /* B_Skip：比特流中不存在宏块的更多数据。函数 MbPartWidth( B_Skip ) 和 MbPartHeight( B_Skip ) 用于第 8.4.1 节中用于直接模式预测的运动向量和参考帧索引的导出过程。*/
+    mb_type = 23;
 
-  //    ret = fix_mb_type(slice_header.slice_type, mb_type, m_slice_type_fixed,
-  //    m_mb_type_fixed); //需要立即修正mb_type的值 RETURN_IF_FAILED(ret != 0,
-  //    ret);
-
-  m_slice_type_fixed = slice_header.slice_type;
+  m_slice_type_fixed = header.slice_type;
   m_mb_type_fixed = mb_type;
 
   //-----------------------------------------------
@@ -164,18 +144,15 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
                        m_name_of_mb_type, m_mb_pred_mode);
   RETURN_IF_FAILED(ret != 0, ret);
 
-  //    RETURN_IF_FAILED(m_name_of_mb_type == P_Skip || m_name_of_mb_type ==
-  //    B_Skip, -1);
-
   //---------------------------------------------------
   mb_qp_delta = 0;
 
-  QPY = ((slice_header.QPY_prev + mb_qp_delta + 52 +
+  QPY = ((header.QPY_prev + mb_qp_delta + 52 +
           2 * picture.m_slice.m_sps.QpBdOffsetY) %
          (52 + picture.m_slice.m_sps.QpBdOffsetY)) -
         picture.m_slice.m_sps.QpBdOffsetY; // (7-37)
   QP1Y = QPY + picture.m_slice.m_sps.QpBdOffsetY;
-  slice_header.QPY_prev = QPY;
+  header.QPY_prev = QPY;
 
   ret = set_mb_type_X_slice_info();
   // 因CABAC会用到MbPartWidth/MbPartHeight信息，所以需要尽可能提前设置相关值
@@ -184,78 +161,8 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
   return 0;
 }
 
-int MacroBlock::getMbPartWidthAndHeight(H264_MB_TYPE name_of_mb_type,
-                                        int32_t &_MbPartWidth,
-                                        int32_t &_MbPartHeight) {
-  int ret = 0;
-
-  if (name_of_mb_type >= P_L0_16x16 && name_of_mb_type <= P_Skip) {
-    _MbPartWidth =
-        mb_type_P_SP_slices_define[name_of_mb_type - P_L0_16x16].MbPartWidth;
-    _MbPartHeight =
-        mb_type_P_SP_slices_define[name_of_mb_type - P_L0_16x16].MbPartHeight;
-  } else if (name_of_mb_type >= B_Direct_16x16 && name_of_mb_type <= B_Skip) {
-    _MbPartWidth =
-        mb_type_B_slices_define[name_of_mb_type - B_Direct_16x16].MbPartWidth;
-    _MbPartHeight =
-        mb_type_B_slices_define[name_of_mb_type - B_Direct_16x16].MbPartHeight;
-  } else if (name_of_mb_type >= P_L0_8x8 && name_of_mb_type <= P_L0_4x4) {
-    _MbPartWidth =
-        sub_mb_type_P_mbs_define[name_of_mb_type - P_L0_8x8].SubMbPartWidth;
-    _MbPartHeight =
-        sub_mb_type_P_mbs_define[name_of_mb_type - P_L0_8x8].SubMbPartHeight;
-  } else if (name_of_mb_type >= B_Direct_8x8 && name_of_mb_type <= B_Bi_4x4) {
-    _MbPartWidth =
-        sub_mb_type_B_mbs_define[name_of_mb_type - B_Direct_8x8].SubMbPartWidth;
-    _MbPartHeight = sub_mb_type_B_mbs_define[name_of_mb_type - B_Direct_8x8]
-                        .SubMbPartHeight;
-  } else {
-    ret = -1;
-  }
-
-  return ret;
-}
-
-int MacroBlock::SubMbPredModeFunc(int32_t slice_type, int32_t sub_mb_type,
-                                  int32_t &NumSubMbPart,
-                                  H264_MB_PART_PRED_MODE &SubMbPredMode,
-                                  int32_t &SubMbPartWidth,
-                                  int32_t &SubMbPartHeight) {
-  if (slice_type == SLICE_I) {
-    printf("Unknown slice_type=%d;\n", slice_type);
-    return -1;
-  } else if (slice_type == SLICE_P) {
-    if (sub_mb_type >= 0 && sub_mb_type <= 4) {
-      NumSubMbPart = sub_mb_type_P_mbs_define[sub_mb_type].NumSubMbPart;
-      SubMbPredMode = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPredMode;
-      SubMbPartWidth = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPartWidth;
-      SubMbPartHeight = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPartHeight;
-    } else {
-      printf("sub_mb_type_P_mbs_define: sub_mb_type=%d; Must be in [-1..5]\n",
-             sub_mb_type);
-      return -1;
-    }
-  } else if (slice_type == SLICE_B) {
-    if (sub_mb_type >= 0 && sub_mb_type <= 12) {
-      NumSubMbPart = sub_mb_type_B_mbs_define[sub_mb_type].NumSubMbPart;
-      SubMbPredMode = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPredMode;
-      SubMbPartWidth = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPartWidth;
-      SubMbPartHeight = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPartHeight;
-    } else {
-      printf("sub_mb_type_B_mbs_define: sub_mb_type=%d; Must be in [0..12]\n",
-             sub_mb_type);
-      return -1;
-    }
-  } else {
-    printf("Unknown slice_type=%d;\n", slice_type);
-    return -1;
-  }
-
-  return 0;
-}
-
 // 7.3.5.1 Macroblock prediction syntax
-int MacroBlock::mb_pred(PictureBase &picture, const SliceBody &slice_data) {
+int MacroBlock::mb_pred(PictureBase &picture, const SliceData &slice_data) {
   /* ------------------ 设置别名 ------------------ */
   SliceHeader &header = picture.m_slice.slice_header;
   SPS &sps = picture.m_slice.m_sps;
@@ -335,7 +242,7 @@ int MacroBlock::mb_pred(PictureBase &picture, const SliceBody &slice_data) {
  * Page 58/80/812
  * 7.3.5.2 Sub-macroblock prediction syntax
  */
-int MacroBlock::sub_mb_pred(PictureBase &picture, const SliceBody &slice_data) {
+int MacroBlock::sub_mb_pred(PictureBase &picture, const SliceData &slice_data) {
   int ret = 0;
   int32_t mbPartIdx = 0;
   int32_t subMbPartIdx = 0;
@@ -537,6 +444,75 @@ int MacroBlock::NumSubMbPartFunc(int mbPartIdx) {
     return -1;
   }
   return NumSubMbPart;
+}
+
+int MacroBlock::SubMbPredModeFunc(int32_t slice_type, int32_t sub_mb_type,
+                                  int32_t &NumSubMbPart,
+                                  H264_MB_PART_PRED_MODE &SubMbPredMode,
+                                  int32_t &SubMbPartWidth,
+                                  int32_t &SubMbPartHeight) {
+  if (slice_type == SLICE_I) {
+    printf("Unknown slice_type=%d;\n", slice_type);
+    return -1;
+  } else if (slice_type == SLICE_P) {
+    if (sub_mb_type >= 0 && sub_mb_type <= 4) {
+      NumSubMbPart = sub_mb_type_P_mbs_define[sub_mb_type].NumSubMbPart;
+      SubMbPredMode = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPredMode;
+      SubMbPartWidth = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPartWidth;
+      SubMbPartHeight = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPartHeight;
+    } else {
+      printf("sub_mb_type_P_mbs_define: sub_mb_type=%d; Must be in [-1..5]\n",
+             sub_mb_type);
+      return -1;
+    }
+  } else if (slice_type == SLICE_B) {
+    if (sub_mb_type >= 0 && sub_mb_type <= 12) {
+      NumSubMbPart = sub_mb_type_B_mbs_define[sub_mb_type].NumSubMbPart;
+      SubMbPredMode = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPredMode;
+      SubMbPartWidth = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPartWidth;
+      SubMbPartHeight = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPartHeight;
+    } else {
+      printf("sub_mb_type_B_mbs_define: sub_mb_type=%d; Must be in [0..12]\n",
+             sub_mb_type);
+      return -1;
+    }
+  } else {
+    printf("Unknown slice_type=%d;\n", slice_type);
+    return -1;
+  }
+
+  return 0;
+}
+
+int MacroBlock::getMbPartWidthAndHeight(H264_MB_TYPE name_of_mb_type,
+                                        int32_t &_MbPartWidth,
+                                        int32_t &_MbPartHeight) {
+  int ret = 0;
+
+  if (name_of_mb_type >= P_L0_16x16 && name_of_mb_type <= P_Skip) {
+    _MbPartWidth =
+        mb_type_P_SP_slices_define[name_of_mb_type - P_L0_16x16].MbPartWidth;
+    _MbPartHeight =
+        mb_type_P_SP_slices_define[name_of_mb_type - P_L0_16x16].MbPartHeight;
+  } else if (name_of_mb_type >= B_Direct_16x16 && name_of_mb_type <= B_Skip) {
+    _MbPartWidth =
+        mb_type_B_slices_define[name_of_mb_type - B_Direct_16x16].MbPartWidth;
+    _MbPartHeight =
+        mb_type_B_slices_define[name_of_mb_type - B_Direct_16x16].MbPartHeight;
+  } else if (name_of_mb_type >= P_L0_8x8 && name_of_mb_type <= P_L0_4x4) {
+    _MbPartWidth =
+        sub_mb_type_P_mbs_define[name_of_mb_type - P_L0_8x8].SubMbPartWidth;
+    _MbPartHeight =
+        sub_mb_type_P_mbs_define[name_of_mb_type - P_L0_8x8].SubMbPartHeight;
+  } else if (name_of_mb_type >= B_Direct_8x8 && name_of_mb_type <= B_Bi_4x4) {
+    _MbPartWidth =
+        sub_mb_type_B_mbs_define[name_of_mb_type - B_Direct_8x8].SubMbPartWidth;
+    _MbPartHeight = sub_mb_type_B_mbs_define[name_of_mb_type - B_Direct_8x8]
+                        .SubMbPartHeight;
+  } else
+    ret = -1;
+
+  return ret;
 }
 
 string MacroBlock::getNameOfMbTypeStr(H264_MB_TYPE name_of_mb_type) {
@@ -1125,9 +1101,9 @@ int MacroBlock::set_mb_type_X_slice_info() {
     if (m_mb_type_fixed >= 0 && m_mb_type_fixed <= 5) {
       mb_type_P_SP_slice = mb_type_P_SP_slices_define[m_mb_type_fixed];
     } else {
-      printf(
-          "mb_type_P_SP_slices_define: m_mb_type_fixed=%d; Must be in [0..5]\n",
-          m_mb_type_fixed);
+      printf("mb_type_P_SP_slices_define: m_mb_type_fixed=%d; Must be in "
+             "[0..5]\n",
+             m_mb_type_fixed);
       return -1;
     }
 
@@ -1179,7 +1155,7 @@ int MacroBlock::set_mb_type_X_slice_info() {
 }
 
 void MacroBlock::initFromSlice(SliceHeader &header,
-                               const SliceBody &slice_data) {
+                               const SliceData &slice_data) {
   field_pic_flag = header.field_pic_flag;
   bottom_field_flag = header.bottom_field_flag;
   mb_skip_flag = slice_data.mb_skip_flag;

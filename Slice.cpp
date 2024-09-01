@@ -1,7 +1,7 @@
 #include "Slice.hpp"
 #include "Frame.hpp"
 
-Slice::Slice() : slice_header(m_sps, m_pps), slice_body(m_sps, m_pps){};
+Slice::Slice() : slice_header(m_sps, m_pps), slice_data(m_sps, m_pps){};
 
 void Slice::addMacroblock(std::shared_ptr<MacroBlock> macroblock) {
   _macroblocks.push_back(macroblock);
@@ -43,6 +43,6 @@ int Slice::decode(BitStream &bitStream, Frame *(&dpb)[16], SPS &sps, PPS &pps,
   //else  // 帧
   //std::cout << "\t帧编码" << std::endl;
 
-  slice_body.parseSliceData(bitStream, frame->m_picture_frame);
+  slice_data.parseSliceData(bitStream, frame->m_picture_frame);
   return 0;
 }

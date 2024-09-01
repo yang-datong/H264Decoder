@@ -1018,7 +1018,7 @@ int PictureBase::
       colPic = &m_RefPicList1[0]->m_picture_frame;
     } else if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
                H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
-      if (m_slice.slice_body.mb_field_decoding_flag == 0) {
+      if (m_slice.slice_data.mb_field_decoding_flag == 0) {
         if (topAbsDiffPOC < bottomAbsDiffPOC) {
           colPic = firstRefPicL1Top;
         } else // if (topAbsDiffPOC >= bottomAbsDiffPOC)
@@ -1156,7 +1156,7 @@ int PictureBase::
   } else if (PicCodingStruct_CurrPic == AFRM) {
     if (PicCodingStruct_colPic == FLD) {
       int32_t mbAddrCol5 = CurrMbAddr / 2;
-      if (m_slice.slice_body.mb_field_decoding_flag == 0) {
+      if (m_slice.slice_data.mb_field_decoding_flag == 0) {
         mbAddrCol = mbAddrCol5;
         yM = 8 * (CurrMbAddr % 2) + 4 * (yCol / 8);
         vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
@@ -1168,7 +1168,7 @@ int PictureBase::
       }
     } else if (PicCodingStruct_colPic == AFRM) {
       int32_t mbAddrX = CurrMbAddr;
-      if (m_slice.slice_body.mb_field_decoding_flag == 0) {
+      if (m_slice.slice_data.mb_field_decoding_flag == 0) {
         if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag ==
             0) // Otherwise (the macroblock mbAddrX in the picture colPic is a
                // frame macroblock), fieldDecodingFlagX is set equal to 0.
@@ -2346,7 +2346,7 @@ int PictureBase::Luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
   SliceHeader &slice_header = m_slice.slice_header;
 
   if (slice_header.MbaffFrameFlag == 0 ||
-      m_slice.slice_body.mb_field_decoding_flag == 0) {
+      m_slice.slice_data.mb_field_decoding_flag == 0) {
     refPicHeightEffectiveL = PicHeightInSamplesL;
   } else // if (slice_header.MbaffFrameFlag == 1 &&
          // m_slice.slice_body.mb_field_decoding_flag == 1)
@@ -2490,7 +2490,7 @@ int PictureBase::Chroma_sample_interpolation_process(
   SliceHeader &slice_header = m_slice.slice_header;
 
   if (slice_header.MbaffFrameFlag == 0 ||
-      m_slice.slice_body.mb_field_decoding_flag == 0) {
+      m_slice.slice_data.mb_field_decoding_flag == 0) {
     refPicHeightEffectiveC = PicHeightInSamplesC;
   } else // if (slice_header.MbaffFrameFlag == 1 &&
          // m_slice.slice_body.mb_field_decoding_flag == 1)

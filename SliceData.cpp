@@ -1,4 +1,4 @@
-#include "SliceBody.hpp"
+#include "SliceData.hpp"
 #include "BitStream.hpp"
 #include "Frame.hpp"
 #include "PictureBase.hpp"
@@ -6,7 +6,7 @@
 #include <cstdint>
 
 /* 7.3.4 Slice data syntax */
-int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
+int SliceData::parseSliceData(BitStream &bs, PictureBase &picture) {
   SliceHeader &header = picture.m_slice.slice_header;
 
   /* CABAC编码 */
@@ -79,7 +79,7 @@ int SliceBody::parseSliceData(BitStream &bs, PictureBase &picture) {
 }
 
 /* 9.3.1 Initialization process */
-int SliceBody::initCABAC(CH264Cabac &cabac, BitStream &bs,
+int SliceData::initCABAC(CH264Cabac &cabac, BitStream &bs,
                          SliceHeader &header) {
   if (!m_pps.entropy_coding_mode_flag) return -1;
 
@@ -95,7 +95,7 @@ int SliceBody::initCABAC(CH264Cabac &cabac, BitStream &bs,
   return 0;
 }
 
-int SliceBody::do_decoding_picture_order_count(PictureBase &picture,
+int SliceData::do_decoding_picture_order_count(PictureBase &picture,
                                                const SliceHeader &header) {
   /* 设为0是防止在场编码时可能存在多个slice data，那么就只需要对首个slice data进行定位，防止对附属的slice data进行再次解码工作 */
   if (picture.m_slice_cnt == 0) {
@@ -119,13 +119,13 @@ int SliceBody::do_decoding_picture_order_count(PictureBase &picture,
   return 0;
 }
 
-int SliceBody::process_mb_skip_run() {
+int SliceData::process_mb_skip_run() {
   std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m" << std::endl;
   exit(0);
   return 0;
 }
 
-int SliceBody::process_mb_skip_flag(PictureBase &picture,
+int SliceData::process_mb_skip_flag(PictureBase &picture,
                                     const SliceHeader &header,
                                     CH264Cabac &cabac,
                                     const int32_t prevMbSkipped) {
@@ -229,18 +229,18 @@ int SliceBody::process_mb_skip_flag(PictureBase &picture,
   return 0;
 }
 
-int SliceBody::process_mb_field_decoding_flag() {
+int SliceData::process_mb_field_decoding_flag() {
   std::cout << "hi~" << __LINE__ << std::endl;
   exit(0);
   return 0;
 }
 
-int SliceBody::process_end_of_slice_flag(CH264Cabac &cabac) {
+int SliceData::process_end_of_slice_flag(CH264Cabac &cabac) {
   cabac.decode_end_of_slice_flag(end_of_slice_flag);
   return 0;
 }
 
-int SliceBody::do_macroblock_layer(PictureBase &picture, BitStream &bs,
+int SliceData::do_macroblock_layer(PictureBase &picture, BitStream &bs,
                                    CH264Cabac &cabac,
                                    const SliceHeader &header) {
   picture.mb_x =
@@ -356,7 +356,7 @@ int SliceBody::do_macroblock_layer(PictureBase &picture, BitStream &bs,
   return 0;
 }
 
-int SliceBody::NextMbAddress(int n, SliceHeader &slice_header) {
+int SliceData::NextMbAddress(int n, SliceHeader &slice_header) {
   int i = n + 1;
   while (i < m_idr.PicSizeInMbs &&
          slice_header.MbToSliceGroupMap[i] != slice_header.MbToSliceGroupMap[n])
@@ -364,7 +364,7 @@ int SliceBody::NextMbAddress(int n, SliceHeader &slice_header) {
   return i;
 }
 
-void SliceBody::printFrameReorderPriorityInfo(PictureBase &picture) {
+void SliceData::printFrameReorderPriorityInfo(PictureBase &picture) {
   string sliceType = "UNKNOWN";
   std::cout << "\tGOP[" << picture.m_PicNumCnt + 1 << "] -> {" << std::endl;
   for (int i = 0; i < picture.m_PicNumCnt + 1; ++i) {

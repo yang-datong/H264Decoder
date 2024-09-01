@@ -7,7 +7,7 @@
 #include "Type.hpp"
 
 class PictureBase;
-class SliceBody;
+class SliceData;
 
 class MacroBlock {
  public:
@@ -209,10 +209,10 @@ class MacroBlock {
 
  public:
   int macroblock_layer(BitStream &bs, PictureBase &picture,
-                       const SliceBody &slice_data, CH264Cabac &cabac);
+                       const SliceData &slice_data, CH264Cabac &cabac);
 
   int macroblock_layer_mb_skip(PictureBase &picture,
-                               const SliceBody &slice_data, CH264Cabac &cabac);
+                               const SliceData &slice_data, CH264Cabac &cabac);
 
   static int getMbPartWidthAndHeight(H264_MB_TYPE name_of_mb_type,
                                      int32_t &_MbPartWidth,
@@ -243,7 +243,7 @@ class MacroBlock {
                             H264_MB_PART_PRED_MODE &mb_pred_mode);
 
   int set_mb_type_X_slice_info();
-  void initFromSlice(SliceHeader &header, const SliceBody &slice_data);
+  void initFromSlice(SliceHeader &header, const SliceData &slice_data);
   int process_decode_mb_type(PictureBase &picture, SliceHeader &header,
                              const int32_t slice_type);
   int process_transform_size_8x8_flag(int32_t &transform_size_8x8_flag_temp);
@@ -263,8 +263,8 @@ class MacroBlock {
 
   int NumSubMbPartFunc(int mbPartIdx);
 
-  int mb_pred(PictureBase &picture, const SliceBody &slice_data);
-  int sub_mb_pred(PictureBase &picture, const SliceBody &slice_data);
+  int mb_pred(PictureBase &picture, const SliceData &slice_data);
+  int sub_mb_pred(PictureBase &picture, const SliceData &slice_data);
 
   int residual(PictureBase &picture, int32_t startIdx, int32_t endIdx);
 
