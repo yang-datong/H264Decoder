@@ -1,7 +1,6 @@
 #ifndef SLICEHEADER_HPP_JYXLKOEI
 #define SLICEHEADER_HPP_JYXLKOEI
 
-#include "IDR.hpp"
 #include "PPS.hpp"
 #include "SPS.hpp"
 #include <cstdint>
@@ -22,7 +21,6 @@ class SliceHeader {
    * 如果将变量放在for中那么默认值为其他就会发生不可预知的错误 */
   SPS m_sps;
   PPS m_pps;
-  IDR m_idr;
 
  private:
   /* 私有化SliceBody，不提供给外界，只能通过Slice来访问本类 */

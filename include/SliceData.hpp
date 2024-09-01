@@ -10,7 +10,6 @@ class SliceData {
  private:
   SPS m_sps;
   PPS m_pps;
-  IDR m_idr;
 
  private:
   /* 私有化SliceBody，不提供给外界，只能通过Slice来访问本类 */
