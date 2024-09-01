@@ -26,6 +26,17 @@ UE(V)：无符号整数Exp-Golomb编码的语法元素，左位在前。此描�
 u(v): v = log2(MaxFrameNum)  = log2_max_frame_num_minus4 + 4  <=> bitStream.readUn(log2(m_sps.MaxFrameNum));
 
 
+
+RefPicList0:
+  主要用于P帧和B帧的前向预测。
+  包含当前帧之前的参考帧（即已经解码的帧），这些帧可以用来预测当前帧的宏块。
+
+RefPicList1:
+  仅用于B帧的后向预测。
+  包含当前帧之后的参考帧（即在时间顺序上位于当前帧之后的帧），这些帧也可以用来预测当前帧的宏块。
+
+
+
 ## 解码流程
 
 ### 1. **Annex B: Byte Stream Format**

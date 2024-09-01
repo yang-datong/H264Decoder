@@ -17,9 +17,9 @@ int main(int argc, char *argv[]) {
     /* 1920x1080 无B帧*/
     //filePath = "./source_cut_10_frames_no_B.h264";
     /* 714x624 帧编码 */
-    filePath = "./demo_10_frames.h264";
-    /* 714x624 场编码(解码出来的图片部分绿屏） */
-    //filePath = "./demo_10_frames_interlace.h264";
+    //filePath = "./demo_10_frames.h264";
+    /* 714x624 场编码(IDR帧解码出来的图片部分绿屏） */
+    filePath = "./demo_10_frames_interlace.h264";
     /* 714x624 帧编码(CAVLC 熵编码模式,即profile=baseline) */
     //filePath = "./demo_10_frames_cavlc.h264";
   }

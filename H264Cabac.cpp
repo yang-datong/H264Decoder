@@ -250,6 +250,7 @@ int CH264Cabac::init_of_decoding_engine() {
 }
 
 /* 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element mb_skip_flag */
+/* 输出: ctxIdxInc */
 int CH264Cabac::derivation_of_ctxIdxInc_for_mb_skip_flag(
     const int32_t currMbAddr, int32_t &ctxIdxInc) {
 
@@ -2819,6 +2820,7 @@ int CH264Cabac::decode_sub_mb_type_in_B_slices(int32_t &synElVal) {
 }
 
 /* 9.3.3 Decoding process flow */
+/* 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element mb_skip_flag */
 int CH264Cabac::decode_mb_skip_flag(const int32_t currMbAddr,
                                     int32_t &synElVal) {
 

@@ -459,48 +459,57 @@ int SliceData::process_mb_skip_flag(PictureBase &picture,
   /* 1. 计算当前宏块的位置 */
   updatesLocationOfCurrentMacroblock(picture, header->MbaffFrameFlag);
 
-  //-------------解码mb_skip_flag-----------------------
-  /* mb_skip_flag等于1指定对于当前宏块，在解码P或SP切片时，mb_type应推断为P_Skip，宏块类型统称为P宏块类型，或者在解码B切片时，mb_type应推断为B_Skip，该宏块类型统称为B宏块类型。 mb_skip_flag等于0表示不跳过当前宏块 */
-
-  // //因为解码mb_skip_flag需要事先知道MbaffFrameFlag的值
   /* 2. 设置当前宏块的切片编号 */
   picture.m_mbs[picture.CurrMbAddr].slice_number = slice_number;
-  // 因为解码mb_skip_flag需要事先知道slice_id的值（从0开始）
 
   if (header->MbaffFrameFlag) {
-    /* 当前帧使用MBAFF编码模式。在这种模式下，每个宏块对（MB pair）可以独立地选择是作为帧宏块对还是场宏块对进行编码。 */
-    if (CurrMbAddr % 2 == 0) { //顶场宏块
-      if (picture.mb_x == 0 && picture.mb_y >= 2) {
-        //注意：此处在T-REC-H.264-201704-S!!PDF-E.pdf文档中，并没有明确写出来，所以这是一个坑
-        //When MbaffFrameFlag is equal to 1 and mb_field_decoding_flag is not present
-        //for both the top and the bottom macroblock of a macroblock pair
-        if (picture.mb_x > 0 &&
-            picture.m_mbs[CurrMbAddr - 2].slice_number == slice_number)
-          //the left of the current macroblock pair in the same slice
-          mb_field_decoding_flag =
-              picture.m_mbs[CurrMbAddr - 2].mb_field_decoding_flag;
-        else if (picture.mb_y > 0 &&
-                 picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs]
-                         .slice_number == slice_number)
-          //above the current macroblock pair in the same slice
-          mb_field_decoding_flag =
-              picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs]
-                  .mb_field_decoding_flag;
-        else
-          mb_field_decoding_flag = 0; //is inferred to be equal to 0
+    // 当前帧使用MBAFF编码模式。每个宏块对可以独立地选择是作为帧宏块对还是场宏块对进行编码。
+    /* 当 MbaffFrameFlag 等于 1 并且宏块对的顶部和底部宏块均不存在 mb_field_decoding_flag 时，应按如下方式推断 mb_field_decoding_flag 的值：
+     * 1. 如果同一切片中存在紧邻当前宏块对左侧的相邻宏块对，则 mb_field_decoding_flag 的值被推断为等于紧邻当前宏块对左侧的相邻宏块对的 mb_field_decoding_flag 的值 
+     * 2. 否则，如果在同一片中不存在紧邻当前宏块对左边的相邻宏块对，并且在同一片中存在紧邻当前宏块对上方的相邻宏块对，则推断mb_field_decoding_flag的值等于紧邻当前宏块对上方的相邻宏块对的 mb_field_decoding_flag 值
+     * 3. 否则（同一片中当前宏块对的左边或上方不存在相邻宏块对），则 mb_field_decoding_flag 的值被推断为等于 0
+     * */
+
+    /* 字段解释：
+     * CurrMbAddr % 2 == 0表示当前宏块地址是偶数（由于是场宏块，则即当前宏块是一个宏块对的前宏块）
+     * mb_x = 0表示宏块在图像的最左边，水平位置为0
+     * mb_y = 0表示宏块在图像的最顶部，垂直位置为0
+     * 如果两个宏块的slice_number相同表示它们属于同一个Slice */
+
+    /* 是否为顶宏块，即宏块对中的前宏块 */
+    bool is_top_mb = (CurrMbAddr % 2 == 0);
+    if (is_top_mb) {
+      /* 顶宏块，是否已经完成解码 */
+      int32_t is_top_decoding_flag =
+          picture.m_mbs[CurrMbAddr].mb_field_decoding_flag;
+      /* 底宏块，是否已经完成解码 */
+      int32_t is_bottom_decoding_flag =
+          picture.m_mbs[CurrMbAddr + 1].mb_field_decoding_flag;
+      if (!is_top_decoding_flag && !is_bottom_decoding_flag) {
+        if (picture.mb_x > 0) {
+          /* 左侧的相邻宏块对 */
+          auto &left_mb = picture.m_mbs[CurrMbAddr - 2];
+          if (left_mb.slice_number == slice_number)
+            mb_field_decoding_flag = left_mb.mb_field_decoding_flag;
+        } else if (picture.mb_y > 0) {
+          /* 上方的相邻宏块对 */
+          auto &top_mb = picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs];
+          if (top_mb.slice_number == slice_number)
+            mb_field_decoding_flag = top_mb.mb_field_decoding_flag;
+        } else
+          mb_field_decoding_flag = 0;
       }
     }
 
     picture.m_mbs[picture.CurrMbAddr].mb_field_decoding_flag =
         mb_field_decoding_flag;
-    //因为解码mb_skip_flag需要事先知道mb_field_decoding_flag的值
   }
 
+  /* TODO YangJing 看到这里来了，睡了睡了。。。。 <24-09-02 02:35:07> */
   /* 3. 处理宏块跳过标志位 */
-  if (header->MbaffFrameFlag && CurrMbAddr % 2 == 1 && prevMbSkipped) {
-    /* 当前帧使用MBAFF编码模式。在这种模式下，每个宏块对（MB pair）可以独立地选择是作为帧宏块对还是场宏块对进行编码。 */
+  if (header->MbaffFrameFlag && CurrMbAddr % 2 == 1 && prevMbSkipped)
     mb_skip_flag = mb_skip_flag_next_mb;
-  } else
+  else
     cabac->decode_mb_skip_flag(CurrMbAddr, mb_skip_flag);
 
   /* 4. 处理跳过的宏块 */
@@ -740,7 +749,6 @@ void SliceData::printFrameReorderPriorityInfo(PictureBase &picture) {
     }
   }
 
-  /* TODO YangJing m_RefPicList1好像并不是后参考帧，后面再确认一下 <24-08-31 18:19:22> */
   for (int i = 0; i < picture.m_RefPicList1Length; ++i) {
     const auto &refPic = picture.m_RefPicList1[i];
     if (refPic) {
