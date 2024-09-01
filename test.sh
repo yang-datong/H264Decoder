@@ -23,6 +23,21 @@ demo_10_frames_interlace_h264(){
 	echo -e "\033[31m不支持\033[0m"
 }
 
+demo_10_frames_cavlc_h264(){
+	index=11
+	ALL_MD5['output_I_0.bmp']=bece5ba2be612511f200769b1731ada6
+	ALL_MD5['output_P_1.bmp']=09792bf3c1e6275891b7a8fd1c33434d
+	ALL_MD5['output_B_2.bmp']=931a46fb1b080a53ef43d647095b4a5d
+	ALL_MD5['output_B_3.bmp']=0f54e6d4525e3a4cefc56afaf484b48c
+	ALL_MD5['output_B_4.bmp']=e2e3f9da46c28bf44300a08bb2dfe379
+	ALL_MD5['output_P_5.bmp']=67064a9f13acc3b67e929876a115e037
+	ALL_MD5['output_B_6.bmp']=107d0d1f0cb942e267130ce17488bd31
+	ALL_MD5['output_P_7.bmp']=7e08e5fa6bf7e2397cd995471e22c94c
+	ALL_MD5['output_B_8.bmp']=92db42a5d4d5ebe5275df552831479e9
+	ALL_MD5['output_P_9.bmp']=d3e517b42cc25ee035ac71fa0d31c41d
+ ALL_MD5['output_B_10.bmp']=955c29533decc52a6656c4e593a4fe38
+}
+
 
 source_cut_10_frames_h264(){
 	index=9
@@ -82,6 +97,8 @@ if [ "$1" == "demo_10_frames.h264" ];then
 	demo_10_frames_h264
 elif [ "$1" == "demo_10_frames_interlace.h264" ];then
 	demo_10_frames_interlace_h264
+elif [ "$1" == "demo_10_frames_cavlc.h264" ];then
+	demo_10_frames_cavlc_h264
 elif [ "$1" == "source_cut_10_frames.h264" ];then
 	source_cut_10_frames_h264
 elif [ "$1" == "source_cut_10_frames_no_B.h264" ];then

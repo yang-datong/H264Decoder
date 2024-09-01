@@ -21,6 +21,10 @@ jobs:
       run: ./build/a.out demo_10_frames.h264
     - name: test1 and gen md5
       run: ./test.sh demo_10_frames.h264 && rm output_*.bmp
+    - name: test2
+      run: ./build/a.out demo_10_frames_cavlc.h264
+    - name: test2 and gen md5
+      run: ./test.sh demo_10_frames_cavlc.h264 && rm output_*.bmp
     - name: test3
       run: ./build/a.out source_cut_10_frames.h264
     - name: test3 and gen md5
