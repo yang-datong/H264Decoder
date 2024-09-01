@@ -22,9 +22,6 @@ class SliceData {
   void setSPS(SPS &sps) { this->m_sps = sps; }
   void setPPS(PPS &pps) { this->m_pps = pps; }
 
-  /* NOTE: 默认值应该设置为0,因为有时候就是需要使用到默认值为0的情况，
-   * 如果将变量放在for中那么默认值为其他就会发生不可预知的错误 */
-
  public:
   /* 这个id是解码器自己维护的，每次解码一帧则+1 */
   uint32_t slice_id = 0;
@@ -33,31 +30,38 @@ class SliceData {
 
   /* 由CABAC单独解码而来的重要控制变量 */
   int32_t mb_skip_flag = 0;
-  uint32_t mb_skip_run = 0;
-  int32_t mb_skip_flag_next_mb = 0;
   int32_t mb_field_decoding_flag = 0;
-  int32_t end_of_slice_flag = 0; // 2 ae(v)
-
   uint32_t CurrMbAddr = 0;
 
-  int parseSliceData(BitStream &bitStream, PictureBase &picture);
+ private:
+  uint32_t mb_skip_run = 0;
+  int32_t mb_skip_flag_next_mb = 0;
+  int32_t end_of_slice_flag = 0; // 2 ae(v)
 
  private:
-  int do_decoding_picture_order_count(PictureBase &picture,
-                                      const SliceHeader &header);
-  int decoding_macroblock_to_slice_group_map(SliceHeader &header);
-  int setMapUnitToSliceGroupMap(SliceHeader &header);
-  int setMbToSliceGroupMap(SliceHeader &header);
+  int parseSliceData(BitStream &bitStream, PictureBase &picture);
+  /* 由外部(parseSliceData)传进来的指针，不是Slice Data的一部分，随着parseSliceData后一起消灭 */
+  SliceHeader *header = nullptr;
+  /* 由外部(parseSliceData)初始化，不是Slice Data的一部分，随着parseSliceData后一起消灭 */
+  CH264Cabac *cabac = nullptr;
+  /* 由外部(parseSliceData)传进来的指针，不是Slice Data的一部分，随着parseSliceData后一起消灭 */
+  BitStream *bs = nullptr;
+
+  bool is_need_skip_read_mb_field_decoding_flag = false;
+  int slice_decoding_process(PictureBase &picture);
+  int decoding_macroblock_to_slice_group_map();
+  int setMapUnitToSliceGroupMap();
+  int setMbToSliceGroupMap();
 
   int process_mb_skip_run();
-  int process_mb_skip_flag(PictureBase &picture, const SliceHeader &header,
-                           CH264Cabac &cabac, const int32_t prevMbSkipped);
-  int process_mb_field_decoding_flag();
-  int process_end_of_slice_flag(CH264Cabac &cabac);
-  int do_macroblock_layer(PictureBase &picture, BitStream &bs,
-                          CH264Cabac &cabac, const SliceHeader &header);
+  int process_mb_skip_flag(PictureBase &picture, const int32_t prevMbSkipped);
+  int process_mb_field_decoding_flag(PictureBase &picture,
+                                     const bool entropy_coding_mode_flag);
+  int process_end_of_slice_flag();
 
-  int initCABAC(CH264Cabac &cabac, BitStream &bs, SliceHeader &slice_header);
+  int do_macroblock_layer(PictureBase &picture);
+
+  int initCABAC();
 
   void printFrameReorderPriorityInfo(PictureBase &picture);
 
@@ -66,6 +70,7 @@ class SliceData {
                                           const bool MbaffFrameFlag);
 
  private:
+  /* 用于更新mapUnitToSliceGroupMap的值 */
   int interleaved_slice_group_map_type(int32_t *&mapUnitToSliceGroupMap);
   int dispersed_slice_group_map_type(int32_t *&mapUnitToSliceGroupMap);
   int foreground_with_left_over_slice_group_ma_type(
@@ -79,6 +84,6 @@ class SliceData {
   int explicit_slice_group_map_type(int32_t *&mapUnitToSliceGroupMap);
 };
 
-int NextMbAddress(int n, SliceHeader &slice_header);
+int NextMbAddress(int n, SliceHeader *slice_header);
 
 #endif /* end of include guard: SLICEBODY_HPP_OVHTPIZQ */

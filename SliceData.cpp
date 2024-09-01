@@ -2,76 +2,74 @@
 #include "BitStream.hpp"
 #include "Frame.hpp"
 #include "PictureBase.hpp"
-#include "SliceHeader.hpp"
 #include <cstdint>
 #include <cstring>
 
 /* 7.3.4 Slice data syntax */
-int SliceData::parseSliceData(BitStream &bs, PictureBase &picture) {
-  SliceHeader &header = picture.m_slice.slice_header;
-
+int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture) {
+  /* 初始化类中的指针 */
+  header = &picture.m_slice.slice_header;
+  bs = &bitStream;
   /* CABAC编码 */
-  CH264Cabac cabac(bs, picture);
-  /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
-  initCABAC(cabac, bs, header);
+  cabac = new CH264Cabac(*bs, picture);
 
-  if (header.MbaffFrameFlag == 0)
+  /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
+  initCABAC();
+
+  if (header->MbaffFrameFlag == 0)
     /* 如果当前帧不使用MBAFF编码模式。所有宏块都作为帧宏块进行编码 */
-    mb_field_decoding_flag = header.field_pic_flag;
+    mb_field_decoding_flag = header->field_pic_flag;
 
   picture.CurrMbAddr = CurrMbAddr =
-      header.first_mb_in_slice * (1 + header.MbaffFrameFlag);
+      header->first_mb_in_slice * (1 + header->MbaffFrameFlag);
 
   /* 更新参考帧列表0,1的预测图像编号 */
-  header.picNumL0Pred = header.picNumL1Pred = header.CurrPicNum;
+  header->picNumL0Pred = header->picNumL1Pred = header->CurrPicNum;
 
-  /* 处理帧间控制变量（主要是针对帧间解码情况） */
-  /* 8.2.1 Decoding process for picture order count */
-  do_decoding_picture_order_count(picture, header);
+  /* 8.2 Slice decoding process */
+  slice_decoding_process(picture);
 
-  /* 8.2.5 Decoded reference picture marking process ? */
-  decoding_macroblock_to_slice_group_map(header);
-
+  //----------------------- 这里开始对Slice分割为MacroBlock进行处理 ----------------------------
   bool moreDataFlag = 1;
   int32_t prevMbSkipped = 0;
-
   do {
     /* 1. 对于非I帧，先解码出mb_skip_flag，判断是否跳过对MacroBlock的处理 */
-    if (header.slice_type != SLICE_I && header.slice_type != SLICE_SI) {
+    if (header->slice_type != SLICE_I && header->slice_type != SLICE_SI) {
       if (m_pps.entropy_coding_mode_flag == 0) {
-        /* CAVLC熵编码，暂时不处理 */
+        /* CAVLC熵编码 */
         process_mb_skip_run();
         prevMbSkipped = (mb_skip_run > 0);
         for (int i = 0; i < mb_skip_run; i++)
           CurrMbAddr = NextMbAddress(CurrMbAddr, header);
-        if (mb_skip_run > 0) moreDataFlag = bs.more_rbsp_data();
+        if (mb_skip_run > 0) moreDataFlag = bs->more_rbsp_data();
       } else {
         /* CABAC熵编码 */
-        process_mb_skip_flag(picture, header, cabac, prevMbSkipped);
+        process_mb_skip_flag(picture, prevMbSkipped);
         moreDataFlag = !mb_skip_flag;
       }
     }
 
     /* 2. 对MacroBlock的处理 */
     if (moreDataFlag) {
-      if (header.MbaffFrameFlag &&
-          (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
+      if (header->MbaffFrameFlag &&
+          (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped))) {
         /* 表示本宏块是属于一个宏块对中的一个 */
-        process_mb_field_decoding_flag();
+        process_mb_field_decoding_flag(picture, m_pps.entropy_coding_mode_flag);
+      }
 
       /* 这里包括了后续的，帧内预测、帧间预测、解码宏块、去块滤波 */
-      do_macroblock_layer(picture, bs, cabac, header);
+      do_macroblock_layer(picture);
     }
 
     if (!m_pps.entropy_coding_mode_flag)
-      moreDataFlag = bs.more_rbsp_data();
+      moreDataFlag = bs->more_rbsp_data();
     else {
-      if (header.slice_type != SLICE_I && header.slice_type != SLICE_SI)
+      if (header->slice_type != SLICE_I && header->slice_type != SLICE_SI)
         prevMbSkipped = mb_skip_flag;
-      if (header.MbaffFrameFlag && CurrMbAddr % 2 == 0)
+      if (header->MbaffFrameFlag && CurrMbAddr % 2 == 0)
         moreDataFlag = 1;
       else {
-        process_end_of_slice_flag(cabac);
+        process_end_of_slice_flag();
         moreDataFlag = !end_of_slice_flag;
       }
     }
@@ -82,44 +80,49 @@ int SliceData::parseSliceData(BitStream &bs, PictureBase &picture) {
 
   slice_id++;
   slice_number++;
+
+  header = nullptr;
+  cabac = nullptr;
+  bs = nullptr;
   return 0;
 }
 
 /* 9.3.1 Initialization process */
-int SliceData::initCABAC(CH264Cabac &cabac, BitStream &bs,
-                         SliceHeader &header) {
+int SliceData::initCABAC() {
   if (!m_pps.entropy_coding_mode_flag) return -1;
 
   /* CABAC(上下文自适应二进制算术编码) */
-  while (!bs.byte_aligned())
-    bs.readU1(); //cabac_alignment_one_bit
+  while (!bs->byte_aligned())
+    bs->readU1(); //cabac_alignment_one_bit
 
   // cabac初始化环境变量
-  cabac.init_of_context_variables((H264_SLICE_TYPE)header.slice_type,
-                                  header.cabac_init_idc, header.SliceQPY);
+  cabac->init_of_context_variables((H264_SLICE_TYPE)header->slice_type,
+                                   header->cabac_init_idc, header->SliceQPY);
   // cabac初始化解码引擎
-  cabac.init_of_decoding_engine();
+  cabac->init_of_decoding_engine();
   return 0;
 }
 
-int SliceData::do_decoding_picture_order_count(PictureBase &picture,
-                                               const SliceHeader &header) {
+int SliceData::slice_decoding_process(PictureBase &picture) {
   /* 设为0是防止在场编码时可能存在多个slice data，那么就只需要对首个slice data进行定位，防止对附属的slice data进行再次解码工作 */
   if (picture.m_slice_cnt == 0) {
     /* 解码参考帧重排序(POC) */
     // 8.2.1 Decoding process for picture order count
     picture.decoding_picture_order_count();
     if (m_sps.frame_mbs_only_flag == 0) {
-      /* 场编码 */
-      std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m" << std::endl;
-      exit(0);
+      /* 场宏块 */
+      picture.m_parent->m_picture_top_filed.copyDataPicOrderCnt(picture);
+      //顶（底）场帧有可能被选为参考帧，在解码P/B帧时，会用到PicOrderCnt字段，所以需要在此处复制一份
+      picture.m_parent->m_picture_bottom_filed.copyDataPicOrderCnt(picture);
     }
 
-    /* 在每个 P、SP 或 B 切片的解码过程开始时调用此过程。 */
-    if (header.slice_type == SLICE_P || header.slice_type == SLICE_SP ||
-        header.slice_type == SLICE_B) {
-      /* 当前帧需要参考帧预测，则需要进行参考帧重排序 */
-      // 8.2.4 Decoding process for reference picture lists construction
+    /* 8.2.2 Decoding process for macroblock to slice group map */
+    decoding_macroblock_to_slice_group_map();
+
+    // 8.2.4 Decoding process for reference picture lists construction
+    if (header->slice_type == SLICE_P || header->slice_type == SLICE_SP ||
+        header->slice_type == SLICE_B) {
+      /* 当前帧需要参考帧预测，则需要进行参考帧重排序。在每个 P、SP 或 B 切片的解码过程开始时调用此过程。 */
       picture.decoding_reference_picture_lists_construction(
           picture.m_dpb, picture.m_RefPicList0, picture.m_RefPicList1);
       /* (m_RefPicList0,m_RefPicList1为m_dpb排序后的前后参考列表）打印帧重排序先后信息 */
@@ -134,18 +137,18 @@ int SliceData::do_decoding_picture_order_count(PictureBase &picture,
 /* 输入:活动图像参数集和要解码的切片的切片头。  
  * 输出:宏块到切片组映射MbToSliceGroupMap。 */
 //该过程在每个切片开始时调用。
-int SliceData::decoding_macroblock_to_slice_group_map(SliceHeader &header) {
-  setMapUnitToSliceGroupMap(header);
-  setMbToSliceGroupMap(header);
+int SliceData::decoding_macroblock_to_slice_group_map() {
+  setMapUnitToSliceGroupMap();
+  setMbToSliceGroupMap();
   return 0;
 }
 
 //8.2.2.1 - 8.2.2.7  Specification for interleaved slice group map type
-int SliceData::setMapUnitToSliceGroupMap(SliceHeader &header) {
+int SliceData::setMapUnitToSliceGroupMap() {
 
   /* 别名 */
-  const int &MapUnitsInSliceGroup0 = header.MapUnitsInSliceGroup0;
-  int32_t *&mapUnitToSliceGroupMap = header.mapUnitToSliceGroupMap;
+  const int &MapUnitsInSliceGroup0 = header->MapUnitsInSliceGroup0;
+  int32_t *&mapUnitToSliceGroupMap = header->mapUnitToSliceGroupMap;
 
   /* mapUnitToSliceGroupMap 数组的推导如下：
    * – 如果 num_slice_groups_minus1 等于 0，则为范围从 0 到 PicSizeInMapUnits − 1（含）的所有 i 生成切片组映射的映射单元，如 mapUnitToSliceGroupMap[ i ] = 0 */
@@ -224,9 +227,9 @@ int SliceData::dispersed_slice_group_map_type(
 //8.2.2.3 Specification for foreground with left-over slice group map type
 int SliceData::foreground_with_left_over_slice_group_ma_type(
     int32_t *&mapUnitToSliceGroupMap) {
-  for (int i = 0; i < m_sps.PicSizeInMapUnits; i++) {
+  for (int i = 0; i < m_sps.PicSizeInMapUnits; i++)
     mapUnitToSliceGroupMap[i] = m_pps.num_slice_groups_minus1;
-  }
+
   for (int iGroup = m_pps.num_slice_groups_minus1 - 1; iGroup >= 0; iGroup--) {
     int32_t yTopLeft = m_pps.top_left[iGroup] / m_sps.PicWidthInMbs;
     int32_t xTopLeft = m_pps.top_left[iGroup] % m_sps.PicWidthInMbs;
@@ -244,9 +247,9 @@ int SliceData::foreground_with_left_over_slice_group_ma_type(
 int SliceData::box_out_slice_group_map_types(int32_t *&mapUnitToSliceGroupMap,
                                              const int &MapUnitsInSliceGroup0) {
 
-  for (int i = 0; i < m_sps.PicSizeInMapUnits; i++) {
+  for (int i = 0; i < m_sps.PicSizeInMapUnits; i++)
     mapUnitToSliceGroupMap[i] = 1;
-  }
+
   int x = (m_sps.PicWidthInMbs - m_pps.slice_group_change_direction_flag) / 2;
   int y =
       (m_sps.PicHeightInMapUnits - m_pps.slice_group_change_direction_flag) / 2;
@@ -304,11 +307,10 @@ int SliceData::raster_scan_slice_group_map_types(
   }
 
   for (int i = 0; i < m_sps.PicSizeInMapUnits; i++) {
-    if (i < sizeOfUpperLeftGroup) {
+    if (i < sizeOfUpperLeftGroup)
       mapUnitToSliceGroupMap[i] = m_pps.slice_group_change_direction_flag;
-    } else {
+    else
       mapUnitToSliceGroupMap[i] = 1 - m_pps.slice_group_change_direction_flag;
-    }
   }
   return 0;
 }
@@ -346,15 +348,15 @@ int SliceData::explicit_slice_group_map_type(int32_t *&mapUnitToSliceGroupMap) {
 }
 
 // 8.2.2.8 Specification for conversion of map unit to slice group map to macroblock to slice group map
-int SliceData::setMbToSliceGroupMap(SliceHeader &header) {
-  int32_t *&MbToSliceGroupMap = header.MbToSliceGroupMap;
-  int32_t *&mapUnitToSliceGroupMap = header.mapUnitToSliceGroupMap;
+int SliceData::setMbToSliceGroupMap() {
+  int32_t *&MbToSliceGroupMap = header->MbToSliceGroupMap;
+  int32_t *&mapUnitToSliceGroupMap = header->mapUnitToSliceGroupMap;
 
   /* 对于范围从 0 到 PicSizeInMbs - 1（含）的每个 i 值，宏块到切片组映射指定如下： */
-  for (int i = 0; i < header.PicSizeInMbs; i++) {
-    if (m_sps.frame_mbs_only_flag == 1 || header.field_pic_flag == 1)
+  for (int i = 0; i < header->PicSizeInMbs; i++) {
+    if (m_sps.frame_mbs_only_flag == 1 || header->field_pic_flag == 1)
       MbToSliceGroupMap[i] = mapUnitToSliceGroupMap[i];
-    else if (header.MbaffFrameFlag == 1)
+    else if (header->MbaffFrameFlag == 1)
       MbToSliceGroupMap[i] = mapUnitToSliceGroupMap[i / 2];
     else
       MbToSliceGroupMap[i] =
@@ -388,11 +390,9 @@ void SliceData::updatesLocationOfCurrentMacroblock(PictureBase &picture,
 }
 
 int SliceData::process_mb_skip_flag(PictureBase &picture,
-                                    const SliceHeader &header,
-                                    CH264Cabac &cabac,
                                     const int32_t prevMbSkipped) {
   /* 1. 计算当前宏块的位置 */
-  updatesLocationOfCurrentMacroblock(picture, header.MbaffFrameFlag);
+  updatesLocationOfCurrentMacroblock(picture, header->MbaffFrameFlag);
 
   //-------------解码mb_skip_flag-----------------------
   /* mb_skip_flag等于1指定对于当前宏块，在解码P或SP切片时，mb_type应推断为P_Skip，宏块类型统称为P宏块类型，或者在解码B切片时，mb_type应推断为B_Skip，该宏块类型统称为B宏块类型。 mb_skip_flag等于0表示不跳过当前宏块 */
@@ -402,26 +402,26 @@ int SliceData::process_mb_skip_flag(PictureBase &picture,
   picture.m_mbs[picture.CurrMbAddr].slice_number = slice_number;
   // 因为解码mb_skip_flag需要事先知道slice_id的值（从0开始）
 
-  if (header.MbaffFrameFlag) {
+  if (header->MbaffFrameFlag) {
     /* 当前帧使用MBAFF编码模式。在这种模式下，每个宏块对（MB pair）可以独立地选择是作为帧宏块对还是场宏块对进行编码。 */
     std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m" << std::endl;
     exit(0);
   }
 
   /* 3. 处理宏块跳过标志位 */
-  if (header.MbaffFrameFlag && CurrMbAddr % 2 == 1 && prevMbSkipped) {
+  if (header->MbaffFrameFlag && CurrMbAddr % 2 == 1 && prevMbSkipped) {
     /* 当前帧使用MBAFF编码模式。在这种模式下，每个宏块对（MB pair）可以独立地选择是作为帧宏块对还是场宏块对进行编码。 */
     std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m" << std::endl;
     exit(0);
   } else
-    cabac.decode_mb_skip_flag(CurrMbAddr, mb_skip_flag);
+    cabac->decode_mb_skip_flag(CurrMbAddr, mb_skip_flag);
 
   /* 4. 处理跳过的宏块 */
   if (mb_skip_flag == 1) {
     // 表示本宏块没有残差数据，相应的像素值只需要利用之前已经解码的I/P帧来预测获得
     // 首个IDR帧不会进这里，紧跟其后的P帧会进这里（可能会进）
     picture.mb_cnt++;
-    if (header.MbaffFrameFlag) {
+    if (header->MbaffFrameFlag) {
       if (CurrMbAddr % 2 == 0) {
         // 只需要处理top field macroblock
         picture.m_mbs[picture.CurrMbAddr].mb_skip_flag = mb_skip_flag;
@@ -432,16 +432,16 @@ int SliceData::process_mb_skip_flag(PictureBase &picture,
             mb_field_decoding_flag;
         // 特别注意：底场宏块和顶场宏块的mb_field_decoding_flag值是相同的
 
-        cabac.decode_mb_skip_flag(CurrMbAddr + 1, mb_skip_flag_next_mb);
+        cabac->decode_mb_skip_flag(CurrMbAddr + 1, mb_skip_flag_next_mb);
         // 2 ae(v) 先读取底场宏块的mb_skip_flag
 
         if (mb_skip_flag_next_mb == 0) {
           // 如果底场宏块mb_skip_flag=0
-          cabac.decode_mb_field_decoding_flag(mb_field_decoding_flag);
+          cabac->decode_mb_field_decoding_flag(mb_field_decoding_flag);
           // 2 u(1) | ae(v)
           // 再读取底场宏块的mb_field_decoding_flag
 
-          //is_need_skip_read_mb_field_decoding_flag = true;
+          is_need_skip_read_mb_field_decoding_flag = true;
         } else // if (mb_skip_flag_next_mb == 1)
         {
           // When MbaffFrameFlag is equal to 1 and mb_field_decoding_flag
@@ -472,7 +472,7 @@ int SliceData::process_mb_skip_flag(PictureBase &picture,
 
     //-----------------------------------------------------------------
     picture.m_mbs[picture.CurrMbAddr].macroblock_layer_mb_skip(
-        picture, *this, cabac); // 2 | 3 | 4
+        picture, *this, *cabac); // 2 | 3 | 4
 
     // The inter prediction process for P and B macroblocks is specified
     // in clause 8.4 with inter prediction samples being the output.
@@ -482,26 +482,35 @@ int SliceData::process_mb_skip_flag(PictureBase &picture,
   return 0;
 }
 
-int SliceData::process_mb_field_decoding_flag() {
-  std::cout << "hi~" << __LINE__ << std::endl;
-  exit(0);
+int SliceData::process_mb_field_decoding_flag(
+    PictureBase &picture, const bool entropy_coding_mode_flag) {
+  int ret;
+  if (is_need_skip_read_mb_field_decoding_flag == false) {
+    if (entropy_coding_mode_flag) {
+      ret = cabac->decode_mb_field_decoding_flag(mb_field_decoding_flag);
+      //2 u(1) | ae(v) 表示本宏块对是帧宏块对，还是场宏块对
+      RETURN_IF_FAILED(ret != 0, ret);
+    } else
+      mb_field_decoding_flag = bs->readU1();
+    //2 u(1) | ae(v) 表示本宏块对是帧宏块对，还是场宏块对
+  } else
+    is_need_skip_read_mb_field_decoding_flag = false;
   return 0;
 }
 
-int SliceData::process_end_of_slice_flag(CH264Cabac &cabac) {
-  cabac.decode_end_of_slice_flag(end_of_slice_flag);
+int SliceData::process_end_of_slice_flag() {
+  cabac->decode_end_of_slice_flag(end_of_slice_flag);
   return 0;
 }
 
-int SliceData::do_macroblock_layer(PictureBase &picture, BitStream &bs,
-                                   CH264Cabac &cabac,
-                                   const SliceHeader &header) {
+int SliceData::do_macroblock_layer(PictureBase &picture) {
 
-  updatesLocationOfCurrentMacroblock(picture, header.MbaffFrameFlag);
+  updatesLocationOfCurrentMacroblock(picture, header->MbaffFrameFlag);
   picture.mb_cnt++;
 
   //--------熵解码------------
-  picture.m_mbs[picture.CurrMbAddr].macroblock_layer(bs, picture, *this, cabac);
+  picture.m_mbs[picture.CurrMbAddr].macroblock_layer(*bs, picture, *this,
+                                                     *cabac);
 
   //--------帧内/间预测------------
   //--------反量化------------
@@ -602,11 +611,11 @@ int SliceData::do_macroblock_layer(PictureBase &picture, BitStream &bs,
 }
 
 /* 在按照第 8.2.2.8 节的规定导出宏块到切片组映射之后，函数 NextMbAddress( n ) 被定义为由以下伪代码指定导出的变量 nextMbAddress 的值： */
-int NextMbAddress(int currMbAddr, SliceHeader &header) {
+int NextMbAddress(int currMbAddr, SliceHeader *header) {
   int nextMbAddr = currMbAddr + 1;
-  while (nextMbAddr < header.PicSizeInMbs &&
-         header.MbToSliceGroupMap[nextMbAddr] !=
-             header.MbToSliceGroupMap[currMbAddr])
+  while (nextMbAddr < header->PicSizeInMbs &&
+         header->MbToSliceGroupMap[nextMbAddr] !=
+             header->MbToSliceGroupMap[currMbAddr])
     nextMbAddr++;
   return nextMbAddr;
 }
