@@ -232,8 +232,8 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
   int ret = 0;
 
   if (m_slice.m_sps.ChromaArrayType == 0) {
-    LOG_ERROR("This process is invoked for each chroma component Cb and Cr "
-              "separately when ChromaArrayType is not equal to 0.");
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
     return -1;
   }
 

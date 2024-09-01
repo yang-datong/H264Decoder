@@ -106,7 +106,7 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
                                          const SliceData &slice_data,
                                          CH264Cabac &cabac) {
   int ret = 0;
-  /* TODO YangJing 初始化 <24-09-01 02:07:46> */
+  /* YangJing 初始化 <24-09-01 02:07:46> */
   this->_cabac = &cabac;
   this->_gb = new CH264Golomb();
 

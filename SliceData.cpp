@@ -37,10 +37,7 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture) {
     if (header->slice_type != SLICE_I && header->slice_type != SLICE_SI) {
       if (m_pps.entropy_coding_mode_flag == 0) {
         /* CAVLC熵编码 */
-        process_mb_skip_run();
-        prevMbSkipped = (mb_skip_run > 0);
-        for (int i = 0; i < mb_skip_run; i++)
-          CurrMbAddr = NextMbAddress(CurrMbAddr, header);
+        process_mb_skip_run(picture, prevMbSkipped, false);
         if (mb_skip_run > 0) moreDataFlag = bs->more_rbsp_data();
       } else {
         /* CABAC熵编码 */
@@ -368,9 +365,76 @@ int SliceData::setMbToSliceGroupMap() {
   return 0;
 }
 
-int SliceData::process_mb_skip_run() {
-  std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m" << std::endl;
-  exit(0);
+int SliceData::process_mb_skip_run(PictureBase &picture, int32_t &prevMbSkipped,
+                                   const bool &is_cabac) {
+  //mb_skip_run = gb.get_ue_golomb(bs); //2 ue(v)
+  mb_skip_run = bs->readUE();
+
+  prevMbSkipped = (mb_skip_run > 0);
+  for (int i = 0; i < mb_skip_run; i++) {
+    picture.mb_x =
+        (CurrMbAddr % (picture.PicWidthInMbs * (1 + header->MbaffFrameFlag))) /
+        (1 + header->MbaffFrameFlag);
+    picture.mb_y =
+        (CurrMbAddr / (picture.PicWidthInMbs * (1 + header->MbaffFrameFlag)) *
+         (1 + header->MbaffFrameFlag)) +
+        ((CurrMbAddr % (picture.PicWidthInMbs * (1 + header->MbaffFrameFlag))) %
+         (1 + header->MbaffFrameFlag));
+    picture.CurrMbAddr = CurrMbAddr;
+
+    picture.mb_cnt++;
+
+    if (header->MbaffFrameFlag) {
+      if (CurrMbAddr % 2 == 0) //只需要处理top field macroblock
+      {
+        if (i == mb_skip_run - 1) {
+          if (is_cabac) //ae(v)表示CABAC编码
+          {
+            //mb_field_decoding_flag; //2 u(1) | ae(v)
+          } else //ue(v) 表示CAVLC编码
+          {
+            mb_field_decoding_flag = bs->readU1(); //2 u(1) | ae(v)
+          }
+
+          is_need_skip_read_mb_field_decoding_flag = true;
+        } else {
+          //When MbaffFrameFlag is equal to 1 and mb_field_decoding_flag is not present
+          //for both the top and the bottom macroblock of a macroblock pair
+          if (picture.mb_x > 0 &&
+              picture.m_mbs[CurrMbAddr - 2].slice_number ==
+                  slice_number) //the left of the current macroblock pair in the same slice
+          {
+            mb_field_decoding_flag =
+                picture.m_mbs[CurrMbAddr - 2].mb_field_decoding_flag;
+          } else if (
+              picture.mb_y > 0 &&
+              picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs]
+                      .slice_number ==
+                  slice_number) //above the current macroblock pair in the same slice
+          {
+            mb_field_decoding_flag =
+                picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs]
+                    .mb_field_decoding_flag;
+          } else {
+            mb_field_decoding_flag = 0; //is inferred to be equal to 0
+          }
+        }
+      }
+    }
+
+    //-----------------------------------------------------------------
+    picture.m_mbs[picture.CurrMbAddr].macroblock_layer_mb_skip(
+        picture, *this, *cabac); //2 | 3 | 4
+
+    //The inter prediction process for P and B macroblocks is specified in clause 8.4 with inter prediction samples being the output.
+    picture.Inter_prediction_process(); //帧间预测
+
+    CurrMbAddr = NextMbAddress(CurrMbAddr, header);
+    if (CurrMbAddr < 0) {
+      LOG_ERROR("CurrMbAddr(%d) < 0\n", CurrMbAddr);
+      break;
+    }
+  }
   return 0;
 }
 
@@ -389,6 +453,7 @@ void SliceData::updatesLocationOfCurrentMacroblock(PictureBase &picture,
   picture.CurrMbAddr = CurrMbAddr;
 }
 
+/* TODO YangJing 这个函数还需要仔细整理下 <24-09-01 20:51:44> */
 int SliceData::process_mb_skip_flag(PictureBase &picture,
                                     const int32_t prevMbSkipped) {
   /* 1. 计算当前宏块的位置 */
@@ -404,15 +469,37 @@ int SliceData::process_mb_skip_flag(PictureBase &picture,
 
   if (header->MbaffFrameFlag) {
     /* 当前帧使用MBAFF编码模式。在这种模式下，每个宏块对（MB pair）可以独立地选择是作为帧宏块对还是场宏块对进行编码。 */
-    std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m" << std::endl;
-    exit(0);
+    if (CurrMbAddr % 2 == 0) { //顶场宏块
+      if (picture.mb_x == 0 && picture.mb_y >= 2) {
+        //注意：此处在T-REC-H.264-201704-S!!PDF-E.pdf文档中，并没有明确写出来，所以这是一个坑
+        //When MbaffFrameFlag is equal to 1 and mb_field_decoding_flag is not present
+        //for both the top and the bottom macroblock of a macroblock pair
+        if (picture.mb_x > 0 &&
+            picture.m_mbs[CurrMbAddr - 2].slice_number == slice_number)
+          //the left of the current macroblock pair in the same slice
+          mb_field_decoding_flag =
+              picture.m_mbs[CurrMbAddr - 2].mb_field_decoding_flag;
+        else if (picture.mb_y > 0 &&
+                 picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs]
+                         .slice_number == slice_number)
+          //above the current macroblock pair in the same slice
+          mb_field_decoding_flag =
+              picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs]
+                  .mb_field_decoding_flag;
+        else
+          mb_field_decoding_flag = 0; //is inferred to be equal to 0
+      }
+    }
+
+    picture.m_mbs[picture.CurrMbAddr].mb_field_decoding_flag =
+        mb_field_decoding_flag;
+    //因为解码mb_skip_flag需要事先知道mb_field_decoding_flag的值
   }
 
   /* 3. 处理宏块跳过标志位 */
   if (header->MbaffFrameFlag && CurrMbAddr % 2 == 1 && prevMbSkipped) {
     /* 当前帧使用MBAFF编码模式。在这种模式下，每个宏块对（MB pair）可以独立地选择是作为帧宏块对还是场宏块对进行编码。 */
-    std::cout << "\033[33m Into -> " << __LINE__ << "()\033[0m" << std::endl;
-    exit(0);
+    mb_skip_flag = mb_skip_flag_next_mb;
   } else
     cabac->decode_mb_skip_flag(CurrMbAddr, mb_skip_flag);
 
@@ -486,13 +573,12 @@ int SliceData::process_mb_field_decoding_flag(
     PictureBase &picture, const bool entropy_coding_mode_flag) {
   int ret;
   if (is_need_skip_read_mb_field_decoding_flag == false) {
+    //2 u(1) | ae(v) 表示本宏块对是帧宏块对，还是场宏块对
     if (entropy_coding_mode_flag) {
       ret = cabac->decode_mb_field_decoding_flag(mb_field_decoding_flag);
-      //2 u(1) | ae(v) 表示本宏块对是帧宏块对，还是场宏块对
       RETURN_IF_FAILED(ret != 0, ret);
     } else
       mb_field_decoding_flag = bs->readU1();
-    //2 u(1) | ae(v) 表示本宏块对是帧宏块对，还是场宏块对
   } else
     is_need_skip_read_mb_field_decoding_flag = false;
   return 0;
@@ -580,7 +666,7 @@ int SliceData::do_macroblock_layer(PictureBase &picture) {
         isChromaCb, picWidthInSamplesC, pic_buff_cr);
   } else if (picture.m_mbs[picture.CurrMbAddr].m_name_of_mb_type == I_PCM)
     // 说明该宏块没有残差，也没有预测值，码流中的数据直接为原始像素值
-    exit(0);
+    picture.Sample_construction_process_for_I_PCM_macroblocks();
   else {
 
     // P,B帧，I帧不会进这里

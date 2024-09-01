@@ -15,9 +15,10 @@ class BitStream {
   /* 读取1 bit */
   bool readU1();
 
-  /* 读取n bit */
+  /* 读取n bit(消耗bitStream) */
   uint32_t readUn(uint32_t num);
-  // long readU(long num);
+  /* 获取n bit(不消耗bitStream) */
+  uint32_t getUn(uint32_t num);
 
   /* 读取无符号指数哥伦布编码 */
   uint32_t readUE();

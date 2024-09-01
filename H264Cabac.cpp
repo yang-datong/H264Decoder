@@ -294,9 +294,9 @@ int CH264Cabac::derivation_of_ctxIdxInc_for_mb_skip_flag(
 int CH264Cabac::derivation_of_ctxIdxInc_for_mb_field_decoding_flag(
     int32_t &ctxIdxInc) {
 
-  /* 调用第 6.4.10 节中指定的相邻宏块地址及其在 MBAFF 帧中的可用性的导出过程，并将输出分配给 mbAddrA 和 mbAddrB。  */
-  int32_t mbAddrA, mbAddrB, mbAddrC, mbAddrD;
   /* Table 6-4 – Specification of mbAddrN and yM */
+  int32_t mbAddrA, mbAddrB, mbAddrC, mbAddrD;
+  /* 调用第 6.4.10 节中指定的相邻宏块地址及其在 MBAFF 帧中的可用性的导出过程，并将输出分配给 mbAddrA 和 mbAddrB。  */
   picture.derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
       mbAddrA, mbAddrB, mbAddrC, mbAddrD);
 
@@ -307,11 +307,16 @@ int CH264Cabac::derivation_of_ctxIdxInc_for_mb_field_decoding_flag(
       * — 宏块 mbAddrN 是帧宏块。  
    * – 否则，condTermFlagN 设置为等于 1。*/
 
-  int32_t flagA = picture.m_mbs[mbAddrA].mb_field_decoding_flag;
-  int32_t flagB = picture.m_mbs[mbAddrB].mb_field_decoding_flag;
+  int32_t condTermFlagA = -1, condTermFlagB = -1;
+  if (mbAddrA < 0 || picture.m_mbs[mbAddrA].mb_field_decoding_flag == 0)
+    condTermFlagA = 0;
+  else
+    condTermFlagA = 1;
 
-  int32_t condTermFlagA = (mbAddrA < 0 || flagA == 0) ? 0 : 1;
-  int32_t condTermFlagB = (mbAddrB < 0 || flagB == 0) ? 0 : 1;
+  if (mbAddrB < 0 || picture.m_mbs[mbAddrB].mb_field_decoding_flag == 0)
+    condTermFlagB = 0;
+  else
+    condTermFlagB = 1;
 
   // 变量 ctxIdxInc 由以下公式得出： ctxIdxInc = condTermFlagA + condTermFlagB
   ctxIdxInc = condTermFlagA + condTermFlagB;
@@ -3286,11 +3291,7 @@ int CH264Cabac::decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
 
 /* 9.3.3 Decoding process flow */
 int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
-  // Table 9-34 – Syntax elements and associated types of binarization,maxBinIdxCtx, and ctxIdxOffset
-  // int maxBinIdxCtx = 0;
-  int ctxIdxOffset = 70;
   int ctxIdxInc = 0;
-
   // 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element mb_field_decoding_flag
   int ret = derivation_of_ctxIdxInc_for_mb_field_decoding_flag(ctxIdxInc);
   if (ret != 0) {
@@ -3299,6 +3300,8 @@ int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
     return -1;
   }
 
+  // Table 9-34 – Syntax elements and associated types of binarization,maxBinIdxCtx, and ctxIdxOffset
+  int ctxIdxOffset = 70;
   int bypassFlag = (ctxIdxOffset == -1) ? 1 : 0;
   int ctxIdx = ctxIdxOffset + ctxIdxInc;
 

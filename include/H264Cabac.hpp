@@ -16,6 +16,7 @@ class CH264Cabac {
   int32_t _valMPSs[1024] = {0};
 
   /* 声明为引用，如果Cabac消费了bs流，对应的外层也需要同样被消费 */
+  /* TODO YangJing 为什么这里会存在BitStream ，PictureBase？ <24-09-01 19:59:43> */
   BitStream &bs;
   PictureBase &picture;
 

@@ -34,8 +34,7 @@ int CH264ResidualBlockCavlc::residual_block_cavlc(
   ret = get_nC(picture, mb_residual_level, MbPartPredMode, BlkIdx, nC);
   RETURN_IF_FAILED(ret != 0, -1);
 
-  // uint16_t coeff_token = bs.getBits(16);
-  // TODO 没有实现bs.getBits <24-07-29 15:08:41, YangJing>
+  uint16_t coeff_token = bs.getUn(16);
   //  先获取16bit数据（注意：并不是读取），因为coeff_token_table表里面最长的coeff_token为16bit，所以预先获取16bit数据就足够了
 
   int32_t coeff_token_bit_length = 0;
@@ -2118,917 +2117,926 @@ int CH264ResidualBlockCavlc::coeff_token_table(int32_t nC, uint16_t coeff_token,
 int CH264ResidualBlockCavlc::get_total_zeros(BitStream &bs, int32_t maxNumCoeff,
                                              int32_t tzVlcIndex,
                                              int32_t &total_zeros) {
-  /*
-    if (maxNumCoeff == 4) // If maxNumCoeff is equal to 4, one of the VLCs
-                          // specified in Table 9-9 (a) is used.
-    {
-      int32_t token = 0;
-      int32_t token2 = 0;
-      int32_t token_length = 0;
+  if (maxNumCoeff == 4) // If maxNumCoeff is equal to 4, one of the VLCs
+                        // specified in Table 9-9 (a) is used.
+  {
+    int32_t token = 0;
+    //int32_t token2 = 0;
+    int32_t token_length = 0;
 
-      // Table 9-9 – total_zeros tables for chroma DC 2x2 and 2x4 blocks
-      //(a) Chroma DC 2x2 block (4:2:0 chroma sampling)
-      if (tzVlcIndex == 1) {
-        token = bs.getBits(3);
-        token_length = 0;
-        if ((token >> 2) == 0x01) // (1)b
-        {
-          token_length = 1;
-          total_zeros = 0;
-        } else if ((token >> 1) == 0x01) // (01)b
-        {
-          token_length = 2;
-          total_zeros = 1;
-        } else if ((token >> 0) == 0x01) // (001)b
-        {
-          token_length = 3;
-          total_zeros = 2;
-        } else if ((token >> 0) == 0x00) // (000)b
-        {
-          token_length = 3;
-          total_zeros = 3;
-        } else {
-          RETURN_IF_FAILED(1, -1);
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 2) {
-        token = bs.getBits(2);
-        token_length = 0;
-        if ((token >> 1) == 0x01) // (1)b
-        {
-          token_length = 1;
-          total_zeros = 0;
-        } else if ((token >> 0) == 0x01) // (01)b
-        {
-          token_length = 2;
-          total_zeros = 1;
-        } else if ((token >> 0) == 0x00) // (00)b
-        {
-          token_length = 2;
-          total_zeros = 2;
-        } else {
-          RETURN_IF_FAILED(1, -1);
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 3) {
-        token = bs.getBits(1);
-        token_length = 0;
-        if ((token >> 0) == 0x01) // (1)b
-        {
-          token_length = 1;
-          total_zeros = 0;
-        } else if ((token >> 0) == 0x00) // (0)b
-        {
-          token_length = 1;
-          total_zeros = 1;
-        } else {
-          RETURN_IF_FAILED(1, -1);
-        }
-        token2 = bs.readUn(token_length);
+    // Table 9-9 – total_zeros tables for chroma DC 2x2 and 2x4 blocks
+    //(a) Chroma DC 2x2 block (4:2:0 chroma sampling)
+    if (tzVlcIndex == 1) {
+      token = bs.getUn(3);
+      token_length = 0;
+      if ((token >> 2) == 0x01) // (1)b
+      {
+        token_length = 1;
+        total_zeros = 0;
+      } else if ((token >> 1) == 0x01) // (01)b
+      {
+        token_length = 2;
+        total_zeros = 1;
+      } else if ((token >> 0) == 0x01) // (001)b
+      {
+        token_length = 3;
+        total_zeros = 2;
+      } else if ((token >> 0) == 0x00) // (000)b
+      {
+        token_length = 3;
+        total_zeros = 3;
       } else {
         RETURN_IF_FAILED(1, -1);
       }
-    } else if (maxNumCoeff ==
-               8) // Otherwise, if maxNumCoeff is equal to 8, one of the VLCs
-                  // specified in Table 9-9 (b) is used.
-    {
-      int32_t token = 0;
-      int32_t token2 = 0;
-      int32_t token_length = 0;
-
-      // Table 9-9 – total_zeros tables for chroma DC 2x2 and 2x4 blocks
-      //(b) Chroma DC 2x4 block (4:2:2 chroma sampling)
-      if (tzVlcIndex == 1) {
-        token = bs.getBits(5);
-        token_length = 0;
-        if ((token >> 4) == 0x01) // (1)b
-        {
-          token_length = 1;
-          total_zeros = 0;
-        } else if ((token >> 2) == 0x02) // (010)b
-        {
-          token_length = 3;
-          total_zeros = 1;
-        } else if ((token >> 2) == 0x03) // (011)b
-        {
-          token_length = 3;
-          total_zeros = 2;
-        } else if ((token >> 1) == 0x02) // (0010)b
-        {
-          token_length = 4;
-          total_zeros = 3;
-        } else if ((token >> 1) == 0x03) // (0011)b
-        {
-          token_length = 4;
-          total_zeros = 4;
-        } else if ((token >> 1) == 0x01) // (0001)b
-        {
-          token_length = 4;
-          total_zeros = 5;
-        } else if ((token >> 0) == 0x01) // (0000 1)b
-        {
-          token_length = 5;
-          total_zeros = 6;
-        } else if ((token >> 0) == 0x00) // (0000 0)b
-        {
-          token_length = 5;
-          total_zeros = 7;
-        } else {
-          RETURN_IF_FAILED(1, -1);
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 2) {
-        token = bs.getBits(3);
-        token_length = 0;
-        if ((token >> 0) == 0x00) // (000)b
-        {
-          token_length = 3;
-          total_zeros = 0;
-        } else if ((token >> 1) == 0x01) // (01)b
-        {
-          token_length = 2;
-          total_zeros = 1;
-        } else if ((token >> 0) == 0x01) // (001)b
-        {
-          token_length = 3;
-          total_zeros = 2;
-        } else if ((token >> 0) == 0x04) // (100)b
-        {
-          token_length = 3;
-          total_zeros = 3;
-        } else if ((token >> 0) == 0x05) // (101)b
-        {
-          token_length = 3;
-          total_zeros = 4;
-        } else if ((token >> 0) == 0x06) // (110)b
-        {
-          token_length = 3;
-          total_zeros = 5;
-        } else if ((token >> 0) == 0x07) // (111)b
-        {
-          token_length = 3;
-          total_zeros = 6;
-        } else {
-          RETURN_IF_FAILED(1, -1);
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 3) {
-        token = bs.getBits(3);
-        token_length = 0;
-        if ((token >> 0) == 0x00) // (000)b
-        {
-          token_length = 3;
-          total_zeros = 0;
-        } else if ((token >> 0) == 0x01) // (001)b
-        {
-          token_length = 3;
-          total_zeros = 1;
-        } else if ((token >> 1) == 0x01) // (01)b
-        {
-          token_length = 2;
-          total_zeros = 2;
-        } else if ((token >> 1) == 0x02) // (10)b
-        {
-          token_length = 2;
-          total_zeros = 3;
-        } else if ((token >> 0) == 0x06) // (110)b
-        {
-          token_length = 3;
-          total_zeros = 4;
-        } else if ((token >> 0) == 0x07) // (111)b
-        {
-          token_length = 3;
-          total_zeros = 5;
-        } else {
-          RETURN_IF_FAILED(1, -1);
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 4) {
-        token = bs.getBits(3);
-        token_length = 0;
-        if ((token >> 0) == 0x06) // (110)b
-        {
-          token_length = 3;
-          total_zeros = 0;
-        } else if ((token >> 1) == 0x00) // (00)b
-        {
-          token_length = 2;
-          total_zeros = 1;
-        } else if ((token >> 1) == 0x01) // (01)b
-        {
-          token_length = 2;
-          total_zeros = 2;
-        } else if ((token >> 1) == 0x02) // (10)b
-        {
-          token_length = 2;
-          total_zeros = 3;
-        } else if ((token >> 0) == 0x07) // (111)b
-        {
-          token_length = 3;
-          total_zeros = 4;
-        } else {
-          RETURN_IF_FAILED(1, -1);
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 5) {
-        token = bs.getBits(2);
-        token_length = 0;
-        if ((token >> 0) == 0x00) // (00)b
-        {
-          token_length = 2;
-          total_zeros = 0;
-        } else if ((token >> 0) == 0x01) // (01)b
-        {
-          token_length = 2;
-          total_zeros = 1;
-        } else if ((token >> 0) == 0x02) // (10)b
-        {
-          token_length = 2;
-          total_zeros = 2;
-        } else if ((token >> 0) == 0x03) // (11)b
-        {
-          token_length = 2;
-          total_zeros = 3;
-        } else {
-          RETURN_IF_FAILED(1, -1);
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 6) {
-        token = bs.getBits(2);
-        token_length = 0;
-        if ((token >> 0) == 0x00) // (00)b
-        {
-          token_length = 2;
-          total_zeros = 0;
-        } else if ((token >> 0) == 0x01) // (01)b
-        {
-          token_length = 2;
-          total_zeros = 1;
-        } else if ((token >> 1) == 0x01) // (1)b
-        {
-          token_length = 1;
-          total_zeros = 2;
-        } else {
-          RETURN_IF_FAILED(1, -1);
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 7) {
-        token = bs.getBits(1);
-        token_length = 0;
-        if ((token >> 0) == 0x00) // (0)b
-        {
-          token_length = 1;
-          total_zeros = 0;
-        } else if ((token >> 0) == 0x01) // (1)b
-        {
-          token_length = 1;
-          total_zeros = 1;
-        } else {
-          RETURN_IF_FAILED(1, -1);
-        }
-        token2 = bs.readUn(token_length);
+      /*token2 =*/bs.readUn(token_length);
+    } else if (tzVlcIndex == 2) {
+      token = bs.getUn(2);
+      token_length = 0;
+      if ((token >> 1) == 0x01) // (1)b
+      {
+        token_length = 1;
+        total_zeros = 0;
+      } else if ((token >> 0) == 0x01) // (01)b
+      {
+        token_length = 2;
+        total_zeros = 1;
+      } else if ((token >> 0) == 0x00) // (00)b
+      {
+        token_length = 2;
+        total_zeros = 2;
       } else {
         RETURN_IF_FAILED(1, -1);
       }
-    } else // Otherwise (maxNumCoeff is not equal to 4 and not equal to 8), VLCs
-           // from Tables 9-7 and 9-8 are used.
-    {
-      int32_t token = 0;
-      int32_t token2 = 0;
-      int32_t token_length = 0;
-
-      // Table 9-7 – total_zeros tables for 4x4 blocks with tzVlcIndex 1 to 7
-      if (tzVlcIndex == 1) {
-        token = bs.getBits(9);
-        token_length = 0;
-        if ((token >> 8) == 0x01) // (1)b
-        {
-          token_length = 1;
-          total_zeros = 0;
-        } else if ((token >> 6) == 0x03) // (011)b
-        {
-          token_length = 3;
-          total_zeros = 1;
-        } else if ((token >> 6) == 0x02) // (010)b
-        {
-          token_length = 3;
-          total_zeros = 2;
-        } else if ((token >> 5) == 0x03) // (0011)b
-        {
-          token_length = 4;
-          total_zeros = 3;
-        } else if ((token >> 5) == 0x02) // (0010)b
-        {
-          token_length = 4;
-          total_zeros = 4;
-        } else if ((token >> 4) == 0x03) // (0001 1)b
-        {
-          token_length = 5;
-          total_zeros = 5;
-        } else if ((token >> 4) == 0x02) // (0001 0)b
-        {
-          token_length = 5;
-          total_zeros = 6;
-        } else if ((token >> 3) == 0x03) // (0000 11)b
-        {
-          token_length = 6;
-          total_zeros = 7;
-        } else if ((token >> 3) == 0x02) // (0000 10)b
-        {
-          token_length = 6;
-          total_zeros = 8;
-        } else if ((token >> 2) == 0x03) // (0000 011)b
-        {
-          token_length = 7;
-          total_zeros = 9;
-        } else if ((token >> 2) == 0x02) // (0000 010)b
-        {
-          token_length = 7;
-          total_zeros = 10;
-        } else if ((token >> 1) == 0x03) // (0000 0011)b
-        {
-          token_length = 8;
-          total_zeros = 11;
-        } else if ((token >> 1) == 0x02) // (0000 0010)b
-        {
-          token_length = 8;
-          total_zeros = 12;
-        } else if ((token >> 0) == 0x03) // (0000 0001 1)b
-        {
-          token_length = 9;
-          total_zeros = 13;
-        } else if ((token >> 0) == 0x02) // (0000 0001 0)b
-        {
-          token_length = 9;
-          total_zeros = 14;
-        } else if ((token >> 0) == 0x01) // (0000 0000 1)b
-        {
-          token_length = 9;
-          total_zeros = 15;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 2) {
-        token = bs.getBits(6);
-        token_length = 0;
-        if ((token >> 3) == 0x07) // (111)b
-        {
-          token_length = 3;
-          total_zeros = 0;
-        } else if ((token >> 3) == 0x06) // (110)b
-        {
-          token_length = 3;
-          total_zeros = 1;
-        } else if ((token >> 3) == 0x05) // (101)b
-        {
-          token_length = 3;
-          total_zeros = 2;
-        } else if ((token >> 3) == 0x04) // (100)b
-        {
-          token_length = 3;
-          total_zeros = 3;
-        } else if ((token >> 3) == 0x03) // (011)b
-        {
-          token_length = 3;
-          total_zeros = 4;
-        } else if ((token >> 2) == 0x05) // (0101)b
-        {
-          token_length = 4;
-          total_zeros = 5;
-        } else if ((token >> 2) == 0x04) // (0100)b
-        {
-          token_length = 4;
-          total_zeros = 6;
-        } else if ((token >> 2) == 0x03) // (0011)b
-        {
-          token_length = 4;
-          total_zeros = 7;
-        } else if ((token >> 2) == 0x02) // (0010)b
-        {
-          token_length = 4;
-          total_zeros = 8;
-        } else if ((token >> 1) == 0x03) // (0001 1)b
-        {
-          token_length = 5;
-          total_zeros = 9;
-        } else if ((token >> 1) == 0x02) // (0001 0)b
-        {
-          token_length = 5;
-          total_zeros = 10;
-        } else if ((token >> 0) == 0x03) // (0000 11)b
-        {
-          token_length = 6;
-          total_zeros = 11;
-        } else if ((token >> 0) == 0x02) // (0000 10)b
-        {
-          token_length = 6;
-          total_zeros = 12;
-        } else if ((token >> 0) == 0x01) // (0000 01)b
-        {
-          token_length = 6;
-          total_zeros = 13;
-        } else if ((token >> 0) == 0x00) // (0000 00)b
-        {
-          token_length = 6;
-          total_zeros = 14;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 3) {
-        token = bs.getBits(6);
-        token_length = 0;
-        if ((token >> 2) == 0x05) // (0101)b
-        {
-          token_length = 4;
-          total_zeros = 0;
-        } else if ((token >> 3) == 0x07) // (111)b
-        {
-          token_length = 3;
-          total_zeros = 1;
-        } else if ((token >> 3) == 0x06) // (110)b
-        {
-          token_length = 3;
-          total_zeros = 2;
-        } else if ((token >> 3) == 0x05) // (101)b
-        {
-          token_length = 3;
-          total_zeros = 3;
-        } else if ((token >> 2) == 0x04) // (0100)b
-        {
-          token_length = 4;
-          total_zeros = 4;
-        } else if ((token >> 2) == 0x03) // (0011)b
-        {
-          token_length = 4;
-          total_zeros = 5;
-        } else if ((token >> 3) == 0x04) // (100)b
-        {
-          token_length = 3;
-          total_zeros = 6;
-        } else if ((token >> 3) == 0x03) // (011)b
-        {
-          token_length = 3;
-          total_zeros = 7;
-        } else if ((token >> 2) == 0x02) // (0010)b
-        {
-          token_length = 4;
-          total_zeros = 8;
-        } else if ((token >> 1) == 0x03) // (0001 1)b
-        {
-          token_length = 5;
-          total_zeros = 9;
-        } else if ((token >> 1) == 0x02) // (0001 0)b
-        {
-          token_length = 5;
-          total_zeros = 10;
-        } else if ((token >> 0) == 0x01) // (0000 01)b
-        {
-          token_length = 6;
-          total_zeros = 11;
-        } else if ((token >> 1) == 0x01) // (0000 1)b
-        {
-          token_length = 5;
-          total_zeros = 12;
-        } else if ((token >> 0) == 0x00) // (0000 00)b
-        {
-          token_length = 6;
-          total_zeros = 13;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 4) {
-        token = bs.getBits(5);
-        token_length = 0;
-        if ((token >> 0) == 0x03) // (0001 1)b
-        {
-          token_length = 5;
-          total_zeros = 0;
-        } else if ((token >> 2) == 0x07) // (111)b
-        {
-          token_length = 3;
-          total_zeros = 1;
-        } else if ((token >> 1) == 0x05) // (0101)b
-        {
-          token_length = 4;
-          total_zeros = 2;
-        } else if ((token >> 1) == 0x04) // (0100)b
-        {
-          token_length = 4;
-          total_zeros = 3;
-        } else if ((token >> 2) == 0x06) // (110)b
-        {
-          token_length = 3;
-          total_zeros = 4;
-        } else if ((token >> 2) == 0x05) // (101)b
-        {
-          token_length = 3;
-          total_zeros = 5;
-        } else if ((token >> 2) == 0x04) // (100)b
-        {
-          token_length = 3;
-          total_zeros = 6;
-        } else if ((token >> 1) == 0x03) // (0011)b
-        {
-          token_length = 4;
-          total_zeros = 7;
-        } else if ((token >> 2) == 0x03) // (011)b
-        {
-          token_length = 3;
-          total_zeros = 8;
-        } else if ((token >> 1) == 0x02) // (0010)b
-        {
-          token_length = 4;
-          total_zeros = 9;
-        } else if ((token >> 0) == 0x02) // (0001 0)b
-        {
-          token_length = 5;
-          total_zeros = 10;
-        } else if ((token >> 0) == 0x01) // (0000 1)b
-        {
-          token_length = 5;
-          total_zeros = 11;
-        } else if ((token >> 0) == 0x00) // (0000 0)b
-        {
-          token_length = 5;
-          total_zeros = 12;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 5) {
-        token = bs.getBits(5);
-        token_length = 0;
-        if ((token >> 1) == 0x05) // (0101)b
-        {
-          token_length = 4;
-          total_zeros = 0;
-        } else if ((token >> 1) == 0x04) // (0100)b
-        {
-          token_length = 4;
-          total_zeros = 1;
-        } else if ((token >> 1) == 0x03) // (0011)b
-        {
-          token_length = 4;
-          total_zeros = 2;
-        } else if ((token >> 2) == 0x07) // (111)b
-        {
-          token_length = 3;
-          total_zeros = 3;
-        } else if ((token >> 2) == 0x06) // (110)b
-        {
-          token_length = 3;
-          total_zeros = 4;
-        } else if ((token >> 2) == 0x05) // (101)b
-        {
-          token_length = 3;
-          total_zeros = 5;
-        } else if ((token >> 2) == 0x04) // (100)b
-        {
-          token_length = 3;
-          total_zeros = 6;
-        } else if ((token >> 2) == 0x03) // (011)b
-        {
-          token_length = 3;
-          total_zeros = 7;
-        } else if ((token >> 1) == 0x02) // (0010)b
-        {
-          token_length = 4;
-          total_zeros = 8;
-        } else if ((token >> 0) == 0x01) // (0000 1)b
-        {
-          token_length = 5;
-          total_zeros = 9;
-        } else if ((token >> 1) == 0x01) // (0001)b
-        {
-          token_length = 4;
-          total_zeros = 10;
-        } else if ((token >> 0) == 0x00) // (0000 0)b
-        {
-          token_length = 5;
-          total_zeros = 11;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 6) {
-        token = bs.getBits(6);
-        token_length = 0;
-        if ((token >> 0) == 0x01) // (0000 01)b
-        {
-          token_length = 6;
-          total_zeros = 0;
-        } else if ((token >> 1) == 0x01) // (0000 1)b
-        {
-          token_length = 5;
-          total_zeros = 1;
-        } else if ((token >> 3) == 0x07) // (111)b
-        {
-          token_length = 3;
-          total_zeros = 2;
-        } else if ((token >> 3) == 0x06) // (110)b
-        {
-          token_length = 3;
-          total_zeros = 3;
-        } else if ((token >> 3) == 0x05) // (101)b
-        {
-          token_length = 3;
-          total_zeros = 4;
-        } else if ((token >> 3) == 0x04) // (100)b
-        {
-          token_length = 3;
-          total_zeros = 5;
-        } else if ((token >> 3) == 0x03) // (011)b
-        {
-          token_length = 3;
-          total_zeros = 6;
-        } else if ((token >> 3) == 0x02) // (010)b
-        {
-          token_length = 3;
-          total_zeros = 7;
-        } else if ((token >> 2) == 0x01) // (0001)b
-        {
-          token_length = 4;
-          total_zeros = 8;
-        } else if ((token >> 3) == 0x01) // (001)b
-        {
-          token_length = 3;
-          total_zeros = 9;
-        } else if ((token >> 0) == 0x00) // (0000 00)b
-        {
-          token_length = 6;
-          total_zeros = 10;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 7) {
-        token = bs.getBits(6);
-        token_length = 0;
-        if ((token >> 0) == 0x01) // (0000 01)b
-        {
-          token_length = 6;
-          total_zeros = 0;
-        } else if ((token >> 1) == 0x01) // (0000 1)b
-        {
-          token_length = 5;
-          total_zeros = 1;
-        } else if ((token >> 3) == 0x05) // (101)b
-        {
-          token_length = 3;
-          total_zeros = 2;
-        } else if ((token >> 3) == 0x04) // (100)b
-        {
-          token_length = 3;
-          total_zeros = 3;
-        } else if ((token >> 3) == 0x03) // (011)b
-        {
-          token_length = 3;
-          total_zeros = 4;
-        } else if ((token >> 4) == 0x03) // (11)b
-        {
-          token_length = 2;
-          total_zeros = 5;
-        } else if ((token >> 3) == 0x02) // (010)b
-        {
-          token_length = 3;
-          total_zeros = 6;
-        } else if ((token >> 2) == 0x01) // (0001)b
-        {
-          token_length = 4;
-          total_zeros = 7;
-        } else if ((token >> 3) == 0x01) // (001)b
-        {
-          token_length = 3;
-          total_zeros = 8;
-        } else if ((token >> 0) == 0x00) // (0000 00)b
-        {
-          token_length = 6;
-          total_zeros = 9;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 8) {
-        token = bs.getBits(6);
-        token_length = 0;
-        if ((token >> 0) == 0x01) // (0000 01)b
-        {
-          token_length = 6;
-          total_zeros = 0;
-        } else if ((token >> 2) == 0x01) // (0001)b
-        {
-          token_length = 4;
-          total_zeros = 1;
-        } else if ((token >> 1) == 0x01) // (0000 1)b
-        {
-          token_length = 5;
-          total_zeros = 2;
-        } else if ((token >> 3) == 0x03) // (011)b
-        {
-          token_length = 3;
-          total_zeros = 3;
-        } else if ((token >> 4) == 0x03) // (11)b
-        {
-          token_length = 2;
-          total_zeros = 4;
-        } else if ((token >> 4) == 0x02) // (10)b
-        {
-          token_length = 2;
-          total_zeros = 5;
-        } else if ((token >> 3) == 0x02) // (010)b
-        {
-          token_length = 3;
-          total_zeros = 6;
-        } else if ((token >> 3) == 0x01) // (001)b
-        {
-          token_length = 3;
-          total_zeros = 7;
-        } else if ((token >> 0) == 0x00) // (0000 00)b
-        {
-          token_length = 6;
-          total_zeros = 8;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 9) {
-        token = bs.getBits(6);
-        token_length = 0;
-        if ((token >> 0) == 0x01) // (0000 01)b
-        {
-          token_length = 6;
-          total_zeros = 0;
-        } else if ((token >> 0) == 0x00) // (0000 00)b
-        {
-          token_length = 6;
-          total_zeros = 1;
-        } else if ((token >> 2) == 0x01) // (0001)b
-        {
-          token_length = 4;
-          total_zeros = 2;
-        } else if ((token >> 4) == 0x03) // (11)b
-        {
-          token_length = 2;
-          total_zeros = 3;
-        } else if ((token >> 4) == 0x02) // (10)b
-        {
-          token_length = 2;
-          total_zeros = 4;
-        } else if ((token >> 3) == 0x01) // (001)b
-        {
-          token_length = 3;
-          total_zeros = 5;
-        } else if ((token >> 4) == 0x01) // (01)b
-        {
-          token_length = 2;
-          total_zeros = 6;
-        } else if ((token >> 1) == 0x01) // (0000 1)b
-        {
-          token_length = 5;
-          total_zeros = 7;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 10) {
-        token = bs.getBits(5);
-        token_length = 0;
-        if ((token >> 0) == 0x01) // (0000 1)b
-        {
-          token_length = 5;
-          total_zeros = 0;
-        } else if ((token >> 0) == 0x00) // (0000 0)b
-        {
-          token_length = 5;
-          total_zeros = 1;
-        } else if ((token >> 2) == 0x01) // (001)b
-        {
-          token_length = 3;
-          total_zeros = 2;
-        } else if ((token >> 3) == 0x03) // (11)b
-        {
-          token_length = 2;
-          total_zeros = 3;
-        } else if ((token >> 3) == 0x02) // (10)b
-        {
-          token_length = 2;
-          total_zeros = 4;
-        } else if ((token >> 3) == 0x01) // (01)b
-        {
-          token_length = 2;
-          total_zeros = 5;
-        } else if ((token >> 1) == 0x01) // (0001)b
-        {
-          token_length = 4;
-          total_zeros = 6;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 11) {
-        token = bs.getBits(4);
-        token_length = 0;
-        if ((token >> 0) == 0x00) // (0000)b
-        {
-          token_length = 4;
-          total_zeros = 0;
-        } else if ((token >> 0) == 0x01) // (0001)b
-        {
-          token_length = 4;
-          total_zeros = 1;
-        } else if ((token >> 1) == 0x01) // (001)b
-        {
-          token_length = 3;
-          total_zeros = 2;
-        } else if ((token >> 1) == 0x02) // (010)b
-        {
-          token_length = 3;
-          total_zeros = 3;
-        } else if ((token >> 3) == 0x01) // (1)b
-        {
-          token_length = 1;
-          total_zeros = 4;
-        } else if ((token >> 1) == 0x03) // (011)b
-        {
-          token_length = 3;
-          total_zeros = 5;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 12) {
-        token = bs.getBits(4);
-        token_length = 0;
-        if ((token >> 0) == 0x00) // (0000)b
-        {
-          token_length = 4;
-          total_zeros = 0;
-        } else if ((token >> 0) == 0x01) // (0001)b
-        {
-          token_length = 4;
-          total_zeros = 1;
-        } else if ((token >> 2) == 0x01) // (01)b
-        {
-          token_length = 2;
-          total_zeros = 2;
-        } else if ((token >> 3) == 0x01) // (1)b
-        {
-          token_length = 1;
-          total_zeros = 3;
-        } else if ((token >> 1) == 0x01) // (001)b
-        {
-          token_length = 3;
-          total_zeros = 4;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 13) {
-        token = bs.getBits(4);
-        token_length = 0;
-        if ((token >> 1) == 0x00) // (000)b
-        {
-          token_length = 3;
-          total_zeros = 0;
-        } else if ((token >> 1) == 0x01) // (001)b
-        {
-          token_length = 3;
-          total_zeros = 1;
-        } else if ((token >> 3) == 0x01) // (1)b
-        {
-          token_length = 1;
-          total_zeros = 2;
-        } else if ((token >> 2) == 0x01) // (01)b
-        {
-          token_length = 2;
-          total_zeros = 3;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 14) {
-        token = bs.getBits(2);
-        token_length = 0;
-        if ((token >> 0) == 0x00) // (00)b
-        {
-          token_length = 2;
-          total_zeros = 0;
-        } else if ((token >> 0) == 0x01) // (01)b
-        {
-          token_length = 2;
-          total_zeros = 1;
-        } else if ((token >> 1) == 0x01) // (1)b
-        {
-          token_length = 1;
-          total_zeros = 2;
-        }
-        token2 = bs.readUn(token_length);
-      } else if (tzVlcIndex == 15) {
-        token = bs.getBits(1);
-        token_length = 0;
-        if ((token >> 0) == 0x00) // (0)b
-        {
-          token_length = 1;
-          total_zeros = 0;
-        } else if ((token >> 0) == 0x01) // (1)b
-        {
-          token_length = 1;
-          total_zeros = 1;
-        }
-        token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 3) {
+      token = bs.getUn(1);
+      token_length = 0;
+      if ((token >> 0) == 0x01) // (1)b
+      {
+        token_length = 1;
+        total_zeros = 0;
+      } else if ((token >> 0) == 0x00) // (0)b
+      {
+        token_length = 1;
+        total_zeros = 1;
+      } else {
+        RETURN_IF_FAILED(1, -1);
       }
+      /*token2 =*/bs.readUn(token_length);
+    } else {
+      RETURN_IF_FAILED(1, -1);
     }
+  } else if (maxNumCoeff ==
+             8) // Otherwise, if maxNumCoeff is equal to 8, one of the VLCs
+                // specified in Table 9-9 (b) is used.
+  {
+    int32_t token = 0;
+    //int32_t token2 = 0;
+    int32_t token_length = 0;
 
-    */
+    // Table 9-9 – total_zeros tables for chroma DC 2x2 and 2x4 blocks
+    //(b) Chroma DC 2x4 block (4:2:2 chroma sampling)
+    if (tzVlcIndex == 1) {
+      token = bs.getUn(5);
+      token_length = 0;
+      if ((token >> 4) == 0x01) // (1)b
+      {
+        token_length = 1;
+        total_zeros = 0;
+      } else if ((token >> 2) == 0x02) // (010)b
+      {
+        token_length = 3;
+        total_zeros = 1;
+      } else if ((token >> 2) == 0x03) // (011)b
+      {
+        token_length = 3;
+        total_zeros = 2;
+      } else if ((token >> 1) == 0x02) // (0010)b
+      {
+        token_length = 4;
+        total_zeros = 3;
+      } else if ((token >> 1) == 0x03) // (0011)b
+      {
+        token_length = 4;
+        total_zeros = 4;
+      } else if ((token >> 1) == 0x01) // (0001)b
+      {
+        token_length = 4;
+        total_zeros = 5;
+      } else if ((token >> 0) == 0x01) // (0000 1)b
+      {
+        token_length = 5;
+        total_zeros = 6;
+      } else if ((token >> 0) == 0x00) // (0000 0)b
+      {
+        token_length = 5;
+        total_zeros = 7;
+      } else {
+        RETURN_IF_FAILED(1, -1);
+      }
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 2) {
+      token = bs.getUn(3);
+      token_length = 0;
+      if ((token >> 0) == 0x00) // (000)b
+      {
+        token_length = 3;
+        total_zeros = 0;
+      } else if ((token >> 1) == 0x01) // (01)b
+      {
+        token_length = 2;
+        total_zeros = 1;
+      } else if ((token >> 0) == 0x01) // (001)b
+      {
+        token_length = 3;
+        total_zeros = 2;
+      } else if ((token >> 0) == 0x04) // (100)b
+      {
+        token_length = 3;
+        total_zeros = 3;
+      } else if ((token >> 0) == 0x05) // (101)b
+      {
+        token_length = 3;
+        total_zeros = 4;
+      } else if ((token >> 0) == 0x06) // (110)b
+      {
+        token_length = 3;
+        total_zeros = 5;
+      } else if ((token >> 0) == 0x07) // (111)b
+      {
+        token_length = 3;
+        total_zeros = 6;
+      } else {
+        RETURN_IF_FAILED(1, -1);
+      }
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 3) {
+      token = bs.getUn(3);
+      token_length = 0;
+      if ((token >> 0) == 0x00) // (000)b
+      {
+        token_length = 3;
+        total_zeros = 0;
+      } else if ((token >> 0) == 0x01) // (001)b
+      {
+        token_length = 3;
+        total_zeros = 1;
+      } else if ((token >> 1) == 0x01) // (01)b
+      {
+        token_length = 2;
+        total_zeros = 2;
+      } else if ((token >> 1) == 0x02) // (10)b
+      {
+        token_length = 2;
+        total_zeros = 3;
+      } else if ((token >> 0) == 0x06) // (110)b
+      {
+        token_length = 3;
+        total_zeros = 4;
+      } else if ((token >> 0) == 0x07) // (111)b
+      {
+        token_length = 3;
+        total_zeros = 5;
+      } else {
+        RETURN_IF_FAILED(1, -1);
+      }
+      /* token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 4) {
+      token = bs.getUn(3);
+      token_length = 0;
+      if ((token >> 0) == 0x06) // (110)b
+      {
+        token_length = 3;
+        total_zeros = 0;
+      } else if ((token >> 1) == 0x00) // (00)b
+      {
+        token_length = 2;
+        total_zeros = 1;
+      } else if ((token >> 1) == 0x01) // (01)b
+      {
+        token_length = 2;
+        total_zeros = 2;
+      } else if ((token >> 1) == 0x02) // (10)b
+      {
+        token_length = 2;
+        total_zeros = 3;
+      } else if ((token >> 0) == 0x07) // (111)b
+      {
+        token_length = 3;
+        total_zeros = 4;
+      } else {
+        RETURN_IF_FAILED(1, -1);
+      }
+      /*token2 =*/bs.readUn(token_length);
+    } else if (tzVlcIndex == 5) {
+      token = bs.getUn(2);
+      token_length = 0;
+      if ((token >> 0) == 0x00) // (00)b
+      {
+        token_length = 2;
+        total_zeros = 0;
+      } else if ((token >> 0) == 0x01) // (01)b
+      {
+        token_length = 2;
+        total_zeros = 1;
+      } else if ((token >> 0) == 0x02) // (10)b
+      {
+        token_length = 2;
+        total_zeros = 2;
+      } else if ((token >> 0) == 0x03) // (11)b
+      {
+        token_length = 2;
+        total_zeros = 3;
+      } else {
+        RETURN_IF_FAILED(1, -1);
+      }
+      /*token2 =*/bs.readUn(token_length);
+    } else if (tzVlcIndex == 6) {
+      token = bs.getUn(2);
+      token_length = 0;
+      if ((token >> 0) == 0x00) // (00)b
+      {
+        token_length = 2;
+        total_zeros = 0;
+      } else if ((token >> 0) == 0x01) // (01)b
+      {
+        token_length = 2;
+        total_zeros = 1;
+      } else if ((token >> 1) == 0x01) // (1)b
+      {
+        token_length = 1;
+        total_zeros = 2;
+      } else {
+        RETURN_IF_FAILED(1, -1);
+      }
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 7) {
+      token = bs.getUn(1);
+      token_length = 0;
+      if ((token >> 0) == 0x00) // (0)b
+      {
+        token_length = 1;
+        total_zeros = 0;
+      } else if ((token >> 0) == 0x01) // (1)b
+      {
+        token_length = 1;
+        total_zeros = 1;
+      } else {
+        RETURN_IF_FAILED(1, -1);
+      }
+      /*token2 =*/bs.readUn(token_length);
+    } else {
+      RETURN_IF_FAILED(1, -1);
+    }
+  } else // Otherwise (maxNumCoeff is not equal to 4 and not equal to 8), VLCs
+         // from Tables 9-7 and 9-8 are used.
+  {
+    int32_t token = 0;
+    //int32_t token2 = 0;
+    int32_t token_length = 0;
+
+    // Table 9-7 – total_zeros tables for 4x4 blocks with tzVlcIndex 1 to 7
+    if (tzVlcIndex == 1) {
+      token = bs.getUn(9);
+      token_length = 0;
+      if ((token >> 8) == 0x01) // (1)b
+      {
+        token_length = 1;
+        total_zeros = 0;
+      } else if ((token >> 6) == 0x03) // (011)b
+      {
+        token_length = 3;
+        total_zeros = 1;
+      } else if ((token >> 6) == 0x02) // (010)b
+      {
+        token_length = 3;
+        total_zeros = 2;
+      } else if ((token >> 5) == 0x03) // (0011)b
+      {
+        token_length = 4;
+        total_zeros = 3;
+      } else if ((token >> 5) == 0x02) // (0010)b
+      {
+        token_length = 4;
+        total_zeros = 4;
+      } else if ((token >> 4) == 0x03) // (0001 1)b
+      {
+        token_length = 5;
+        total_zeros = 5;
+      } else if ((token >> 4) == 0x02) // (0001 0)b
+      {
+        token_length = 5;
+        total_zeros = 6;
+      } else if ((token >> 3) == 0x03) // (0000 11)b
+      {
+        token_length = 6;
+        total_zeros = 7;
+      } else if ((token >> 3) == 0x02) // (0000 10)b
+      {
+        token_length = 6;
+        total_zeros = 8;
+      } else if ((token >> 2) == 0x03) // (0000 011)b
+      {
+        token_length = 7;
+        total_zeros = 9;
+      } else if ((token >> 2) == 0x02) // (0000 010)b
+      {
+        token_length = 7;
+        total_zeros = 10;
+      } else if ((token >> 1) == 0x03) // (0000 0011)b
+      {
+        token_length = 8;
+        total_zeros = 11;
+      } else if ((token >> 1) == 0x02) // (0000 0010)b
+      {
+        token_length = 8;
+        total_zeros = 12;
+      } else if ((token >> 0) == 0x03) // (0000 0001 1)b
+      {
+        token_length = 9;
+        total_zeros = 13;
+      } else if ((token >> 0) == 0x02) // (0000 0001 0)b
+      {
+        token_length = 9;
+        total_zeros = 14;
+      } else if ((token >> 0) == 0x01) // (0000 0000 1)b
+      {
+        token_length = 9;
+        total_zeros = 15;
+      }
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 2) {
+      token = bs.getUn(6);
+      token_length = 0;
+      if ((token >> 3) == 0x07) // (111)b
+      {
+        token_length = 3;
+        total_zeros = 0;
+      } else if ((token >> 3) == 0x06) // (110)b
+      {
+        token_length = 3;
+        total_zeros = 1;
+      } else if ((token >> 3) == 0x05) // (101)b
+      {
+        token_length = 3;
+        total_zeros = 2;
+      } else if ((token >> 3) == 0x04) // (100)b
+      {
+        token_length = 3;
+        total_zeros = 3;
+      } else if ((token >> 3) == 0x03) // (011)b
+      {
+        token_length = 3;
+        total_zeros = 4;
+      } else if ((token >> 2) == 0x05) // (0101)b
+      {
+        token_length = 4;
+        total_zeros = 5;
+      } else if ((token >> 2) == 0x04) // (0100)b
+      {
+        token_length = 4;
+        total_zeros = 6;
+      } else if ((token >> 2) == 0x03) // (0011)b
+      {
+        token_length = 4;
+        total_zeros = 7;
+      } else if ((token >> 2) == 0x02) // (0010)b
+      {
+        token_length = 4;
+        total_zeros = 8;
+      } else if ((token >> 1) == 0x03) // (0001 1)b
+      {
+        token_length = 5;
+        total_zeros = 9;
+      } else if ((token >> 1) == 0x02) // (0001 0)b
+      {
+        token_length = 5;
+        total_zeros = 10;
+      } else if ((token >> 0) == 0x03) // (0000 11)b
+      {
+        token_length = 6;
+        total_zeros = 11;
+      } else if ((token >> 0) == 0x02) // (0000 10)b
+      {
+        token_length = 6;
+        total_zeros = 12;
+      } else if ((token >> 0) == 0x01) // (0000 01)b
+      {
+        token_length = 6;
+        total_zeros = 13;
+      } else if ((token >> 0) == 0x00) // (0000 00)b
+      {
+        token_length = 6;
+        total_zeros = 14;
+      }
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 3) {
+      token = bs.getUn(6);
+      token_length = 0;
+      if ((token >> 2) == 0x05) // (0101)b
+      {
+        token_length = 4;
+        total_zeros = 0;
+      } else if ((token >> 3) == 0x07) // (111)b
+      {
+        token_length = 3;
+        total_zeros = 1;
+      } else if ((token >> 3) == 0x06) // (110)b
+      {
+        token_length = 3;
+        total_zeros = 2;
+      } else if ((token >> 3) == 0x05) // (101)b
+      {
+        token_length = 3;
+        total_zeros = 3;
+      } else if ((token >> 2) == 0x04) // (0100)b
+      {
+        token_length = 4;
+        total_zeros = 4;
+      } else if ((token >> 2) == 0x03) // (0011)b
+      {
+        token_length = 4;
+        total_zeros = 5;
+      } else if ((token >> 3) == 0x04) // (100)b
+      {
+        token_length = 3;
+        total_zeros = 6;
+      } else if ((token >> 3) == 0x03) // (011)b
+      {
+        token_length = 3;
+        total_zeros = 7;
+      } else if ((token >> 2) == 0x02) // (0010)b
+      {
+        token_length = 4;
+        total_zeros = 8;
+      } else if ((token >> 1) == 0x03) // (0001 1)b
+      {
+        token_length = 5;
+        total_zeros = 9;
+      } else if ((token >> 1) == 0x02) // (0001 0)b
+      {
+        token_length = 5;
+        total_zeros = 10;
+      } else if ((token >> 0) == 0x01) // (0000 01)b
+      {
+        token_length = 6;
+        total_zeros = 11;
+      } else if ((token >> 1) == 0x01) // (0000 1)b
+      {
+        token_length = 5;
+        total_zeros = 12;
+      } else if ((token >> 0) == 0x00) // (0000 00)b
+      {
+        token_length = 6;
+        total_zeros = 13;
+      }
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 4) {
+      token = bs.getUn(5);
+      token_length = 0;
+      if ((token >> 0) == 0x03) // (0001 1)b
+      {
+        token_length = 5;
+        total_zeros = 0;
+      } else if ((token >> 2) == 0x07) // (111)b
+      {
+        token_length = 3;
+        total_zeros = 1;
+      } else if ((token >> 1) == 0x05) // (0101)b
+      {
+        token_length = 4;
+        total_zeros = 2;
+      } else if ((token >> 1) == 0x04) // (0100)b
+      {
+        token_length = 4;
+        total_zeros = 3;
+      } else if ((token >> 2) == 0x06) // (110)b
+      {
+        token_length = 3;
+        total_zeros = 4;
+      } else if ((token >> 2) == 0x05) // (101)b
+      {
+        token_length = 3;
+        total_zeros = 5;
+      } else if ((token >> 2) == 0x04) // (100)b
+      {
+        token_length = 3;
+        total_zeros = 6;
+      } else if ((token >> 1) == 0x03) // (0011)b
+      {
+        token_length = 4;
+        total_zeros = 7;
+      } else if ((token >> 2) == 0x03) // (011)b
+      {
+        token_length = 3;
+        total_zeros = 8;
+      } else if ((token >> 1) == 0x02) // (0010)b
+      {
+        token_length = 4;
+        total_zeros = 9;
+      } else if ((token >> 0) == 0x02) // (0001 0)b
+      {
+        token_length = 5;
+        total_zeros = 10;
+      } else if ((token >> 0) == 0x01) // (0000 1)b
+      {
+        token_length = 5;
+        total_zeros = 11;
+      } else if ((token >> 0) == 0x00) // (0000 0)b
+      {
+        token_length = 5;
+        total_zeros = 12;
+      }
+      //token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 5) {
+      token = bs.getUn(5);
+      token_length = 0;
+      if ((token >> 1) == 0x05) // (0101)b
+      {
+        token_length = 4;
+        total_zeros = 0;
+      } else if ((token >> 1) == 0x04) // (0100)b
+      {
+        token_length = 4;
+        total_zeros = 1;
+      } else if ((token >> 1) == 0x03) // (0011)b
+      {
+        token_length = 4;
+        total_zeros = 2;
+      } else if ((token >> 2) == 0x07) // (111)b
+      {
+        token_length = 3;
+        total_zeros = 3;
+      } else if ((token >> 2) == 0x06) // (110)b
+      {
+        token_length = 3;
+        total_zeros = 4;
+      } else if ((token >> 2) == 0x05) // (101)b
+      {
+        token_length = 3;
+        total_zeros = 5;
+      } else if ((token >> 2) == 0x04) // (100)b
+      {
+        token_length = 3;
+        total_zeros = 6;
+      } else if ((token >> 2) == 0x03) // (011)b
+      {
+        token_length = 3;
+        total_zeros = 7;
+      } else if ((token >> 1) == 0x02) // (0010)b
+      {
+        token_length = 4;
+        total_zeros = 8;
+      } else if ((token >> 0) == 0x01) // (0000 1)b
+      {
+        token_length = 5;
+        total_zeros = 9;
+      } else if ((token >> 1) == 0x01) // (0001)b
+      {
+        token_length = 4;
+        total_zeros = 10;
+      } else if ((token >> 0) == 0x00) // (0000 0)b
+      {
+        token_length = 5;
+        total_zeros = 11;
+      }
+      //token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 6) {
+      token = bs.getUn(6);
+      token_length = 0;
+      if ((token >> 0) == 0x01) // (0000 01)b
+      {
+        token_length = 6;
+        total_zeros = 0;
+      } else if ((token >> 1) == 0x01) // (0000 1)b
+      {
+        token_length = 5;
+        total_zeros = 1;
+      } else if ((token >> 3) == 0x07) // (111)b
+      {
+        token_length = 3;
+        total_zeros = 2;
+      } else if ((token >> 3) == 0x06) // (110)b
+      {
+        token_length = 3;
+        total_zeros = 3;
+      } else if ((token >> 3) == 0x05) // (101)b
+      {
+        token_length = 3;
+        total_zeros = 4;
+      } else if ((token >> 3) == 0x04) // (100)b
+      {
+        token_length = 3;
+        total_zeros = 5;
+      } else if ((token >> 3) == 0x03) // (011)b
+      {
+        token_length = 3;
+        total_zeros = 6;
+      } else if ((token >> 3) == 0x02) // (010)b
+      {
+        token_length = 3;
+        total_zeros = 7;
+      } else if ((token >> 2) == 0x01) // (0001)b
+      {
+        token_length = 4;
+        total_zeros = 8;
+      } else if ((token >> 3) == 0x01) // (001)b
+      {
+        token_length = 3;
+        total_zeros = 9;
+      } else if ((token >> 0) == 0x00) // (0000 00)b
+      {
+        token_length = 6;
+        total_zeros = 10;
+      }
+      //token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 7) {
+      token = bs.getUn(6);
+      token_length = 0;
+      if ((token >> 0) == 0x01) // (0000 01)b
+      {
+        token_length = 6;
+        total_zeros = 0;
+      } else if ((token >> 1) == 0x01) // (0000 1)b
+      {
+        token_length = 5;
+        total_zeros = 1;
+      } else if ((token >> 3) == 0x05) // (101)b
+      {
+        token_length = 3;
+        total_zeros = 2;
+      } else if ((token >> 3) == 0x04) // (100)b
+      {
+        token_length = 3;
+        total_zeros = 3;
+      } else if ((token >> 3) == 0x03) // (011)b
+      {
+        token_length = 3;
+        total_zeros = 4;
+      } else if ((token >> 4) == 0x03) // (11)b
+      {
+        token_length = 2;
+        total_zeros = 5;
+      } else if ((token >> 3) == 0x02) // (010)b
+      {
+        token_length = 3;
+        total_zeros = 6;
+      } else if ((token >> 2) == 0x01) // (0001)b
+      {
+        token_length = 4;
+        total_zeros = 7;
+      } else if ((token >> 3) == 0x01) // (001)b
+      {
+        token_length = 3;
+        total_zeros = 8;
+      } else if ((token >> 0) == 0x00) // (0000 00)b
+      {
+        token_length = 6;
+        total_zeros = 9;
+      }
+      //token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 8) {
+      token = bs.getUn(6);
+      token_length = 0;
+      if ((token >> 0) == 0x01) // (0000 01)b
+      {
+        token_length = 6;
+        total_zeros = 0;
+      } else if ((token >> 2) == 0x01) // (0001)b
+      {
+        token_length = 4;
+        total_zeros = 1;
+      } else if ((token >> 1) == 0x01) // (0000 1)b
+      {
+        token_length = 5;
+        total_zeros = 2;
+      } else if ((token >> 3) == 0x03) // (011)b
+      {
+        token_length = 3;
+        total_zeros = 3;
+      } else if ((token >> 4) == 0x03) // (11)b
+      {
+        token_length = 2;
+        total_zeros = 4;
+      } else if ((token >> 4) == 0x02) // (10)b
+      {
+        token_length = 2;
+        total_zeros = 5;
+      } else if ((token >> 3) == 0x02) // (010)b
+      {
+        token_length = 3;
+        total_zeros = 6;
+      } else if ((token >> 3) == 0x01) // (001)b
+      {
+        token_length = 3;
+        total_zeros = 7;
+      } else if ((token >> 0) == 0x00) // (0000 00)b
+      {
+        token_length = 6;
+        total_zeros = 8;
+      }
+      //token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 9) {
+      token = bs.getUn(6);
+      token_length = 0;
+      if ((token >> 0) == 0x01) // (0000 01)b
+      {
+        token_length = 6;
+        total_zeros = 0;
+      } else if ((token >> 0) == 0x00) // (0000 00)b
+      {
+        token_length = 6;
+        total_zeros = 1;
+      } else if ((token >> 2) == 0x01) // (0001)b
+      {
+        token_length = 4;
+        total_zeros = 2;
+      } else if ((token >> 4) == 0x03) // (11)b
+      {
+        token_length = 2;
+        total_zeros = 3;
+      } else if ((token >> 4) == 0x02) // (10)b
+      {
+        token_length = 2;
+        total_zeros = 4;
+      } else if ((token >> 3) == 0x01) // (001)b
+      {
+        token_length = 3;
+        total_zeros = 5;
+      } else if ((token >> 4) == 0x01) // (01)b
+      {
+        token_length = 2;
+        total_zeros = 6;
+      } else if ((token >> 1) == 0x01) // (0000 1)b
+      {
+        token_length = 5;
+        total_zeros = 7;
+      }
+      //token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 10) {
+      token = bs.getUn(5);
+      token_length = 0;
+      if ((token >> 0) == 0x01) // (0000 1)b
+      {
+        token_length = 5;
+        total_zeros = 0;
+      } else if ((token >> 0) == 0x00) // (0000 0)b
+      {
+        token_length = 5;
+        total_zeros = 1;
+      } else if ((token >> 2) == 0x01) // (001)b
+      {
+        token_length = 3;
+        total_zeros = 2;
+      } else if ((token >> 3) == 0x03) // (11)b
+      {
+        token_length = 2;
+        total_zeros = 3;
+      } else if ((token >> 3) == 0x02) // (10)b
+      {
+        token_length = 2;
+        total_zeros = 4;
+      } else if ((token >> 3) == 0x01) // (01)b
+      {
+        token_length = 2;
+        total_zeros = 5;
+      } else if ((token >> 1) == 0x01) // (0001)b
+      {
+        token_length = 4;
+        total_zeros = 6;
+      }
+      //token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 11) {
+      token = bs.getUn(4);
+      token_length = 0;
+      if ((token >> 0) == 0x00) // (0000)b
+      {
+        token_length = 4;
+        total_zeros = 0;
+      } else if ((token >> 0) == 0x01) // (0001)b
+      {
+        token_length = 4;
+        total_zeros = 1;
+      } else if ((token >> 1) == 0x01) // (001)b
+      {
+        token_length = 3;
+        total_zeros = 2;
+      } else if ((token >> 1) == 0x02) // (010)b
+      {
+        token_length = 3;
+        total_zeros = 3;
+      } else if ((token >> 3) == 0x01) // (1)b
+      {
+        token_length = 1;
+        total_zeros = 4;
+      } else if ((token >> 1) == 0x03) // (011)b
+      {
+        token_length = 3;
+        total_zeros = 5;
+      }
+      //token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 12) {
+      token = bs.getUn(4);
+      token_length = 0;
+      if ((token >> 0) == 0x00) // (0000)b
+      {
+        token_length = 4;
+        total_zeros = 0;
+      } else if ((token >> 0) == 0x01) // (0001)b
+      {
+        token_length = 4;
+        total_zeros = 1;
+      } else if ((token >> 2) == 0x01) // (01)b
+      {
+        token_length = 2;
+        total_zeros = 2;
+      } else if ((token >> 3) == 0x01) // (1)b
+      {
+        token_length = 1;
+        total_zeros = 3;
+      } else if ((token >> 1) == 0x01) // (001)b
+      {
+        token_length = 3;
+        total_zeros = 4;
+      }
+      //token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 13) {
+      token = bs.getUn(4);
+      token_length = 0;
+      if ((token >> 1) == 0x00) // (000)b
+      {
+        token_length = 3;
+        total_zeros = 0;
+      } else if ((token >> 1) == 0x01) // (001)b
+      {
+        token_length = 3;
+        total_zeros = 1;
+      } else if ((token >> 3) == 0x01) // (1)b
+      {
+        token_length = 1;
+        total_zeros = 2;
+      } else if ((token >> 2) == 0x01) // (01)b
+      {
+        token_length = 2;
+        total_zeros = 3;
+      }
+      //token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 14) {
+      token = bs.getUn(2);
+      token_length = 0;
+      if ((token >> 0) == 0x00) // (00)b
+      {
+        token_length = 2;
+        total_zeros = 0;
+      } else if ((token >> 0) == 0x01) // (01)b
+      {
+        token_length = 2;
+        total_zeros = 1;
+      } else if ((token >> 1) == 0x01) // (1)b
+      {
+        token_length = 1;
+        total_zeros = 2;
+      }
+      //token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    } else if (tzVlcIndex == 15) {
+      token = bs.getUn(1);
+      token_length = 0;
+      if ((token >> 0) == 0x00) // (0)b
+      {
+        token_length = 1;
+        total_zeros = 0;
+      } else if ((token >> 0) == 0x01) // (1)b
+      {
+        token_length = 1;
+        total_zeros = 1;
+      }
+      //token2 = bs.readUn(token_length);
+      /*token2 = */ bs.readUn(token_length);
+    }
+  }
+
   return 0;
 }
 
 int CH264ResidualBlockCavlc::get_run_before(BitStream &bs, int32_t zerosLeft,
                                             int32_t &run_before) {
-  /*
   int32_t token = 0;
-  int32_t token2 = 0;
+  //int32_t token2 = 0;
   int32_t token_length = 0;
 
   if (zerosLeft == 1) {
-    token = bs.getBits(1);
+    token = bs.getUn(1);
     token_length = 0;
     if ((token >> 0) == 0x01) // (1)b
     {
@@ -3039,9 +3047,9 @@ int CH264ResidualBlockCavlc::get_run_before(BitStream &bs, int32_t zerosLeft,
       token_length = 1;
       run_before = 1;
     }
-    token2 = bs.readUn(token_length);
+    bs.readUn(token_length);
   } else if (zerosLeft == 2) {
-    token = bs.getBits(2);
+    token = bs.getUn(2);
     token_length = 0;
     if ((token >> 1) == 0x01) // (1)b
     {
@@ -3056,9 +3064,9 @@ int CH264ResidualBlockCavlc::get_run_before(BitStream &bs, int32_t zerosLeft,
       token_length = 2;
       run_before = 2;
     }
-    token2 = bs.readUn(token_length);
+    bs.readUn(token_length);
   } else if (zerosLeft == 3) {
-    token = bs.getBits(2);
+    token = bs.getUn(2);
     token_length = 0;
     if ((token >> 0) == 0x03) // (11)b
     {
@@ -3077,9 +3085,9 @@ int CH264ResidualBlockCavlc::get_run_before(BitStream &bs, int32_t zerosLeft,
       token_length = 2;
       run_before = 3;
     }
-    token2 = bs.readUn(token_length);
+    bs.readUn(token_length);
   } else if (zerosLeft == 4) {
-    token = bs.getBits(3);
+    token = bs.getUn(3);
     token_length = 0;
     if ((token >> 1) == 0x03) // (11)b
     {
@@ -3102,9 +3110,9 @@ int CH264ResidualBlockCavlc::get_run_before(BitStream &bs, int32_t zerosLeft,
       token_length = 3;
       run_before = 4;
     }
-    token2 = bs.readUn(token_length);
+    bs.readUn(token_length);
   } else if (zerosLeft == 5) {
-    token = bs.getBits(3);
+    token = bs.getUn(3);
     token_length = 0;
     if ((token >> 1) == 0x03) // (11)b
     {
@@ -3131,9 +3139,9 @@ int CH264ResidualBlockCavlc::get_run_before(BitStream &bs, int32_t zerosLeft,
       token_length = 3;
       run_before = 5;
     }
-    token2 = bs.readUn(token_length);
+    bs.readUn(token_length);
   } else if (zerosLeft == 6) {
-    token = bs.getBits(3);
+    token = bs.getUn(3);
     token_length = 0;
     if ((token >> 1) == 0x03) // (11)b
     {
@@ -3164,9 +3172,9 @@ int CH264ResidualBlockCavlc::get_run_before(BitStream &bs, int32_t zerosLeft,
       token_length = 3;
       run_before = 6;
     }
-    token2 = bs.readUn(token_length);
+    bs.readUn(token_length);
   } else if (zerosLeft > 6) {
-    token = bs.getBits(11);
+    token = bs.getUn(11);
     token_length = 0;
     if ((token >> 8) == 0x07) // (111)b
     {
@@ -3229,9 +3237,8 @@ int CH264ResidualBlockCavlc::get_run_before(BitStream &bs, int32_t zerosLeft,
       token_length = 11;
       run_before = 14;
     }
-    token2 = bs.readUn(token_length);
+    bs.readUn(token_length);
   }
-*/
 
   return 0;
 }

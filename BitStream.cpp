@@ -19,6 +19,23 @@ uint32_t BitStream::readUn(uint32_t num) {
   return n;
 }
 
+uint32_t BitStream::getUn(uint32_t num) {
+  uint32_t bitsLeft = _bitsLeft;
+  int size = _size;
+  uint8_t *p = _p;
+  uint8_t *endBuf = _endBuf;
+
+  uint32_t n = 0;
+  for (int i = 0; i < (int)num; i++)
+    n = (n << 1) | readU1();
+
+  _bitsLeft = bitsLeft;
+  _size = size;
+  _p = p;
+  _endBuf = endBuf;
+  return n;
+}
+
 uint32_t BitStream::readUE() {
   uint32_t r = 0;
   uint32_t zero_count = 0; // How many 0 bits
@@ -46,8 +63,7 @@ uint32_t BitStream::readSE() {
   r++;
   bool sign = r & 1; // fetch the min{endpos} bit
   r >>= 1;
-  if (sign)
-    r *= -1; // 去绝对值
+  if (sign) r *= -1; // 去绝对值
   return r;
 }
 
@@ -66,8 +82,7 @@ bool BitStream::byte_aligned() {
 bool BitStream::isEndOf() { return ((*_p == *_endBuf) && _bitsLeft == 0); }
 
 bool BitStream::more_rbsp_data() {
-  if (isEndOf())
-    return 0;
+  if (isEndOf()) return 0;
 
   uint8_t *p1 = getEndBuf();
   while (p1 > getP() && *p1 == 0) {
@@ -87,18 +102,16 @@ bool BitStream::more_rbsp_data() {
       }
     }
 
-    if (flag == 1 && (i + 1) < getBitsLeft())
-      return 1;
+    if (flag == 1 && (i + 1) < getBitsLeft()) return 1;
   }
 
   return 0;
 }
 
 int BitStream::rbsp_trailing_bits() {
-  if (getP() >= getEndBuf())
-    return 0;
-  /*int32_t rbsp_stop_one_bit =*/ readU1(); // /* equal to 1 */ All f(1)
+  if (getP() >= getEndBuf()) return 0;
+  /*int32_t rbsp_stop_one_bit =*/readU1(); // /* equal to 1 */ All f(1)
   while (!byte_aligned())
-    /*int32_t rbsp_alignment_zero_bit =*/ readU1();
+    /*int32_t rbsp_alignment_zero_bit =*/readU1();
   return 0;
 }

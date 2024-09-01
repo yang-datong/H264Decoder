@@ -52,8 +52,10 @@ class SPS {
   uint32_t pic_width_in_mbs_minus1 = 0;
   /* 宏块（MB）单位的图像高度减 1。（用于计算原图像正常情况下的高）*/
   uint32_t pic_height_in_map_units_minus1 = 0;
+
   /*色度格式。指定了亮度和色度分量的采样方式,444,420,422*/
-  uint32_t chroma_format_idc = 0;
+  /* 当 chroma_format_idc 不存在时，应推断其等于 1（4:2:0 色度格式）。page 74 */
+  uint32_t chroma_format_idc = 1;
 
   uint32_t MaxFrameNum = 0;
   /* 是否使用直接 8x8 推断 */

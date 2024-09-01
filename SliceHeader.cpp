@@ -226,9 +226,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream) {
 
   pic_parameter_set_id = bitStream.readUE();
   std::cout << "\tPPS ID:" << pic_parameter_set_id << std::endl;
-  /* TODO YangJing
-   * 这里可能存在多个sps和pps的情况，这里并没有使用到id，后续注意一下 <24-08-16
-   * 10:13:03> */
+  /* TODO YangJing 这里可能存在多个sps和pps的情况，这里并没有使用到id，后续注意一下 <24-08-16 10:13:03> */
   if (m_sps.separate_colour_plane_flag == 1) {
     colour_plane_id = bitStream.readUn(2);
     std::cout << "\t颜色平面ID:" << colour_plane_id << std::endl;
