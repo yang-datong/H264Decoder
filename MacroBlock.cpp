@@ -29,7 +29,6 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
 
   constrained_intra_pred_flag = pps.constrained_intra_pred_flag;
 
-  //-----------------------------
   process_decode_mb_type(picture, header, header.slice_type);
 
   if (m_mb_type_fixed == I_PCM) {

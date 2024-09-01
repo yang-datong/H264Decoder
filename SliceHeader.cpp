@@ -201,191 +201,6 @@ int SliceHeader::set_scaling_lists_values() {
   return ret;
 }
 
-int SliceHeader::setMapUnitToSliceGroupMap() {
-  int32_t i = 0;
-  int32_t j = 0;
-  int32_t k = 0;
-  int32_t x = 0;
-  int32_t y = 0;
-  int32_t iGroup = 0;
-
-  if (m_pps.num_slice_groups_minus1 == 0) {
-    for (i = 0; i < m_sps.PicSizeInMapUnits; i++) {
-      mapUnitToSliceGroupMap[i] = 0;
-    }
-    return 0;
-  }
-
-  if (m_pps.slice_group_map_type ==
-      0) // 8.2.2.1 Specification for interleaved slice
-         // group map type 交叉型 slice组映射类型的描述
-  {
-    i = 0;
-    do {
-      for (iGroup = 0; iGroup <= m_pps.num_slice_groups_minus1 &&
-                       i < m_sps.PicSizeInMapUnits;
-           i += m_pps.run_length_minus1[iGroup++] + 1) {
-        for (j = 0; j <= m_pps.run_length_minus1[iGroup] &&
-                    i + j < m_sps.PicSizeInMapUnits;
-             j++) {
-          mapUnitToSliceGroupMap[i + j] = iGroup;
-        }
-      }
-    } while (i < m_sps.PicSizeInMapUnits);
-  } else if (m_pps.slice_group_map_type ==
-             1) // 8.2.2.2 Specification for dispersed slice group map type
-                // 分散型 slice 组映射类型的描述
-  {
-    for (i = 0; i < m_sps.PicSizeInMapUnits; i++) {
-      mapUnitToSliceGroupMap[i] =
-          ((i % m_sps.PicWidthInMbs) +
-           (((i / m_sps.PicWidthInMbs) * (m_pps.num_slice_groups_minus1 + 1)) /
-            2)) %
-          (m_pps.num_slice_groups_minus1 + 1);
-    }
-  } else if (m_pps.slice_group_map_type ==
-             2) // 8.2.2.3 Specification for foreground with left-over slice
-  // group map type 前景加剩余型 slice 组映射类型的描述
-  {
-    for (i = 0; i < m_sps.PicSizeInMapUnits; i++) {
-      mapUnitToSliceGroupMap[i] = m_pps.num_slice_groups_minus1;
-    }
-    for (iGroup = m_pps.num_slice_groups_minus1 - 1; iGroup >= 0; iGroup--) {
-      int32_t yTopLeft = m_pps.top_left[iGroup] / m_sps.PicWidthInMbs;
-      int32_t xTopLeft = m_pps.top_left[iGroup] % m_sps.PicWidthInMbs;
-      int32_t yBottomRight = m_pps.bottom_right[iGroup] / m_sps.PicWidthInMbs;
-      int32_t xBottomRight = m_pps.bottom_right[iGroup] % m_sps.PicWidthInMbs;
-      for (y = yTopLeft; y <= yBottomRight; y++) {
-        for (x = xTopLeft; x <= xBottomRight; x++) {
-          mapUnitToSliceGroupMap[y * m_sps.PicWidthInMbs + x] = iGroup;
-        }
-      }
-    }
-  } else if (m_pps.slice_group_map_type == 3) {
-    // 8.2.2.4 Specification for box-out slice group map types
-    // 外旋盒子型 slice 组映射类型的描述
-    for (i = 0; i < m_sps.PicSizeInMapUnits; i++) {
-      mapUnitToSliceGroupMap[i] = 1;
-    }
-    x = (m_sps.PicWidthInMbs - m_pps.slice_group_change_direction_flag) / 2;
-    y = (m_sps.PicHeightInMapUnits - m_pps.slice_group_change_direction_flag) /
-        2;
-
-    int32_t leftBound = x;
-    int32_t topBound = y;
-    int32_t rightBound = x;
-    int32_t bottomBound = y;
-    int32_t xDir = m_pps.slice_group_change_direction_flag - 1;
-    int32_t yDir = m_pps.slice_group_change_direction_flag;
-    int32_t mapUnitVacant = 0;
-
-    for (k = 0; k < MapUnitsInSliceGroup0; k += mapUnitVacant) {
-      mapUnitVacant =
-          (mapUnitToSliceGroupMap[y * m_sps.PicWidthInMbs + x] == 1);
-      if (mapUnitVacant) {
-        mapUnitToSliceGroupMap[y * m_sps.PicWidthInMbs + x] = 0;
-      }
-      if (xDir == -1 && x == leftBound) {
-        leftBound = fmax(leftBound - 1, 0);
-        x = leftBound;
-        xDir = 0;
-        yDir = 2 * m_pps.slice_group_change_direction_flag - 1;
-      } else if (xDir == 1 && x == rightBound) {
-        rightBound = MIN(rightBound + 1, m_sps.PicWidthInMbs - 1);
-        x = rightBound;
-        xDir = 0;
-        yDir = 1 - 2 * m_pps.slice_group_change_direction_flag;
-      } else if (yDir == -1 && y == topBound) {
-        topBound = MAX(topBound - 1, 0);
-        y = topBound;
-        xDir = 1 - 2 * m_pps.slice_group_change_direction_flag;
-        yDir = 0;
-      } else if (yDir == 1 && y == bottomBound) {
-        bottomBound = MIN(bottomBound + 1, m_sps.PicHeightInMapUnits - 1);
-        y = bottomBound;
-        xDir = 2 * m_pps.slice_group_change_direction_flag - 1;
-        yDir = 0;
-      } else {
-        //(x, y) = (x + xDir, y + yDir);
-      }
-    }
-  } else if (m_pps.slice_group_map_type == 4) {
-    // 8.2.2.5 Specification for raster scan slice group map types
-    // 栅格扫描型 slice 组映射类型的描述
-    int32_t sizeOfUpperLeftGroup = 0;
-    if (m_pps.num_slice_groups_minus1 == 1) {
-      sizeOfUpperLeftGroup =
-          (m_pps.slice_group_change_direction_flag
-               ? (m_sps.PicSizeInMapUnits - MapUnitsInSliceGroup0)
-               : MapUnitsInSliceGroup0);
-    }
-
-    for (i = 0; i < m_sps.PicSizeInMapUnits; i++) {
-      if (i < sizeOfUpperLeftGroup) {
-        mapUnitToSliceGroupMap[i] = m_pps.slice_group_change_direction_flag;
-      } else {
-        mapUnitToSliceGroupMap[i] = 1 - m_pps.slice_group_change_direction_flag;
-      }
-    }
-  } else if (m_pps.slice_group_map_type ==
-             5) // 8.2.2.6 Specification for wipe slice group map types 擦除型
-                // slice 组映射类型的描述
-  {
-    int32_t sizeOfUpperLeftGroup = 0;
-    if (m_pps.num_slice_groups_minus1 == 1) {
-      sizeOfUpperLeftGroup =
-          (m_pps.slice_group_change_direction_flag
-               ? (m_sps.PicSizeInMapUnits - MapUnitsInSliceGroup0)
-               : MapUnitsInSliceGroup0);
-    }
-
-    k = 0;
-    for (j = 0; j < m_sps.PicWidthInMbs; j++) {
-      for (i = 0; i < m_sps.PicHeightInMapUnits; i++) {
-        if (k++ < sizeOfUpperLeftGroup) {
-          mapUnitToSliceGroupMap[i * m_sps.PicWidthInMbs + j] =
-              m_pps.slice_group_change_direction_flag;
-        } else {
-          mapUnitToSliceGroupMap[i * m_sps.PicWidthInMbs + j] =
-              1 - m_pps.slice_group_change_direction_flag;
-        }
-      }
-    }
-  } else if (m_pps.slice_group_map_type ==
-             6) // 8.2.2.7 Specification for explicit slice group map type
-                // 显式型 slice 组映射类型的描述
-  {
-    for (i = 0; i < m_sps.PicSizeInMapUnits; i++) {
-      mapUnitToSliceGroupMap[i] = m_pps.slice_group_id[i];
-    }
-  } else {
-    printf("slice_group_map_type=%d, must be in [0..6];\n",
-           m_pps.slice_group_map_type);
-    return -1;
-  }
-
-  return 0;
-}
-
-int SliceHeader::setMbToSliceGroupMap() {
-  for (int i = 0; i < m_idr.PicSizeInMbs; i++) {
-    if (m_sps.frame_mbs_only_flag == 1 || field_pic_flag == 1) {
-      MbToSliceGroupMap[i] = mapUnitToSliceGroupMap[i];
-    } else if (MbaffFrameFlag == 1) {
-      MbToSliceGroupMap[i] = mapUnitToSliceGroupMap[i / 2];
-    } else // if (frame_mbs_only_flag == 0 &&
-           // mb_adaptive_frame_field_flag == 0 && slice.field_pic_flag == 0)
-    {
-      MbToSliceGroupMap[i] =
-          mapUnitToSliceGroupMap[(i / (2 * m_sps.PicWidthInMbs)) *
-                                     m_sps.PicWidthInMbs +
-                                 (i % m_sps.PicWidthInMbs)];
-    }
-  }
-
-  return 0;
-}
-
 /* Slice header syntax -> 51 page */
 int SliceHeader::parseSliceHeader(BitStream &bitStream) {
   first_mb_in_slice = bitStream.readUE();
@@ -580,12 +395,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream) {
     std::cout << "\t宏块到Slice组的映射表:" << PicSizeInMbs << std::endl;
   }
 
-  setMapUnitToSliceGroupMap();
-
-  setMbToSliceGroupMap();
-
   set_scaling_lists_values();
-
   m_is_malloc_mem_self = 1;
   return 0;
 }
@@ -726,17 +536,17 @@ void SliceHeader::dec_ref_pic_marking(BitStream &bitStream) {
         memory_management_control_operation = bitStream.readUE();
         if (memory_management_control_operation == 1 ||
             memory_management_control_operation == 3)
-          /*uint32_t difference_of_pic_nums_minus1 = */bitStream.readUE();
+          /*uint32_t difference_of_pic_nums_minus1 = */ bitStream.readUE();
         /* TODO YangJing 应该还需要进一步写入到结构体中 <24-09-01 00:38:22> */
         if (memory_management_control_operation == 2)
-          /*uint32_t long_term_pic_num = */bitStream.readUE();
+          /*uint32_t long_term_pic_num = */ bitStream.readUE();
         /* TODO YangJing 应该还需要进一步写入到结构体中 <24-09-01 00:38:22> */
         if (memory_management_control_operation == 3 ||
             memory_management_control_operation == 6)
-          /*uint32_t long_term_frame_idx = */bitStream.readUE();
+          /*uint32_t long_term_frame_idx = */ bitStream.readUE();
         /* TODO YangJing 应该还需要进一步写入到结构体中 <24-09-01 00:38:22> */
         if (memory_management_control_operation == 4)
-          /*uint32_t max_long_term_frame_idx_plus1 = */bitStream.readUE();
+          /*uint32_t max_long_term_frame_idx_plus1 = */ bitStream.readUE();
         /* TODO YangJing 应该还需要进一步写入到结构体中 <24-09-01 00:38:22> */
       } while (memory_management_control_operation != 0);
     }

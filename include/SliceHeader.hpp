@@ -191,8 +191,6 @@ class SliceHeader {
   uint32_t ScalingList8x8[6][64] = {{0}};
 
   int set_scaling_lists_values();
-  int setMapUnitToSliceGroupMap();
-  int setMbToSliceGroupMap();
 
   void ref_pic_list_mvc_modification(BitStream &bitStream);
   void ref_pic_list_modification(BitStream &bitStream);

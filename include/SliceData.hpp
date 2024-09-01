@@ -45,6 +45,10 @@ class SliceData {
  private:
   int do_decoding_picture_order_count(PictureBase &picture,
                                       const SliceHeader &header);
+  int decoding_macroblock_to_slice_group_map(SliceHeader &header);
+  int setMapUnitToSliceGroupMap(SliceHeader &header);
+  int setMbToSliceGroupMap(SliceHeader &header);
+
   int process_mb_skip_run();
   int process_mb_skip_flag(PictureBase &picture, const SliceHeader &header,
                            CH264Cabac &cabac, const int32_t prevMbSkipped);
@@ -53,9 +57,28 @@ class SliceData {
   int do_macroblock_layer(PictureBase &picture, BitStream &bs,
                           CH264Cabac &cabac, const SliceHeader &header);
 
-  int NextMbAddress(int n, SliceHeader &slice_header);
   int initCABAC(CH264Cabac &cabac, BitStream &bs, SliceHeader &slice_header);
 
   void printFrameReorderPriorityInfo(PictureBase &picture);
+
+ private:
+  void updatesLocationOfCurrentMacroblock(PictureBase &picture,
+                                          const bool MbaffFrameFlag);
+
+ private:
+  int interleaved_slice_group_map_type(int32_t *&mapUnitToSliceGroupMap);
+  int dispersed_slice_group_map_type(int32_t *&mapUnitToSliceGroupMap);
+  int foreground_with_left_over_slice_group_ma_type(
+      int32_t *&mapUnitToSliceGroupMap);
+  int box_out_slice_group_map_types(int32_t *&mapUnitToSliceGroupMap,
+                                    const int &MapUnitsInSliceGroup0);
+  int raster_scan_slice_group_map_types(int32_t *&mapUnitToSliceGroupMap,
+                                        const int &MapUnitsInSliceGroup0);
+  int wipe_slice_group_map_types(int32_t *&mapUnitToSliceGroupMap,
+                                 const int &MapUnitsInSliceGroup0);
+  int explicit_slice_group_map_type(int32_t *&mapUnitToSliceGroupMap);
 };
+
+int NextMbAddress(int n, SliceHeader &slice_header);
+
 #endif /* end of include guard: SLICEBODY_HPP_OVHTPIZQ */
