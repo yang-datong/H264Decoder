@@ -22,7 +22,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
 
   /* TODO YangJing 初始化 <24-09-01 02:07:46> */
   this->_cabac = &cabac;
-  this->_gb = new CH264Golomb();
+  if (_gb == nullptr) this->_gb = new CH264Golomb();
   this->_bs = &bs;
 
   initFromSlice(header, slice_data);
@@ -108,7 +108,7 @@ int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
   int ret = 0;
   /* YangJing 初始化 <24-09-01 02:07:46> */
   this->_cabac = &cabac;
-  this->_gb = new CH264Golomb();
+  if (_gb == nullptr) this->_gb = new CH264Golomb();
 
   SliceHeader &header = picture.m_slice.slice_header;
 

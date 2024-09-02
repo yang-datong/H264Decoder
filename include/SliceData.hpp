@@ -35,7 +35,6 @@ class SliceData {
  private:
   uint32_t mb_skip_run = 0;
   int32_t mb_skip_flag_next_mb = 0;
-  int32_t end_of_slice_flag = 0; // 2 ae(v)
 
  private:
   int parseSliceData(BitStream &bitStream, PictureBase &picture);
@@ -52,12 +51,16 @@ class SliceData {
   int setMapUnitToSliceGroupMap();
   int setMbToSliceGroupMap();
 
+  /* process表示处理字段，具体处理手段有推流或解码操作 */
   int process_mb_skip_run(PictureBase &picture, int32_t &prevMbSkipped,
                           const bool &is_cabac);
   int process_mb_skip_flag(PictureBase &picture, const int32_t prevMbSkipped);
   int process_mb_field_decoding_flag(PictureBase &picture,
                                      const bool entropy_coding_mode_flag);
-  int process_end_of_slice_flag();
+  int process_end_of_slice_flag(int32_t &end_of_slice_flag);
+
+  /* derivation表示推断字段（根据其他内容进行猜测） */
+  int derivation_for_mb_field_decoding_flag(PictureBase &picture);
 
   int do_macroblock_layer(PictureBase &picture);
 
