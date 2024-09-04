@@ -355,7 +355,9 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream) {
 
   SliceQPY = 26 + m_pps.pic_init_qp_minus26 + slice_qp_delta;
   std::cout << "\tSlice的量化参数:" << SliceQPY << std::endl;
+  /* 对于首个Slice而言前一个Slice的量化参数应该初始化为当前量化参数，而不是0 */
   QPY_prev = SliceQPY;
+
   MbaffFrameFlag = (m_sps.mb_adaptive_frame_field_flag && !field_pic_flag);
   std::cout << "\t宏块自适应帧场标志:" << MbaffFrameFlag << std::endl;
   PicHeightInMbs = m_sps.frameHeightInMbs / (1 + field_pic_flag);

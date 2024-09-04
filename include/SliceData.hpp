@@ -28,9 +28,11 @@ class SliceData {
   uint32_t slice_number = 0;
 
   /* 由CABAC单独解码而来的重要控制变量 */
+  uint32_t CurrMbAddr = 0;
+
+ public:
   int32_t mb_skip_flag = 0;
   int32_t mb_field_decoding_flag = 0;
-  uint32_t CurrMbAddr = 0;
 
  private:
   uint32_t mb_skip_run = 0;

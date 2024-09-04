@@ -289,16 +289,13 @@ int SPS::extractParameters() {
   else
     ChromaArrayType = 0;
 
-  /* 计算位深度 */
+  /* 7.4.2.1.1 Sequence parameter set data semantics */
   BitDepthY = bit_depth_luma_minus8 + 8;
-  // 亮度分量的位深度
   QpBdOffsetY = bit_depth_luma_minus8 * 6;
-  // 亮度分量的量化参数步长偏移
   BitDepthC = bit_depth_chroma_minus8 + 8;
-  // 色度分量的位深度
   QpBdOffsetC = bit_depth_chroma_minus8 * 6;
-  // 色度分量的量化参数步长偏移
-  //
+  // 色度分量的采样宽度
+  RawMbBits = 256 * BitDepthY + 2 * MbWidthC * MbHeightC * BitDepthC;
 
   CHROMA_FORMAT_IDC_T g_chroma_format_idcs[5] = {
       {0, 0, MONOCHROME, NA, NA},
@@ -332,8 +329,6 @@ int SPS::extractParameters() {
   picWidthInSamplesL = PicWidthInMbs * 16;
   // 亮度分量的采样宽度，等于宏块宽度乘以 16
   picWidthInSamplesC = PicWidthInMbs * MbWidthC;
-  // 色度分量的采样宽度，等于宏块宽度乘以 MbWidthC。
-  RawMbBits = 256 * BitDepthY + 2 * MbWidthC * MbHeightC * BitDepthY;
 
   /* 计算最大帧号和最大图像顺序计数 LSB  in 77 page*/
   /*

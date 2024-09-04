@@ -1,5 +1,8 @@
+#include "Common.hpp"
 #include "Nalu.hpp"
 #include "PictureBase.hpp"
+#include "Type.hpp"
+#include <cstdint>
 
 #define FLD 0
 #define FRM 1
@@ -413,163 +416,152 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
 
 // 8.4 Inter prediction process
 // This process is invoked when decoding P and B macroblock types.
-int PictureBase::Inter_prediction_process() {
-  int ret = 0;
-  //int32_t MvCnt = 0;
+/* 该过程的输出是当前宏块的帧间预测样本，它们是亮度样本的 16x16 数组 predL，并且当 ChromaArrayType 不等于 0 时，是色度样本的两个 (MbWidthC)x(MbHeightC) 数组 predCb 和 predCr，每个数组对应一个色度分量 Cb 和 Cr。*/
+int PictureBase::inter_prediction_process() {
+  int ret;
+  const SliceHeader &header = m_slice.slice_header;
 
-  SliceHeader &slice_header = m_slice.slice_header;
-
-  int32_t refIdxL0 = -1;
-  int32_t refIdxL1 = -1;
-  int32_t mvL0[2] = {0};
-  int32_t mvL1[2] = {0};
-  int32_t mvCL0[2] = {0};
-  int32_t mvCL1[2] = {0};
-  int32_t subMvCnt = 0;
-  int32_t predFlagL0 = 0;
-  int32_t predFlagL1 = 0;
-
-  int32_t NumMbPart = 0;
-  int32_t NumSubMbPart = 0;
-  int32_t partWidth = 0;
-  int32_t partHeight = 0;
-  int32_t partWidthC = 0;
-  int32_t partHeightC = 0;
-  int32_t SubMbPartWidth = 0;
-  int32_t SubMbPartHeight = 0;
-  H264_MB_PART_PRED_MODE SubMbPredMode = MB_PRED_MODE_NA;
-
-  int32_t i = 0;
-  int32_t j = 0;
-
+  /* 宏块部分数量，指示当前宏块被划分成的部分数量 */
+  int32_t NumMbPart = 0, NumSubMbPart = 0;
   MacroBlock &mb = m_mbs[CurrMbAddr];
 
-  int32_t isMbAff =
-      (slice_header.MbaffFrameFlag == 1 && mb.mb_field_decoding_flag == 1) ? 1
-                                                                           : 0;
+  /* 宏块的划分由mb_type指定。每个宏块分区由 mbPartIdx 引用。当宏块划分由等于子宏块的分区组成时，每个子宏块可以进一步划分为由sub_mb_type[mbPartIdx]指定的子宏块分区。每个子宏块分区由 subMbPartIdx 引用。当宏块划分不由子宏块组成时，subMbPartIdx设置为等于0。 */
 
-  //--------------------------------------------
-  if (mb.m_name_of_mb_type == B_Skip ||
-      mb.m_name_of_mb_type == B_Direct_16x16) {
+  /* 宏块分区索引 mbPartIdx 的范围推导如下： 
+   * – 如果 mb_type 等于 B_Skip 或 B_Direct_16x16，则 mbPartIdx 继续值 0..3。  
+   * – 否则（mb_type 不等于 B_Skip 或 B_Direct_16x16），mbPartIdx 将继续执行值 0..NumMbPart( mb_type ) − 1。*/
+  if (mb.m_name_of_mb_type == B_Skip || mb.m_name_of_mb_type == B_Direct_16x16)
     NumMbPart = 4;
-  } else {
+  else
+    /* mb.m_NumMbPart已经在macroblock_mb_skip(对于B、P帧）或macroblock_layer(对于I、SI帧）函数计算过 */
     NumMbPart = mb.m_NumMbPart;
-  }
 
-  //--------------------------------------------
-  for (int mbPartIdx = 0; mbPartIdx <= NumMbPart - 1; mbPartIdx++) {
-    ret = MacroBlock::SubMbPredModeFunc(
-        m_slice.slice_header.slice_type, mb.sub_mb_type[mbPartIdx],
-        NumSubMbPart, SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
-    RETURN_IF_FAILED(ret != 0, ret);
+  /* NOTE:大部分情况来说NumMbPart取值 1,4：
+   * - 取值为1则说明不再需要对划分为子宏块
+   * - 取值为4说明将16x16划分为4个4x4的子宏块 */
 
-    if (mb.m_name_of_mb_type != P_8x8 && mb.m_name_of_mb_type != P_8x8ref0 &&
-        mb.m_name_of_mb_type != B_Skip &&
-        mb.m_name_of_mb_type != B_Direct_16x16 &&
-        mb.m_name_of_mb_type != B_8x8) {
-      NumSubMbPart = 1;
-      partWidth = mb.MbPartWidth;
-      partHeight = mb.MbPartHeight;
-    } else if (mb.m_name_of_mb_type == P_8x8 ||
-               mb.m_name_of_mb_type == P_8x8ref0 ||
-               (mb.m_name_of_mb_type == B_8x8 &&
-                mb.m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8)) {
+  int32_t partWidth = 0, partHeight = 0, SubMbPartWidth = 0,
+          SubMbPartHeight = 0;
+  H264_MB_PART_PRED_MODE SubMbPredMode = MB_PRED_MODE_NA;
+
+  /* 为每个宏块分区或每个子宏块分区指定以下步骤。  描述宏块分区和子宏块分区的宽度和高度的函数MbPartWidth()、MbPartHeight()、SubMbPartWidth()和SubMbPartHeight()在表7-13、7-14、7-17和7-中指定。 18.*/
+  for (int mbPartIdx = 0; mbPartIdx < NumMbPart; mbPartIdx++) {
+    /* 注意，如果宏块没有被划分为子宏块，同样也是在这里处理 */
+
+    /* 据宏块类型和其他参数，设置宏块的预测模式。这一步决定了如何对宏块进行预测和解码 */
+    ret = MacroBlock::SubMbPredMode(
+        header.slice_type, mb.sub_mb_type[mbPartIdx], NumSubMbPart,
+        SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
+    if (ret) {
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
+      return ret;
+    }
+
+    /* NOTE: 这里设计到了一个直接模式：没有显式编码运动矢量，通过周围块的信息来推导运动矢量。 */
+
+    /* 对于mbPartIdx的每个值，宏块中每个宏块分区或子宏块分区的变量partWidth和partHeight推导如下：*/
+    if (mb.m_name_of_mb_type == P_8x8 || mb.m_name_of_mb_type == P_8x8ref0 ||
+        (mb.m_name_of_mb_type == B_8x8 &&
+         mb.m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8)) {
+      /* 如果宏块类型是 P_8x8 或 P_8x8ref0（即拿到的宏块已经就是4个 8x8的宏块其中一个，还没有分为子宏块的流程，比如拿到的是YUV420的色度块，那么此时就是一个4x4的宏块），或者宏块类型是 B_8x8 且子宏块类型（mb.m_name_of_sub_mb_type[mbPartIdx]）不是 B_Direct_8x8，则使用子宏块的分区信息 */
+
+      /* 对于P帧，意味着整个宏块被划分为 4 个 8x8 的子宏块
+       * 对于B帧，意味着宏块被划分为 8x8 的子宏块，但这些子宏块可能进一步划分为更小的分区（如 4x4 或 4x8）
+       * 所以对于这种情况，需要暂时先将宏块信息设为子宏块的信息，方便进一步划分或直接操作子宏块解码*/
+      /* 适合复杂、动态的场景，提供更细粒度的运动估计 */
       NumSubMbPart = mb.NumSubMbPart[mbPartIdx];
       partWidth = mb.SubMbPartWidth[mbPartIdx];
       partHeight = mb.SubMbPartHeight[mbPartIdx];
-    } else // if (mb.m_name_of_mb_type == B_Skip
-           //|| mb.m_name_of_mb_type == B_Direct_16x16
-           //|| (mb.m_name_of_mb_type == B_8x8 && mb.m_name_of_sub_mb_type[
-           // mbPartIdx ] == B_Direct_8x8)
-           //)
-    {
-      NumSubMbPart = 4;
-      partWidth = 4;
-      partHeight = 4;
+    } else if (mb.m_name_of_mb_type == B_Skip ||
+               mb.m_name_of_mb_type == B_Direct_16x16 ||
+               (mb.m_name_of_mb_type == B_8x8 &&
+                mb.m_name_of_sub_mb_type[mbPartIdx] == B_Direct_8x8)) {
+      /* 如果宏块类型是 B_Skip 或 B_Direct_16x16，或者宏块类型是 B_8x8 且子宏块类型是 B_Direct_8x8，则直接将分区设置为 4x4 的大小，表示为表示 4 个 4x4 的分区 */
+      /* 直接模式：只是为了进行更细粒度的运动补偿 */
+
+      /* 适合简单、重复的运动场景，或者运动矢量可以直接推导。 */
+      NumSubMbPart = partWidth = partHeight = 4;
+    } else {
+      /* 表示没有进一步的分区，直接对该宏块进行解码，比如16x16的宏块直接解码，一般这种就是局部画面为静态画面 */
+      NumSubMbPart = 1;
+      partWidth = mb.MbPartWidth;
+      partHeight = mb.MbPartHeight;
     }
 
-    //-----------------
+    int32_t partWidthC = 0, partHeightC = 0;
+    /* 当ChromaArrayType不等于0时，变量partWidthC和partHeightC导出为：*/
     if (m_slice.m_sps.ChromaArrayType != 0) {
       partWidthC = partWidth / m_slice.m_sps.SubWidthC;
       partHeightC = partHeight / m_slice.m_sps.SubHeightC;
     }
 
-    //--------------------------------------
-    // 6.4.2.1 Inverse macroblock partition scanning process
     int32_t xP =
         InverseRasterScan(mbPartIdx, mb.MbPartWidth, mb.MbPartHeight, 16, 0);
     int32_t yP =
         InverseRasterScan(mbPartIdx, mb.MbPartWidth, mb.MbPartHeight, 16, 1);
 
-    //--------------------------
-    for (int subMbPartIdx = 0; subMbPartIdx <= NumSubMbPart - 1;
-         subMbPartIdx++) {
-      //------------------------------------
-      PictureBase *refPicL0 = NULL;
-      PictureBase *refPicL1 = NULL;
+    /* 在对宏块调用第 8.4.1 节之前，将变量 MvCnt 初始设置为 0 */
 
-      // 1. The derivation process for motion vector components and reference
-      // indices as specified in clause 8.4.1 is invoked. 8.4.1 Derivation
-      // process for motion vector components and reference indices
-      ret =
-          Derivation_process_for_motion_vector_components_and_reference_indices(
-              mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, mvCL0,
-              mvCL1, subMvCnt, predFlagL0, predFlagL1, refPicL0, refPicL1);
+    /* 宏块分区mbPartIdx和子宏块分区subMbPartIdx的帧间预测过程由以下有序步骤组成： 
+     * 1. 调用第8.4.1节中指定的运动矢量分量和参考索引的推导过程。  
+     * 2. 变量MvCnt 增加subMvCnt。
+     * 3. 当(weighted_pred_flag等于1且(slice_type % 5)等于0或3)或(weighted_bipred_idc大于0且(slice_type % 5)等于1)时，预测权重的推导过程如第8.4节中指定.3 被调用。
+     * 4.调用第8.4.2节中指定的帧间预测样本的解码过程。*/
+
+    /* 该过程的输入是： 
+   * – 宏块分区 mbPartIdx， 
+   * – 子宏块分区 subMbPartIdx。  */
+
+    /* 该过程的输出为： */
+    /* – 亮度运动矢量 mvL0 和 mvL1，
+       - 色度运动矢量 mvCL0 和 mvCL1(ChromaArrayType 不等于 0 时)*/
+    int32_t mvL0[2] = {0}, mvL1[2] = {0}, mvCL0[2] = {0}, mvCL1[2] = {0};
+    /* – 参考索引 refIdxL0 和 refIdxL1 */
+    int32_t refIdxL0 = -1, refIdxL1 = -1;
+    /* – 预测列表利用标志 predFlagL0 和 predFlagL1 */
+    int32_t predFlagL0 = 0, predFlagL1 = 0;
+    /* – 子宏块分区运动向量计数 subMvCnt。*/
+    int32_t subMvCnt = 0;
+
+    for (int subMbPartIdx = 0; subMbPartIdx < NumSubMbPart; subMbPartIdx++) {
+      /* 给出两个参考帧指针 */
+      PictureBase *refPicL0 = nullptr, *refPicL1 = nullptr;
+
+      //1. 调用第8.4.1节中指定的运动矢量分量和参考索引的推导过程。
+      //8.4.1 Derivation process for motion vector components and reference indices
+      ret = derivation_motion_vector_components_and_reference_indices(
+          mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, mvCL0, mvCL1,
+          subMvCnt, predFlagL0, predFlagL1, refPicL0, refPicL1);
       RETURN_IF_FAILED(ret != 0, ret);
 
-      // 2. The variable MvCnt is incremented by subMvCnt.
+      //2. 变量MvCnt 增加subMvCnt。
+      //TODO 为什么不加？ <24-09-04 14:28:25, YangJing>
       //MvCnt += subMvCnt;
 
-      // 3. When (weighted_pred_flag is equal to 1 and (slice_type % 5) is equal
-      // to 0 or 3) or (weighted_bipred_idc is greater than 0 and (slice_type %
-      // 5) is equal to 1), the derivation process for prediction weights as
-      // specified in clause 8.4.3 is invoked.
-      int32_t logWDL = 0;
-      int32_t w0L = 1;
-      int32_t w1L = 1;
-      int32_t o0L = 0;
-      int32_t o1L = 0;
-      int32_t logWDCb = 0;
-      int32_t w0Cb = 1;
-      int32_t w1Cb = 1;
-      int32_t o0Cb = 0;
-      int32_t o1Cb = 0;
-      int32_t logWDCr = 0;
-      int32_t w0Cr = 1;
-      int32_t w1Cr = 1;
-      int32_t o0Cr = 0;
-      int32_t o1Cr = 0;
+      uint32_t slice_type = header.slice_type % 5;
 
-      if ((m_slice.m_pps.weighted_pred_flag == 1 &&
-           ((slice_header.slice_type % 5) == 0 ||
-            (slice_header.slice_type % 5) == 3)) // SLICE_P=0
-          || (m_slice.m_pps.weighted_bipred_idc > 0 &&
-              (slice_header.slice_type % 5) == 1) // SLICE_B=1
-      ) {
+      int32_t logWDL = 0, w0L = 1, w1L = 1, o0L = 0, o1L = 0;
+      int32_t logWDCb = 0, w0Cb = 1, w1Cb = 1, o0Cb = 0, o1Cb = 0;
+      int32_t logWDCr = 0, w0Cr = 1, w1Cr = 1, o0Cr = 0, o1Cr = 0;
+      // 3. 当(weighted_pred_flag等于1且(slice_type % 5)等于0或3)或(weighted_bipred_idc大于0且(slice_type % 5)等于1)时，预测权重的推导过程如第8.4.3节中指定被调用。
+      if ((m_slice.m_pps.weighted_pred_flag &&
+           (slice_type == SLICE_P || slice_type == SLICE_SP)) ||
+          (m_slice.m_pps.weighted_bipred_idc > 0 && slice_type == SLICE_B)) {
+        /* 加权预测 */
         // 8.4.3 Derivation process for prediction weights
-        ret = Derivation_process_for_prediction_weights(
+        /* 输入  参考索引 refIdxL0 和 refIdxL1 ,预测列表利用标志 predFlagL0 和 predFlagL1 */
+        /* 输出: 加权预测logWDC、w0C、w1C、o0C、o1C的变量，其中C被L替换，并且当ChromaArrayType不等于0时，是Cb和Cr。*/
+        ret = derivation_prediction_weights(
             refIdxL0, refIdxL1, predFlagL0, predFlagL1, logWDL, w0L, w1L, o0L,
             o1L, logWDCb, w0Cb, w1Cb, o0Cb, o1Cb, logWDCr, w0Cr, w1Cr, o0Cr,
             o1Cr);
-        RETURN_IF_FAILED(ret != 0, ret);
+        RET(ret);
       }
 
-      // 4. The decoding process for Inter prediction samples as specified in
-      // clause 8.4.2 is invoked.
-      uint8_t predPartL[16 * 16] = {0};
-      uint8_t predPartCb[16 * 16] = {0};
-      uint8_t predPartCr[16 * 16] = {0};
-      int32_t xS = 0;
-      int32_t yS = 0;
-
-      //--------------------------------------
-      // 6.4.2.2 Inverse sub-macroblock partition scanning process
-      // int32_t xS = InverseRasterScan( subMbPartIdx,
-      // mb.SubMbPartWidth[subMbPartIdx], mb.SubMbPartHeight[subMbPartIdx], 8, 0
-      // ); int32_t yS = InverseRasterScan( subMbPartIdx,
-      // mb.SubMbPartWidth[subMbPartIdx], mb.SubMbPartHeight[subMbPartIdx], 8, 1
-      // );
-
+      /* 宏块分区的左上样本相对于宏块的左上样本的位置是通过调用第 6.4.2.1 节中描述的逆宏块分区扫描过程来导出的，其中 mbPartIdx 作为输入和 ( xP, yP )作为输出*/
+      /* 子宏块分区的左上样本相对于宏块分区的左上样本的位置是通过调用第 6.4.2.2 节中描述的逆子宏块分区扫描过程来导出的，其中 subMbPartIdx 作为输入，并且( xS, yS ) 作为输出。 */
+      int32_t xS = 0, yS = 0;
       if (mb.m_name_of_mb_type == P_8x8 || mb.m_name_of_mb_type == P_8x8ref0 ||
           mb.m_name_of_mb_type == B_8x8) {
         xS = InverseRasterScan(subMbPartIdx, partWidth, partHeight, 8, 0);
@@ -579,23 +571,28 @@ int PictureBase::Inter_prediction_process() {
         yS = InverseRasterScan(subMbPartIdx, 4, 4, 8, 1);
       }
 
+      /* 4.调用第8.4.2节中指定的帧间预测样本的解码过程。 */
       int32_t xAL = mb.m_mb_position_x + xP + xS;
       int32_t yAL = mb.m_mb_position_y + yP + yS;
 
-      if (isMbAff) {
+      uint8_t predPartL[16 * 16] = {0};
+      uint8_t predPartCb[16 * 16] = {0};
+      uint8_t predPartCr[16 * 16] = {0};
+
+      if (header.MbaffFrameFlag == 1 && mb.mb_field_decoding_flag == 1)
         yAL = (mb.m_mb_position_y / 2 + (yP + yS));
-      }
 
       // 8.4.2 Decoding process for Inter prediction samples
-      ret = Decoding_process_for_Inter_prediction_samples(
+      //* 输出：帧间预测样本predPart，它们是预测亮度样本的(partWidth)x(partHeight)数组predPartL，并且当ChromaArrayType不等于0时，预测的两个(partWidthC)x(partHeightC)数组predPartCb、predPartCr色度样本，每个色度分量 Cb 和 Cr 各一个。 */
+      ret = decoding_Inter_prediction_samples(
           mbPartIdx, subMbPartIdx, partWidth, partHeight, partWidthC,
           partHeightC, xAL, yAL, mvL0, mvL1, mvCL0, mvCL1, refPicL0, refPicL1,
           predFlagL0, predFlagL1, logWDL, w0L, w1L, o0L, o1L, logWDCb, w0Cb,
           w1Cb, o0Cb, o1Cb, logWDCr, w0Cr, w1Cr, o0Cr, o1Cr, predPartL,
           predPartCb, predPartCr);
-      RETURN_IF_FAILED(ret != 0, -1);
+      RET(ret);
 
-      //----------------------------------
+      /* 为了在解码过程中稍后调用的变量的导出过程中使用，进行以下分配： */
       mb.m_MvL0[mbPartIdx][subMbPartIdx][0] = mvL0[0];
       mb.m_MvL0[mbPartIdx][subMbPartIdx][1] = mvL0[1];
 
@@ -608,23 +605,22 @@ int PictureBase::Inter_prediction_process() {
       mb.m_PredFlagL0[mbPartIdx] = predFlagL0;
       mb.m_PredFlagL1[mbPartIdx] = predFlagL1;
 
-      //--------------------------------------
+      /* 通过将宏块或子宏块分区预测样本放置在它们在宏块中的正确相对位置来形成宏块预测，如下所示：
+       * 变量 predL[ xP + xS + x, yP + yS + y ]（其中 x = 0..partWidth − 1, y = 0..partHeight − 1）的推导如下：
+       * predL[ xP + xS + x, yP + yS + y ] = predPartL[ x, y ]
+       * */
       if (mb.mb_field_decoding_flag == 0) {
-        for (i = 0; i <= partHeight - 1; i++) {
-          for (j = 0; j <= partWidth - 1; j++) {
-            // predL[ xP + xS + x, yP + yS + y ] = predPartL[ x, y ];
+        for (int i = 0; i <= partHeight - 1; i++)
+          for (int j = 0; j <= partWidth - 1; j++)
             m_pic_buff_luma[(mb_y * MbHeightL + yP + yS + i) *
                                 PicWidthInSamplesL +
                             (mb_x * MbWidthL + xP + xS + j)] =
                 predPartL[i * partWidth + j];
-          }
-        }
 
+        /* 当 ChromaArrayType 不等于 0 时，变量 predC 的 x = 0..partWidthC − 1，y = 0..partHeightC − 1，并且 predC 和 predPartC 中的 C 被 Cb 或 Cr 替换，推导如下： */
         if (m_slice.m_sps.ChromaArrayType != 0) {
-          for (i = 0; i <= partHeightC - 1; i++) {
-            for (j = 0; j <= partWidthC - 1; j++) {
-              // predC[ xP / SubWidthC + xS / SubWidthC + x, yP / SubHeightC +
-              // yS / SubHeightC + y ] = predPartC[ x, y ];
+          for (int i = 0; i <= partHeightC - 1; i++) {
+            for (int j = 0; j <= partWidthC - 1; j++) {
               m_pic_buff_cb[(mb_y * MbHeightC + yP / m_slice.m_sps.SubHeightC +
                              yS / m_slice.m_sps.SubHeightC + i) *
                                 PicWidthInSamplesC +
@@ -641,11 +637,10 @@ int PictureBase::Inter_prediction_process() {
             }
           }
         }
-      } else // if (mb.mb_field_decoding_flag == 1)
-      {
-        for (i = 0; i <= partHeight - 1; i++) {
-          for (j = 0; j <= partWidth - 1; j++) {
-            // predL[ xP + xS + x, yP + yS + y ] = predPartL[ x, y ];
+      } else {
+        /* 同上帧宏块，只不过需要对顶、底同时处理 */
+        for (int i = 0; i <= partHeight - 1; i++) {
+          for (int j = 0; j <= partWidth - 1; j++) {
             m_pic_buff_luma[(mb_y % 2) * PicWidthInSamplesL +
                             ((mb_y / 2) * MbHeightL + yP + yS + i) *
                                 PicWidthInSamplesL * 2 +
@@ -655,10 +650,8 @@ int PictureBase::Inter_prediction_process() {
         }
 
         if (m_slice.m_sps.ChromaArrayType != 0) {
-          for (i = 0; i <= partHeightC - 1; i++) {
-            for (j = 0; j <= partWidthC - 1; j++) {
-              // predC[ xP / SubWidthC + xS / SubWidthC + x, yP / SubHeightC +
-              // yS / SubHeightC + y ] = predPartC[ x, y ];
+          for (int i = 0; i <= partHeightC - 1; i++) {
+            for (int j = 0; j <= partWidthC - 1; j++) {
               m_pic_buff_cb[(mb_y % 2) * PicWidthInSamplesC +
                             ((mb_y / 2) * MbHeightC +
                              yP / m_slice.m_sps.SubHeightC +
@@ -681,7 +674,7 @@ int PictureBase::Inter_prediction_process() {
         }
       }
 
-      //-------------------
+      /* 完成该宏块解码 */
       mb.m_isDecoded[mbPartIdx][subMbPartIdx] = 1; // 标记为已解码
     }
   }
@@ -689,14 +682,22 @@ int PictureBase::Inter_prediction_process() {
   return 0;
 }
 
-// 8.4.1 Derivation process for motion vector components and reference indices
-int PictureBase::
-    Derivation_process_for_motion_vector_components_and_reference_indices(
-        int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
-        int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
-        int32_t (&mvCL0)[2], int32_t (&mvCL1)[2], int32_t &subMvCnt,
-        int32_t &predFlagL0, int32_t &predFlagL1, PictureBase *&refPicL0,
-        PictureBase *&refPicL1) {
+// 8.4.1 Derivation process for motion vector components and reference indices(运动矢量分量和参考索引的推导过程)
+/* 该过程的输入是： 
+   * – 宏块分区 mbPartIdx， 
+   * – 子宏块分区 subMbPartIdx。  
+ * 该过程的输出为： 
+   * – 亮度运动矢量 mvL0 和 mvL1，
+   * - ChromaArrayType 不等于 0 时，色度运动矢量 mvCL0 和 mvCL1 
+   * – 参考索引 refIdxL0 和 refIdxL1 
+   * – 预测列表利用标志 predFlagL0 和 predFlagL1 
+   * – 子宏块分区运动向量计数 subMvCnt。*/
+int PictureBase::derivation_motion_vector_components_and_reference_indices(
+    int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
+    int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
+    int32_t (&mvCL0)[2], int32_t (&mvCL1)[2], int32_t &subMvCnt,
+    int32_t &predFlagL0, int32_t &predFlagL1, PictureBase *&refPicL0,
+    PictureBase *&refPicL1) {
   int ret = 0;
 
   int32_t mvpL0[2] = {0};
@@ -783,10 +784,10 @@ int PictureBase::
         m_mbs[CurrMbAddr].transform_size_8x8_flag, mb_pred_mode);
     RETURN_IF_FAILED(ret != 0, ret);
 
-    ret = MacroBlock::SubMbPredModeFunc(
-        m_slice.slice_header.slice_type,
-        m_mbs[CurrMbAddr].sub_mb_type[mbPartIdx], NumSubMbPart, SubMbPredMode,
-        SubMbPartWidth, SubMbPartHeight);
+    ret = MacroBlock::SubMbPredMode(m_slice.slice_header.slice_type,
+                                    m_mbs[CurrMbAddr].sub_mb_type[mbPartIdx],
+                                    NumSubMbPart, SubMbPredMode, SubMbPartWidth,
+                                    SubMbPartHeight);
     RETURN_IF_FAILED(ret != 0, ret);
 
     // If MbPartPredMode( mb_type, mbPartIdx ) or SubMbPredMode( sub_mb_type[
@@ -917,10 +918,10 @@ int PictureBase::
         int32_t &subMvCnt, int32_t &predFlagL0, int32_t &predFlagL1) {
   int ret = 0;
 
-  SliceHeader &slice_header = m_slice.slice_header;
+  SliceHeader &header = m_slice.slice_header;
 
   //-----------------------------------
-  if (slice_header.direct_spatial_mv_pred_flag ==
+  if (header.direct_spatial_mv_pred_flag ==
       1) // the mode in which the outputs of this process are derived is
          // referred to as spatial direct prediction mode.
   {
@@ -2069,7 +2070,16 @@ int PictureBase::Derivation_process_for_chroma_motion_vectors(
 }
 
 // 8.4.2 Decoding process for Inter prediction samples
-int PictureBase::Decoding_process_for_Inter_prediction_samples(
+/* 输入： 
+   * – 宏块分区 mbPartIdx， 
+   * – 子宏块分区 subMbPartIdx， 
+   * – 指定亮度和色度分区宽度和高度的变量（如果可用）、partWidth、partHeight、partWidthC（如果可用）和 partHeightC（如果可用） )， 
+   * – 亮度运动向量 mvL0 和 mvL1，以及当 ChromaArrayType 不等于 0 色度运动向量 mvCL0 和 mvCL1 时， 
+   * – 参考索引 refIdxL0 和 refIdxL1， 
+   * – 预测列表利用标志 predFlagL0 和 predFlagL1， 
+   * – 加权预测变量 logWDC，w0C， w1C、o0C、o1C，其中 C 被 L 替换，并且当 ChromaArrayType 不等于 0 时，Cb 和 Cr。
+ * 输出：帧间预测样本predPart，它们是预测亮度样本的(partWidth)x(partHeight)数组predPartL，并且当ChromaArrayType不等于0时，预测的两个(partWidthC)x(partHeightC)数组predPartCb、predPartCr色度样本，每个色度分量 Cb 和 Cr 各一个。 */
+int PictureBase::decoding_Inter_prediction_samples(
     int32_t mbPartIdx, int32_t subMbPartIdx, int32_t partWidth,
     int32_t partHeight, int32_t partWidthC, int32_t partHeightC, int32_t xAL,
     int32_t yAL, int32_t (&mvL0)[2], int32_t (&mvL1)[2], int32_t (&mvCL0)[2],
@@ -2077,60 +2087,61 @@ int PictureBase::Decoding_process_for_Inter_prediction_samples(
     int32_t predFlagL0, int32_t predFlagL1, int32_t logWDL, int32_t w0L,
     int32_t w1L, int32_t o0L, int32_t o1L, int32_t logWDCb, int32_t w0Cb,
     int32_t w1Cb, int32_t o0Cb, int32_t o1Cb, int32_t logWDCr, int32_t w0Cr,
-    int32_t w1Cr, int32_t o0Cr, int32_t o1Cr,
-    uint8_t *predPartL,  // predPartL[partHeight][partWidth]
-    uint8_t *predPartCb, // predPartCb[partHeightC][partWidthC]
-    uint8_t *predPartCr  // predPartCr[partHeightC][partWidthC]
-) {
-  int ret = 0;
+    int32_t w1Cr, int32_t o0Cr, int32_t o1Cr, uint8_t *predPartL,
+    uint8_t *predPartCb, uint8_t *predPartCr) {
 
-  uint8_t predPartL0L[256] = {0};
-  uint8_t predPartL1L[256] = {0};
-  uint8_t predPartL0Cb[256] = {0};
-  uint8_t predPartL1Cb[256] = {0};
-  uint8_t predPartL0Cr[256] = {0};
-  uint8_t predPartL1Cr[256] = {0};
+  /* 预测亮度样本值的 (partWidth)x(partHeight) 数组 */
+  /* 最大为16x16 = 256 , 最小为4x4 = 16 */
+  uint8_t predPartL0L[256] = {0}, predPartL1L[256] = {0};
+  /* predPartL0Cb、predPartL1Cb、predPartL0Cr 和 predPartL1Cr 为预测色度样本值的 (partWidthC)x(partHeightC) 数组 */
+  uint8_t predPartL0Cb[256] = {0}, predPartL1Cb[256] = {0},
+          predPartL0Cr[256] = {0}, predPartL1Cr[256] = {0};
+  int ret = -1;
 
-  //---------------------------
-  if (predFlagL0 == 1) {
-    //        PictureBase * refPicL0 = NULL;
-
+  /* 对于在变量 predFlagLX、RefPicListX、refIdxLX、refPicLX、predPartLX 中用 L0 或 L1 替换 LX，指定以下内容: 
+   * - 当 predFlagLX 等于 1 时，以下情况适用：*/
+  if (predFlagL0) {
+    /* – 参考图像由亮度样本的有序二维数组 refPicLXL 组成，并且当 ChromaArrayType 不等于 0 时，色度样本的两个有序二维数组 refPicLXCb 和 refPicLXCr 是通过使用 refIdxLX 调用第 8.4.2.1 节中规定的过程来导出的和 RefPicListX 作为输入给出。 */
+    /* TODO YangJing 为什么不需要调用？ <24-09-04 17:45:18> */
+    //PictureBase *refPicL0 = NULL;
     // 8.4.2.1 Reference picture selection process
-    //        ret = Reference_picture_selection_process(refIdxL0, m_RefPicList0,
-    //        m_RefPicList0Length, refPicL0); RETURN_IF_FAILED(ret, -1);
+    //ret = Reference_picture_selection_process(refIdxL0, m_RefPicList0,
+    //m_RefPicList0Length, refPicL0);
 
-    // 8.4.2.2 Fractional sample interpolation process
-    ret = Fractional_sample_interpolation_process(
+    /* 数组 predPartLXL 以及当 ChromaArrayType 不等于 0 时，数组 predPartLXCb 和 predPartLXCr 是通过调用第 8.4.2.2 节中指定的过程以及由 mbPartIdx\subMbPartIdx 指定的当前分区、运动矢量 mvLX、mvCLX（如果可用）和参考数组，其中 refPicLXL、refPicLXCb（如果可用）和 refPicLXCr（如果可用）作为输入给出。 */
+    // 8.4.2.2 Fractional sample interpolation process (分数样本插值过程)
+    ret = fractional_sample_interpolation(
         mbPartIdx, subMbPartIdx, partWidth, partHeight, partWidthC, partHeightC,
         xAL, yAL, mvL0, mvCL0, refPicL0, predPartL0L, predPartL0Cb,
         predPartL0Cr);
-    RETURN_IF_FAILED(ret, -1);
+    RET(ret);
   }
 
-  if (predFlagL1 == 1) {
-    //        PictureBase * refPicL1 = NULL;
-
-    // 8.4.2.1 Reference picture selection process
-    //        ret = Reference_picture_selection_process(refIdxL1, m_RefPicList1,
-    //        m_RefPicList1Length, refPicL1); RETURN_IF_FAILED(ret, -1);
-
+  if (predFlagL1) {
     // 8.4.2.2 Fractional sample interpolation process
-    ret = Fractional_sample_interpolation_process(
+    ret = fractional_sample_interpolation(
         mbPartIdx, subMbPartIdx, partWidth, partHeight, partWidthC, partHeightC,
         xAL, yAL, mvL1, mvCL1, refPicL1, predPartL1L, predPartL1Cb,
         predPartL1Cr);
-    RETURN_IF_FAILED(ret, -1);
+    RET(ret);
   }
 
-  //----------------------------
-  // 8.4.2.3 Weighted sample prediction process
-  ret = Weighted_sample_prediction_process(
+  /* 对于 C 被 L、Cb（如果可用）或 Cr（如果可用）替换，分量 C 的预测样本的数组 predPartC 是通过调用第 8.4.2.3 节中指定的过程以及 mbPartIdx 指定的当前分区和subMbPartIdx、预测利用标志 predFlagL0 和 predFlagL1、数组 predPartL0C 和 predPartL1C 以及作为输入给出的加权预测变量 logWDC、w0C、w1C、o0C、o1C。 */
+  // 8.4.2.3 Weighted sample prediction process(加权样本预测过程)
+  ret = weighted_sample_prediction(
+      /* Input： */
       mbPartIdx, subMbPartIdx, predFlagL0, predFlagL1, partWidth, partHeight,
-      partWidthC, partHeightC, logWDL, w0L, w1L, o0L, o1L, logWDCb, w0Cb, w1Cb,
-      o0Cb, o1Cb, logWDCr, w0Cr, w1Cr, o0Cr, o1Cr, predPartL0L, predPartL0Cb,
-      predPartL0Cr, predPartL1L, predPartL1Cb, predPartL1Cr, predPartL,
-      predPartCb, predPartCr);
-  RETURN_IF_FAILED(ret != 0, -1);
+      partWidthC, partHeightC,
+      //L
+      logWDL, w0L, w1L, o0L, o1L,
+      //Cb
+      logWDCb, w0Cb, w1Cb, o0Cb, o1Cb,
+      //Cr
+      logWDCr, w0Cr, w1Cr, o0Cr, o1Cr, predPartL0L, predPartL0Cb, predPartL0Cr,
+      predPartL1L, predPartL1Cb, predPartL1Cr,
+      /* Output: */
+      predPartL, predPartCb, predPartCr);
+  RET(ret);
 
   return 0;
 }
@@ -2225,46 +2236,57 @@ int PictureBase::Reference_picture_selection_process(int32_t refIdxLX,
   return 0;
 }
 
-// 8.4.2.2 Fractional sample interpolation process
-int PictureBase::Fractional_sample_interpolation_process(
+// 8.4.2.2 Fractional sample interpolation process(分数样本插值过程)
+/* 输入： – 由其分区索引 mbPartIdx 及其子宏块分区索引 subMbPartIdx 给出的当前分区， 
+   * – 该分区的宽度和高度部分宽度、部分高度（以亮度样本单位表示）， 
+   * – 给出的亮度运动向量 mvLX四分之一亮度样本单位， 
+   * – 当 ChromaArrayType 不等于 0 时，色度运动向量 mvCLX 的水平精度为第 1(4*SubWidthC) 色度样本单位，精度为第 1(4*SubHeightC) 色度单位垂直样本单位，
+   * – 选定的参考图片样本数组refPicLXL，以及当ChromaArrayType不等于0时，refPicLXCb和refPicLXCr。  
+ * 输出： – 预测亮度样本值的 (partWidth)x(partHeight) 数组 predPartLXL， 
+ * – 当 ChromaArrayType 不等于 0 时，预测色度样本值的两个 (partWidthC)x(partHeightC) 数组 predPartLXCb 和 predPartLXCr 。*/
+int PictureBase::fractional_sample_interpolation(
     int32_t mbPartIdx, int32_t subMbPartIdx, int32_t partWidth,
     int32_t partHeight, int32_t partWidthC, int32_t partHeightC, int32_t xAL,
     int32_t yAL, int32_t (&mvLX)[2], int32_t (&mvCLX)[2], PictureBase *refPicLX,
-    uint8_t *predPartLXL,  // predPartL[partHeight][partWidth]
-    uint8_t *predPartLXCb, // predPartCb[partHeightC][partWidthC]
-    uint8_t *predPartLXCr) // predPartCr[partHeightC][partWidthC]
-{
+    uint8_t *predPartLXL, uint8_t *predPartLXCb, uint8_t *predPartLXCr) {
   int ret = 0;
 
-  //    int32_t xAL = mb_x * 16;
-  //    int32_t yAL = mb_y * 16;
+  /* 令 ( xAL, yAL ) 为由 mbPartIdx\subMbPartIdx 给出的当前分区的左上亮度样本的完整样本单位给出的位置，相对于给定的二维亮度样本数组的左上亮度样本位置。 */
+  /* 令 ( xIntL, yIntL ) 为以全样本单位给出的亮度位置，( xFracL, yFracL ) 为以四分之一样本单位给出的偏移量。这些变量仅在本子句中使用，用于指定参考样本数组 refPicLXL、refPicLXCb（如果可用）和 refPicLXCr（如果可用）内的一般分数样本位置。 */
 
-  for (int32_t yL = 0; yL < partHeight; yL++) {
+  /* 对于预测亮度样本数组 predPartLXL 内的每个亮度样本位置 (0 <= xL < partWidth, 0 <= yL < partHeight)，按照以下有序步骤指定导出相应的预测亮度样本值 predPartLXL[ xL, yL ]： 
+   * 1. 变量 xIntL、yIntL、xFracL 和 yFracL 由以下公式导出： */
+  for (int32_t yL = 0; yL < partHeight; yL++)
     for (int32_t xL = 0; xL < partWidth; xL++) {
+      // 全样本单位的亮度位置（ xIntL, yIntL ）
       int32_t xIntL = xAL + (mvLX[0] >> 2) + xL;
       int32_t yIntL = yAL + (mvLX[1] >> 2) + yL;
+      // 小数样本单位的亮度位置偏移（ xFracL, yFracL ）
       int32_t xFracL = mvLX[0] & 3;
       int32_t yFracL = mvLX[1] & 3;
 
-      // 8.4.2.2.1 Luma sample interpolation process
+      /* 预测亮度样本值 predPartLXL[ xL, yL ] 通过调用第 8.4.2.2.1 节中指定的过程（以 ( xIntL, yIntL )、( xFracL, yFracL ) 和 refPicLXL 作为输入给出）来导出。 */
+      // 8.4.2.2.1 Luma sample interpolation process (Luma样本插值过程)
       uint8_t predPartLXL_xL_yL = 0;
-      ret = Luma_sample_interpolation_process(xIntL, yIntL, xFracL, yFracL,
+      ret = luma_sample_interpolation_process(xIntL, yIntL, xFracL, yFracL,
                                               refPicLX, predPartLXL_xL_yL);
-      RETURN_IF_FAILED(ret != 0, -1);
+      RET(ret);
       predPartLXL[yL * partWidth + xL] = predPartLXL_xL_yL;
     }
-  }
 
-  //-------------------------
+  /* 当 ChromaArrayType 不等于 0 时，以下情况适用。  
+   * 令 ( xIntC, yIntC ) 为以全样本单位给出的色度位置，( xFracC, yFracC ) 为以一 (4*SubWidthC) 个色度样本单位水平给出的偏移量和一 (4*SubHeightC)- 给出的偏移量垂直第 th 色度样本单位。这些变量仅在本子句中使用，用于指定参考样本数组 refPicLXCb 和 refPicLXCr 内的一般分数样本位置。  */
+
+  /* 对于预测色度样本数组 predPartLXCb 和 predPartLXCr 内的每个色度样本位置 (0 <= xC < partWidthC, 0 <= yC < partHeightC)，相应的预测色度样本值 predPartLXCb[ xC, yC ] 和 predPartLXCr[ xC, yC ] 为按照以下顺序步骤指定导出： */
   if (m_slice.m_sps.ChromaArrayType != 0) {
-    int32_t xIntC = 0;
-    int32_t yIntC = 0;
-    int32_t xFracC = 0;
-    int32_t yFracC = 0;
+    int32_t xIntC = 0, yIntC = 0;
+    int32_t xFracC = 0, yFracC = 0;
     int32_t isChromaCb = 1;
 
     for (int32_t yC = 0; yC < partHeightC; yC++) {
       for (int32_t xC = 0; xC < partWidthC; xC++) {
+
+        /* 根据 ChromaArrayType，变量 xIntC、yIntC、xFracC 和 yFracC 的推导如下： */
         if (m_slice.m_sps.ChromaArrayType == 1) {
           xIntC = (xAL / m_slice.m_sps.SubWidthC) + (mvCLX[0] >> 3) + xC;
           yIntC = (yAL / m_slice.m_sps.SubHeightC) + (mvCLX[1] >> 3) + yC;
@@ -2275,45 +2297,52 @@ int PictureBase::Fractional_sample_interpolation_process(
           yIntC = (yAL / m_slice.m_sps.SubHeightC) + (mvCLX[1] >> 2) + yC;
           xFracC = mvCLX[0] & 7;
           yFracC = (mvCLX[1] & 3) << 1;
-        } else // if (m_slice.m_sps.ChromaArrayType == 3)
-        {
+        } else {
           xIntC = xAL + (mvLX[0] >> 2) + xC;
           yIntC = yAL + (mvLX[1] >> 2) + yC;
-          xFracC = (mvCLX[0] & 3); // FIXME: mvCX[ 0 ] ?
+          xFracC = (mvCLX[0] & 3);
           yFracC = (mvCLX[1] & 3);
         }
 
+        /* 根据 ChromaArrayType，以下规则适用： */
         if (m_slice.m_sps.ChromaArrayType != 3) {
-          // 8.4.2.2.2 Chroma sample interpolation process
+          /* 预测样本值 predPartLXCb[ xC, yC ] 通过调用第 8.4.2.2.2 节中指定的过程（以 ( xIntC, yIntC )、( xFracC, yFracC ) 和 refPicLXCb 作为输入给出）来导出。 */
           uint8_t predPartLXCb_xC_yC = 0;
           isChromaCb = 1;
-          ret = Chroma_sample_interpolation_process(
+          // 8.4.2.2.2 Chroma sample interpolation process
+          ret = chroma_sample_interpolation_process(
               xIntC, yIntC, xFracC, yFracC, refPicLX, isChromaCb,
               predPartLXCb_xC_yC);
-          RETURN_IF_FAILED(ret != 0, -1);
+          RET(ret);
           predPartLXCb[yC * partWidthC + xC] = predPartLXCb_xC_yC;
 
-          // 8.4.2.2.2 Chroma sample interpolation process
+          /* 预测样本值 predPartLXCr[ xC, yC ] 通过调用第 8.4.2.2.2 节中指定的过程（以 ( xIntC, yIntC )、( xFracC, yFracC ) 和 refPicLXCr 作为输入给出）来导出。 */
           uint8_t predPartLXCr_xC_yC = 0;
           isChromaCb = 0;
-          ret = Chroma_sample_interpolation_process(
+          // 8.4.2.2.2 Chroma sample interpolation process
+          ret = chroma_sample_interpolation_process(
               xIntC, yIntC, xFracC, yFracC, refPicLX, isChromaCb,
               predPartLXCr_xC_yC);
-          RETURN_IF_FAILED(ret != 0, -1);
+          RET(ret);
           predPartLXCr[yC * partWidthC + xC] = predPartLXCr_xC_yC;
+
         } else {
-          // 8.4.2.2.1 Luma sample interpolation process
+          /* 此时没有UV色度，即YUV400 */
+
+          /* 预测样本值 predPartLXCb[ xC, yC ] 通过调用第 8.4.2.2.1 节中指定的过程（以 ( xIntC, yIntC )、( xFracC, yFracC ) 和 refPicLXCb 作为输入给出）来导出。 */
           uint8_t predPartLXCb_xC_yC = 0;
-          ret = Luma_sample_interpolation_process(xIntC, yIntC, xFracC, yFracC,
+          // 8.4.2.2.1 Luma sample interpolation process
+          ret = luma_sample_interpolation_process(xIntC, yIntC, xFracC, yFracC,
                                                   refPicLX, predPartLXCb_xC_yC);
-          RETURN_IF_FAILED(ret != 0, -1);
+          RET(ret);
           predPartLXCb[yC * partWidthC + xC] = predPartLXCb_xC_yC;
 
-          // 8.4.2.2.1 Luma sample interpolation process
+          /* 预测样本值 predPartLXCr[ xC, yC ] 通过调用第 8.4.2.2.1 节中指定的过程（以 ( xIntC, yIntC )、( xFracC, yFracC ) 和 refPicLXCr 作为输入给出）来导出。 */
           uint8_t predPartLXCr_xC_yC = 0;
-          ret = Luma_sample_interpolation_process(xIntC, yIntC, xFracC, yFracC,
+          // 8.4.2.2.1 Luma sample interpolation process
+          ret = luma_sample_interpolation_process(xIntC, yIntC, xFracC, yFracC,
                                                   refPicLX, predPartLXCr_xC_yC);
-          RETURN_IF_FAILED(ret != 0, -1);
+          RET(ret);
           predPartLXCr[yC * partWidthC + xC] = predPartLXCr_xC_yC;
         }
       }
@@ -2323,39 +2352,29 @@ int PictureBase::Fractional_sample_interpolation_process(
   return 0;
 }
 
-// 8.4.2.2.1 Luma sample interpolation process
-// 亮度像素值插值过程
-// Figure 8-4
-//
-//  口       口       A     aa    B       口       口
-//  口       口       C     bb    D       口       口
-//  E        F        G  a  b  c  H       I        J
-//                    d  e  f  g
-//  cc       dd       h  i  j  k  m       ee       ff
-//                    n  p  q  r
-//  K        L        M     s     N       P        Q
-//  口       口       R     gg    S       口       口
-//  口       口       T     hh    U       口       口
-int PictureBase::Luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
+// 8.4.2.2.1 Luma sample interpolation process(Luma样本插值过程)
+/* 输入：– 全样本单位的亮度位置（ xIntL, yIntL ）， – 小数样本单位的亮度位置偏移（ xFracL, yFracL ）， – 亮度样本所选参考图片 refPicLXL 的数组。  
+ * 输出: 预测的亮度样本值 predPartLXL[ xL, yL ]。*/
+int PictureBase::luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
                                                    int32_t xFracL,
                                                    int32_t yFracL,
                                                    PictureBase *refPic,
                                                    uint8_t &predPartLXL_xL_yL) {
 
+  const SliceHeader &slice_header = m_slice.slice_header;
+  const int32_t mb_field_decoding_flag =
+      m_slice.slice_data.mb_field_decoding_flag;
+
+  /* 变量 refPicHeightEffectiveL（有效参考图像亮度数组的高度）的推导如下： 
+   * – 如果 MbaffFrameFlag 等于 0 或 mb_field_decoding_flag 等于 0，则 refPicHeightEffectiveL 设置为等于 PicHeightInSamplesL。  
+   * – 否则（MbaffFrameFlag 等于 1 并且 mb_field_decoding_flag 等于 1），refPicHeightEffectiveL 设置为等于 PicHeightInSamplesL / 2。 */
   int32_t refPicHeightEffectiveL = 0;
-  SliceHeader &slice_header = m_slice.slice_header;
-
-  if (slice_header.MbaffFrameFlag == 0 ||
-      m_slice.slice_data.mb_field_decoding_flag == 0) {
+  if (slice_header.MbaffFrameFlag == 0 || mb_field_decoding_flag == 0)
     refPicHeightEffectiveL = PicHeightInSamplesL;
-  } else // if (slice_header.MbaffFrameFlag == 1 &&
-         // m_slice.slice_body.mb_field_decoding_flag == 1)
-  {
+  else
     refPicHeightEffectiveL = PicHeightInSamplesL / 2;
-  }
 
-  //------------------------
-  // #define CLIP3(x, y, z)  (((z) < (x)) ? (x) : (((z) > (y)) ? (y) : (z)))
+    /* 在给定数组 ref PiXL 内，亮度样本的推导如下： */
 #define getLumaSample(xDZL, yDZL)                                              \
   refPic                                                                       \
       ->m_pic_buff_luma[CLIP3(0, refPicHeightEffectiveL - 1, yIntL + (yDZL)) * \
@@ -2363,6 +2382,7 @@ int PictureBase::Luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
                         CLIP3(0, refPic->PicWidthInSamplesL - 1,               \
                               xIntL + (xDZL))]
 
+  /* 给定全样本位置（xAL，yAL）至（xUL，yUL）处的亮度样本“A”至“U”，分数样本位置处的亮度样本“a”至“s”通过以下规则导出。 */
   int32_t A = getLumaSample(0, -2);
   int32_t B = getLumaSample(1, -2);
   int32_t C = getLumaSample(0, -1);
@@ -2404,50 +2424,35 @@ int PictureBase::Luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
   int32_t X43 = getLumaSample(2, 3);
   int32_t X44 = getLumaSample(3, 3);
 
-  //-----------------------
-  // a 6-tap filter with tap values ( 1, −5, 20, 20, −5, 1 ).
-  // 6抽头滤波器
-
+  /* 通过应用具有抽头值(1,-5,20,20,-5,1)的6-tap滤波器来导出半样本位置处的亮度预测值。四分之一样本位置处的亮度预测值是通过对全样本位置和半样本位置处的样本进行平均而得出的。每个分数位置的过程如下所述。*/
 #define a_6_tap_filter(v1, v2, v3, v4, v5, v6)                                 \
   ((v1) - 5 * (v2) + 20 * (v3) + 20 * (v4) - 5 * (v5) + (v6))
 
-  //    int32_t b1 = ( E - 5 * F + 20 * G + 20 * H - 5 * I + J );
-  //    int32_t h1 = ( A - 5 * C + 20 * G + 20 * M - 5 * R + T );
-
+  /* 通过首先将 6 抽头滤波器应用于水平方向上最接近的整数位置样本来计算表示为 b1 的中间值，从而导出标记为 b 的一半样本位置处的样本。通过首先将 6 抽头滤波器应用于垂直方向上最近的整数位置样本来计算表示为 h1 的中间值，从而导出标记为 h 的一半样本位置处的样本： */
   int32_t b1 = a_6_tap_filter(E, F, G, H, I, J);
   int32_t s1 = a_6_tap_filter(K, L, M, N, P, Q);
   int32_t h1 = a_6_tap_filter(A, C, G, M, R, T);
   int32_t m1 = a_6_tap_filter(B, D, H, N, S, U);
 
-  // b = Clip1Y( ( b1 + 16 ) >> 5 ) = Clip3( 0, ( 1 << BitDepthY ) - 1, x );
+  /* 最终预测值 b 和 h 是使用以下公式得出的 */
   int32_t b = CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1, (b1 + 16) >> 5);
   int32_t s = CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1, (s1 + 16) >> 5);
   int32_t h = CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1, (h1 + 16) >> 5);
   int32_t m = CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1, (m1 + 16) >> 5);
-
-  //int32_t aa = a_6_tap_filter(X11, X12, A, B, X13, X14);
-  //int32_t bb = a_6_tap_filter(X21, X22, C, D, X23, X24);
-  //int32_t gg = a_6_tap_filter(X31, X32, R, S, X33, X34);
-  //int32_t hh = a_6_tap_filter(X41, X42, T, U, X43, X44);
 
   int32_t cc = a_6_tap_filter(X11, X21, E, K, X31, X41);
   int32_t dd = a_6_tap_filter(X12, X22, F, L, X32, X42);
   int32_t ee = a_6_tap_filter(X13, X23, I, P, X33, X43);
   int32_t ff = a_6_tap_filter(X14, X24, J, Q, X34, X44);
 
-  //--------------------
-  //    int32_t j1 = cc - 5 * dd + 20 * h1 + 20 * m1 - 5 * ee + ff;
-  //    int32_t j2 = aa - 5 * bb + 20 * b1 + 20 * s1 - 5 * gg + hh;
-
+  /* 标记为 j 的半样本位置处的样本是通过首先计算表示为 j1 的中间值而得出的，方法是将 6 抽头滤波器应用于水平或垂直方向上最接近的半样本位置的中间值，因为它们会产生相同的结果： */
   int32_t j1 = a_6_tap_filter(cc, dd, h1, m1, ee, ff);
   //    int32_t j2 = a_6_tap_filter(aa, bb, b1, s1, gg, hh);
 
-  //    RETURN_IF_FAILED(j1 != j2, -1);
-
-  // int32_t j = Clip1Y( ( j1 + 512 ) >> 10 );
+  /*  其中，表示为 aa、bb、gg、s1 和 hh 的中间值是通过以与 b1 的推导相同的方式水平应用 6 抽头滤波器而导出的，表示为 cc、dd、ee、m1 和 ff 的中间值是通过以下方式导出的：以与 h1 的推导相同的方式垂直应用 6 抽头滤波器。最终预测值 j 是使用以下公式得出的*/
   int32_t j = CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1, (j1 + 512) >> 10);
 
-  //--------------------
+  /* – 标记为 a、c、d、n、f、i、k 和 q 的四分之一样本位置的样本是通过对整数和半样本位置处的两个最近样本进行向上舍入平均而得出的*/
   int32_t a = (G + b + 1) >> 1;
   int32_t c = (H + b + 1) >> 1;
   int32_t d = (G + h + 1) >> 1;
@@ -2457,16 +2462,16 @@ int PictureBase::Luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
   int32_t k = (j + m + 1) >> 1;
   int32_t q = (j + s + 1) >> 1;
 
+  /* 标记为 e、g、p 和 r 的四分之一样本位置处的样本是通过对对角线方向上一半样本位置处的两个最近样本进行向上舍入平均而得出的： */
   int32_t e = (b + h + 1) >> 1;
   int32_t g = (b + m + 1) >> 1;
   int32_t p = (h + s + 1) >> 1;
   int32_t r = (m + s + 1) >> 1;
 
-  //----------------------
 #undef a_6_tap_filter
 #undef getLumaSample
 
-  //-------------------------
+  /* 以小数样本单位表示的亮度位置偏移 ( xFracL, yFracL ) 指定将在全样本和小数样本位置处生成的亮度样本中的哪一个分配给预测的亮度样本值 predPartLXL[ xL, yL ]。此分配根据表 8-12 完成。 predPartLXL[ xL, yL ] 的值是输出。 */
   // Table 8-12 – Assignment of the luma prediction sample predPartLXL[ xL, yL ]
   int32_t predPartLXLs[4][4] = {
       {G, d, h, n},
@@ -2481,42 +2486,42 @@ int PictureBase::Luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
 }
 
 // 8.4.2.2.2 Chroma sample interpolation process
-// This process is only invoked when ChromaArrayType is equal to 1 or 2.
-int PictureBase::Chroma_sample_interpolation_process(
+//同Luma_sample_interpolation_process类似
+/* 输入：– 全样本单位的色度位置 ( xIntC, yIntC )， – 小数样本单位的色度位置偏移 ( xFracC， yFracC )， – 来自所选参考图片 refPicLXC 的色度分量样本。  
+ * 输出: 预测色度样本值predPartLXC[xC，yC]。*/
+int PictureBase::chroma_sample_interpolation_process(
     int32_t xIntC, int32_t yIntC, int32_t xFracC, int32_t yFracC,
     PictureBase *refPic, int32_t isChromaCb, uint8_t &predPartLXC_xC_yC) {
 
+  const SliceHeader &slice_header = m_slice.slice_header;
+
+  /* 变量 refPicHeightEffectiveC 是有效参考图像色度数组的高度，其推导如下： */
   int32_t refPicHeightEffectiveC = 0;
-  SliceHeader &slice_header = m_slice.slice_header;
-
   if (slice_header.MbaffFrameFlag == 0 ||
-      m_slice.slice_data.mb_field_decoding_flag == 0) {
+      m_slice.slice_data.mb_field_decoding_flag == 0)
     refPicHeightEffectiveC = PicHeightInSamplesC;
-  } else // if (slice_header.MbaffFrameFlag == 1 &&
-         // m_slice.slice_body.mb_field_decoding_flag == 1)
-  {
+  else
     refPicHeightEffectiveC = PicHeightInSamplesC / 2;
-  }
 
-  //----------------------
+  /* 等式8-262至8-269中指定的样本坐标用于生成预测色度样本值predPartLXC[xC,yC]。*/
+  int32_t xAC = CLIP3(0, refPic->PicWidthInSamplesC - 1, xIntC);
+  int32_t xBC = CLIP3(0, refPic->PicWidthInSamplesC - 1, xIntC + 1);
+  int32_t xCC = CLIP3(0, refPic->PicWidthInSamplesC - 1, xIntC);
+  int32_t xDC = CLIP3(0, refPic->PicWidthInSamplesC - 1, xIntC + 1);
+
+  int32_t yAC = CLIP3(0, refPicHeightEffectiveC - 1, yIntC);
+  int32_t yBC = CLIP3(0, refPicHeightEffectiveC - 1, yIntC);
+  int32_t yCC = CLIP3(0, refPicHeightEffectiveC - 1, yIntC + 1);
+  int32_t yDC = CLIP3(0, refPicHeightEffectiveC - 1, yIntC + 1);
+
   uint8_t *refPicLC_pic_buff_cbcr =
       (isChromaCb == 1) ? refPic->m_pic_buff_cb : refPic->m_pic_buff_cr;
-
-  int32_t xAC = CLIP3(0, refPic->PicWidthInSamplesC - 1, xIntC);     // (8-262)
-  int32_t xBC = CLIP3(0, refPic->PicWidthInSamplesC - 1, xIntC + 1); // (8-263)
-  int32_t xCC = CLIP3(0, refPic->PicWidthInSamplesC - 1, xIntC);     // (8-264)
-  int32_t xDC = CLIP3(0, refPic->PicWidthInSamplesC - 1, xIntC + 1); // (8-265)
-
-  int32_t yAC = CLIP3(0, refPicHeightEffectiveC - 1, yIntC);     // (8-266)
-  int32_t yBC = CLIP3(0, refPicHeightEffectiveC - 1, yIntC);     // (8-267)
-  int32_t yCC = CLIP3(0, refPicHeightEffectiveC - 1, yIntC + 1); // (8-268)
-  int32_t yDC = CLIP3(0, refPicHeightEffectiveC - 1, yIntC + 1); // (8-269)
-
   int32_t A = refPicLC_pic_buff_cbcr[yAC * refPic->PicWidthInSamplesC + xAC];
   int32_t B = refPicLC_pic_buff_cbcr[yBC * refPic->PicWidthInSamplesC + xBC];
   int32_t C = refPicLC_pic_buff_cbcr[yCC * refPic->PicWidthInSamplesC + xCC];
   int32_t D = refPicLC_pic_buff_cbcr[yDC * refPic->PicWidthInSamplesC + xDC];
 
+  /* 给定等式 8-262 至 8-269 中指定的全样本位置处的色度样本 A、B、C 和 D，预测色度样本值 predPartLXC[ xC, yC ] 推导如下： */
   predPartLXC_xC_yC =
       ((8 - xFracC) * (8 - yFracC) * A + xFracC * (8 - yFracC) * B +
        (8 - xFracC) * yFracC * C + xFracC * yFracC * D + 32) >>
@@ -2526,103 +2531,108 @@ int PictureBase::Chroma_sample_interpolation_process(
 }
 
 // 8.4.2.3 Weighted sample prediction process
-int PictureBase::Weighted_sample_prediction_process(
+/* 输入： – mbPartIdx：由分区索引给出的当前分区， – subMbPartIdx：子宏块分区索引， – predFlagL0 和 predFlagL1：预测列表利用率标志， – predPartLXL：(partWidth)x(partHeight) 数组预测亮度样本的数量（根据 predFlagL0 和 predFlagL1 将 LX 替换为 L0 或 L1）， – 当 ChromaArrayType 不等于 0 时，predPartLXCb 和 predPartLXCr：预测色度样本的 (partWidthC)x(partHeightC) 数组，每个数组对应一个色度分量 Cb 和 Cr（其中 LX 被替换为 L0 或 L1，具体取决于 predFlagL0 和 predFlagL1）， – 加权预测变量 logWDC、w0C、w1C、o0C、o1C，其中 C 被 L 替换，并且当 ChromaArrayType 不等于0、Cb 和 Cr。  
+ * 输出： – predPartL：预测亮度样本的 (partWidth)x(partHeight) 数组， – 当 ChromaArrayType 不等于 0 时，predPartCb 和 predPartCr：预测色度样本的 (partWidthC)x(partHeightC) 数组，色度分量 Cb 和 Cr 各一个。*/
+int PictureBase::weighted_sample_prediction(
+    /* Input: */
     int32_t mbPartIdx, int32_t subMbPartIdx, int32_t predFlagL0,
     int32_t predFlagL1, int32_t partWidth, int32_t partHeight,
     int32_t partWidthC, int32_t partHeightC, int32_t logWDL, int32_t w0L,
     int32_t w1L, int32_t o0L, int32_t o1L, int32_t logWDCb, int32_t w0Cb,
     int32_t w1Cb, int32_t o0Cb, int32_t o1Cb, int32_t logWDCr, int32_t w0Cr,
-    int32_t w1Cr, int32_t o0Cr, int32_t o1Cr,
-    uint8_t *predPartL0L,  // predPartLXL[partHeight][partWidth]
-    uint8_t *predPartL0Cb, // predPartLXCb[partHeightC][partWidthC]
-    uint8_t *predPartL0Cr, // predPartLXCr[partHeightC][partWidthC]
-    uint8_t *predPartL1L,  // predPartLXL[partHeight][partWidth]
-    uint8_t *predPartL1Cb, // predPartLXCb[partHeightC][partWidthC]
-    uint8_t *predPartL1Cr, // predPartLXCr[partHeightC][partWidthC]
-    uint8_t *predPartL,    // out: predPartL[partHeight][partWidth]
-    uint8_t *predPartCb,   // out: predPartLXCb[partHeightC][partWidthC]
-    uint8_t *predPartCr    // out: predPartLXCr[partHeightC][partWidthC]
-) {
-  int ret = 0;
-  SliceHeader &slice_header = m_slice.slice_header;
+    int32_t w1Cr, int32_t o0Cr, int32_t o1Cr, uint8_t *predPartL0L,
+    uint8_t *predPartL0Cb, uint8_t *predPartL0Cr, uint8_t *predPartL1L,
+    uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
+    /* Output: */
+    uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
 
-  if (predFlagL0 == 1 && (slice_header.slice_type % 5 == SLICE_P ||
-                          slice_header.slice_type % 5 == SLICE_SP)) {
-    if (m_slice.m_pps.weighted_pred_flag == 0) {
+  int ret = 0;
+  const SliceHeader &slice_header = m_slice.slice_header;
+  uint32_t slice_type = slice_header.slice_type % 5;
+
+  /* 对于 P 和 SP 切片中 predFlagL0 等于 1 的宏块或分区，以下情况适用： 
+   * – 如果weighted_pred_flag 等于 0，则使用相同的输入和输出调用第 8.4.2.3.1 节中描述的默认加权样本预测过程如本条中描述的过程。  
+   * — 否则（weighted_pred_flag等于1），使用与本节中描述的过程相同的输入和输出来调用第8.4.2.3.2节中描述的显式加权样本预测过程。 */
+  if (predFlagL0 && (slice_type == SLICE_P || slice_type == SLICE_SP)) {
+    if (m_slice.m_pps.weighted_pred_flag == 0)
       // 8.4.2.3.1 Default weighted sample prediction process
-      ret = Default_weighted_sample_prediction_process(
+      ret = default_weighted_sample_prediction(
           predFlagL0, predFlagL1, partWidth, partHeight, partWidthC,
           partHeightC, predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L,
           predPartL1Cb, predPartL1Cr, predPartL, predPartCb, predPartCr);
-      RETURN_IF_FAILED(ret != 0, -1);
-    } else // if (m_slice.m_pps.weighted_pred_flag == 1)
-    {
+    else
       // 8.4.2.3.2 Weighted sample prediction process
-      ret = Weighted_sample_prediction_process_2(
+      ret = weighted_sample_prediction_process_2(
           mbPartIdx, subMbPartIdx, predFlagL0, predFlagL1, partWidth,
           partHeight, partWidthC, partHeightC, logWDL, w0L, w1L, o0L, o1L,
           logWDCb, w0Cb, w1Cb, o0Cb, o1Cb, logWDCr, w0Cr, w1Cr, o0Cr, o1Cr,
           predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L, predPartL1Cb,
           predPartL1Cr, predPartL, predPartCb, predPartCr);
-      RETURN_IF_FAILED(ret != 0, -1);
-    }
-  } else if ((predFlagL0 == 1 || predFlagL1 == 1) &&
-             (slice_header.slice_type % 5 == SLICE_B)) {
+    RET(ret);
+
+    /* 对于 B 切片中 predFlagL0 或 predFlagL1 等于 1 的宏块或分区，以下情况适用：
+     * – 如果weighted_bipred_idc等于0，同P
+     * — 否则，如果weighted_bipred_idc等于1，同P
+     * – 否则（weighted_bipred_idc 等于 2），则适用： 
+        * – 如果 predFlagL0 等于 1 并且 predFlagL1 等于 1，则使用相同的输入调用第 8.4.2.3.2 节中描述的隐式加权样本预测过程，并且输出如本节中描述的过程。  
+        * – 否则（predFlagL0 或 predFlagL1 等于 1，但不是两者），则使用与本节中描述的过程相同的输入和输出来调用第 8.4.2.3.1 节中描述的默认加权样本预测过程。*/
+  } else if ((predFlagL0 == 1 || predFlagL1 == 1) && slice_type == SLICE_B) {
     if (m_slice.m_pps.weighted_bipred_idc == 0) {
       // 8.4.2.3.1 Default weighted sample prediction process
-      ret = Default_weighted_sample_prediction_process(
+      ret = default_weighted_sample_prediction(
           predFlagL0, predFlagL1, partWidth, partHeight, partWidthC,
           partHeightC, predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L,
           predPartL1Cb, predPartL1Cr, predPartL, predPartCb, predPartCr);
-      RETURN_IF_FAILED(ret != 0, -1);
     } else if (m_slice.m_pps.weighted_bipred_idc == 1) {
       // 8.4.2.3.2 Weighted sample prediction process
-      ret = Weighted_sample_prediction_process_2(
+      ret = weighted_sample_prediction_process_2(
           mbPartIdx, subMbPartIdx, predFlagL0, predFlagL1, partWidth,
           partHeight, partWidthC, partHeightC, logWDL, w0L, w1L, o0L, o1L,
           logWDCb, w0Cb, w1Cb, o0Cb, o1Cb, logWDCr, w0Cr, w1Cr, o0Cr, o1Cr,
           predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L, predPartL1Cb,
           predPartL1Cr, predPartL, predPartCb, predPartCr);
-      RETURN_IF_FAILED(ret != 0, -1);
-    } else // if (m_slice.m_pps.weighted_bipred_idc == 2)
-    {
-      if (predFlagL0 == 1 && predFlagL1 == 1) {
+    } else {
+      /* 双向预测 */
+      if (predFlagL0 && predFlagL1)
         // 8.4.2.3.2 Weighted sample prediction process
-        ret = Weighted_sample_prediction_process_2(
+        ret = weighted_sample_prediction_process_2(
             mbPartIdx, subMbPartIdx, predFlagL0, predFlagL1, partWidth,
             partHeight, partWidthC, partHeightC, logWDL, w0L, w1L, o0L, o1L,
             logWDCb, w0Cb, w1Cb, o0Cb, o1Cb, logWDCr, w0Cr, w1Cr, o0Cr, o1Cr,
             predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L, predPartL1Cb,
             predPartL1Cr, predPartL, predPartCb, predPartCr);
-        RETURN_IF_FAILED(ret != 0, -1);
-      } else // if (predFlagL0 == 1 || predFlagL1 == 1)
-      {
+      /* 非双向预测 */
+      else
         // 8.4.2.3.1 Default weighted sample prediction process
-        ret = Default_weighted_sample_prediction_process(
+        ret = default_weighted_sample_prediction(
             predFlagL0, predFlagL1, partWidth, partHeight, partWidthC,
             partHeightC, predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L,
             predPartL1Cb, predPartL1Cr, predPartL, predPartCb, predPartCr);
-        RETURN_IF_FAILED(ret != 0, -1);
-      }
     }
+    RET(ret);
   }
 
   return 0;
 }
 
 // 8.4.2.3.1 Default weighted sample prediction process
-int PictureBase::Default_weighted_sample_prediction_process(
+/* 输入、输出同weighted_sample_prediction() */
+int PictureBase::default_weighted_sample_prediction(
     int32_t predFlagL0, int32_t predFlagL1, int32_t partWidth,
     int32_t partHeight, int32_t partWidthC, int32_t partHeightC,
     uint8_t *predPartL0L, uint8_t *predPartL0Cb, uint8_t *predPartL0Cr,
     uint8_t *predPartL1L, uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
+    /* Output: */
     uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
-  if (predFlagL0 == 1 && predFlagL1 == 0) {
-    for (int y = 0; y <= partHeight - 1; y++) {
-      for (int x = 0; x <= partWidth - 1; x++) {
+
+  /* 根据导出预测块的可用组件，以下适用： 
+   * – 如果导出亮度样本预测值 predPartL[ x, y ]，则以下适用，其中 C 设置等于 L，x 设置等于 0。 partWidth − 1，且 y 设置等于 0..partHeight − 1。 
+   * – 否则，如果导出色度 Cb 分量样本预测值 predPartCb[ x, y ]，则以下情况适用于 C 设置等于 Cb，x 设置等于0..partWidthC − 1，且 y 设置等于 0..partHeightC − 1。 
+   * – 否则（导出色度 Cr 分量样本预测值 predPartCr[ x, y ]），以下适用于设置等于 Cr、x 的 C设置等于 0..partWidthC − 1，y 设置等于 0..partHeightC − 1。 */
+  if (predFlagL0 && predFlagL1 == 0) {
+    for (int y = 0; y <= partHeight - 1; y++)
+      for (int x = 0; x <= partWidth - 1; x++)
         predPartL[y * partWidth + x] = predPartL0L[y * partWidth + x];
-      }
-    }
 
     if (m_slice.m_sps.ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
@@ -2632,12 +2642,10 @@ int PictureBase::Default_weighted_sample_prediction_process(
         }
       }
     }
-  } else if (predFlagL0 == 0 && predFlagL1 == 1) {
-    for (int y = 0; y <= partHeight - 1; y++) {
-      for (int x = 0; x <= partWidth - 1; x++) {
+  } else if (predFlagL0 == 0 && predFlagL1) {
+    for (int y = 0; y <= partHeight - 1; y++)
+      for (int x = 0; x <= partWidth - 1; x++)
         predPartL[y * partWidth + x] = predPartL1L[y * partWidth + x];
-      }
-    }
 
     if (m_slice.m_sps.ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
@@ -2647,15 +2655,12 @@ int PictureBase::Default_weighted_sample_prediction_process(
         }
       }
     }
-  } else // if (predFlagL0 == 1 && predFlagL1 == 1)
-  {
-    for (int y = 0; y <= partHeight - 1; y++) {
-      for (int x = 0; x <= partWidth - 1; x++) {
+  } else {
+    for (int y = 0; y <= partHeight - 1; y++)
+      for (int x = 0; x <= partWidth - 1; x++)
         predPartL[y * partWidth + x] = (predPartL0L[y * partWidth + x] +
                                         predPartL1L[y * partWidth + x] + 1) >>
                                        1;
-      }
-    }
 
     if (m_slice.m_sps.ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
@@ -2677,7 +2682,8 @@ int PictureBase::Default_weighted_sample_prediction_process(
 }
 
 // 8.4.2.3.2 Weighted sample prediction process
-int PictureBase::Weighted_sample_prediction_process_2(
+/* 输入、输出同weighted_sample_prediction() */
+int PictureBase::weighted_sample_prediction_process_2(
     int32_t mbPartIdx, int32_t subMbPartIdx, int32_t predFlagL0,
     int32_t predFlagL1, int32_t partWidth, int32_t partHeight,
     int32_t partWidthC, int32_t partHeightC, int32_t logWDL, int32_t w0L,
@@ -2685,150 +2691,136 @@ int PictureBase::Weighted_sample_prediction_process_2(
     int32_t w1Cb, int32_t o0Cb, int32_t o1Cb, int32_t logWDCr, int32_t w0Cr,
     int32_t w1Cr, int32_t o0Cr, int32_t o1Cr, uint8_t *predPartL0L,
     uint8_t *predPartL0Cb, uint8_t *predPartL0Cr, uint8_t *predPartL1L,
-    uint8_t *predPartL1Cb, uint8_t *predPartL1Cr, uint8_t *predPartL,
-    uint8_t *predPartCb, uint8_t *predPartCr) {
-  if (predFlagL0 == 1 && predFlagL1 == 0) {
+    uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
+    /* Output: */
+    uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
+
+  const uint32_t BitDepthY = m_slice.m_sps.BitDepthY;
+  const uint32_t BitDepthC = m_slice.m_sps.BitDepthC;
+
+  /* 根据导出预测块的可用组件，以下适用： 
+   * – 如果导出亮度样本预测值 predPartL[ x, y ]，则以下适用，其中 C 设置等于 L，x 设置等于 0。 partWidth - 1，y 设置为等于 0..partHeight - 1，并且 Clip1( ) 被替换为 Clip1Y( )。  
+   * – 否则，如果导出色度 Cb 分量样本预测值 predPartCb[ x, y ]，则以下情况适用于 C 设置等于 Cb、x 设置等于 0..partWidthC − 1、y 设置等于 0..partHeightC − 1，并且Clip1()被Clip1C()替代。  
+   * – 否则（导出色度 Cr 分量样本预测值 predPartCr[ x, y ]），以下情况适用于 C 设置等于 Cr、x 设置等于 0..partWidthC − 1、y 设置等于 0..partHeightC − 1，并且Clip1()被Clip1C()替代。 */
+
+  if (predFlagL0 && predFlagL1 == 0) {
+    /* 如果 predFlagL0 等于 1 并且 predFlagL1 等于 0，则最终预测样本值 predPartC[ x, y ] 由下式得出： */
     for (int y = 0; y <= partHeight - 1; y++) {
       for (int x = 0; x <= partWidth - 1; x++) {
-        if (logWDL >= 1) // Clip1Y( x ) = Clip3( 0, ( 1 << BitDepthY ) − 1, x )
-        {
+        /* 预测样本值的推导如下： */
+        if (logWDL >= 1)
           predPartL[y * partWidth + x] =
-              CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1,
-                    ((predPartL0L[y * partWidth + x] * w0L +
-                      h264_power2(logWDL - 1)) >>
-                     logWDL) +
-                        o0L);
-        } else {
+              Clip1C(((predPartL0L[y * partWidth + x] * w0L +
+                       h264_power2(logWDL - 1)) >>
+                      logWDL) +
+                         o0L,
+                     BitDepthY);
+        else
           predPartL[y * partWidth + x] =
-              CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1,
-                    predPartL0L[y * partWidth + x] * w0L + o0L);
-        }
+              Clip1C(predPartL0L[y * partWidth + x] * w0L + o0L, BitDepthY);
       }
     }
 
     if (m_slice.m_sps.ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
-          if (logWDCb >=
-              1) // Clip1Y( x ) = Clip3( 0, ( 1 << BitDepthC ) − 1, x )
-          {
+          if (logWDCb >= 1)
             predPartCb[y * partWidthC + x] =
-                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
-                      ((predPartL0Cb[y * partWidthC + x] * w0Cb +
-                        h264_power2(logWDCb - 1)) >>
-                       logWDCb) +
-                          o0Cb);
-          } else {
-            predPartCb[y * partWidthC + x] =
-                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
-                      predPartL0Cb[y * partWidthC + x] * w0Cb + o0Cb);
-          }
+                Clip1C(((predPartL0Cb[y * partWidthC + x] * w0Cb +
+                         h264_power2(logWDCb - 1)) >>
+                        logWDCb) +
+                           o0Cb,
+                       BitDepthC);
+          else
+            predPartCb[y * partWidthC + x] = Clip1C(
+                predPartL0Cb[y * partWidthC + x] * w0Cb + o0Cb, BitDepthC);
 
-          if (logWDCr >=
-              1) // Clip1Y( x ) = Clip3( 0, ( 1 << BitDepthC ) − 1, x )
-          {
+          if (logWDCr >= 1)
             predPartCr[y * partWidthC + x] =
-                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
-                      ((predPartL0Cr[y * partWidthC + x] * w0Cr +
-                        h264_power2(logWDCr - 1)) >>
-                       logWDCr) +
-                          o0Cr);
-          } else {
-            predPartCr[y * partWidthC + x] =
-                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
-                      predPartL0Cr[y * partWidthC + x] * w0Cr + o0Cr);
-          }
+                Clip1C(((predPartL0Cr[y * partWidthC + x] * w0Cr +
+                         h264_power2(logWDCr - 1)) >>
+                        logWDCr) +
+                           o0Cr,
+                       BitDepthC);
+          else
+            predPartCr[y * partWidthC + x] = Clip1C(
+                predPartL0Cr[y * partWidthC + x] * w0Cr + o0Cr, BitDepthC);
         }
       }
     }
-  } else if (predFlagL0 == 0 && predFlagL1 == 1) {
-    for (int y = 0; y <= partHeight - 1; y++) {
-      for (int x = 0; x <= partWidth - 1; x++) {
-        if (logWDL >= 1) // Clip1Y( x ) = Clip3( 0, ( 1 << BitDepthY ) − 1, x )
-        {
+  } else if (predFlagL0 == 0 && predFlagL1) {
+    /* 否则，如果 predFlagL0 等于 0 且 predFlagL1 等于 1，则最终预测样本值 predPartC[ x, y ] 可由下式导出： */
+    for (int y = 0; y <= partHeight - 1; y++)
+      for (int x = 0; x <= partWidth - 1; x++)
+        if (logWDL >= 1)
           predPartL[y * partWidth + x] =
-              CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1,
-                    ((predPartL1L[y * partWidth + x] * w0L +
-                      h264_power2(logWDL - 1)) >>
-                     logWDL) +
-                        o0L);
-        } else {
+              Clip1C(((predPartL1L[y * partWidth + x] * w0L +
+                       h264_power2(logWDL - 1)) >>
+                      logWDL) +
+                         o0L,
+                     BitDepthY);
+        else
           predPartL[y * partWidth + x] =
-              CLIP3(0, (1 << m_slice.m_sps.BitDepthY) - 1,
-                    predPartL1L[y * partWidth + x] * w0L + o0L);
-        }
-      }
-    }
+              Clip1C(predPartL1L[y * partWidth + x] * w0L + o0L, BitDepthY);
 
     if (m_slice.m_sps.ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
-          if (logWDCb >=
-              1) // Clip1Y( x ) = Clip3( 0, ( 1 << BitDepthC ) − 1, x )
-          {
+          if (logWDCb >= 1)
             predPartCb[y * partWidthC + x] =
-                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
-                      ((predPartL1Cb[y * partWidthC + x] * w1Cb +
-                        h264_power2(logWDCb - 1)) >>
-                       logWDCb) +
-                          o1Cb);
-          } else {
-            predPartCb[y * partWidthC + x] =
-                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
-                      predPartL1Cb[y * partWidthC + x] * w1Cb + o1Cb);
-          }
+                Clip1C(((predPartL1Cb[y * partWidthC + x] * w1Cb +
+                         h264_power2(logWDCb - 1)) >>
+                        logWDCb) +
+                           o1Cb,
+                       BitDepthC);
+          else
+            predPartCb[y * partWidthC + x] = Clip1C(
+                predPartL1Cb[y * partWidthC + x] * w1Cb + o1Cb, BitDepthC);
 
-          if (logWDCr >=
-              1) // Clip1Y( x ) = Clip3( 0, ( 1 << BitDepthC ) − 1, x )
-          {
+          if (logWDCr >= 1)
             predPartCr[y * partWidthC + x] =
-                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
-                      ((predPartL1Cr[y * partWidthC + x] * w1Cr +
-                        h264_power2(logWDCr - 1)) >>
-                       logWDCr) +
-                          o1Cr);
-          } else {
-            predPartCr[y * partWidthC + x] =
-                CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
-                      predPartL1Cr[y * partWidthC + x] * w1Cr + o1Cr);
-          }
+                Clip1C(((predPartL1Cr[y * partWidthC + x] * w1Cr +
+                         h264_power2(logWDCr - 1)) >>
+                        logWDCr) +
+                           o1Cr,
+                       BitDepthC);
+          else
+            predPartCr[y * partWidthC + x] = Clip1C(
+                predPartL1Cr[y * partWidthC + x] * w1Cr + o1Cr, BitDepthC);
         }
       }
     }
-  } else if (predFlagL0 == 1 && predFlagL1 == 1) // 处理B帧的双向预测结果
-  {
-    for (int y = 0; y <= partHeight - 1; y++) {
-      for (int x = 0; x <= partWidth - 1; x++) {
-        // predPartC[ x, y ] = Clip1( ( ( predPartL0C[ x, y ] * w0C +
-        // predPartL1C[ x, y ] * w1C + 2logWDC ) >> ( logWDC + 1 ) ) + ( ( o0C +
-        // o1C + 1 ) >> 1 ) );
-        predPartL[y * partWidth + x] = CLIP3(
-            0, (1 << m_slice.m_sps.BitDepthY) - 1,
+
+    /* 否则（predFlagL0 和 predFlagL1 都等于 1），最终预测样本值 predPartC[ x, y ] 由下式得出： */
+  } else if (predFlagL0 && predFlagL1) {
+    // B帧双向预测
+    for (int y = 0; y <= partHeight - 1; y++)
+      for (int x = 0; x <= partWidth - 1; x++)
+        predPartL[y * partWidth + x] = Clip1C(
             ((predPartL0L[y * partWidth + x] * w0L +
               predPartL1L[y * partWidth + x] * w1L + h264_power2(logWDL)) >>
              (logWDL + 1)) +
-                ((o0L + o1L + 1) >> 1));
-      }
-    }
+                ((o0L + o1L + 1) >> 1),
+            BitDepthY);
 
     if (m_slice.m_sps.ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           predPartCb[y * partWidthC + x] =
-              CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
-                    ((predPartL0Cb[y * partWidthC + x] * w0Cb +
-                      predPartL1Cb[y * partWidthC + x] * w1Cb +
-                      h264_power2(logWDCb)) >>
-                     (logWDCb + 1)) +
-                        ((o0Cb + o1Cb + 1) >> 1));
+              Clip1C(((predPartL0Cb[y * partWidthC + x] * w0Cb +
+                       predPartL1Cb[y * partWidthC + x] * w1Cb +
+                       h264_power2(logWDCb)) >>
+                      (logWDCb + 1)) +
+                         ((o0Cb + o1Cb + 1) >> 1),
+                     BitDepthC);
 
           predPartCr[y * partWidthC + x] =
-              CLIP3(0, (1 << m_slice.m_sps.BitDepthC) - 1,
-                    ((predPartL0Cr[y * partWidthC + x] * w0Cr +
-                      predPartL1Cr[y * partWidthC + x] * w1Cr +
-                      h264_power2(logWDCr)) >>
-                     (logWDCr + 1)) +
-                        ((o0Cr + o1Cr + 1) >> 1));
+              Clip1C(((predPartL0Cr[y * partWidthC + x] * w0Cr +
+                       predPartL1Cr[y * partWidthC + x] * w1Cr +
+                       h264_power2(logWDCr)) >>
+                      (logWDCr + 1)) +
+                         ((o0Cr + o1Cr + 1) >> 1),
+                     BitDepthC);
         }
       }
     }
@@ -2838,176 +2830,147 @@ int PictureBase::Weighted_sample_prediction_process_2(
 }
 
 // 8.4.3 Derivation process for prediction weights
-int PictureBase::Derivation_process_for_prediction_weights(
+/* 输入：参考索引 refIdxL0 和 refIdxL1，预测利用标志 predFlagL0 和 predFlagL1
+ * 输出: 加权预测变量 logWDC、w0C、w1C、o0C、o1C，其中 C 被 L 替换，并且当 ChromaArrayType 不等于 0 时，为 Cb 和 Cr。*/
+int PictureBase::derivation_prediction_weights(
     int32_t refIdxL0, int32_t refIdxL1, int32_t predFlagL0, int32_t predFlagL1,
     int32_t &logWDL, int32_t &w0L, int32_t &w1L, int32_t &o0L, int32_t &o1L,
     int32_t &logWDCb, int32_t &w0Cb, int32_t &w1Cb, int32_t &o0Cb,
     int32_t &o1Cb, int32_t &logWDCr, int32_t &w0Cr, int32_t &w1Cr,
     int32_t &o0Cr, int32_t &o1Cr) {
-  SliceHeader &slice_header = m_slice.slice_header;
 
-  //-----------------------------
-  int32_t implicitModeFlag = 0;
-  int32_t explicitModeFlag = 0;
+  const SliceHeader &slice_header = m_slice.slice_header;
+  uint32_t weighted_bipred_idc = m_slice.m_pps.weighted_bipred_idc;
+  uint32_t slice_type = slice_header.slice_type % 5;
 
-  if (m_slice.m_pps.weighted_bipred_idc == 2 &&
-      (slice_header.slice_type % 5) == 1 && predFlagL0 == 1 &&
-      predFlagL1 == 1) {
+  /* 变量implicitModeFlag和explicitModeFlag的推导如下：
+   * – 如果weighted_bipred_idc等于2，(slice_type % 5)等于1，predFlagL0等于1，并且predFlagL1等于1，则implicitModeFlag设置为等于1并且explicitModeFlag设置为等于0。 
+   * – 否则，如果weighted_bipred_idc等于 1，(slice_type % 5) 等于 1，并且 predFlagL0 + predFlagL1 等于 1 或 2，implicitModeFlag 设置为等于 0，explicitModeFlag 设置为等于 1。 
+   * – 否则，如果weighted_pred_flag 等于 1， (slice_type % 5) 等于 0 或 3，并且 predFlagL0 等于 1，implicitModeFlag 设置为等于 0，explicitModeFlag 设置为等于 1。 
+   * – 否则，implicitModeFlag 设置为等于 0，explicitModeFlag 设置为等于 0。*/
+  bool implicitModeFlag = 0, explicitModeFlag = 0;
+  if (weighted_bipred_idc == 2 && slice_type == SLICE_B && predFlagL0 &&
+      predFlagL1) {
     implicitModeFlag = 1;
     explicitModeFlag = 0;
-  } else if (m_slice.m_pps.weighted_bipred_idc == 1 &&
-             (slice_header.slice_type % 5) == 1 &&
-             (predFlagL0 + predFlagL1 == 1 || predFlagL0 + predFlagL1 == 2)) {
+  } else if (weighted_bipred_idc == 1 && slice_type == SLICE_B &&
+             (predFlagL0 + predFlagL1)) {
     implicitModeFlag = 0;
     explicitModeFlag = 1;
   } else if (m_slice.m_pps.weighted_pred_flag == 1 &&
-             ((slice_header.slice_type % 5) == 0 ||
-              (slice_header.slice_type % 5) == 3) &&
-             predFlagL0 == 1) {
+             (slice_type == SLICE_P || slice_type == SLICE_SP) && predFlagL0) {
     implicitModeFlag = 0;
     explicitModeFlag = 1;
-  } else {
-    implicitModeFlag = 0;
-    explicitModeFlag = 0;
-  }
+  } else
+    implicitModeFlag = explicitModeFlag = 0;
 
-  //-----------------------------
-  if (implicitModeFlag == 1) {
+  /* 将C替换为L，当ChromaArrayType不等于0、Cb和Cr时，变量logWDC、w0C、w1C、o0C、o1C推导如下：
+   * – 如果implicitModeFlag等于1，则使用隐式模式加权预测，如下所示：*/
+  if (implicitModeFlag) {
     logWDL = 5;
-    o0L = 0;
-    o1L = 0;
-
+    o0L = o1L = 0;
     if (m_slice.m_sps.ChromaArrayType != 0) {
-      logWDCb = 5;
-      o0Cb = 0;
-      o1Cb = 0;
-
-      logWDCr = 5;
-      o0Cr = 0;
-      o1Cr = 0;
+      logWDCb = logWDCr = 5;
+      o0Cb = o1Cb = o0Cr = o1Cr = 0;
     }
-
-    //-----------------------------
-    PictureBase *currPicOrField = NULL;
-    PictureBase *pic0 = NULL;
-    PictureBase *pic1 = NULL;
+    /* w0C 和 w1C 是按照以下顺序步骤中指定的导出的：
+     * 1. 变量 currPicOrField、pic0 和 pic1 的推导如下： */
+    PictureBase *currPicOrField = nullptr, *pic0 = nullptr, *pic1 = nullptr;
 
     if (slice_header.field_pic_flag == 0 &&
-        m_mbs[CurrMbAddr].mb_field_decoding_flag ==
-            1) // If field_pic_flag is equal to 0 and the current macroblock is
-               // a field macroblock
-    {
-      if (CurrMbAddr % 2 ==
-          0) // currPicOrField is the field of the current picture CurrPic that
-             // has the same parity as the current macroblock.
-      {
+        m_mbs[CurrMbAddr].mb_field_decoding_flag) {
+      /* 帧图像，但是场宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
+
+      //* a.currPicOrField 是当前图片CurrPic 中与当前宏块具有相同奇偶性的字段。
+      if (CurrMbAddr % 2 == 0)
         currPicOrField = &(m_parent->m_picture_top_filed);
-      } else {
+      else
         currPicOrField = &(m_parent->m_picture_bottom_filed);
-      }
 
+      /* b.变量 pic0 的推导如下： 
+            * – 如果 refIdxL0 % 2 等于 0（参考帧索引为偶数），则 pic0 是 RefPicList0[ refIdxL0 / 2 ] 中与当前宏块具有相同奇偶校验的字段。  */
       if (refIdxL0 % 2 == 0) {
-        if (CurrMbAddr % 2 ==
-            0) // pic0 is the field of RefPicList0[ refIdxL0 / 2 ] that has the
-               // same parity as the current macroblock.
-        {
+        if (CurrMbAddr % 2 == 0)
           pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_top_filed);
-        } else {
+        else
           pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_bottom_filed);
-        }
-      } else // if (refIdxL0 % 2 != 0)
-      {
-        if (CurrMbAddr % 2 ==
-            0) // pic0 is the field of RefPicList0[ refIdxL0 / 2 ] that has the
-               // opposite parity of the current macroblock.
-        {
+
+        /* – 否则（refIdxL0 % 2 不等于 0）（参考帧索引为奇数），pic0 是 RefPicList0[ refIdxL0 / 2 ] 中与当前宏块具有相反奇偶校验的字段。   */
+      } else {
+        if (CurrMbAddr % 2 == 0)
           pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_bottom_filed);
-        } else {
+        else
           pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_top_filed);
-        }
       }
 
+      /* c.变量 pic1 的推导：同pic0 */
       if (refIdxL1 % 2 == 0) {
-        if (CurrMbAddr % 2 ==
-            0) // pic1 is the field of RefPicList1[ refIdxL1 / 2 ] that has the
-               // same parity as the current macroblock.
-        {
+        if (CurrMbAddr % 2 == 0)
           pic1 = &(m_RefPicList1[refIdxL1 / 2]->m_picture_top_filed);
-        } else {
+        else
           pic1 = &(m_RefPicList1[refIdxL1 / 2]->m_picture_bottom_filed);
-        }
-      } else // if (refIdxL0 % 2 != 0)
-      {
-        if (CurrMbAddr % 2 ==
-            0) // pic1 is the field of RefPicList1[ refIdxL1 / 2 ] that has the
-               // opposite parity of the current macroblock.
-        {
+      } else {
+        if (CurrMbAddr % 2 == 0)
           pic1 = &(m_RefPicList1[refIdxL1 / 2]->m_picture_bottom_filed);
-        } else {
+        else
           pic1 = &(m_RefPicList1[refIdxL1 / 2]->m_picture_top_filed);
-        }
       }
-    } else // field_pic_flag is equal to 1 or the current macroblock is a frame
-           // macroblock
-    {
+
+      //* – 否则（field_pic_flag等于1或当前宏块是帧宏块），currPicOrField是当前图片CurrPic，pic1是RefPicList1[refIdxL1]，pic0是RefPicList0[refIdxL0]。*/
+      /* 场图像，或者帧宏块 */
+    } else {
       currPicOrField = &(m_parent->m_picture_frame);
       pic0 = &(m_RefPicList0[refIdxL0]->m_picture_frame);
       pic1 = &(m_RefPicList1[refIdxL1]->m_picture_frame);
     }
 
-    //------------------------------------
-    int32_t tb =
-        CLIP3(-128, 127, DiffPicOrderCnt(currPicOrField, pic0)); //(8-201)
-    int32_t td = CLIP3(-128, 127, DiffPicOrderCnt(pic1, pic0));  //(8-202)
+    /* 2-1. 变量DistScaleFactor的推导如下： */
+    //8.4.1.2.3 Derivation process for temporal direct luma motion vector and reference index prediction mode -> page 161
+    int32_t tb = CLIP3(-128, 127, DiffPicOrderCnt(currPicOrField, pic0));
+    int32_t td = CLIP3(-128, 127, DiffPicOrderCnt(pic1, pic0));
+    int32_t tx = (16384 + ABS(td / 2)) / td;
+    int32_t DistScaleFactor = CLIP3(-1024, 1023, (tb * tx + 32) >> 6);
 
-    int32_t tx = (16384 + ABS(td / 2)) / td;                           //(8-197)
-    int32_t DistScaleFactor = CLIP3(-1024, 1023, (tb * tx + 32) >> 6); //(8-198)
-
+    /* 2-2. 变量w0C和w1C的推导如下： */
+    //– 如果 DiffPicOrderCnt( pic1, pic0 ) 等于 0 或 pic1 和 pic0 之一或两者被标记为“用于长期参考”或 ( DistScaleFactor >> 2 ) < −64 或 ( DistScaleFactor >> 2 ) > 128 、w0C 和 w1C 推导为：
     if (DiffPicOrderCnt(pic1, pic0) == 0 ||
         pic0->reference_marked_type ==
             H264_PICTURE_MARKED_AS_used_for_long_term_reference ||
         pic1->reference_marked_type ==
             H264_PICTURE_MARKED_AS_used_for_long_term_reference ||
         (DistScaleFactor >> 2) < -64 || (DistScaleFactor >> 2) > 128) {
-      w0L = 32;
-      w1L = 32;
+      w0L = w1L = 32;
 
-      if (m_slice.m_sps.ChromaArrayType != 0) {
-        w0Cb = 32;
-        w1Cb = 32;
-        w0Cr = 32;
-        w1Cr = 32;
-      }
+      if (m_slice.m_sps.ChromaArrayType != 0) w0Cb = w1Cb = w0Cr = w1Cr = 32;
+
+      /* 否则，变量 tb、td、tx 和 DistScaleFactor 分别使用方程 8-201、8-202、8-197 和 8-198 从 currPicOrField、pic0 和 pic1 的值导出，权重 w0C 和w1C 导出为 */
     } else {
       w0L = 64 - (DistScaleFactor >> 2);
       w1L = DistScaleFactor >> 2;
 
       if (m_slice.m_sps.ChromaArrayType != 0) {
-        w0Cb = 64 - (DistScaleFactor >> 2);
-        w1Cb = DistScaleFactor >> 2;
-        w0Cr = 64 - (DistScaleFactor >> 2);
-        w1Cr = DistScaleFactor >> 2;
+        w0Cb = w0Cr = 64 - (DistScaleFactor >> 2);
+        w1Cb = w1Cr = DistScaleFactor >> 2;
       }
     }
-  } else if (explicitModeFlag == 1) {
-    int32_t refIdxL0WP = 0;
-    int32_t refIdxL1WP = 0;
 
-    if (slice_header.MbaffFrameFlag == 1 &&
-        m_mbs[CurrMbAddr].mb_field_decoding_flag ==
-            1) // If MbaffFrameFlag is equal to 1 and the current macroblock is
-               // a field macroblock
-    {
+    /* 否则，如果explicitModeFlag等于1，则按照以下顺序步骤指定使用显式模式加权预测： */
+  } else if (explicitModeFlag == 1) {
+    //1.变量refIdxL0WP和refIdxL1WP的推导如下：
+    int32_t refIdxL0WP = 0, refIdxL1WP = 0;
+    /* 宏块自适应帧场，场宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
+    if (slice_header.MbaffFrameFlag &&
+        m_mbs[CurrMbAddr].mb_field_decoding_flag) {
       refIdxL0WP = refIdxL0 >> 1;
       refIdxL1WP = refIdxL1 >> 1;
-    } else // Otherwise (MbaffFrameFlag is equal to 0 or the current macroblock
-           // is a frame macroblock)
-    {
+    } else {
+      /* 非宏块自适应帧场，帧宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
       refIdxL0WP = refIdxL0;
       refIdxL1WP = refIdxL1;
     }
 
-    // If C is equal to L for luma samples
+    /* 2. 变量logWDC、w0C、w1C、o0C和o1C的推导如下： */
+    // – 对于亮度样本，如果 C 等于 L
     logWDL = slice_header.luma_log2_weight_denom;
     w0L = slice_header.luma_weight_l0[refIdxL0WP];
     w1L = slice_header.luma_weight_l1[refIdxL1WP];
@@ -3016,42 +2979,53 @@ int PictureBase::Derivation_process_for_prediction_weights(
     o1L = slice_header.luma_offset_l1[refIdxL1WP] *
           (1 << (m_slice.m_sps.BitDepthY - 8));
 
-    // C is equal to Cb or Cr for chroma samples
+    // – 否则（对于色度样本，C 等于 Cb 或 Cr，对于 Cb，iCbCr = 0，对于 Cr，iCbCr = 1）
     if (m_slice.m_sps.ChromaArrayType != 0) {
-      logWDCb = slice_header.chroma_log2_weight_denom;
+      logWDCb = logWDCr = slice_header.chroma_log2_weight_denom;
+
       w0Cb = slice_header.chroma_weight_l0[refIdxL0WP][0];
+      w0Cr = slice_header.chroma_weight_l0[refIdxL0WP][1];
+
       w1Cb = slice_header.chroma_weight_l1[refIdxL1WP][0];
+      w1Cr = slice_header.chroma_weight_l1[refIdxL1WP][1];
+
       o0Cb = slice_header.chroma_offset_l0[refIdxL0WP][0] *
              (1 << (m_slice.m_sps.BitDepthC - 8));
-      o1Cb = slice_header.chroma_offset_l1[refIdxL1WP][0] *
+      o0Cr = slice_header.chroma_offset_l0[refIdxL0WP][1] *
              (1 << (m_slice.m_sps.BitDepthC - 8));
 
-      logWDCr = slice_header.chroma_log2_weight_denom;
-      w0Cr = slice_header.chroma_weight_l0[refIdxL0WP][1];
-      w1Cr = slice_header.chroma_weight_l1[refIdxL1WP][1];
-      o0Cr = slice_header.chroma_offset_l0[refIdxL0WP][1] *
+      o1Cb = slice_header.chroma_offset_l1[refIdxL1WP][0] *
              (1 << (m_slice.m_sps.BitDepthC - 8));
       o1Cr = slice_header.chroma_offset_l1[refIdxL1WP][1] *
              (1 << (m_slice.m_sps.BitDepthC - 8));
     }
-  } else // if (implicitModeFlag == 0 && explicitModeFlag == 0)
-  {
-    // the variables logWDC, w0C, w1C, o0C, o1C are not used in the
-    // reconstruction process for the current macroblock.
+  } else {
+    /* 否则(implicitModeFlag等于0且explicitModeFlag等于0)，变量logWDC、w0C、w1C、o0C、o1C不用于当前宏块的重建过程。*/
   }
 
-  //-----------------
-  if (explicitModeFlag == 1 && predFlagL0 == 1 && predFlagL1 == 1) {
-    // −128 <= w0C + w1C <= ( ( logWDC = = 7 ) ? 127 : 128 )
-    RETURN_IF_FAILED(
-        !(-128 <= w0L + w1L && w0L + w1L <= ((logWDL == 7) ? 127 : 128)), -1);
+  /* 当explicitModeFlag等于1并且predFlagL0和predFlagL1等于1时，对于C等于L，并且当ChromaArrayType不等于0时，Cb和Cr应遵守以下约束： */
+  if (explicitModeFlag && predFlagL0 && predFlagL1) {
+    int32_t max = (logWDL == 7) ? 127 : 128;
+    if (-128 > (w0L + w1L) || (w0L + w1L) > max) {
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
+      return -1;
+    }
+
     if (m_slice.m_sps.ChromaArrayType != 0) {
-      RETURN_IF_FAILED(
-          !(-128 <= w0Cb + w1Cb && w0Cb + w1Cb <= ((logWDCb == 7) ? 127 : 128)),
-          -1);
-      RETURN_IF_FAILED(
-          !(-128 <= w0Cr + w1Cr && w0Cb + w1Cr <= ((logWDCr == 7) ? 127 : 128)),
-          -1);
+      int32_t max = (logWDCb == 7) ? 127 : 128;
+      if (-128 > (w0Cb + w1Cb) || (w0Cb + w1Cb) > max) {
+        std::cerr << "An error occurred on " << __FUNCTION__
+                  << "():" << __LINE__ << std::endl;
+        return -1;
+      }
+
+      max = (logWDCr == 7) ? 127 : 128;
+      if (-128 > (w0Cr + w1Cr) || (w0Cr + w1Cr) > max) {
+        std::cerr << "An error occurred on " << __FUNCTION__
+                  << "():" << __LINE__ << std::endl;
+        return -1;
+      }
     }
   }
 
@@ -3249,6 +3223,8 @@ int PictureBase::
   return 0;
 }
 
+//8.2.1 Decoding process for picture order count (8-2)
+/* 两张图片相差的距离（即两图片计数器的差值） */
 int PictureBase::DiffPicOrderCnt(PictureBase *picA, PictureBase *picB) {
   return PicOrderCntFunc(picA) - PicOrderCntFunc(picB);
 }

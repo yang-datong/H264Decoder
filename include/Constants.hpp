@@ -910,6 +910,7 @@ const int32_t rangeTabLPS[64][4] = {
 };
 
 //----------------------------------------------- Macroblock ---------------------------------------------
+//Table 7-11 – Macroblock types for I slices
 const MB_TYPE_I_SLICES_T mb_type_I_slices_define[27] = {
     {0, I_NxN, 0, Intra_4x4, NA, -1, -1},
     {0, I_NxN, 1, Intra_8x8, NA, -1, -1},
@@ -939,6 +940,7 @@ const MB_TYPE_I_SLICES_T mb_type_I_slices_define[27] = {
     {24, I_16x16_3_2_1, NA, Intra_16x16, 3, 2, 15},
     {25, I_PCM, NA, Intra_NA, NA, NA, NA}};
 
+//Table 7-12 – Macroblock type with value 0 for SI slices
 const MB_TYPE_SI_SLICES_T mb_type_SI_slices_define[1] = {
     {0, SI, Intra_4x4, NA, NA, NA}};
 
@@ -1015,6 +1017,8 @@ struct SUB_MB_TYPE_P_MBS_T
     int32_t                   SubMbPartHeight;
 };
 */
+
+//Table 7-17 – Sub-macroblock types in P macroblocks
 const SUB_MB_TYPE_P_MBS_T sub_mb_type_P_mbs_define[4] = {
     //    { inferred,    NA,         NA,   NA,         NA,   NA },
     {0, P_L0_8x8, 1, Pred_L0, 8, 8},

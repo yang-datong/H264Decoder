@@ -1,38 +1,42 @@
 #ifndef TYPE_HPP_TPOWA9WD
 #define TYPE_HPP_TPOWA9WD
 
-#include <array>
-#include <bitset>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
-#include <fstream>
-#include <iomanip> //用于格式化输出
-#include <ios>
 #include <iostream>
-#include <iterator>
-#include <math.h>
-#include <memory>
-#include <netinet/in.h>
-#include <sstream>
 #include <string.h>
-#include <string>
-#include <thread>
-#include <vector>
 
 using namespace std;
 
+// 5.7 Mathematical functions
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
-// Ceil( x ) the smallest integer greater than or equal to x.
 #define CEIL(x) (int(x))
 
-//=============================== CABAC ============================
-/* CABAC function */
 #define CLIP(x, low, high)                                                     \
   (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
+
 #define CLIP3(x, y, z) (((z) < (x)) ? (x) : (((z) > (y)) ? (y) : (z)))
+
+//(5-6)
+#define Clip1C(x, BitDepthC) CLIP3(0, ((1 << (BitDepthC)) - 1), (x))
+
+/* 
+光栅扫描顺序是从左到右、从上到下逐行扫描的顺序。
+    a: 线性扫描索引（通常是光栅扫描顺序中的索引）。
+    b: 块的宽度或高度（取决于 e 的值）。
+    c: 块的宽度或高度（与 b 相对，取决于 e 的值）。
+    d: 图像的宽度或高度（取决于 e 的值）。
+    e: 指定要计算的是行还是列：
+        e == 0 时，计算列索引。
+        e == 1 时，计算行索引。
+ */
+#define InverseRasterScan(a, b, c, d, e)                                       \
+  ((e) == 0   ? ((a) % ((d) / (b))) * (b)                                      \
+   : (e) == 1 ? ((a) / ((d) / (b))) * (c)                                      \
+              : 0)
 
 // Table 7-6 – Name association to slice_type
 enum H264_SLICE_TYPE {
@@ -209,18 +213,16 @@ typedef enum _MB_ADDR_TYPE_ {
 
 typedef enum _H264_MB_PART_PRED_MODE_ {
   MB_PRED_MODE_NA,
-
-  Intra_NA,    //        -1
-  Intra_4x4,   //        0
-  Intra_8x8,   //        1
-  Intra_16x16, //      2
-  Inter,       //            3
-
-  Pred_NA, //   -1
-  Pred_L0, //    0
-  Pred_L1, //    1
-  BiPred,  //     2
-  Direct,  //     3
+  Intra_NA,
+  Intra_4x4,
+  Intra_8x8,
+  Intra_16x16,
+  Inter,
+  Pred_NA,
+  Pred_L0,
+  Pred_L1,
+  BiPred,
+  Direct,
 } H264_MB_PART_PRED_MODE;
 
 // Table 7-11 – Macroblock types for I slices

@@ -7,6 +7,7 @@
 #include "PictureBase.hpp"
 #include "SliceHeader.hpp"
 #include "Type.hpp"
+#include <cstdint>
 
 // 7.3.5 Macroblock layer syntax
 int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
@@ -19,15 +20,14 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
   /* ------------------  End ------------------ */
 
   _is_cabac = pps.entropy_coding_mode_flag; // 是否CABAC编码
-
-  /* TODO YangJing 初始化 <24-09-01 02:07:46> */
   this->_cabac = &cabac;
   if (_gb == nullptr) this->_gb = new CH264Golomb();
   this->_bs = &bs;
 
+  /* 受限帧内预测标志，这个标志决定了是否可以在帧内预测中使用非帧内编码的宏块 */
+  constrained_intra_pred_flag =
+      picture.m_slice.m_pps.constrained_intra_pred_flag;
   initFromSlice(header, slice_data);
-
-  constrained_intra_pred_flag = pps.constrained_intra_pred_flag;
 
   process_decode_mb_type(picture, header, header.slice_type);
 
@@ -77,6 +77,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
     }
   }
 
+  /* 计算当前宏块的量化参数（QP）。量化参数影响解码后的图像质量和压缩率*/
   /* 7.4.5 Macroblock layer semantics , page 105 */
   /* mb_qp_delta可以改变宏块层中QPY的值。 mb_qp_delta 的解码值应在 -( 26 + QpBdOffsetY / 2) 至 +( 25 + QpBdOffsetY / 2 ) 的范围内，包括端值。当 mb_qp_delta 对于任何宏块（包括 P_Skip 和 B_Skip 宏块类型）不存在时，应推断其等于 0。如果 mb_qp_delta 超出了范围，它会被修正到合法范围内。 */
   if (mb_qp_delta < (int32_t)(-(26 + (int32_t)sps.QpBdOffsetY / 2)) ||
@@ -91,71 +92,98 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
          (52 + sps.QpBdOffsetY)) -
         sps.QpBdOffsetY;
 
+  /* 还原偏移后的QP */
   QP1Y = QPY + sps.QpBdOffsetY;
+
   /* 更新前一个宏块的量化参数（也就是当前宏快，对于下一个宏快来说就是前一个） */
   header.QPY_prev = QPY;
 
-  /* 是否启用变换旁路模式 */
+  // 7.4.5 Macroblock layer semantics -> mb_qp_delta
+  /* 计算出是否启用变换旁路模式 */
   TransformBypassModeFlag =
       (sps.qpprime_y_zero_transform_bypass_flag == 1 && QP1Y == 0) ? 1 : 0;
 
   return 0;
 }
 
-int MacroBlock::macroblock_layer_mb_skip(PictureBase &picture,
-                                         const SliceData &slice_data,
-                                         CH264Cabac &cabac) {
+#define MB_TYPE_P_SP_Skip 5
+#define MB_TYPE_B_Skip 23
+/* 该函数将一个宏块进行预处理，设置对应的状态，但是并不需要进行真正的解码操作（跟macroblock_layer函数非常类似） */
+int MacroBlock::macroblock_mb_skip(PictureBase &picture,
+                                   const SliceData &slice_data,
+                                   CH264Cabac &cabac) {
   int ret = 0;
-  /* YangJing 初始化 <24-09-01 02:07:46> */
   this->_cabac = &cabac;
   if (_gb == nullptr) this->_gb = new CH264Golomb();
 
+  /* TODO YangJing 这里的header应该是输入，不应该存在输出 <24-09-03 21:12:33> */
   SliceHeader &header = picture.m_slice.slice_header;
+  int32_t &QPY_prev = header.QPY_prev;
+  const uint32_t QpBdOffsetY = picture.m_slice.m_sps.QpBdOffsetY;
 
-  initFromSlice(header, slice_data);
+  /* 受限帧内预测标志，这个标志决定了是否可以在帧内预测中使用非帧内编码的宏块 */
   constrained_intra_pred_flag =
       picture.m_slice.m_pps.constrained_intra_pred_flag;
+  initFromSlice(header, slice_data);
 
-  ret = picture.Inverse_macroblock_scanning_process(
+  /* 执行逆宏块扫描过程，确定当前宏块在帧中的位置。这一步通常是为了处理宏块的地址映射，特别是在使用宏块自适应帧场编码（MBAFF）时 */
+  ret = picture.inverse_macroblock_scanning_process(
       header.MbaffFrameFlag, CurrMbAddr, mb_field_decoding_flag,
       picture.m_mbs[CurrMbAddr].m_mb_position_x,
       picture.m_mbs[CurrMbAddr].m_mb_position_y);
-  RETURN_IF_FAILED(ret != 0, ret);
+  /* 比如说，这里出来的x,y应该是(0,0) (16,0) (32,0) (48,0) */
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return ret;
+  }
 
-  //    int is_ae = picture.m_slice.m_pps.entropy_coding_mode_flag;
-  //    //ae(v)表示CABAC编码
-
+  /* 当Slice为P,SP时，5表示P_Skip，即跳过宏块处理，当Slice为B时，23表示P_Skip，即跳过宏块处理 */
   if (header.slice_type == SLICE_P || header.slice_type == SLICE_SP)
-    /* P_Skip：比特流中不存在宏块的更多数据。 */
-    mb_type = 5;
+    m_mb_type_fixed = mb_type = MB_TYPE_P_SP_Skip;
   else if (header.slice_type == SLICE_B)
-    /* B_Skip：比特流中不存在宏块的更多数据。函数 MbPartWidth( B_Skip ) 和 MbPartHeight( B_Skip ) 用于第 8.4.1 节中用于直接模式预测的运动向量和参考帧索引的导出过程。*/
-    mb_type = 23;
+    m_mb_type_fixed = mb_type = MB_TYPE_B_Skip;
 
   m_slice_type_fixed = header.slice_type;
-  m_mb_type_fixed = mb_type;
 
-  //-----------------------------------------------
-  // int32_t noSubMbPartSizeLessThan8x8Flag = 1;
+  /* 据宏块类型和其他参数，设置宏块的预测模式。这一步决定了如何对宏块进行预测和解码 */
+  /* 7.4.5 Macroblock layer semantics -> mb_type */
   ret = MbPartPredMode(m_slice_type_fixed, transform_size_8x8_flag,
                        m_mb_type_fixed, 0, m_NumMbPart, CodedBlockPatternChroma,
                        CodedBlockPatternLuma, Intra16x16PredMode,
                        m_name_of_mb_type, m_mb_pred_mode);
-  RETURN_IF_FAILED(ret != 0, ret);
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return ret;
+  }
 
-  //---------------------------------------------------
+  /* 计算当前宏块的量化参数（QP）。量化参数影响解码后的图像质量和压缩率*/
+
+  /* 7.4.5 Macroblock layer semantics , page 105 */
+  /* mb_qp_delta可以改变宏块层中QPY的值。 mb_qp_delta 的解码值应在 -( 26 + QpBdOffsetY / 2) 至 +( 25 + QpBdOffsetY / 2 ) 的范围内，包括端值。当 mb_qp_delta 对于任何宏块（包括 P_Skip 和 B_Skip 宏块类型）不存在时，应推断其等于 0。如果 mb_qp_delta 超出了范围，它会被修正到合法范围内。 */
+
+  /* 这里mb_qp_delta确定为0,则不需要进行修正 */
   mb_qp_delta = 0;
 
-  QPY = ((header.QPY_prev + mb_qp_delta + 52 +
-          2 * picture.m_slice.m_sps.QpBdOffsetY) %
-         (52 + picture.m_slice.m_sps.QpBdOffsetY)) -
-        picture.m_slice.m_sps.QpBdOffsetY; // (7-37)
-  QP1Y = QPY + picture.m_slice.m_sps.QpBdOffsetY;
-  header.QPY_prev = QPY;
+  /* 计算当前宏块的量化参数 QPY */
+  QPY = ((QPY_prev + mb_qp_delta + 52 + 2 * QpBdOffsetY) % (52 + QpBdOffsetY)) -
+        QpBdOffsetY;
 
-  ret = set_mb_type_X_slice_info();
+  /* 还原偏移后的QP */
+  QP1Y = QPY + QpBdOffsetY;
+
+  /* 更新前一个宏块的量化参数（也就是当前宏快，对于下一个宏快来说就是前一个） */
+  QPY_prev = QPY;
+
+  /* 将宏块类型和相关的片段信息设置到宏块中，以便后续的解码过程使用 */
+  ret = MbPartPredMode();
   // 因CABAC会用到MbPartWidth/MbPartHeight信息，所以需要尽可能提前设置相关值
-  RETURN_IF_FAILED(ret != 0, ret);
+  if (ret) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return ret;
+  }
 
   return 0;
 }
@@ -443,44 +471,6 @@ int MacroBlock::NumSubMbPartFunc(int mbPartIdx) {
     return -1;
   }
   return NumSubMbPart;
-}
-
-int MacroBlock::SubMbPredModeFunc(int32_t slice_type, int32_t sub_mb_type,
-                                  int32_t &NumSubMbPart,
-                                  H264_MB_PART_PRED_MODE &SubMbPredMode,
-                                  int32_t &SubMbPartWidth,
-                                  int32_t &SubMbPartHeight) {
-  if (slice_type == SLICE_I) {
-    printf("Unknown slice_type=%d;\n", slice_type);
-    return -1;
-  } else if (slice_type == SLICE_P) {
-    if (sub_mb_type >= 0 && sub_mb_type <= 4) {
-      NumSubMbPart = sub_mb_type_P_mbs_define[sub_mb_type].NumSubMbPart;
-      SubMbPredMode = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPredMode;
-      SubMbPartWidth = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPartWidth;
-      SubMbPartHeight = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPartHeight;
-    } else {
-      printf("sub_mb_type_P_mbs_define: sub_mb_type=%d; Must be in [-1..5]\n",
-             sub_mb_type);
-      return -1;
-    }
-  } else if (slice_type == SLICE_B) {
-    if (sub_mb_type >= 0 && sub_mb_type <= 12) {
-      NumSubMbPart = sub_mb_type_B_mbs_define[sub_mb_type].NumSubMbPart;
-      SubMbPredMode = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPredMode;
-      SubMbPartWidth = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPartWidth;
-      SubMbPartHeight = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPartHeight;
-    } else {
-      printf("sub_mb_type_B_mbs_define: sub_mb_type=%d; Must be in [0..12]\n",
-             sub_mb_type);
-      return -1;
-    }
-  } else {
-    printf("Unknown slice_type=%d;\n", slice_type);
-    return -1;
-  }
-
-  return 0;
 }
 
 int MacroBlock::getMbPartWidthAndHeight(H264_MB_TYPE name_of_mb_type,
@@ -882,20 +872,23 @@ int MacroBlock::fix_mb_type(const int32_t slice_type_raw,
   return 0;
 }
 
+/* Table 7-11 – Macroblock types for I slices
+ * Table 7-12 – Macroblock type with value 0 for SI slices
+ * Table 7-13 – Macroblock type values 0 to 4 for P and SP slices
+ * Table 7-14 – Macroblock type values 0 to 22 for B slices */
 int MacroBlock::MbPartPredMode(
     int32_t slice_type, int32_t transform_size_8x8_flag, int32_t _mb_type,
     int32_t index, int32_t &NumMbPart, int32_t &CodedBlockPatternChroma,
     int32_t &CodedBlockPatternLuma, int32_t &_Intra16x16PredMode,
     H264_MB_TYPE &name_of_mb_type, H264_MB_PART_PRED_MODE &mb_pred_mode) {
-  int ret = 0;
 
+  //Table 7-11 – Macroblock types for I slices
   if ((slice_type % 5) == SLICE_I) {
     if (_mb_type == 0) {
       if (transform_size_8x8_flag == 0) {
         name_of_mb_type = mb_type_I_slices_define[0].name_of_mb_type;
         mb_pred_mode = mb_type_I_slices_define[0].MbPartPredMode;
-      } else // if (transform_size_8x8_flag == 1)
-      {
+      } else {
         name_of_mb_type = mb_type_I_slices_define[1].name_of_mb_type;
         mb_pred_mode = mb_type_I_slices_define[1].MbPartPredMode;
       }
@@ -909,55 +902,58 @@ int MacroBlock::MbPartPredMode(
           mb_type_I_slices_define[_mb_type + 1].Intra16x16PredMode;
       mb_pred_mode = mb_type_I_slices_define[_mb_type + 1].MbPartPredMode;
     } else {
-      printf("mb_type_I_slices_define: _mb_type=%d; Must be in [0..25]\n",
-             _mb_type);
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
       return -1;
     }
+
+    //Table 7-12 – Macroblock type with value 0 for SI slices
   } else if ((slice_type % 5) == SLICE_SI) {
     if (_mb_type == 0) {
       name_of_mb_type = mb_type_SI_slices_define[0].name_of_mb_type;
       mb_pred_mode = mb_type_SI_slices_define[0].MbPartPredMode;
     } else {
-      printf("mb_type_SI_slices_define: _mb_type=%d; Must be in [0..0]\n",
-             _mb_type);
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
       return -1;
     }
+
+    //Table 7-13 – Macroblock type values 0 to 4 for P and SP slices
   } else if ((slice_type % 5) == SLICE_P || (slice_type % 5) == SLICE_SP) {
     if (_mb_type >= 0 && _mb_type <= 5) {
       name_of_mb_type = mb_type_P_SP_slices_define[_mb_type].name_of_mb_type;
       NumMbPart = mb_type_P_SP_slices_define[_mb_type].NumMbPart;
-      if (index == 0) {
+      if (index == 0)
         mb_pred_mode = mb_type_P_SP_slices_define[_mb_type].MbPartPredMode0;
-      } else // if (index == 1)
-      {
+      else
         mb_pred_mode = mb_type_P_SP_slices_define[_mb_type].MbPartPredMode1;
-      }
     } else {
-      printf("mb_type_P_SP_slices_define: _mb_type=%d; Must be in [0..5]\n",
-             _mb_type);
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
       return -1;
     }
+
+    //Table 7-14 – Macroblock type values 0 to 22 for B slices
   } else if ((slice_type % 5) == SLICE_B) {
     if (_mb_type >= 0 && _mb_type <= 23) {
       name_of_mb_type = mb_type_B_slices_define[_mb_type].name_of_mb_type;
       NumMbPart = mb_type_B_slices_define[_mb_type].NumMbPart;
-      if (index == 0) {
+      if (index == 0)
         mb_pred_mode = mb_type_B_slices_define[_mb_type].MbPartPredMode0;
-      } else // if (index == 1)
-      {
+      else
         mb_pred_mode = mb_type_B_slices_define[_mb_type].MbPartPredMode1;
-      }
     } else {
-      printf("mb_type_B_slices_define: _mb_type=%d; Must be in [0..23]\n",
-             _mb_type);
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
       return -1;
     }
   } else {
-    printf("Unknown slice_type=%d;\n", slice_type);
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
     return -1;
   }
 
-  return ret;
+  return 0;
 }
 
 int MacroBlock::MbPartPredMode2(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
@@ -1067,42 +1063,41 @@ int MacroBlock::MbPartPredMode2(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
   return ret;
 }
 
-int MacroBlock::set_mb_type_X_slice_info() {
-  // int32_t mbPartIdx = 0;
-
+int MacroBlock::MbPartPredMode() {
+  //Table 7-11 – Macroblock types for I slices
   if ((m_slice_type_fixed % 5) == SLICE_I) {
     if (m_mb_type_fixed == 0) {
-      if (transform_size_8x8_flag == 0) {
+      if (transform_size_8x8_flag == 0)
         mb_type_I_slice = mb_type_I_slices_define[0];
-      } else // if (transform_size_8x8_flag == 1)
-      {
+      else
         mb_type_I_slice = mb_type_I_slices_define[1];
-      }
-    } else if (m_mb_type_fixed >= 1 && m_mb_type_fixed <= 25) {
+
+    } else if (m_mb_type_fixed >= 1 && m_mb_type_fixed <= 25)
       mb_type_I_slice = mb_type_I_slices_define[m_mb_type_fixed + 1];
-    } else {
-      printf(
-          "mb_type_I_slices_define: m_mb_type_fixed=%d; Must be in [0..25]\n",
-          m_mb_type_fixed);
+    else {
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
       return -1;
     }
+
+    //Table 7-12 – Macroblock type with value 0 for SI slices
   } else if ((m_slice_type_fixed % 5) == SLICE_SI) {
-    if (m_mb_type_fixed == 0) {
+    if (m_mb_type_fixed == 0)
       mb_type_SI_slice = mb_type_SI_slices_define[0];
-    } else {
-      printf(
-          "mb_type_SI_slices_define: m_mb_type_fixed=%d; Must be in [0..0]\n",
-          m_mb_type_fixed);
+    else {
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
       return -1;
     }
+
+    //Table 7-13 – Macroblock type values 0 to 4 for P and SP slices
   } else if ((m_slice_type_fixed % 5) == SLICE_P ||
              (m_slice_type_fixed % 5) == SLICE_SP) {
-    if (m_mb_type_fixed >= 0 && m_mb_type_fixed <= 5) {
+    if (m_mb_type_fixed >= 0 && m_mb_type_fixed <= 5)
       mb_type_P_SP_slice = mb_type_P_SP_slices_define[m_mb_type_fixed];
-    } else {
-      printf("mb_type_P_SP_slices_define: m_mb_type_fixed=%d; Must be in "
-             "[0..5]\n",
-             m_mb_type_fixed);
+    else {
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
       return -1;
     }
 
@@ -1110,50 +1105,69 @@ int MacroBlock::set_mb_type_X_slice_info() {
     MbPartHeight = mb_type_P_SP_slice.MbPartHeight;
     m_NumMbPart = mb_type_P_SP_slice.NumMbPart;
 
-    //---------------------------------------------
-    // for (mbPartIdx = 0; mbPartIdx < m_NumMbPart; mbPartIdx++)
-    //{
-    // sub_mb_type_P_slice[mbPartIdx] = sub_mb_type_P_mbs_define[sub_mb_type[
-    // mbPartIdx ]]; NumSubMbPart[mbPartIdx] =
-    // sub_mb_type_P_mbs_define[sub_mb_type[ mbPartIdx ]].NumSubMbPart;
-    // SubMbPartWidth[mbPartIdx] = sub_mb_type_P_mbs_define[sub_mb_type[
-    // mbPartIdx ]].SubMbPartWidth; SubMbPartHeight[mbPartIdx] =
-    // sub_mb_type_P_mbs_define[sub_mb_type[ mbPartIdx ]].SubMbPartHeight;
-    //}
+    //Table 7-14 – Macroblock type values 0 to 22 for B slices
   } else if ((m_slice_type_fixed % 5) == SLICE_B) {
-    if (m_mb_type_fixed >= 0 && m_mb_type_fixed <= 23) {
+    if (m_mb_type_fixed >= 0 && m_mb_type_fixed <= 23)
       mb_type_B_slice = mb_type_B_slices_define[m_mb_type_fixed];
-    } else {
-      printf(
-          "mb_type_B_slices_define: m_mb_type_fixed=%d; Must be in [0..23]\n",
-          m_mb_type_fixed);
+    else {
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
       return -1;
     }
 
     MbPartWidth = mb_type_B_slice.MbPartWidth;
     MbPartHeight = mb_type_B_slice.MbPartHeight;
     m_NumMbPart = mb_type_B_slice.NumMbPart;
-
-    //---------------------------------------------
-    // for (mbPartIdx = 0; mbPartIdx < m_NumMbPart; mbPartIdx++)
-    //{
-    // sub_mb_type_B_slice[mbPartIdx] = sub_mb_type_B_mbs_define[sub_mb_type[
-    // mbPartIdx ]]; NumSubMbPart[mbPartIdx] =
-    // sub_mb_type_B_mbs_define[sub_mb_type[ mbPartIdx ]].NumSubMbPart;
-    // SubMbPartWidth[mbPartIdx] = sub_mb_type_B_mbs_define[sub_mb_type[
-    // mbPartIdx ]].SubMbPartWidth; SubMbPartHeight[mbPartIdx] =
-    // sub_mb_type_B_mbs_define[sub_mb_type[ mbPartIdx ]].SubMbPartHeight;
-    //}
   } else {
-    printf("Unknown mb_type=%d; m_mb_type_fixed=%d;\n", mb_type,
-           m_mb_type_fixed);
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
     return -1;
   }
 
   return 0;
 }
 
-void MacroBlock::initFromSlice(SliceHeader &header,
+/* 7.4.5.2 Sub-macroblock prediction semantics */
+/* 输出为子宏块的sub_mb_type,NumSubMbPart,SubMbPredMode,SubMbPartWidth,SubMbPartHeight，类似于一个查表操作*/
+int MacroBlock::SubMbPredMode(int32_t slice_type, int32_t sub_mb_type,
+                              int32_t &NumSubMbPart,
+                              H264_MB_PART_PRED_MODE &SubMbPredMode,
+                              int32_t &SubMbPartWidth,
+                              int32_t &SubMbPartHeight) {
+  if (slice_type == SLICE_P) {
+    if (sub_mb_type >= 0 && sub_mb_type <= 3) {
+      /* Table 7-17 – Sub-macroblock types in P macroblocks */
+      NumSubMbPart = sub_mb_type_P_mbs_define[sub_mb_type].NumSubMbPart;
+      SubMbPredMode = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPredMode;
+      SubMbPartWidth = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPartWidth;
+      SubMbPartHeight = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPartHeight;
+    } else {
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
+      return -1;
+    }
+  } else if (slice_type == SLICE_B) {
+    if (sub_mb_type >= 0 && sub_mb_type <= 12) {
+      /* Table 7-18 – Sub-macroblock types in B macroblocks */
+      NumSubMbPart = sub_mb_type_B_mbs_define[sub_mb_type].NumSubMbPart;
+      SubMbPredMode = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPredMode;
+      SubMbPartWidth = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPartWidth;
+      SubMbPartHeight = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPartHeight;
+    } else {
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
+      return -1;
+    }
+  } else {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return -1;
+  }
+
+  return 0;
+}
+
+void MacroBlock::initFromSlice(const SliceHeader &header,
                                const SliceData &slice_data) {
   field_pic_flag = header.field_pic_flag;
   bottom_field_flag = header.bottom_field_flag;
@@ -1172,7 +1186,7 @@ void MacroBlock::initFromSlice(SliceHeader &header,
 int MacroBlock::process_decode_mb_type(PictureBase &picture,
                                        SliceHeader &header,
                                        const int32_t slice_type) {
-  int ret = picture.Inverse_macroblock_scanning_process(
+  int ret = picture.inverse_macroblock_scanning_process(
       header.MbaffFrameFlag, CurrMbAddr, mb_field_decoding_flag,
       picture.m_mbs[CurrMbAddr].m_mb_position_x,
       picture.m_mbs[CurrMbAddr].m_mb_position_y);
@@ -1192,7 +1206,7 @@ int MacroBlock::process_decode_mb_type(PictureBase &picture,
   RETURN_IF_FAILED(ret != 0, ret);
 
   // 因CABAC会用到MbPartWidth/MbPartHeight信息，所以需要尽可能提前设置相关值
-  ret = set_mb_type_X_slice_info();
+  ret = MbPartPredMode();
   RETURN_IF_FAILED(ret != 0, ret);
 
   ret = MbPartPredMode(m_slice_type_fixed, transform_size_8x8_flag,

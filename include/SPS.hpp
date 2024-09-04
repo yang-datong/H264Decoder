@@ -31,9 +31,14 @@ class SPS {
   uint8_t profile_idc = 0; // 0x64
   /* 表示编码级别 */
   uint8_t level_idc = 0; // 0
-  /* SPS 的唯一标识符 */
+  /* SPS 的唯一标识符[0-31] */
   uint32_t seq_parameter_set_id = 0;
   /* 指示是否使用约束基线配置文件 */
+
+  /*色度格式[0-3]。指定了亮度和色度分量的采样方式,444,420,422*/
+  /* 当 chroma_format_idc 不存在时，应推断其等于 1（4:2:0 色度格式）。page 74 */
+  uint32_t chroma_format_idc = 1;
+
   uint8_t constraint_set0_5_flag = 0;
   uint8_t reserved_zero_2bits = 0;
   /* 用于计算帧号的最大值 */
@@ -53,14 +58,11 @@ class SPS {
   /* 宏块（MB）单位的图像高度减 1。（用于计算原图像正常情况下的高）*/
   uint32_t pic_height_in_map_units_minus1 = 0;
 
-  /*色度格式。指定了亮度和色度分量的采样方式,444,420,422*/
-  /* 当 chroma_format_idc 不存在时，应推断其等于 1（4:2:0 色度格式）。page 74 */
-  uint32_t chroma_format_idc = 1;
-
   uint32_t MaxFrameNum = 0;
   /* 是否使用直接 8x8 推断 */
   bool direct_8x8_inference_flag = 0;
 
+  /* 等于 1 指定 4:4:4 色度格式的三个颜色分量分别编码。 separate_colour_plane_flag 等于 0 指定颜色分量不单独编码。当separate_colour_plane_flag不存在时，应推断其等于0。当separate_colour_plane_flag等于1时，主编码图像由三个单独的分量组成，每个分量由一个颜色平面（Y、Cb或Cr）的编码样本组成。 ），每个都使用单色编码语法。在这种情况下，每个颜色平面都与特定的 color_plane_id 值相关联。 */
   bool separate_colour_plane_flag = 0;
 
   /* 亮度分量的比特深度减去 8 */
@@ -68,10 +70,23 @@ class SPS {
   /* 色度分量的比特深度减去 8 */
   uint32_t bit_depth_chroma_minus8 = 0;
   /* 图像是否仅包含帧（否则为场编码） */
+
+  // 上面bit_depth_luma_minus8.bit_depth_chroma_minus8计算还原的结果
+  uint32_t BitDepthY = 0;
+  uint32_t QpBdOffsetY = 0;
+  uint32_t BitDepthC = 0;
+  uint32_t QpBdOffsetC = 0;
+
   bool frame_mbs_only_flag = 0;
   /* 帧顺序计数增量是否始终为零 */
   bool delta_pic_order_always_zero_flag = 0;
 
+  /* 色度子采样的类型：
+    0: 4:0:0 色度子采样（没有色度信息，只有亮度信息）
+    1: 4:2:0 色度子采样（色度分辨率为亮度分辨率的一半）
+    2: 4:2:2 色度子采样（色度分辨率为亮度分辨率的水平一半，垂直方向相同）
+    3: 4:4:4 色度子采样（没有子采样，色度和亮度分辨率相同）
+*/
   uint32_t ChromaArrayType = 0;
 
   /* 是否使用基于宏块的自适应帧/场编码 */
@@ -84,14 +99,13 @@ class SPS {
 
   /* 是否对亮度分量中的零系数块应用变换旁路 */
   bool qpprime_y_zero_transform_bypass_flag = 0;
+
   /* 是否在序列级别存在缩放矩阵 */
   bool seq_scaling_matrix_present_flag = 0;
+
+  /* 等于 1 指定缩放列表 i 的语法结构存在于序列参数集中。 seq_scaling_list_present_flag[ i ] 等于 0 指定缩放列表 i 的语法结构不存在于序列参数集中，并且表 7-2 中指定的缩放列表回退规则集 A 将用于推断序列级缩放索引 i 的列表。 */
   bool seq_scaling_list_present_flag[12] = {false};
 
-  uint32_t BitDepthY = 0;
-  uint32_t QpBdOffsetY = 0;
-  uint32_t BitDepthC = 0;
-  uint32_t QpBdOffsetC = 0;
   uint32_t MbWidthC = 0;          // 色度宏块宽度
   uint32_t MbHeightC = 0;         // 色度宏块高度
   int32_t pcm_sample_chroma[256]; // 3 u(v)

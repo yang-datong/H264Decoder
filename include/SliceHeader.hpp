@@ -120,14 +120,14 @@ class SliceHeader {
   int PicHeightInSamplesC = 0;
   /* 禁用去块效应滤波器标志 */
   uint32_t disable_deblocking_filter_idc = 0;
-  /* 前一个Slice的量化参数 */
-  int QPY_prev = 0;
+  /* 前一个Slice的量化参数（这里的Y表示亮度块，一般来说QP也以QPY为准） */
+  int32_t QPY_prev = 0;
+  /* Slice的量化参数（色度） */
+  int QSY = 0;
   /* 最大图像编号 */
   int MaxPicNum = 0;
   /* 当前图像编号 */
   int CurrPicNum = 0;
-  /* Slice的量化参数（色度） */
-  int QSY = 0;
   /* 去块效应滤波器的A偏移值 */
   int FilterOffsetA = 0;
   /* 去块效应滤波器的B偏移值 */

@@ -203,7 +203,7 @@ class PictureBase {
       uint8_t *pic_buff_chroma_pred, int32_t PicWidthInSamples); // 8.3.4.5
   int Sample_construction_process_for_I_PCM_macroblocks();       // 8.3.5
 
-  int Inverse_macroblock_scanning_process(int32_t MbaffFrameFlag,
+  int inverse_macroblock_scanning_process(int32_t MbaffFrameFlag,
                                           int32_t mbAddr,
                                           int32_t mb_field_decoding_flag,
                                           int32_t &x,
@@ -331,8 +331,8 @@ class PictureBase {
   int transform_decoding_process_for_chroma_samples_inter(
       int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff);
 
-  int Inter_prediction_process(); // 8.4
-  int Derivation_process_for_motion_vector_components_and_reference_indices(
+  int inter_prediction_process(); // 8.4
+  int derivation_motion_vector_components_and_reference_indices(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
       int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
       int32_t (&mvCL0)[2], int32_t (&mvCL1)[2], int32_t &subMvCnt,
@@ -371,7 +371,7 @@ class PictureBase {
       int32_t ChromaArrayType, int32_t mvLX[2], PictureBase *refPic,
       int32_t (&mvCLX)[2]); // 8.4.1.4
 
-  int Decoding_process_for_Inter_prediction_samples(
+  int decoding_Inter_prediction_samples(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t partWidth,
       int32_t partHeight, int32_t partWidthC, int32_t partHeightC, int32_t xAL,
       int32_t yAL, int32_t (&mvL0)[2], int32_t (&mvL1)[2], int32_t (&mvCL0)[2],
@@ -387,7 +387,7 @@ class PictureBase {
                                           Frame *RefPicListX[16],
                                           int32_t RefPicListXLength,
                                           PictureBase *&refPic); // 8.4.2.1
-  int Fractional_sample_interpolation_process(
+  int fractional_sample_interpolation(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t partWidth,
       int32_t partHeight, int32_t partWidthC, int32_t partHeightC, int32_t xAL,
       int32_t yAL, int32_t (&mvLX)[2], int32_t (&mvCLX)[2],
@@ -395,14 +395,14 @@ class PictureBase {
       uint8_t *predPartLXL,   // predPartL[partHeight][partWidth]
       uint8_t *predPartLXCb,  // predPartCb[partHeightC][partWidthC]
       uint8_t *predPartLXCr); // predPartCr[partHeightC][partWidthC] //8.4.2.2
-  int Luma_sample_interpolation_process(
+  int luma_sample_interpolation_process(
       int32_t xIntL, int32_t yIntL, int32_t xFracL, int32_t yFracL,
       PictureBase *refPic, uint8_t &predPartLXL_xL_yL); // 8.4.2.2.1
-  int Chroma_sample_interpolation_process(
+  int chroma_sample_interpolation_process(
       int32_t xIntC, int32_t yIntC, int32_t xFracC, int32_t yFracC,
       PictureBase *refPic, int32_t isChromaCb,
       uint8_t &predPartLXC_xC_yC); // 8.4.2.2.2
-  int Weighted_sample_prediction_process(
+  int weighted_sample_prediction(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t predFlagL0,
       int32_t predFlagL1, int32_t partWidth, int32_t partHeight,
       int32_t partWidthC, int32_t partHeightC, int32_t logWDL, int32_t w0L,
@@ -420,21 +420,21 @@ class PictureBase {
       uint8_t
           *predPartCr); // out: predPartLXCr[partHeightC][partWidthC] //8.4.2.3
 
-  int Derivation_process_for_prediction_weights(
+  int derivation_prediction_weights(
       int32_t refIdxL0, int32_t refIdxL1, int32_t predFlagL0,
       int32_t predFlagL1, int32_t &logWDL, int32_t &w0L, int32_t &w1L,
       int32_t &o0L, int32_t &o1L, int32_t &logWDCb, int32_t &w0Cb,
       int32_t &w1Cb, int32_t &o0Cb, int32_t &o1Cb, int32_t &logWDCr,
       int32_t &w0Cr, int32_t &w1Cr, int32_t &o0Cr,
       int32_t &o1Cr); // 8.4.3
-  int Default_weighted_sample_prediction_process(
+  int default_weighted_sample_prediction(
       int32_t predFlagL0, int32_t predFlagL1, int32_t partWidth,
       int32_t partHeight, int32_t partWidthC, int32_t partHeightC,
       uint8_t *predPartL0L, uint8_t *predPartL0Cb, uint8_t *predPartL0Cr,
       uint8_t *predPartL1L, uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
       uint8_t *predPartL, uint8_t *predPartCb,
       uint8_t *predPartCr); // 8.4.2.3.1
-  int Weighted_sample_prediction_process_2(
+  int weighted_sample_prediction_process_2(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t predFlagL0,
       int32_t predFlagL1, int32_t partWidth, int32_t partHeight,
       int32_t partWidthC, int32_t partHeightC, int32_t logWDL, int32_t w0L,

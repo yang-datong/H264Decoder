@@ -735,7 +735,7 @@ int PictureBase::Filtering_process_for_block_edges(
   int32_t yI = 0;
 
   // 6.4.1 Inverse macroblock scanning process
-  ret = Inverse_macroblock_scanning_process(MbaffFrameFlag, _CurrMbAddr,
+  ret = inverse_macroblock_scanning_process(MbaffFrameFlag, _CurrMbAddr,
                                             mb_field_decoding_flag, xI, yI);
   RETURN_IF_FAILED(ret != 0, ret);
 

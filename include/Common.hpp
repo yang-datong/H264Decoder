@@ -1,7 +1,5 @@
 #include "BitStream.hpp"
 
-int InverseRasterScan(int32_t a, int32_t b, int32_t c, int32_t d, int32_t e);
-
 int h264_log2(int32_t value);
 
 void *my_malloc(size_t size);
@@ -9,6 +7,13 @@ void *my_malloc(size_t size);
 void my_free(void *ptr);
 
 int32_t h264_power2(int32_t value);
+
+#define RET(ret)                                                               \
+  if (ret) {                                                                   \
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__  \
+              << std::endl;                                                    \
+    return ret;                                                                \
+  }
 
 #define SAFE_FREE(x)                                                           \
   do {                                                                         \

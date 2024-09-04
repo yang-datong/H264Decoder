@@ -372,9 +372,7 @@ int SliceData::setMbToSliceGroupMap() {
 
 int SliceData::process_mb_skip_run(PictureBase &picture, int32_t &prevMbSkipped,
                                    const bool &is_cabac) {
-  //mb_skip_run = gb.get_ue_golomb(bs); //2 ue(v)
   mb_skip_run = bs->readUE();
-
   prevMbSkipped = (mb_skip_run > 0);
   for (int i = 0; i < mb_skip_run; i++) {
     picture.mb_x =
@@ -385,8 +383,8 @@ int SliceData::process_mb_skip_run(PictureBase &picture, int32_t &prevMbSkipped,
          (1 + header->MbaffFrameFlag)) +
         ((CurrMbAddr % (picture.PicWidthInMbs * (1 + header->MbaffFrameFlag))) %
          (1 + header->MbaffFrameFlag));
-    picture.CurrMbAddr = CurrMbAddr;
 
+    picture.CurrMbAddr = CurrMbAddr;
     picture.mb_cnt++;
 
     if (header->MbaffFrameFlag) {
@@ -428,15 +426,16 @@ int SliceData::process_mb_skip_run(PictureBase &picture, int32_t &prevMbSkipped,
     }
 
     //-----------------------------------------------------------------
-    picture.m_mbs[picture.CurrMbAddr].macroblock_layer_mb_skip(
-        picture, *this, *cabac); //2 | 3 | 4
+    picture.m_mbs[picture.CurrMbAddr].macroblock_mb_skip(picture, *this,
+                                                         *cabac); //2 | 3 | 4
 
     //The inter prediction process for P and B macroblocks is specified in clause 8.4 with inter prediction samples being the output.
-    picture.Inter_prediction_process(); //帧间预测
+    picture.inter_prediction_process(); //帧间预测
 
     CurrMbAddr = NextMbAddress(CurrMbAddr, header);
     if (CurrMbAddr < 0) {
-      LOG_ERROR("CurrMbAddr(%d) < 0\n", CurrMbAddr);
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
       break;
     }
   }
@@ -461,6 +460,8 @@ void SliceData::updatesLocationOfCurrentMacroblock(PictureBase &picture,
 /* 如果当前宏块的运动矢量与参考帧中的预测块非常接近，且残差（即当前块与预测块的差异）非常小或为零，编码器可能会选择跳过该宏块的编码。
  * 在这种情况下，解码器可以通过运动矢量预测和参考帧直接重建宏块，而无需传输额外的残差信息。
  * 一般来说，在I帧中，不会出现宏块跳过处理。这是因为I帧中的宏块是使用帧内预测进行编码的，而不是基于参考帧的帧间预测 */
+
+/* NOTE: 顶宏块与底宏块是垂直方向的宏块对，而不是水平方向的，见Figure 6-8 – Partitioning of the decoded frame into macroblock pairs  */
 int SliceData::process_mb_skip_flag(PictureBase &picture,
                                     const int32_t prevMbSkipped) {
   /* 1. 计算当前宏块的位置 */
@@ -481,6 +482,7 @@ int SliceData::process_mb_skip_flag(PictureBase &picture,
      * 如果两个宏块的slice_number相同表示它们属于同一个Slice */
 
     /* 是否为顶宏块，即宏块对中的前宏块 */
+    std::cout << "CurrMbAddr:" << CurrMbAddr << std::endl;
     if (CurrMbAddr % 2 == 0) {
       /* 顶宏块，是否已经完成解码 */
       int32_t is_top_decoding_flag =
@@ -504,8 +506,9 @@ int SliceData::process_mb_skip_flag(PictureBase &picture,
     cabac->decode_mb_skip_flag(CurrMbAddr, mb_skip_flag);
 
   /* 4. 如果当前宏块跳过处理（或顶宏块或底宏块） */
-  if (mb_skip_flag == 1) {
-    // 本宏块没有残差数据，则需要运动矢量预测和参考帧直接重建宏块（帧间预测）。
+  if (mb_skip_flag == 1 && header->slice_type != SLICE_I &&
+      header->slice_type != SLICE_SI) {
+    // 本宏块没有残差数据，则需要运动矢量预测和参考帧直接重建宏块（帧间预测,P,B Slice）。
     picture.mb_cnt++;
 
     /* MBAFF模型下的顶宏块 */
@@ -526,11 +529,11 @@ int SliceData::process_mb_skip_flag(PictureBase &picture,
     }
 
     /* 宏块层对应的处理 */
-    /* TODO YangJing 看宏块层具体来做什么事情 <24-09-03 00:31:30> */
-    picture.m_mbs[picture.CurrMbAddr].macroblock_layer_mb_skip(picture, *this,
-                                                               *cabac);
+    picture.m_mbs[picture.CurrMbAddr].macroblock_mb_skip(picture, *this,
+                                                         *cabac);
 
-    picture.Inter_prediction_process(); // 帧间预测
+    /* 8.4 Inter prediction process(当解码 P 和 B 宏块类型时调用，也就是P Slice,B Slice的宏块) */
+    picture.inter_prediction_process(); // 帧间预测
   }
 
   return 0;
@@ -657,7 +660,7 @@ int SliceData::do_macroblock_layer(PictureBase &picture) {
   else {
 
     // P,B帧，I帧不会进这里
-    picture.Inter_prediction_process(); // 帧间预测
+    picture.inter_prediction_process(); // 帧间预测
 
     BitDepth = picture.m_slice.m_sps.BitDepthY;
 

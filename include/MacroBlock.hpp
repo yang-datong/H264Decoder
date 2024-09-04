@@ -11,8 +11,20 @@ class SliceData;
 
 class MacroBlock {
  public:
-  /* 宏块类型，指示宏块的编码模式（如帧内、帧间、PCM等） */
+  /* 宏块类型，指示宏块的编码模式（如帧内、帧间、PCM等），取决于切片类型 */
+  /* 对于I Slice: mb_type取值区间为：[0-25]
+    * 对于P Slice: mb_type取值区间为：[0-4] + inferred (P_Skip)
+    * 对于B Slice: mb_type取值区间为：[0-22] + inferred (B_Skip)
+    * 对于SI Slice: mb_type取值区间为：[0]
+    * 对于SP Slice: mb_type取值区间为：同P Slice */
+
+  /* 对应的宏块名称，见m_name_of_mb_type（考虑字节对齐，不放在这里），一般来说特殊类型的宏块都是对应类型宏块的最后一个类型：
+      * 对于I宏块来说，存在一个特殊宏块类型，mb_type = 25， 称为I_PCM宏块,I宏块只有16x16大小，但可以使用4x4,8x8进行宏块预测。
+      * 对于P宏块来说，存在一个特殊宏块类型，mb_type = 5， 称为P_Skip宏块。
+      * 对于B宏块来说，存在一个特殊宏块类型，mb_type = 23， 称为B_Skip宏块。
+    * */
   int32_t mb_type = 0;
+
   /* PCM对齐零位，用于对齐PCM数据。 */
   int32_t pcm_alignment_zero_bit = 0;
   /* PCM模式下的亮度样本数据，大小为16x16（256个样本） */
@@ -57,7 +69,7 @@ class MacroBlock {
 
   /* QPY: 当前宏块的亮度量化参数。
     QSY: 当前宏块的亮度量化参数（备用）。
-    QP1Y: 前一个宏块的亮度量化参数。 */
+    QP1Y: 加上QpBdOffset后的QPY */
   int32_t QPY = 0;
   int32_t QSY = 0;
   int32_t QP1Y = 0;
@@ -187,7 +199,10 @@ class MacroBlock {
   int32_t m_slice_type_fixed = -1;
   // 码流解码出来的原始mb_type值，需要修正一次才行，原因是有的P帧里面含有帧内编码的I宏块
   int32_t m_mb_type_fixed = -1;
+
+  /* 对应宏块类型的名称 */
   H264_MB_TYPE m_name_of_mb_type;
+  /* 对应宏块类型所使用的预测模式 */
   H264_MB_PART_PRED_MODE m_mb_pred_mode;
   H264_MB_TYPE m_name_of_sub_mb_type[4];
   H264_MB_PART_PRED_MODE m_sub_mb_pred_mode[4];
@@ -211,8 +226,8 @@ class MacroBlock {
   int macroblock_layer(BitStream &bs, PictureBase &picture,
                        const SliceData &slice_data, CH264Cabac &cabac);
 
-  int macroblock_layer_mb_skip(PictureBase &picture,
-                               const SliceData &slice_data, CH264Cabac &cabac);
+  int macroblock_mb_skip(PictureBase &picture, const SliceData &slice_data,
+                         CH264Cabac &cabac);
 
   static int getMbPartWidthAndHeight(H264_MB_TYPE name_of_mb_type,
                                      int32_t &_MbPartWidth,
@@ -221,29 +236,29 @@ class MacroBlock {
   static int MbPartPredMode2(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
                              int32_t transform_size_8x8_flag,
                              H264_MB_PART_PRED_MODE &mb_pred_mode);
-  static int SubMbPredModeFunc(int32_t slice_type, int32_t sub_mb_type,
-                               int32_t &NumSubMbPart,
-                               H264_MB_PART_PRED_MODE &SubMbPredMode,
-                               int32_t &SubMbPartWidth,
-                               int32_t &SubMbPartHeight);
+
+  static int SubMbPredMode(int32_t slice_type, int32_t sub_mb_type,
+                           int32_t &NumSubMbPart,
+                           H264_MB_PART_PRED_MODE &SubMbPredMode,
+                           int32_t &SubMbPartWidth, int32_t &SubMbPartHeight);
 
  private:
-  static string getNameOfMbTypeStr(H264_MB_TYPE name_of_mb_type);
+  string getNameOfMbTypeStr(H264_MB_TYPE name_of_mb_type);
 
-  static int fix_mb_type(const int32_t slice_type_raw,
-                         const int32_t mb_type_raw, int32_t &slice_type_fixed,
-                         int32_t &mb_type_fixed);
+  int fix_mb_type(const int32_t slice_type_raw, const int32_t mb_type_raw,
+                  int32_t &slice_type_fixed, int32_t &mb_type_fixed);
 
-  static int MbPartPredMode(int32_t slice_type, int32_t transform_size_8x8_flag,
-                            int32_t _mb_type, int32_t index, int32_t &NumMbPart,
-                            int32_t &CodedBlockPatternChroma,
-                            int32_t &CodedBlockPatternLuma,
-                            int32_t &_Intra16x16PredMode,
-                            H264_MB_TYPE &name_of_mb_type,
-                            H264_MB_PART_PRED_MODE &mb_pred_mode);
+  int MbPartPredMode(int32_t slice_type, int32_t transform_size_8x8_flag,
+                     int32_t _mb_type, int32_t index, int32_t &NumMbPart,
+                     int32_t &CodedBlockPatternChroma,
+                     int32_t &CodedBlockPatternLuma,
+                     int32_t &_Intra16x16PredMode,
+                     H264_MB_TYPE &name_of_mb_type,
+                     H264_MB_PART_PRED_MODE &mb_pred_mode);
 
-  int set_mb_type_X_slice_info();
-  void initFromSlice(SliceHeader &header, const SliceData &slice_data);
+  int MbPartPredMode();
+
+  void initFromSlice(const SliceHeader &header, const SliceData &slice_data);
   int process_decode_mb_type(PictureBase &picture, SliceHeader &header,
                              const int32_t slice_type);
   int process_transform_size_8x8_flag(int32_t &transform_size_8x8_flag_temp);

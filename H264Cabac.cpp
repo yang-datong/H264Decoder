@@ -627,7 +627,7 @@ int CH264Cabac::
       int32_t SubMbPartWidth = 0;
       int32_t SubMbPartHeight = 0;
 
-      ret = MacroBlock::SubMbPredModeFunc(
+      ret = MacroBlock::SubMbPredMode(
           picture.m_slice.slice_header.slice_type,
           picture.m_mbs[mbAddrN_A].sub_mb_type[mbPartIdxN_A], NumSubMbPart,
           SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
@@ -704,7 +704,7 @@ int CH264Cabac::
       int32_t SubMbPartWidth = 0;
       int32_t SubMbPartHeight = 0;
 
-      ret = MacroBlock::SubMbPredModeFunc(
+      ret = MacroBlock::SubMbPredMode(
           picture.m_slice.slice_header.slice_type,
           picture.m_mbs[mbAddrN_B].sub_mb_type[mbPartIdxN_B], NumSubMbPart,
           SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
@@ -841,7 +841,7 @@ int CH264Cabac::
     int32_t SubMbPartWidth = 0;
     int32_t SubMbPartHeight = 0;
 
-    ret = MacroBlock::SubMbPredModeFunc(
+    ret = MacroBlock::SubMbPredMode(
         picture.m_slice.slice_header.slice_type,
         picture.m_mbs[mbAddrN_A].sub_mb_type[mbPartIdxN_A], NumSubMbPart,
         SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
@@ -935,7 +935,7 @@ int CH264Cabac::
     int32_t SubMbPartWidth = 0;
     int32_t SubMbPartHeight = 0;
 
-    ret = MacroBlock::SubMbPredModeFunc(
+    ret = MacroBlock::SubMbPredMode(
         picture.m_slice.slice_header.slice_type,
         picture.m_mbs[mbAddrN_B].sub_mb_type[mbPartIdxN_B], NumSubMbPart,
         SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
