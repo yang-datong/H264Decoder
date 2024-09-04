@@ -9,7 +9,7 @@
 #include "Type.hpp"
 #include <cstdint>
 
-// 7.3.5 Macroblock layer syntax
+// 7.3.5 Macroblock layer syntax -> page 57
 int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
                                  const SliceData &slice_data,
                                  CH264Cabac &cabac) {
@@ -19,35 +19,38 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
   PPS &pps = picture.m_slice.m_pps;
   /* ------------------  End ------------------ */
 
+  /* ------------------ 初始化常用变量 ------------------ */
   _is_cabac = pps.entropy_coding_mode_flag; // 是否CABAC编码
   this->_cabac = &cabac;
   if (_gb == nullptr) this->_gb = new CH264Golomb();
   this->_bs = &bs;
-
   /* 受限帧内预测标志，这个标志决定了是否可以在帧内预测中使用非帧内编码的宏块 */
   constrained_intra_pred_flag =
       picture.m_slice.m_pps.constrained_intra_pred_flag;
   initFromSlice(header, slice_data);
-
+  /* ------------------  End ------------------ */
   process_decode_mb_type(picture, header, header.slice_type);
 
   if (m_mb_type_fixed == I_PCM) {
     while (!bs.byte_aligned())
       pcm_alignment_zero_bit = bs.readUn(1);
-
+    /* 16x16 */
     for (int i = 0; i < 256; i++)
       pcm_sample_luma[i] = bs.readUn(sps.BitDepthY);
-
     for (int i = 0; i < 2 * sps.MbWidthC * sps.MbHeightC; i++)
       pcm_sample_chroma[i] = bs.readUn(sps.BitDepthC);
-
   } else {
-    int32_t noSubMbPartSizeLessThan8x8Flag = 1;
     int32_t transform_size_8x8_flag_temp = 0;
 
+    bool noSubMbPartSizeLessThan8x8Flag = 1;
+    /* 根据宏块的类型和预测模式来决定如何处理宏块的预测信息 */
+    // 对于I帧而言，首次进入时即为I_NxN*/
+    // 对于P、B帧而言，m_mb_pred_mode,m_NumMbPart在macroblock_mb_skip()函数中已经计算过了 */
     if (m_name_of_mb_type != I_NxN && m_mb_pred_mode != Intra_16x16 &&
         m_NumMbPart == 4) {
+      /* 当前宏块是一个非Intra的宏块，并且被分成了4个子宏块 */
       sub_mb_pred(picture, slice_data);
+      /* 检查子宏块的类型和大小 */
       for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
         if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8) {
           if (NumSubMbPartFunc(mbPartIdx) > 1)

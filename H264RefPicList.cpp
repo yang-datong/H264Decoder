@@ -558,9 +558,8 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
 
   SliceHeader &slice_header = m_slice.slice_header;
   /* 1. 参考图片列表RefPicList0被排序，使得短期参考帧和短期互补参考场对具有比长期参考帧和长期互补参考场对更低的索引。 */
-  int index = 0;
   vector<int32_t> indexTemp_short, indexTemp_long;
-  for (index = 0; index < size_dpb; index++) {
+  for (int index = 0; index < (int)size_dpb; index++) {
     auto &pict_f = dpb[index]->m_picture_frame;
     if (pict_f.reference_marked_type ==
         H264_PICTURE_MARKED_AS_used_for_short_term_reference)
@@ -592,10 +591,10 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
 
   // 4. 生成排序后的参考序列
   int j = 0;
-  for (index = 0; index < indexTemp_short.size(); ++index)
+  for (int index = 0; index < (int)indexTemp_short.size(); ++index)
     RefPicList0[j++] = dpb[indexTemp_short[index]];
 
-  for (index = 0; index < indexTemp_long.size(); ++index)
+  for (int index = 0; index < (int)indexTemp_long.size(); ++index)
     RefPicList0[j++] = dpb[indexTemp_long[index]];
 
   RefPicList0Length = j;
@@ -608,13 +607,12 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
 
   /* TODO YangJing 这里是在做什么？ <24-08-31 00:06:06> */
   if (slice_header.MbaffFrameFlag) {
-    for (index = 0; index < RefPicList0Length; ++index) {
+    for (int index = 0; index < RefPicList0Length; ++index) {
       Frame *ref_list_frame = RefPicList0[index];
       Frame *&ref_list_top_filed = RefPicList0[16 + 2 * index];
       Frame *&ref_list_bottom_filed = RefPicList0[16 + 2 * index + 1];
 
-      ref_list_top_filed = ref_list_frame;
-      ref_list_bottom_filed = ref_list_frame;
+      ref_list_top_filed = ref_list_bottom_filed = ref_list_frame;
     }
   }
 

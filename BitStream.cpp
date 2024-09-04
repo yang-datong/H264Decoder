@@ -85,22 +85,20 @@ bool BitStream::more_rbsp_data() {
   if (isEndOf()) return 0;
 
   uint8_t *p1 = getEndBuf();
-  while (p1 > getP() && *p1 == 0) {
-    // 从后往前找，直到找到第一个非0值字节位置为止
+  // 从后往前找，直到找到第一个非0值字节位置为止
+  while (p1 > getP() && *p1 == 0)
     p1--;
-  }
 
   if (p1 > getP())
     return 1; // 说明当前位置m_p后面还有码流数据
   else {
-    int flag = 0, i = 0;
     // 在单个字节的8个比特位中，从后往前找，找到rbsp_stop_one_bit位置
-    for (i = 0; i < 8; i++) {
+    int flag = 0, i = 0;
+    for (i = 0; i < 8; i++)
       if ((((*(getP())) >> i) & 0x01) == 1) {
         flag = 1;
         break;
       }
-    }
 
     if (flag == 1 && (i + 1) < getBitsLeft()) return 1;
   }

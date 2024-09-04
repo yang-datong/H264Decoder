@@ -54,8 +54,7 @@ class SliceData {
   int setMbToSliceGroupMap();
 
   /* process表示处理字段，具体处理手段有推流或解码操作 */
-  int process_mb_skip_run(PictureBase &picture, int32_t &prevMbSkipped,
-                          const bool &is_cabac);
+  int process_mb_skip_run(PictureBase &picture, int32_t &prevMbSkipped);
   int process_mb_skip_flag(PictureBase &picture, const int32_t prevMbSkipped);
   int process_mb_field_decoding_flag(PictureBase &picture,
                                      const bool entropy_coding_mode_flag);

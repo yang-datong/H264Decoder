@@ -22,6 +22,8 @@ int main(int argc, char *argv[]) {
     //filePath = "./demo_10_frames_interlace.h264";
     /* 714x624 帧编码(CAVLC 熵编码模式,即profile=baseline) */
     //filePath = "./demo_10_frames_cavlc.h264";
+    /* 714x624 场编码(CAVLC 熵编码模式) */
+    //filePath = "./demo_10_frames_cavlc_and_interlace.h264";
   }
 
   /* 1. 打开文件、读取NUL、存储NUL的操作 */

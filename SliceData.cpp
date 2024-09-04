@@ -37,7 +37,7 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture) {
     if (header->slice_type != SLICE_I && header->slice_type != SLICE_SI) {
       if (m_pps.entropy_coding_mode_flag == 0) {
         /* CAVLC熵编码 */
-        process_mb_skip_run(picture, prevMbSkipped, false);
+        process_mb_skip_run(picture, prevMbSkipped);
         if (mb_skip_run > 0) moreDataFlag = bs->more_rbsp_data();
       } else {
         /* CABAC熵编码 */
@@ -48,7 +48,7 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture) {
 
     /* 2. 如果当前宏块未执行跳过处理，则进一步对MacroBlock的处理 */
     if (moreDataFlag) {
-
+      /* I,P,B帧都会进到这里，但是对于I帧来说这里是首次进入到宏块层处理 */
       if (header->MbaffFrameFlag &&
           (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
         /* 当前处于MBAFF模式，且当前为 “顶宏块” 或者 “底宏块并且对应的顶宏块执行了跳过操作” */
@@ -370,66 +370,24 @@ int SliceData::setMbToSliceGroupMap() {
   return 0;
 }
 
-int SliceData::process_mb_skip_run(PictureBase &picture, int32_t &prevMbSkipped,
-                                   const bool &is_cabac) {
+/* 跟process_mb_skip_flag()函数很相似 */
+int SliceData::process_mb_skip_run(PictureBase &picture,
+                                   int32_t &prevMbSkipped) {
   mb_skip_run = bs->readUE();
   prevMbSkipped = (mb_skip_run > 0);
   for (int i = 0; i < mb_skip_run; i++) {
-    picture.mb_x =
-        (CurrMbAddr % (picture.PicWidthInMbs * (1 + header->MbaffFrameFlag))) /
-        (1 + header->MbaffFrameFlag);
-    picture.mb_y =
-        (CurrMbAddr / (picture.PicWidthInMbs * (1 + header->MbaffFrameFlag)) *
-         (1 + header->MbaffFrameFlag)) +
-        ((CurrMbAddr % (picture.PicWidthInMbs * (1 + header->MbaffFrameFlag))) %
-         (1 + header->MbaffFrameFlag));
-
-    picture.CurrMbAddr = CurrMbAddr;
+    /* 1. 计算当前宏块的位置 */
+    updatesLocationOfCurrentMacroblock(picture, header->MbaffFrameFlag);
     picture.mb_cnt++;
 
-    if (header->MbaffFrameFlag) {
-      if (CurrMbAddr % 2 == 0) //只需要处理top field macroblock
-      {
-        if (i == mb_skip_run - 1) {
-          if (is_cabac) //ae(v)表示CABAC编码
-          {
-            //mb_field_decoding_flag; //2 u(1) | ae(v)
-          } else //ue(v) 表示CAVLC编码
-          {
-            mb_field_decoding_flag = bs->readU1(); //2 u(1) | ae(v)
-          }
+    /* MBAFF模型下的顶宏块 */
+    if (header->MbaffFrameFlag && CurrMbAddr % 2 == 0)
+      derivation_for_mb_field_decoding_flag(picture);
 
-          is_need_skip_read_mb_field_decoding_flag = true;
-        } else {
-          //When MbaffFrameFlag is equal to 1 and mb_field_decoding_flag is not present
-          //for both the top and the bottom macroblock of a macroblock pair
-          if (picture.mb_x > 0 &&
-              picture.m_mbs[CurrMbAddr - 2].slice_number ==
-                  slice_number) //the left of the current macroblock pair in the same slice
-          {
-            mb_field_decoding_flag =
-                picture.m_mbs[CurrMbAddr - 2].mb_field_decoding_flag;
-          } else if (
-              picture.mb_y > 0 &&
-              picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs]
-                      .slice_number ==
-                  slice_number) //above the current macroblock pair in the same slice
-          {
-            mb_field_decoding_flag =
-                picture.m_mbs[CurrMbAddr - 2 * picture.PicWidthInMbs]
-                    .mb_field_decoding_flag;
-          } else {
-            mb_field_decoding_flag = 0; //is inferred to be equal to 0
-          }
-        }
-      }
-    }
-
-    //-----------------------------------------------------------------
+    /* 宏块层对应的处理 */
     picture.m_mbs[picture.CurrMbAddr].macroblock_mb_skip(picture, *this,
                                                          *cabac); //2 | 3 | 4
 
-    //The inter prediction process for P and B macroblocks is specified in clause 8.4 with inter prediction samples being the output.
     picture.inter_prediction_process(); //帧间预测
 
     CurrMbAddr = NextMbAddress(CurrMbAddr, header);
@@ -482,7 +440,6 @@ int SliceData::process_mb_skip_flag(PictureBase &picture,
      * 如果两个宏块的slice_number相同表示它们属于同一个Slice */
 
     /* 是否为顶宏块，即宏块对中的前宏块 */
-    std::cout << "CurrMbAddr:" << CurrMbAddr << std::endl;
     if (CurrMbAddr % 2 == 0) {
       /* 顶宏块，是否已经完成解码 */
       int32_t is_top_decoding_flag =
