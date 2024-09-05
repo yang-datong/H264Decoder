@@ -77,6 +77,7 @@ class SPS {
   uint32_t BitDepthC = 0;
   uint32_t QpBdOffsetC = 0;
 
+  /* 图像是否仅包含帧（一个完整的帧） */
   bool frame_mbs_only_flag = 0;
   /* 帧顺序计数增量是否始终为零 */
   bool delta_pic_order_always_zero_flag = 0;
@@ -92,8 +93,8 @@ class SPS {
   /* 是否使用基于宏块的自适应帧/场编码 */
   bool mb_adaptive_frame_field_flag = 0;
 
-  uint32_t PicWidthInMbs = 0;
-  uint32_t PicHeightInMapUnits = 0;
+  int32_t PicWidthInMbs = 0;
+  int32_t PicHeightInMapUnits = 0;
   uint32_t PicSizeInMapUnits = 0;
   uint32_t frameHeightInMbs = 0;
 
@@ -136,7 +137,7 @@ class SPS {
   bool sp_for_switch_flag = 0;
   uint32_t disable_deblocking_filter_idc = 0;
 
-  int32_t MaxPicOrderCntLsb;
+  uint32_t MaxPicOrderCntLsb;
   int32_t ExpectedDeltaPerPicOrderCntCycle;
 
   /* 用于计算参考帧帧顺序计数偏移量的值，调整参考帧的显示顺序，以确保解码后的视频帧以正确的顺序显示*/

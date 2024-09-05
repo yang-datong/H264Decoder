@@ -449,7 +449,7 @@ void SliceHeader::pred_weight_table(BitStream &bitStream) {
               << std::endl;
   }
 
-  for (int i = 0; i <= num_ref_idx_l0_active_minus1; i++) {
+  for (int i = 0; i <= (int)num_ref_idx_l0_active_minus1; i++) {
     luma_weight_l0[i] = 1 << luma_log2_weight_denom;
     luma_offset_l0[i] = 0;
     bool luma_weight_l0_flag = bitStream.readU1();
@@ -485,7 +485,7 @@ void SliceHeader::pred_weight_table(BitStream &bitStream) {
   //}
 
   if (slice_type % 5 == SLICE_B) {
-    for (int i = 0; i <= num_ref_idx_l1_active_minus1; i++) {
+    for (int i = 0; i <= (int)num_ref_idx_l1_active_minus1; i++) {
       luma_weight_l1[i] = 1 << luma_log2_weight_denom;
       luma_offset_l1[i] = 0;
       bool luma_weight_l1_flag = bitStream.readU1();
@@ -508,7 +508,7 @@ void SliceHeader::pred_weight_table(BitStream &bitStream) {
         }
       }
     }
-    for (int i = 0; i <= num_ref_idx_l1_active_minus1; ++i) {
+    for (int i = 0; i <= (int)num_ref_idx_l1_active_minus1; ++i) {
       std::cout << "\t参考帧列表1的亮度权重:" << luma_weight_l1[i] << std::endl;
       std::cout << "\t参考帧列表1的亮度偏移:" << luma_offset_l1[i] << std::endl;
       std::cout << "\t参考帧列表1的色度权重:" << chroma_weight_l1[i][0]

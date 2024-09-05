@@ -156,7 +156,7 @@ class MacroBlock {
   /* 指示当前宏块所属的片的ID */
   int32_t slice_id;
   /* 指示当前片在序列中的编号 */
-  int32_t slice_number;
+  uint32_t slice_number;
   /* 当前片的类型（如I片、P片、B片等） */
   int32_t m_slice_type;
   /* 滤波器偏移A,B，用于去块效应滤波器的参数 */

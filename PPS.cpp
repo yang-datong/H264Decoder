@@ -26,7 +26,7 @@ int PPS::extractParameters(uint32_t chroma_format_idc) {
     if (slice_group_map_type == 0) {
       std::cout << "\tslice_group_map_type:逐行切片组映射" << std::endl;
       run_length_minus1 = new uint32_t[num_slice_groups_minus1 + 1];
-      for (int iGroup = 0; iGroup <= num_slice_groups_minus1; iGroup++)
+      for (int iGroup = 0; iGroup <= (int)num_slice_groups_minus1; iGroup++)
         run_length_minus1[iGroup] = bitStream.readUE();
     } else if (slice_group_map_type == 1) {
       std::cout << "\tslice_group_map_type:逐列切片组映射" << std::endl;
@@ -34,7 +34,7 @@ int PPS::extractParameters(uint32_t chroma_format_idc) {
       std::cout << "\tslice_group_map_type:逐块切片组映射" << std::endl;
       top_left = new uint32_t[num_slice_groups_minus1];
       bottom_right = new uint32_t[num_slice_groups_minus1];
-      for (int iGroup = 0; iGroup < num_slice_groups_minus1; iGroup++) {
+      for (int iGroup = 0; iGroup < (int)num_slice_groups_minus1; iGroup++) {
         top_left[iGroup] = bitStream.readUE();
         bottom_right[iGroup] = bitStream.readUE();
       }
@@ -50,7 +50,7 @@ int PPS::extractParameters(uint32_t chroma_format_idc) {
       std::cout << "\tpic_size_in_map_units_minus1:"
                 << pic_size_in_map_units_minus1 << std::endl;
       slice_group_id = new uint32_t[pic_size_in_map_units_minus1 + 1];
-      for (int i = 0; i <= pic_size_in_map_units_minus1; i++)
+      for (int i = 0; i <= (int)pic_size_in_map_units_minus1; i++)
         slice_group_id[i] = bitStream.readUE();
     }
   }
@@ -86,7 +86,7 @@ int PPS::extractParameters(uint32_t chroma_format_idc) {
       maxPICScalingList =
           6 + ((chroma_format_idc != 3) ? 2 : 6) * transform_8x8_mode_flag;
       pic_scaling_list_present_flag = new uint32_t[maxPICScalingList]{0};
-      for (int i = 0; i < maxPICScalingList; i++) {
+      for (int i = 0; i < (int)maxPICScalingList; i++) {
         pic_scaling_list_present_flag[i] = bitStream.readU1();
         if (pic_scaling_list_present_flag[i]) {
           if (i < 6) {

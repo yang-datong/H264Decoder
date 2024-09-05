@@ -36,7 +36,7 @@ void SEI::buffering_period() {
   if (NalHrdBpPresentFlag) {
     initial_cpb_removal_delay = new uint32_t[sps->cpb_cnt_minus1 + 1]{0};
     initial_cpb_removal_delay_offset = new uint32_t[sps->cpb_cnt_minus1 + 1]{0};
-    for (int SchedSelIdx = 0; SchedSelIdx <= sps->cpb_cnt_minus1;
+    for (int SchedSelIdx = 0; SchedSelIdx <= (int)sps->cpb_cnt_minus1;
          SchedSelIdx++) {
       initial_cpb_removal_delay[SchedSelIdx] =
           _bs->readUn(log2(sps->MaxFrameNum));
@@ -45,7 +45,7 @@ void SEI::buffering_period() {
     }
   }
   if (VclHrdBpPresentFlag) {
-    for (int SchedSelIdx = 0; SchedSelIdx <= sps->cpb_cnt_minus1;
+    for (int SchedSelIdx = 0; SchedSelIdx <= (int)sps->cpb_cnt_minus1;
          SchedSelIdx++) {
       initial_cpb_removal_delay[SchedSelIdx] =
           _bs->readUn(log2(sps->MaxFrameNum));

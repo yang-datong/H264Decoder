@@ -62,7 +62,7 @@ int PictureBase::decoding_picture_order_count_type_0(
 
   const SliceHeader &header = m_slice.slice_header;
 
-  int32_t prevPicOrderCntMsb, prevPicOrderCntLsb;
+  uint32_t prevPicOrderCntMsb, prevPicOrderCntLsb;
   /* 变量 prevPicOrderCntMsb 和 prevPicOrderCntLsb 的推导如下： 
    * – 如果当前图片是 IDR 图片，则 prevPicOrderCntMsb 设置为等于 0，并且 prevPicOrderCntLsb 设置为等于 0。 */
   /* 否则（当前图片不是 IDR 图片），则适用以下规则： */
@@ -751,11 +751,11 @@ int PictureBase::init_reference_picture_lists_B_slices_in_frames(
        });
 
   RefPicList0Length = 0;
-  for (int i = 0; i < indexTemp_short_left.size(); i++)
+  for (int i = 0; i < (int)indexTemp_short_left.size(); i++)
     RefPicList0[RefPicList0Length++] = dpb[indexTemp_short_left[i]];
-  for (int i = 0; i < indexTemp_short_right.size(); i++)
+  for (int i = 0; i < (int)indexTemp_short_right.size(); i++)
     RefPicList0[RefPicList0Length++] = dpb[indexTemp_short_right[i]];
-  for (int i = 0; i < indexTemp_long.size(); i++)
+  for (int i = 0; i < (int)indexTemp_long.size(); i++)
     RefPicList0[RefPicList0Length++] = dpb[indexTemp_long[i]];
 
   indexTemp_short_left.clear();
@@ -808,13 +808,13 @@ int PictureBase::init_reference_picture_lists_B_slices_in_frames(
        });
 
   RefPicList1Length = 0;
-  for (int i = 0; i < indexTemp_short_left.size(); i++)
+  for (int i = 0; i < (int)indexTemp_short_left.size(); i++)
     RefPicList1[RefPicList1Length++] = dpb[indexTemp_short_left[i]];
 
-  for (int i = 0; i < indexTemp_short_right.size(); i++)
+  for (int i = 0; i < (int)indexTemp_short_right.size(); i++)
     RefPicList1[RefPicList1Length++] = dpb[indexTemp_short_right[i]];
 
-  for (int i = 0; i < indexTemp_long.size(); i++)
+  for (int i = 0; i < (int)indexTemp_long.size(); i++)
     RefPicList1[RefPicList1Length++] = dpb[indexTemp_long[i]];
 
   /* 3、当参考图片列表RefPicList1具有多于一个条目并且RefPicList1与参考图片列表RefPicList0相同时，交换前两个条目RefPicList1[0]和RefPicList1[1]。*/
@@ -894,22 +894,22 @@ int PictureBase::init_reference_picture_lists_B_slices_in_fields(
   // 4. 生成排序后的参考序列
   int j0 = 0;
 
-  for (int i = 0; i < indexTemp_short_left.size(); i++)
+  for (int i = 0; i < (int)indexTemp_short_left.size(); i++)
     refFrameList0ShortTerm[j0++] = dpb[indexTemp_short_left[i]];
 
-  for (int i = 0; i < indexTemp_short_right.size(); i++)
+  for (int i = 0; i < (int)indexTemp_short_right.size(); i++)
     refFrameList0ShortTerm[j0++] = dpb[indexTemp_short_right[i]];
 
-  for (int i = 0; i < indexTemp_long.size(); i++)
+  for (int i = 0; i < (int)indexTemp_long.size(); i++)
     refFrameListLongTerm[j0++] = dpb[indexTemp_long[i]];
 
   /* 令entryShortTerm 为一个变量，范围涵盖当前标记为“用于短期参考”的所有参考条目。当存在具有大于PicOrderCnt(CurrPic)的PicOrderCnt(entryShortTerm)的某些entryShortTerm值时，entryShortTerm的这些值按照PicOrderCnt(entryShortTerm)的升序放置在refFrameList1ShortTerm的开头。 Rec 的所有剩余值。然后，ITU-T H.264 (08/2021) 125entryShortTerm（当存在时）按照 PicOrderCnt(entryShortTerm ) 的降序被附加到 refFrameList1ShortTerm。*/
   /* refFrameListLongTerm 从具有最低 LongTermFrameIdx 值的参考条目开始排序，并按升序继续到具有最高 LongTermFrameIdx 值的参考条目。 */
   int j1 = 0;
-  for (int i = 0; i < indexTemp_short_right.size(); i++)
+  for (int i = 0; i < (int)indexTemp_short_right.size(); i++)
     refFrameList1ShortTerm[j1++] = dpb[indexTemp_short_right[i]];
 
-  for (int i = 0; i < indexTemp_short_left.size(); i++)
+  for (int i = 0; i < (int)indexTemp_short_left.size(); i++)
     refFrameList1ShortTerm[j1++] = dpb[indexTemp_short_left[i]];
 
   /* 第 8.2.4.2.5 节中指定的过程通过作为输入给出的 refFrameList0ShortTerm 和 refFrameListLongTerm 进行调用，并将输出分配给 RefPicList0。*/
@@ -1436,8 +1436,8 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
         H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
   } else {
     int32_t size_dpb = 16;
-    int32_t numShortTerm = 0;
-    int32_t numLongTerm = 0;
+    uint32_t numShortTerm = 0;
+    uint32_t numLongTerm = 0;
 
     for (int i = 0; i < size_dpb; i++) {
       if (dpb[i]->m_picture_frame.reference_marked_type ==

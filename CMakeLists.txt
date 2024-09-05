@@ -8,7 +8,7 @@ project(project_name)
 
 # C++ version used, added compilation parameters
 set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g3 -O0 -Wno-sign-compare -Wno-restrict -Wno-class-memaccess -Wno-comment")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g3 -O0 -Wno-restrict -Wno-comment -Wno-class-memaccess")
 
 # Specify header file directory
 include_directories(include)

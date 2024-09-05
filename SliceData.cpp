@@ -147,15 +147,15 @@ int SliceData::decoding_macroblock_to_slice_group_map() {
 
 //8.2.2.1 - 8.2.2.7  Specification for interleaved slice group map type
 int SliceData::setMapUnitToSliceGroupMap() {
-
-  /* 别名 */
+  /* 输入 */
   const int &MapUnitsInSliceGroup0 = header->MapUnitsInSliceGroup0;
+  /* 输出 */
   int32_t *&mapUnitToSliceGroupMap = header->mapUnitToSliceGroupMap;
 
   /* mapUnitToSliceGroupMap 数组的推导如下：
    * – 如果 num_slice_groups_minus1 等于 0，则为范围从 0 到 PicSizeInMapUnits − 1（含）的所有 i 生成切片组映射的映射单元，如 mapUnitToSliceGroupMap[ i ] = 0 */
   if (m_pps.num_slice_groups_minus1 == 0) {
-    for (int i = 0; i < m_sps.PicSizeInMapUnits; i++)
+    for (int i = 0; i < (int)m_sps.PicSizeInMapUnits; i++)
       mapUnitToSliceGroupMap[i] = 0;
     return 0;
   }
@@ -202,22 +202,22 @@ int SliceData::interleaved_slice_group_map_type(
     int32_t *&mapUnitToSliceGroupMap) {
   int i = 0;
   do {
-    for (int iGroup = 0;
-         iGroup <= m_pps.num_slice_groups_minus1 && i < m_sps.PicSizeInMapUnits;
-         i += m_pps.run_length_minus1[iGroup++] + 1) {
-      for (int j = 0; j <= m_pps.run_length_minus1[iGroup] &&
-                      i + j < m_sps.PicSizeInMapUnits;
+    for (int iGroup = 0; iGroup <= (int)m_pps.num_slice_groups_minus1 &&
+                         i < (int)m_sps.PicSizeInMapUnits;
+         i += (int)m_pps.run_length_minus1[iGroup++] + 1) {
+      for (int j = 0; j <= (int)m_pps.run_length_minus1[iGroup] &&
+                      i + j < (int)m_sps.PicSizeInMapUnits;
            j++) {
         mapUnitToSliceGroupMap[i + j] = iGroup;
       }
     }
-  } while (i < m_sps.PicSizeInMapUnits);
+  } while (i < (int)m_sps.PicSizeInMapUnits);
   return 0;
 }
 //8.2.2.2 Specification for dispersed slice group map type
 int SliceData::dispersed_slice_group_map_type(
     int32_t *&mapUnitToSliceGroupMap) {
-  for (int i = 0; i < m_sps.PicSizeInMapUnits; i++) {
+  for (int i = 0; i < (int)m_sps.PicSizeInMapUnits; i++) {
     mapUnitToSliceGroupMap[i] =
         ((i % m_sps.PicWidthInMbs) +
          (((i / m_sps.PicWidthInMbs) * (m_pps.num_slice_groups_minus1 + 1)) /
@@ -229,7 +229,7 @@ int SliceData::dispersed_slice_group_map_type(
 //8.2.2.3 Specification for foreground with left-over slice group map type
 int SliceData::foreground_with_left_over_slice_group_ma_type(
     int32_t *&mapUnitToSliceGroupMap) {
-  for (int i = 0; i < m_sps.PicSizeInMapUnits; i++)
+  for (int i = 0; i < (int)m_sps.PicSizeInMapUnits; i++)
     mapUnitToSliceGroupMap[i] = m_pps.num_slice_groups_minus1;
 
   for (int iGroup = m_pps.num_slice_groups_minus1 - 1; iGroup >= 0; iGroup--) {
@@ -249,7 +249,7 @@ int SliceData::foreground_with_left_over_slice_group_ma_type(
 int SliceData::box_out_slice_group_map_types(int32_t *&mapUnitToSliceGroupMap,
                                              const int &MapUnitsInSliceGroup0) {
 
-  for (int i = 0; i < m_sps.PicSizeInMapUnits; i++)
+  for (int i = 0; i < (int)m_sps.PicSizeInMapUnits; i++)
     mapUnitToSliceGroupMap[i] = 1;
 
   int x = (m_sps.PicWidthInMbs - m_pps.slice_group_change_direction_flag) / 2;
@@ -308,7 +308,7 @@ int SliceData::raster_scan_slice_group_map_types(
              : MapUnitsInSliceGroup0);
   }
 
-  for (int i = 0; i < m_sps.PicSizeInMapUnits; i++) {
+  for (int i = 0; i < (int)m_sps.PicSizeInMapUnits; i++) {
     if (i < sizeOfUpperLeftGroup)
       mapUnitToSliceGroupMap[i] = m_pps.slice_group_change_direction_flag;
     else
@@ -328,8 +328,8 @@ int SliceData::wipe_slice_group_map_types(int32_t *&mapUnitToSliceGroupMap,
   }
 
   int k = 0;
-  for (int j = 0; j < m_sps.PicWidthInMbs; j++) {
-    for (int i = 0; i < m_sps.PicHeightInMapUnits; i++) {
+  for (int j = 0; j < (int)m_sps.PicWidthInMbs; j++) {
+    for (int i = 0; i < (int)m_sps.PicHeightInMapUnits; i++) {
       if (k++ < sizeOfUpperLeftGroup) {
         mapUnitToSliceGroupMap[i * m_sps.PicWidthInMbs + j] =
             m_pps.slice_group_change_direction_flag;
@@ -344,27 +344,48 @@ int SliceData::wipe_slice_group_map_types(int32_t *&mapUnitToSliceGroupMap,
 
 //8.2.2.7 Specification for explicit slice group map type
 int SliceData::explicit_slice_group_map_type(int32_t *&mapUnitToSliceGroupMap) {
-  for (int i = 0; i < m_sps.PicSizeInMapUnits; i++)
+  for (int i = 0; i < (int)m_sps.PicSizeInMapUnits; i++)
     mapUnitToSliceGroupMap[i] = m_pps.slice_group_id[i];
   return 0;
 }
 
 // 8.2.2.8 Specification for conversion of map unit to slice group map to macroblock to slice group map
+/* 宏块（Macroblock）的位置映射到切片（Slice）的过程*/
 int SliceData::setMbToSliceGroupMap() {
+  /* 输入：存储每个宏块单元对应的切片组索引 */
+  const int32_t *mapUnitToSliceGroupMap = header->mapUnitToSliceGroupMap;
+
+  /* 输出：存储映射后每个宏块对应的切片组索引 */
   int32_t *&MbToSliceGroupMap = header->MbToSliceGroupMap;
-  int32_t *&mapUnitToSliceGroupMap = header->mapUnitToSliceGroupMap;
 
   /* 对于范围从 0 到 PicSizeInMbs - 1（含）的每个 i 值，宏块到切片组映射指定如下： */
-  for (int i = 0; i < header->PicSizeInMbs; i++) {
-    if (m_sps.frame_mbs_only_flag == 1 || header->field_pic_flag == 1)
-      MbToSliceGroupMap[i] = mapUnitToSliceGroupMap[i];
-    else if (header->MbaffFrameFlag == 1)
-      MbToSliceGroupMap[i] = mapUnitToSliceGroupMap[i / 2];
-    else
-      MbToSliceGroupMap[i] =
-          mapUnitToSliceGroupMap[(i / (2 * m_sps.PicWidthInMbs)) *
-                                     m_sps.PicWidthInMbs +
-                                 (i % m_sps.PicWidthInMbs)];
+  for (int mbIndex = 0; mbIndex < header->PicSizeInMbs; mbIndex++) {
+    if (m_sps.frame_mbs_only_flag || header->field_pic_flag)
+      /* 一个完整的帧或场 */
+      MbToSliceGroupMap[mbIndex] = mapUnitToSliceGroupMap[mbIndex];
+    else if (header->MbaffFrameFlag)
+      /* 在交错格式下，每两个宏块共享同一行信息 */
+      MbToSliceGroupMap[mbIndex] = mapUnitToSliceGroupMap[mbIndex / 2];
+    else {
+      /* 假设4x4的宏块，当前宏块索引10，则rowIndex = 10 / 8 = 1，cloIndex = 10 % 4 = 2, 1*4+2=6 */
+      /*          1                   2
+         ------------------|-------------------
+         |+---+---+---+---+|+---+---+---+---+
+         |+   +   +   +   +|+   +   +   +   +
+         |+---+---+---+---+|+---+---+---+---+
+         |+   +   +   +   +|+   +   +   +   +
+         |+---+---+---+---+|+---+---+---+---+
+         |+   +   +   +   +|+   +   +   +   +
+         |+---+---+---+---+|+---+---+---+---+
+         |+   +   +   +   +|+   +   +   +   +
+         |+---+---+---+---+|+---+---+---+---+
+         */
+      uint32_t x = mbIndex / (2 * m_sps.PicWidthInMbs);
+      uint32_t y = mbIndex % m_sps.PicWidthInMbs;
+      MbToSliceGroupMap[mbIndex] =
+          mapUnitToSliceGroupMap[x * m_sps.PicWidthInMbs + y];
+      /* 故，mapUnitToSliceGroupMap[6] 的值将被赋值给 MbToSliceGroupMap[10] */
+    }
   }
 
   return 0;
@@ -375,7 +396,7 @@ int SliceData::process_mb_skip_run(PictureBase &picture,
                                    int32_t &prevMbSkipped) {
   mb_skip_run = bs->readUE();
   prevMbSkipped = (mb_skip_run > 0);
-  for (int i = 0; i < mb_skip_run; i++) {
+  for (int i = 0; i < (int)mb_skip_run; i++) {
     /* 1. 计算当前宏块的位置 */
     updatesLocationOfCurrentMacroblock(picture, header->MbaffFrameFlag);
     picture.mb_cnt++;

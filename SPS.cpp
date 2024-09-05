@@ -122,7 +122,7 @@ void SPS::hrd_parameters(BitStream &bitStream) {
   cpb_size_value_minus1 = new uint32_t[cpb_cnt_minus1];
   cbr_flag = new bool[cpb_cnt_minus1];
 
-  for (int SchedSelIdx = 0; SchedSelIdx <= cpb_cnt_minus1; SchedSelIdx++) {
+  for (int SchedSelIdx = 0; SchedSelIdx <= (int)cpb_cnt_minus1; SchedSelIdx++) {
     bit_rate_value_minus1[SchedSelIdx] = bitStream.readUE();
     cpb_size_value_minus1[SchedSelIdx] = bitStream.readUE();
     cbr_flag[SchedSelIdx] = bitStream.readU1();
@@ -220,7 +220,7 @@ int SPS::extractParameters() {
       offset_for_ref_frame = new int32_t[num_ref_frames_in_pic_order_cnt_cycle];
     /* TODO YangJing [offset_for_ref_frame -> delete] <24-04-04 01:24:42> */
 
-    for (int i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++)
+    for (int i = 0; i < (int)num_ref_frames_in_pic_order_cnt_cycle; i++)
       offset_for_ref_frame[i] = bitStream.readSE();
   }
 

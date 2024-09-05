@@ -37,7 +37,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
     /* 16x16 */
     for (int i = 0; i < 256; i++)
       pcm_sample_luma[i] = bs.readUn(sps.BitDepthY);
-    for (int i = 0; i < 2 * sps.MbWidthC * sps.MbHeightC; i++)
+    for (int i = 0; i < 2 * (int)(sps.MbWidthC * sps.MbHeightC); i++)
       pcm_sample_chroma[i] = bs.readUn(sps.BitDepthC);
   } else {
     int32_t transform_size_8x8_flag_temp = 0;

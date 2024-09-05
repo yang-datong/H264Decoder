@@ -44,7 +44,7 @@ void scaling_list(BitStream &bs, uint32_t *scalingList,
   int32_t nextScale = 8;
   CH264Golomb gb;
 
-  for (int j = 0; j < sizeOfScalingList; j++) {
+  for (int j = 0; j < (int)sizeOfScalingList; j++) {
     if (nextScale != 0) {
       int delta_scale = gb.get_se_golomb(bs); // delta_scale 0 | 1 se(v)
       nextScale = (lastScale + delta_scale + 256) % 256;
