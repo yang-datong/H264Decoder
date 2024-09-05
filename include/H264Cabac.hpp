@@ -88,9 +88,8 @@ class CH264Cabac {
                         int32_t &synElVal);
   int decode_mb_qp_delta(int32_t &synElVal);
   int decode_intra_chroma_pred_mode(int32_t &synElVal);
-  int decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
-      int32_t &synElVal);
-  int decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
+  int decode_prev_intra4x4_or_intra8x8_pred_mode_flag(int32_t &synElVal);
+  int decode_rem_intra4x4_or_intra8x8_pred_mode(
       int32_t &synElVal);
   int decode_coded_block_pattern(int32_t &synElVal);
 

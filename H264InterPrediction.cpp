@@ -779,7 +779,7 @@ int PictureBase::derivation_motion_vector_components_and_reference_indices(
     int32_t SubMbPartHeight = 0;
     H264_MB_PART_PRED_MODE mb_pred_mode = MB_PRED_MODE_NA;
 
-    ret = MacroBlock::MbPartPredMode2(
+    ret = MacroBlock::MbPartPredMode(
         m_mbs[CurrMbAddr].m_name_of_mb_type, mbPartIdx,
         m_mbs[CurrMbAddr].transform_size_8x8_flag, mb_pred_mode);
     RETURN_IF_FAILED(ret != 0, ret);

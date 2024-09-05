@@ -102,6 +102,8 @@ typedef struct _MY_BITMAP_ {
   void *bmBits;
 } MY_BITMAP;
 
+const int MIN_MB_TYPE_FOR_I_SLICE = 1, MAX_MB_TYPE_FOR_I_SLICE = 25;
+
 typedef enum _H264_MB_TYPE_ {
   MB_TYPE_NA,
 

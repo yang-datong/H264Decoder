@@ -10,6 +10,7 @@
 #include <cstdint>
 
 // 7.3.5 Macroblock layer syntax -> page 57
+/* 负责解码一个宏块（这里的宏块指的是16x16 的矩阵块，并不是真的“一个”宏块）的各种信息，包括宏块类型、预测模式、残差数据 */
 int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
                                  const SliceData &slice_data,
                                  CH264Cabac &cabac) {
@@ -31,6 +32,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
   /* ------------------  End ------------------ */
   process_decode_mb_type(picture, header, header.slice_type);
 
+  /* 1. 如果宏块类型是 I_PCM，则直接从比特流中读取未压缩的 PCM 样本数据 */
   if (m_mb_type_fixed == I_PCM) {
     while (!bs.byte_aligned())
       pcm_alignment_zero_bit = bs.readUn(1);
@@ -39,9 +41,10 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
       pcm_sample_luma[i] = bs.readUn(sps.BitDepthY);
     for (int i = 0; i < 2 * (int)(sps.MbWidthC * sps.MbHeightC); i++)
       pcm_sample_chroma[i] = bs.readUn(sps.BitDepthC);
+
+    /* 2. 如果宏块类型不是 I_PCM，则根据宏块类型和预测模式进行子宏块预测或宏块预测 */
   } else {
     int32_t transform_size_8x8_flag_temp = 0;
-
     bool noSubMbPartSizeLessThan8x8Flag = 1;
     /* 根据宏块的类型和预测模式来决定如何处理宏块的预测信息 */
     // 对于I帧而言，首次进入时即为I_NxN*/
@@ -73,6 +76,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
         process_transform_size_8x8_flag(transform_size_8x8_flag_temp);
     }
 
+    /* 3. 如果宏块有残差数据（即 CodedBlockPatternLuma 或 CodedBlockPatternChroma 不为 0），则调用 residual 函数解码残差数据 */
     if (CodedBlockPatternLuma > 0 || CodedBlockPatternChroma > 0 ||
         m_mb_pred_mode == Intra_16x16) {
       process_mb_qp_delta();
@@ -80,7 +84,7 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
     }
   }
 
-  /* 计算当前宏块的量化参数（QP）。量化参数影响解码后的图像质量和压缩率*/
+  /* 4. 根据解码的量化参数增量（mb_qp_delta），更新当前宏块的量化参数 QPY。*/
   /* 7.4.5 Macroblock layer semantics , page 105 */
   /* mb_qp_delta可以改变宏块层中QPY的值。 mb_qp_delta 的解码值应在 -( 26 + QpBdOffsetY / 2) 至 +( 25 + QpBdOffsetY / 2 ) 的范围内，包括端值。当 mb_qp_delta 对于任何宏块（包括 P_Skip 和 B_Skip 宏块类型）不存在时，应推断其等于 0。如果 mb_qp_delta 超出了范围，它会被修正到合法范围内。 */
   if (mb_qp_delta < (int32_t)(-(26 + (int32_t)sps.QpBdOffsetY / 2)) ||
@@ -192,79 +196,105 @@ int MacroBlock::macroblock_mb_skip(PictureBase &picture,
 }
 
 // 7.3.5.1 Macroblock prediction syntax
+/* 根据宏块的预测模式（m_mb_pred_mode），处理亮度和色度的预测模式以及运动矢量差（MVD）的计算 
+ * 此处的预测模式包括帧内预测（Intra）和帧间预测（Inter）*/
 int MacroBlock::mb_pred(PictureBase &picture, const SliceData &slice_data) {
   /* ------------------ 设置别名 ------------------ */
-  SliceHeader &header = picture.m_slice.slice_header;
+  const SliceHeader &header = picture.m_slice.slice_header;
   SPS &sps = picture.m_slice.m_sps;
   /* ------------------  End ------------------ */
-  int ret;
+
+  /* --------------------------这一部分属于帧间预测-------------------------- */
+  /* 获取当前宏块所使用的预测模式 */
   if (m_mb_pred_mode == Intra_4x4 || m_mb_pred_mode == Intra_8x8 ||
       m_mb_pred_mode == Intra_16x16) {
+
+    /* 宏块的大小通常是 16x16 像素。对于 Intra_4x4 预测模式，宏块被划分为 16 个 4x4 的亮度块（luma blocks），每个 4x4 块独立进行预测。这种模式允许更细粒度的预测，从而更好地适应图像中的局部变化。 */
+
+    // NOTE: 这里有一个规则：每个块（假如是4x4) 可以选择一个预测模式（总共有 9 种可能的模式）。然而，相邻的 4x4 块通常会选择相同或相似的预测模式。为了减少冗余信息，H.264 标准引入了一个标志位 prev_intra4x4_pred_mode_flag，用于指示当前块是否使用了与前一个块相同的预测模式。通过这种方式，编码器可以在相邻块使用相同预测模式时节省比特数，因为不需要为每个块单独编码预测模式。只有在预测模式发生变化时，才需要额外编码新的模式，从而减少了整体的编码开销。
+
+    /* 1. 对于 Intra_4x4 模式，遍历 16 个 4x4 的亮度块: */
     if (m_mb_pred_mode == Intra_4x4) {
       for (int luma4x4BlkIdx = 0; luma4x4BlkIdx < 16; luma4x4BlkIdx++) {
+        //解码每个块的前一个 Intra 4x4 预测模式标志
         process_prev_intra4x4_pred_mode_flag(luma4x4BlkIdx);
         if (!prev_intra4x4_pred_mode_flag[luma4x4BlkIdx])
+          //当前一个块不存在预测模式时，解码剩余的 Intra 4x4 预测模式
           process_rem_intra4x4_pred_mode(luma4x4BlkIdx);
       }
     }
+
+    /* 2. 对于 Intra_8x8 模式，遍历 4 个 8x8 的亮度块: */
     if (m_mb_pred_mode == Intra_8x8) {
       for (int luma8x8BlkIdx = 0; luma8x8BlkIdx < 4; luma8x8BlkIdx++) {
+        //解码每个块的前一个 Intra 8x8 预测模式标志
         process_prev_intra8x8_pred_mode_flag(luma8x8BlkIdx);
         if (!prev_intra8x8_pred_mode_flag[luma8x8BlkIdx])
+          //当前一个块不存在预测模式时，解码剩余的 Intra 8x8 预测模式
           process_rem_intra8x8_pred_mode(luma8x8BlkIdx);
       }
     }
 
+    /* 如果色度阵列类型为 YUV420 或 YUV422，则处理色度的 Intra 预测模式 */
     if (sps.ChromaArrayType == 1 || sps.ChromaArrayType == 2)
       process_intra_chroma_pred_mode();
 
+    /* 当前预测模式不为直接模式(通过周围块的信息来推导运动矢量) */
   } else if (m_mb_pred_mode != Direct) {
+    /* --------------------------这一部分属于帧间预测-------------------------- */
+    int ret;
     H264_MB_PART_PRED_MODE mb_pred_mode = MB_PRED_MODE_NA;
+    for (int mbPartIdx = 0; mbPartIdx < m_NumMbPart; mbPartIdx++) {
+      ret = MbPartPredMode(m_name_of_mb_type, mbPartIdx,
+                           transform_size_8x8_flag, mb_pred_mode);
+      RET(ret);
 
-    int32_t NumMbPart = m_NumMbPart;
-    for (int mbPartIdx = 0; mbPartIdx < NumMbPart; mbPartIdx++) {
-      ret = MbPartPredMode2(m_name_of_mb_type, mbPartIdx,
-                            transform_size_8x8_flag, mb_pred_mode);
-      RETURN_IF_FAILED(ret != 0, ret);
-
-      if ((header.num_ref_idx_l0_active_minus1 > 0 ||
-           slice_data.mb_field_decoding_flag != header.field_pic_flag) &&
+      /* (前参考）参考帧列表 0 中有多于一个参考帧可供选择 || 当前宏块的场解码模式与整个图片的场模式不同(这种情况下需要特别处理参考帧索引) 
+       * 并且它使用的是参考帧列表 0（非RefPicList1，即RefPicList0）进行预测*/
+      if ((header.num_ref_idx_l0_active_minus1 + 1 > 1 ||
+           mb_field_decoding_flag != field_pic_flag) &&
           mb_pred_mode != Pred_L1)
-        process_ref_idx_l0(mbPartIdx, picture.m_RefPicList0Length,
-                           slice_data.mb_field_decoding_flag);
+        /* 根据预测模式处理参考索引*/
+        process_ref_idx_l0(mbPartIdx, header.num_ref_idx_l0_active_minus1);
     }
 
-    for (int mbPartIdx = 0; mbPartIdx < NumMbPart; mbPartIdx++) {
-      ret = MbPartPredMode2(m_name_of_mb_type, mbPartIdx,
-                            transform_size_8x8_flag, mb_pred_mode);
-      RETURN_IF_FAILED(ret != 0, ret);
+    for (int mbPartIdx = 0; mbPartIdx < m_NumMbPart; mbPartIdx++) {
+      ret = MbPartPredMode(m_name_of_mb_type, mbPartIdx,
+                           transform_size_8x8_flag, mb_pred_mode);
+      RET(ret);
 
-      if ((header.num_ref_idx_l1_active_minus1 > 0 ||
-           slice_data.mb_field_decoding_flag != header.field_pic_flag) &&
+      /* (后参考）参考帧列表 1 中有多于一个参考帧可供选择 || 当前宏块的场解码模式与整个图片的场模式不同(这种情况下需要特别处理参考帧索引) 
+       * 并且它使用的是参考帧列表 1（非RefPicList0，即RefPicList1）进行预测*/
+      if ((header.num_ref_idx_l1_active_minus1 + 1 > 1 ||
+           mb_field_decoding_flag != field_pic_flag) &&
           mb_pred_mode != Pred_L0)
-        process_ref_idx_l1(mbPartIdx, picture.m_RefPicList1Length,
-                           slice_data.mb_field_decoding_flag);
+        /* 根据预测模式处理参考索引*/
+        process_ref_idx_l1(mbPartIdx, header.num_ref_idx_l1_active_minus1);
     }
 
-    for (int mbPartIdx = 0; mbPartIdx < NumMbPart; mbPartIdx++) {
-      ret = MbPartPredMode2(m_name_of_mb_type, mbPartIdx,
-                            transform_size_8x8_flag, mb_pred_mode);
+    //NOTE: 预测模式可以是 Pred_L0、Pred_L1 或 BiPred，分别表示使用参考帧列表0、参考帧列表1或双向预测
+
+    for (int mbPartIdx = 0; mbPartIdx < m_NumMbPart; mbPartIdx++) {
+      ret = MbPartPredMode(m_name_of_mb_type, mbPartIdx,
+                           transform_size_8x8_flag, mb_pred_mode);
       if (mb_pred_mode != Pred_L1) {
+        /* 根据预测模式处理运动矢量差，运动矢量差是当前宏块部分的运动矢量与预测运动矢量之间的差值 */
         for (int compIdx = 0; compIdx < 2; compIdx++)
+          /* compIdx 遍历两个分量（通常是水平方向和垂直方向），分别处理这两个方向上的运动矢量差。 */
           process_mvd_l0(mbPartIdx, compIdx);
       }
     }
 
-    for (int mbPartIdx = 0; mbPartIdx < NumMbPart; mbPartIdx++) {
-      ret = MbPartPredMode2(m_name_of_mb_type, mbPartIdx,
-                            transform_size_8x8_flag, mb_pred_mode);
+    for (int mbPartIdx = 0; mbPartIdx < m_NumMbPart; mbPartIdx++) {
+      ret = MbPartPredMode(m_name_of_mb_type, mbPartIdx,
+                           transform_size_8x8_flag, mb_pred_mode);
       if (mb_pred_mode != Pred_L0) {
+        /* 同上 */
         for (int compIdx = 0; compIdx < 2; compIdx++)
           process_mvd_l1(mbPartIdx, compIdx);
       }
     }
   }
-
   return 0;
 }
 
@@ -272,28 +302,19 @@ int MacroBlock::mb_pred(PictureBase &picture, const SliceData &slice_data) {
  * Page 58/80/812
  * 7.3.5.2 Sub-macroblock prediction syntax
  */
+/* TODO YangJing  <24-09-06 02:53:39> */
 int MacroBlock::sub_mb_pred(PictureBase &picture, const SliceData &slice_data) {
   int ret = 0;
-  int32_t mbPartIdx = 0;
-  int32_t subMbPartIdx = 0;
-  int32_t compIdx = 0;
-
-  SliceHeader &slice_header = picture.m_slice.slice_header;
-
-  int is_ae =
-      picture.m_slice.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
+  const SliceHeader &header = picture.m_slice.slice_header;
+  const int is_ae = picture.m_slice.m_pps.entropy_coding_mode_flag;
 
   //--------------------------
-  for (mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
-    if (is_ae) // ae(v) 表示CABAC编码
-    {
-      ret =
-          _cabac->decode_sub_mb_type(sub_mb_type[mbPartIdx]); // 2 ue(v) | ae(v)
-      RETURN_IF_FAILED(ret != 0, ret);
-    } else // ue(v) 表示CAVLC编码
-    {
-      sub_mb_type[mbPartIdx] = _gb->get_ue_golomb(*_bs); // 2 ue(v) | ae(v)
-    }
+  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
+    if (is_ae)
+      ret = _cabac->decode_sub_mb_type(sub_mb_type[mbPartIdx]);
+    else
+      sub_mb_type[mbPartIdx] = _gb->get_ue_golomb(*_bs);
+    RET(ret);
 
     //--------------------------------------------------
     if (m_slice_type_fixed == SLICE_P && sub_mb_type[mbPartIdx] >= 0 &&
@@ -320,135 +341,98 @@ int MacroBlock::sub_mb_pred(PictureBase &picture, const SliceData &slice_data) {
           sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]].SubMbPartWidth;
       SubMbPartHeight[mbPartIdx] =
           sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]].SubMbPartHeight;
-    } else {
-      printf("m_slice_type=%d; m_slice_type_fixed=%d; sub_mb_type[%d]=%d;\n",
-             m_slice_type, m_slice_type_fixed, mbPartIdx,
-             sub_mb_type[mbPartIdx]);
-      return -1;
-    }
+    } else
+      RET(-1);
   }
 
-  for (mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
+  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
     //-----mb_type is one of 3=P_8x8, 4=P_8x8ref0, 22=B_8x8----------
-    if ((slice_header.num_ref_idx_l0_active_minus1 > 0 ||
-         slice_data.mb_field_decoding_flag != slice_header.field_pic_flag) &&
+    if ((header.num_ref_idx_l0_active_minus1 > 0 ||
+         mb_field_decoding_flag != field_pic_flag) &&
         m_name_of_mb_type != P_8x8ref0 &&
         m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
-        m_sub_mb_pred_mode[mbPartIdx] !=
-            Pred_L1) // SubMbPredMode(sub_mb_type[ mbPartIdx ]) != Pred_L1)
-    {
-      if (is_ae) // ae(v) 表示CABAC编码
-      {
+        m_sub_mb_pred_mode[mbPartIdx] != Pred_L1) {
+      if (is_ae) {
         int32_t ref_idx_flag = 0;
 
-        ret =
-            _cabac->decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
-                                      ref_idx_l0[mbPartIdx]); // 2 te(v) | ae(v)
-        RETURN_IF_FAILED(ret != 0, ret);
-      } else // ue(v) 表示CAVLC编码
-      {
+        ret = _cabac->decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
+                                        ref_idx_l0[mbPartIdx]);
+        RET(ret);
+      } else {
         int range = picture.m_RefPicList0Length - 1;
 
-        if (slice_data.mb_field_decoding_flag ==
-            1) // 注意：此处是个坑，T-REC-H.264-201704-S!!PDF-E.pdf
-               // 文档中并未明确写出来
-        {
+        if (mb_field_decoding_flag == 1) {
           range = picture.m_RefPicList0Length * 2 - 1;
         }
 
-        ref_idx_l0[mbPartIdx] =
-            _gb->get_te_golomb(*_bs, range); // 2 te(v) | ae(v)
+        ref_idx_l0[mbPartIdx] = _gb->get_te_golomb(*_bs, range);
       }
     }
   }
 
-  for (mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
+  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
     //-----mb_type is one of 3=P_8x8, 4=P_8x8ref0, 22=B_8x8----------
-    if ((slice_header.num_ref_idx_l1_active_minus1 > 0 ||
-         slice_data.mb_field_decoding_flag != slice_header.field_pic_flag) &&
+    if ((header.num_ref_idx_l1_active_minus1 > 0 ||
+         mb_field_decoding_flag != field_pic_flag) &&
         m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
-        m_sub_mb_pred_mode[mbPartIdx] !=
-            Pred_L0) // SubMbPredMode(sub_mb_type[ mbPartIdx ]) != Pred_L0)
-    {
-      if (is_ae) // ae(v) 表示CABAC编码
-      {
+        m_sub_mb_pred_mode[mbPartIdx] != Pred_L0) {
+      if (is_ae) {
         int32_t ref_idx_flag = 1;
 
-        ret =
-            _cabac->decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
-                                      ref_idx_l1[mbPartIdx]); // 2 te(v) | ae(v)
-        RETURN_IF_FAILED(ret != 0, ret);
-      } else // ue(v) 表示CAVLC编码
-      {
+        ret = _cabac->decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
+                                        ref_idx_l1[mbPartIdx]);
+        RET(ret);
+      } else {
         int range = picture.m_RefPicList1Length - 1;
 
-        if (slice_data.mb_field_decoding_flag ==
-            1) // 注意：此处是个坑，T-REC-H.264-201704-S!!PDF-E.pdf
-               // 文档中并未明确写出来
-        {
+        if (mb_field_decoding_flag == 1) {
           range = picture.m_RefPicList1Length * 2 - 1;
         }
 
-        ref_idx_l1[mbPartIdx] =
-            _gb->get_te_golomb(*_bs, range); // 2 te(v) | ae(v)
+        ref_idx_l1[mbPartIdx] = _gb->get_te_golomb(*_bs, range);
       }
     }
   }
 
-  for (mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
+  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
     //-----mb_type is one of 3=P_8x8, 4=P_8x8ref0, 22=B_8x8----------
     if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
-        m_sub_mb_pred_mode[mbPartIdx] !=
-            Pred_L1) // SubMbPredMode(sub_mb_type[ mbPartIdx ]) != Pred_L1)
-    {
-      // for (subMbPartIdx = 0; subMbPartIdx < NumSubMbPart(sub_mb_type[
-      // mbPartIdx ]); subMbPartIdx++)
-      for (subMbPartIdx = 0; subMbPartIdx < NumSubMbPart[mbPartIdx];
+        m_sub_mb_pred_mode[mbPartIdx] != Pred_L1) {
+      for (int subMbPartIdx = 0; subMbPartIdx < NumSubMbPart[mbPartIdx];
            subMbPartIdx++) {
-        for (compIdx = 0; compIdx < 2; compIdx++) {
-          if (is_ae) // ae(v) 表示CABAC编码
-          {
+        for (int compIdx = 0; compIdx < 2; compIdx++) {
+          if (is_ae) {
             int32_t mvd_flag = compIdx;
             int32_t isChroma = 0;
 
             ret = _cabac->decode_mvd_lX(
                 mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
-                mvd_l0[mbPartIdx][subMbPartIdx][compIdx]); // 2 ue(v) | ae(v)
+                mvd_l0[mbPartIdx][subMbPartIdx][compIdx]);
             RETURN_IF_FAILED(ret != 0, ret);
-          } else // ue(v) 表示CAVLC编码
-          {
-            mvd_l0[mbPartIdx][subMbPartIdx][compIdx] =
-                _gb->get_se_golomb(*_bs); // 2 se(v) | ae(v)
-          }
+          } else
+            mvd_l0[mbPartIdx][subMbPartIdx][compIdx] = _gb->get_se_golomb(*_bs);
         }
       }
     }
   }
 
-  for (mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
+  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
     //-----mb_type is one of 3=P_8x8, 4=P_8x8ref0, 22=B_8x8----------
     if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
-        m_sub_mb_pred_mode[mbPartIdx] !=
-            Pred_L0) // SubMbPredMode(sub_mb_type[ mbPartIdx ]) != Pred_L0)
-    {
-      // for (subMbPartIdx = 0; subMbPartIdx < NumSubMbPart(sub_mb_type[
-      // mbPartIdx ]); subMbPartIdx++)
-      for (subMbPartIdx = 0; subMbPartIdx < NumSubMbPart[mbPartIdx];
+        m_sub_mb_pred_mode[mbPartIdx] != Pred_L0) {
+      for (int subMbPartIdx = 0; subMbPartIdx < NumSubMbPart[mbPartIdx];
            subMbPartIdx++) {
-        for (compIdx = 0; compIdx < 2; compIdx++) {
-          if (is_ae) // ae(v) 表示CABAC编码
-          {
+        for (int compIdx = 0; compIdx < 2; compIdx++) {
+          if (is_ae) {
             int32_t mvd_flag = 2 + compIdx;
             int32_t isChroma = 0;
 
             ret = _cabac->decode_mvd_lX(
                 mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
-                mvd_l1[mbPartIdx][subMbPartIdx][compIdx]); // 2 ue(v) | ae(v)
+                mvd_l1[mbPartIdx][subMbPartIdx][compIdx]);
             RETURN_IF_FAILED(ret != 0, ret);
-          } else // ue(v) 表示CAVLC编码
-          {
-            mvd_l1[mbPartIdx][subMbPartIdx][compIdx] =
-                _gb->get_se_golomb(*_bs); // 2 se(v) | ae(v)
+          } else {
+            mvd_l1[mbPartIdx][subMbPartIdx][compIdx] = _gb->get_se_golomb(*_bs);
           }
         }
       }
@@ -887,7 +871,8 @@ int MacroBlock::MbPartPredMode(
 
   //Table 7-11 – Macroblock types for I slices
   if ((slice_type % 5) == SLICE_I) {
-    if (_mb_type == 0) {
+    const int I_NxN = 0;
+    if (_mb_type == I_NxN) {
       if (transform_size_8x8_flag == 0) {
         name_of_mb_type = mb_type_I_slices_define[0].name_of_mb_type;
         mb_pred_mode = mb_type_I_slices_define[0].MbPartPredMode;
@@ -895,7 +880,8 @@ int MacroBlock::MbPartPredMode(
         name_of_mb_type = mb_type_I_slices_define[1].name_of_mb_type;
         mb_pred_mode = mb_type_I_slices_define[1].MbPartPredMode;
       }
-    } else if (_mb_type >= 1 && _mb_type <= 25) {
+    } else if (_mb_type >= MIN_MB_TYPE_FOR_I_SLICE &&
+               _mb_type <= MAX_MB_TYPE_FOR_I_SLICE) {
       name_of_mb_type = mb_type_I_slices_define[_mb_type + 1].name_of_mb_type;
       CodedBlockPatternChroma =
           mb_type_I_slices_define[_mb_type + 1].CodedBlockPatternChroma;
@@ -959,111 +945,93 @@ int MacroBlock::MbPartPredMode(
   return 0;
 }
 
-int MacroBlock::MbPartPredMode2(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
-                                int32_t transform_size_8x8_flag,
-                                H264_MB_PART_PRED_MODE &mb_pred_mode) {
-  int ret = 0;
-
+/* Table 7-11 – Macroblock types for I slices
+ * Table 7-12 – Macroblock type with value 0 for SI slices
+ * Table 7-13 – Macroblock type values 0 to 4 for P and SP slices
+ * Table 7-14 – Macroblock type values 0 to 22 for B slices */
+int MacroBlock::MbPartPredMode(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
+                               int32_t transform_size_8x8_flag,
+                               H264_MB_PART_PRED_MODE &mb_pred_mode) {
+  //Table 7-11 – Macroblock types for I slices
   if (name_of_mb_type == I_NxN) {
     if (mbPartIdx == 0) {
-      if (transform_size_8x8_flag == 0) {
+      if (transform_size_8x8_flag == 0)
         mb_pred_mode = mb_type_I_slices_define[0].MbPartPredMode;
-      } else // if (transform_size_8x8_flag == 1)
-      {
+      else
         mb_pred_mode = mb_type_I_slices_define[1].MbPartPredMode;
-      }
-    } else {
-      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
-      return -1;
-    }
-  } else if (name_of_mb_type >= I_16x16_0_0_0 &&
-             name_of_mb_type <= I_16x16_3_2_1) {
-    if (mbPartIdx == 0) {
+    } else
+      RET(-1);
+
+  } else if (name_of_mb_type >= MIN_MB_TYPE_FOR_I_SLICE &&
+             name_of_mb_type <= MAX_MB_TYPE_FOR_I_SLICE) {
+    if (mbPartIdx == 0)
       mb_pred_mode =
-          mb_type_I_slices_define[mbPartIdx - I_16x16_0_0_0].MbPartPredMode;
-    } else {
-      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
-      return -1;
-    }
-  }
+          mb_type_I_slices_define[mbPartIdx - MIN_MB_TYPE_FOR_I_SLICE]
+              .MbPartPredMode;
+    else
+      RET(-1);
 
-  else if (name_of_mb_type == SI) {
-    if (mbPartIdx == 0) {
+    //Table 7-12 – Macroblock type with value 0 for SI slices
+  } else if (name_of_mb_type == SI) {
+    if (mbPartIdx == 0)
       mb_pred_mode = mb_type_SI_slices_define[0].MbPartPredMode;
-    } else {
-      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
-      return -1;
-    }
-  }
+    else
+      RET(-1);
 
-  else if (name_of_mb_type == P_L0_16x16 || name_of_mb_type == P_Skip) {
-    if (mbPartIdx == 0) {
+    //Table 7-13 – Macroblock type values 0 to 4 for P and SP slices
+  } else if (name_of_mb_type == P_L0_16x16 || name_of_mb_type == P_Skip) {
+    if (mbPartIdx == 0)
       mb_pred_mode = Pred_L0;
-    } else {
-      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
-      return -1;
-    }
+    else
+      RET(-1);
   } else if (name_of_mb_type >= P_L0_L0_16x8 &&
              name_of_mb_type <= P_L0_L0_8x16) {
-    if (mbPartIdx == 0) {
+    if (mbPartIdx == 0)
       mb_pred_mode = mb_type_P_SP_slices_define[name_of_mb_type - P_L0_16x16]
                          .MbPartPredMode0;
-    } else if (mbPartIdx == 1) {
+    else if (mbPartIdx == 1)
       mb_pred_mode = mb_type_P_SP_slices_define[name_of_mb_type - P_L0_16x16]
                          .MbPartPredMode1;
-    } else {
-      printf("mbPartIdx=%d; Must be in [0..1]\n", mbPartIdx);
-      return -1;
-    }
+    else
+      RET(-1);
   } else if (name_of_mb_type >= P_8x8 && name_of_mb_type <= P_8x8ref0) {
-    if (mbPartIdx >= 0 && mbPartIdx <= 3) {
+    if (mbPartIdx >= 0 && mbPartIdx <= 3)
       mb_pred_mode = Pred_L0;
-    } else {
-      printf("mbPartIdx=%d; Must be in [0..3]\n", mbPartIdx);
-      return -1;
-    }
+    else
+      RET(-1);
   }
 
+  //Table 7-14 – Macroblock type values 0 to 22 for B slices
   else if (name_of_mb_type == B_L0_16x16) {
-    if (mbPartIdx == 0) {
+    if (mbPartIdx == 0)
       mb_pred_mode = Pred_L0;
-    } else {
-      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
-      return -1;
-    }
+    else
+      RET(-1);
   } else if (name_of_mb_type == B_L1_16x16) {
-    if (mbPartIdx == 0) {
+    if (mbPartIdx == 0)
       mb_pred_mode = Pred_L1;
-    } else {
-      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
-      return -1;
-    }
+    else
+      RET(-1);
   } else if (name_of_mb_type == B_Bi_16x16) {
-    if (mbPartIdx == 0) {
+    if (mbPartIdx == 0)
       mb_pred_mode = BiPred;
-    } else {
-      printf("mbPartIdx=%d; Must be in [0..0]\n", mbPartIdx);
-      return -1;
-    }
+    else
+      RET(-1);
   } else if (name_of_mb_type >= B_Direct_16x16 && name_of_mb_type <= B_Skip) {
-    if (mbPartIdx == 0) {
+    if (mbPartIdx == 0)
       mb_pred_mode = mb_type_B_slices_define[name_of_mb_type - B_Direct_16x16]
                          .MbPartPredMode0;
-    } else if (mbPartIdx == 1) {
+    else if (mbPartIdx == 1)
       mb_pred_mode = mb_type_B_slices_define[name_of_mb_type - B_Direct_16x16]
                          .MbPartPredMode1;
-    } else if (mbPartIdx == 2 || mbPartIdx == 3) {
+    else if (mbPartIdx == 2 || mbPartIdx == 3)
       mb_pred_mode = MB_PRED_MODE_NA;
-    } else {
-      printf("mbPartIdx=%d; Must be in [0..3]\n", mbPartIdx);
-      return -1;
-    }
-  } else {
-    printf("Invaild value: name_of_mb_type=%d;\n", name_of_mb_type);
-    return -1;
-  }
+    else
+      RET(-1);
+  } else
+    RET(-1);
 
-  return ret;
+  return 0;
 }
 
 int MacroBlock::MbPartPredMode() {
@@ -1193,193 +1161,176 @@ int MacroBlock::process_decode_mb_type(PictureBase &picture,
       header.MbaffFrameFlag, CurrMbAddr, mb_field_decoding_flag,
       picture.m_mbs[CurrMbAddr].m_mb_position_x,
       picture.m_mbs[CurrMbAddr].m_mb_position_y);
-  RETURN_IF_FAILED(ret != 0, ret);
+  RET(ret);
 
   if (_is_cabac)
-    // ae(v) 表示CABAC编码
     ret = _cabac->decode_mb_type(mb_type);
   else
-    // ue(v) 表示CAVLC编码
     mb_type = _gb->get_ue_golomb(*_bs);
-
-  RETURN_IF_FAILED(ret != 0, ret);
+  RET(ret);
 
   ret = fix_mb_type(slice_type, mb_type, m_slice_type_fixed,
                     m_mb_type_fixed); // 需要立即修正mb_type的值
-  RETURN_IF_FAILED(ret != 0, ret);
+  RET(ret);
 
   // 因CABAC会用到MbPartWidth/MbPartHeight信息，所以需要尽可能提前设置相关值
   ret = MbPartPredMode();
-  RETURN_IF_FAILED(ret != 0, ret);
+  RET(ret);
 
   ret = MbPartPredMode(m_slice_type_fixed, transform_size_8x8_flag,
                        m_mb_type_fixed, 0, m_NumMbPart, CodedBlockPatternChroma,
                        CodedBlockPatternLuma, Intra16x16PredMode,
                        m_name_of_mb_type, m_mb_pred_mode);
-  RETURN_IF_FAILED(ret != 0, ret);
+  RET(ret);
   return 0;
 }
 
-int MacroBlock::process_transform_size_8x8_flag(
-    int32_t &transform_size_8x8_flag_temp) {
+/* 在解码过程中是否使用 8x8 的变换块大小，而不是默认的 4x4 变换块大小 */
+int MacroBlock::process_transform_size_8x8_flag(int32_t &is_8x8_flag) {
+  int ret = 0;
+  if (_is_cabac)
+    ret = _cabac->decode_transform_size_8x8_flag(is_8x8_flag);
+  else
+    is_8x8_flag = _bs->readUn(1);
+  RET(ret);
 
-  int ret;
-  if (_is_cabac) {
-    ret = _cabac->decode_transform_size_8x8_flag(transform_size_8x8_flag_temp);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else
-    transform_size_8x8_flag_temp = _bs->readUn(1);
-
-  if (transform_size_8x8_flag_temp != transform_size_8x8_flag) {
-    transform_size_8x8_flag = transform_size_8x8_flag_temp;
+  /* 如果解码得到的 transform_size_8x8_flag_temp 与当前的 transform_size_8x8_flag 不同，则更新 transform_size_8x8_flag */
+  if (is_8x8_flag != transform_size_8x8_flag) {
+    transform_size_8x8_flag = is_8x8_flag;
+    /* 重新计算宏块的预测模式 */
     ret = MbPartPredMode(m_slice_type_fixed, transform_size_8x8_flag,
                          m_mb_type_fixed, 0, m_NumMbPart,
                          CodedBlockPatternChroma, CodedBlockPatternLuma,
                          Intra16x16PredMode, m_name_of_mb_type, m_mb_pred_mode);
-    RETURN_IF_FAILED(ret != 0, ret);
+    RET(ret);
 
+    /* 如果当前片段是 I 片段 (SLICE_I)，并且宏块类型为 0（即 m_mb_type_fixed == 0），则根据 transform_size_8x8_flag 的值来设置 mb_type_I_slice */
     if ((m_slice_type_fixed % 5) == SLICE_I && m_mb_type_fixed == 0)
       mb_type_I_slice =
-          mb_type_I_slices_define[(transform_size_8x8_flag == 0) ? 0 : 1];
+          mb_type_I_slices_define[transform_size_8x8_flag ? 1 : 0];
   }
 
   return 0;
 }
 
 int MacroBlock::process_coded_block_pattern(const uint32_t ChromaArrayType) {
-  if (_is_cabac) {
-    int ret = _cabac->decode_coded_block_pattern(coded_block_pattern);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else
+  int ret = 0;
+  if (_is_cabac)
+    ret = _cabac->decode_coded_block_pattern(coded_block_pattern);
+  else
     coded_block_pattern =
         _gb->get_me_golomb(*_bs, ChromaArrayType, m_mb_pred_mode);
 
   CodedBlockPatternLuma = coded_block_pattern % 16;
   CodedBlockPatternChroma = coded_block_pattern / 16;
-  return 0;
+  return ret;
 }
 
 int MacroBlock::process_mb_qp_delta() {
-  int ret;
-  if (_is_cabac) {
+  int ret = 0;
+  if (_is_cabac)
     ret = _cabac->decode_mb_qp_delta(mb_qp_delta); // 2 se(v) | ae(v)
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else
+  else
     mb_qp_delta = _gb->get_se_golomb(*_bs); // 2 se(v) | ae(v)
-  return 0;
+  return ret;
 }
 
+/* 每个块的前一个 Intra 4x4 预测模式标志 */
 int MacroBlock::process_prev_intra4x4_pred_mode_flag(const int luma4x4BlkIdx) {
-  int ret;
-  if (_is_cabac) {
-    ret =
-        _cabac
-            ->decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
-                prev_intra4x4_pred_mode_flag[luma4x4BlkIdx]);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else
+  int ret = 0;
+  if (_is_cabac)
+    ret = _cabac->decode_prev_intra4x4_or_intra8x8_pred_mode_flag(
+        prev_intra4x4_pred_mode_flag[luma4x4BlkIdx]);
+  else
     prev_intra4x4_pred_mode_flag[luma4x4BlkIdx] = _bs->readUn(1);
-  return 0;
+  return ret;
 }
 
+/* 剩余的 Intra 4x4 预测模式 */
 int MacroBlock::process_rem_intra4x4_pred_mode(const int luma4x4BlkIdx) {
-  int ret;
-  if (_is_cabac) {
-    ret = _cabac->decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
+  int ret = 0;
+  if (_is_cabac)
+    ret = _cabac->decode_rem_intra4x4_or_intra8x8_pred_mode(
         rem_intra4x4_pred_mode[luma4x4BlkIdx]);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else
+  else
     rem_intra4x4_pred_mode[luma4x4BlkIdx] = _bs->readUn(3);
-  return 0;
+  return ret;
 }
 
 int MacroBlock::process_prev_intra8x8_pred_mode_flag(const int luma8x8BlkIdx) {
-
-  int ret;
-  if (_is_cabac) {
-    ret =
-        _cabac
-            ->decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
-                prev_intra8x8_pred_mode_flag[luma8x8BlkIdx]);
-
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else
+  int ret = 0;
+  if (_is_cabac)
+    ret = _cabac->decode_prev_intra4x4_or_intra8x8_pred_mode_flag(
+        prev_intra8x8_pred_mode_flag[luma8x8BlkIdx]);
+  else
     prev_intra8x8_pred_mode_flag[luma8x8BlkIdx] = _bs->readUn(1);
-
-  return 0;
+  return ret;
 }
+
 int MacroBlock::process_rem_intra8x8_pred_mode(const int luma8x8BlkIdx) {
-  int ret;
-  if (_is_cabac) {
-    ret = _cabac->decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
+  int ret = 0;
+  if (_is_cabac)
+    ret = _cabac->decode_rem_intra4x4_or_intra8x8_pred_mode(
         rem_intra8x8_pred_mode[luma8x8BlkIdx]);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else
+  else
     rem_intra8x8_pred_mode[luma8x8BlkIdx] = _bs->readUn(3);
-  return 0;
+  return ret;
 }
 
 int MacroBlock::process_intra_chroma_pred_mode() {
-  int ret;
-  if (_is_cabac) {
+  int ret = 0;
+  if (_is_cabac)
     ret = _cabac->decode_intra_chroma_pred_mode(intra_chroma_pred_mode);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else
+  else
     intra_chroma_pred_mode = _gb->get_ue_golomb(*_bs);
-  return 0;
+  return ret;
 }
 
-int MacroBlock::process_ref_idx_l0(const int mbPartIdx,
-                                   const int32_t RefPicList0Length,
-                                   const int32_t mb_field_decoding_flag) {
-  int ret;
-  if (_is_cabac) {
-    int32_t ref_idx_flag = 0;
-
+/* 指定要用于预测的参考图片的参考图片列表0中的索引。   */
+int MacroBlock::process_ref_idx_l0(int mbPartIdx,
+                                   uint32_t num_ref_idx_l0_active_minus1) {
+  int ret = 0;
+  const int32_t ref_idx_flag = 0;
+  if (_is_cabac)
     ret = _cabac->decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
                                     ref_idx_l0[mbPartIdx]);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else {
-    int range = RefPicList0Length - 1;
+  else {
+    /* ref_idx_l0[ mbPartIdx ]的范围、参考图片列表 0 中的索引以及用于预测的参考图片内的字段奇偶校验（如果适用）指定如下： 
+     * – 如果 MbaffFrameFlag 等于 0 或 mb_field_decoding_flag 为等于 0，ref_idx_l0[ mbPartIdx ] 的值应在 0 到 num_ref_idx_l0_active_minus1 的范围内（包括 0 和 num_ref_idx_l0_active_minus1）。  
+     * — 否则（MbaffFrameFlag 等于 1 并且 mb_field_decoding_flag 等于 1），ref_idx_l0[ mbPartIdx ] 的值应在 0 到 2 * num_ref_idx_l0_active_minus1 + 1 的范围内（含）。  当仅使用一张参考图片进行帧间预测时，ref_idx_l0[mbPartIdx]的值应被推断为等于0。 */
+    uint32_t size = 0;
+    if (MbaffFrameFlag == 0 || mb_field_decoding_flag == 0)
+      size = num_ref_idx_l0_active_minus1 - 1;
+    else
+      size = num_ref_idx_l0_active_minus1 * 2 - 1;
 
-    if (mb_field_decoding_flag == 1) {
-      // 注意：此处是个坑，T-REC-H.264-201704-S!!PDF-E.pdf
-      // 文档中并未明确写出来
-      range = RefPicList0Length * 2 - 1;
-    }
-
-    ref_idx_l0[mbPartIdx] = _gb->get_te_golomb(*_bs, range);
+    ref_idx_l0[mbPartIdx] = _gb->get_te_golomb(*_bs, size);
   }
-  return 0;
+  return ret;
 }
 
-int MacroBlock::process_ref_idx_l1(const int mbPartIdx,
-                                   const int32_t RefPicList1Length,
-                                   const int32_t mb_field_decoding_flag) {
-  int ret;
-  if (_is_cabac) {
-    int32_t ref_idx_flag = 1;
-
+int MacroBlock::process_ref_idx_l1(int mbPartIdx,
+                                   uint32_t num_ref_idx_l1_active_minus1) {
+  int ret = 0;
+  const int32_t ref_idx_flag = 1;
+  if (_is_cabac)
     ret = _cabac->decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
                                     ref_idx_l1[mbPartIdx]);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else {
-    int range = RefPicList1Length - 1;
+  else {
+    uint32_t size = 0;
+    if (MbaffFrameFlag == 0 || mb_field_decoding_flag == 0)
+      size = num_ref_idx_l1_active_minus1 - 1;
+    else
+      size = num_ref_idx_l1_active_minus1 * 2 - 1;
 
-    if (mb_field_decoding_flag == 1) {
-      // 注意：此处是个坑，T-REC-H.264-201704-S!!PDF-E.pdf
-      // 文档中并未明确写出来
-      range = RefPicList1Length * 2 - 1;
-    }
-
-    ref_idx_l1[mbPartIdx] = _gb->get_te_golomb(*_bs, range);
+    ref_idx_l1[mbPartIdx] = _gb->get_te_golomb(*_bs, size);
   }
 
-  return 0;
+  return ret;
 }
 
 int MacroBlock::process_mvd_l0(const int mbPartIdx, const int compIdx) {
-  int ret;
+  int ret = 0;
   if (_is_cabac) {
     int32_t mvd_flag = compIdx;
     int32_t subMbPartIdx = 0;
@@ -1390,22 +1341,20 @@ int MacroBlock::process_mvd_l0(const int mbPartIdx, const int compIdx) {
     RETURN_IF_FAILED(ret != 0, ret);
   } else
     mvd_l0[mbPartIdx][0][compIdx] = _gb->get_se_golomb(*_bs);
-  return 0;
+  return ret;
 }
 
 int MacroBlock::process_mvd_l1(const int mbPartIdx, const int compIdx) {
-  int ret;
+  int ret = 0;
   if (_is_cabac) {
     int32_t mvd_flag = 2 + compIdx;
     int32_t subMbPartIdx = 0;
     int32_t isChroma = 0;
-
     ret = _cabac->decode_mvd_lX(mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
                                 mvd_l1[mbPartIdx][0][compIdx]);
-    RETURN_IF_FAILED(ret != 0, ret);
   } else
     mvd_l1[mbPartIdx][0][compIdx] = _gb->get_se_golomb(*_bs);
-  return 0;
+  return ret;
 }
 
 /*

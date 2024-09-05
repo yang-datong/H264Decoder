@@ -643,7 +643,7 @@ int CH264Cabac::
     } else {
       H264_MB_PART_PRED_MODE mb_pred_mode = MB_PRED_MODE_NA;
 
-      ret = MacroBlock::MbPartPredMode2(
+      ret = MacroBlock::MbPartPredMode(
           picture.m_mbs[mbAddrN_A].m_name_of_mb_type, mbPartIdxN_A,
           picture.m_mbs[mbAddrN_A].transform_size_8x8_flag, mb_pred_mode);
       RETURN_IF_FAILED(ret != 0, ret);
@@ -720,7 +720,7 @@ int CH264Cabac::
     } else {
       H264_MB_PART_PRED_MODE mb_pred_mode = MB_PRED_MODE_NA;
 
-      ret = MacroBlock::MbPartPredMode2(
+      ret = MacroBlock::MbPartPredMode(
           picture.m_mbs[mbAddrN_B].m_name_of_mb_type, mbPartIdxN_B,
           picture.m_mbs[mbAddrN_B].transform_size_8x8_flag, mb_pred_mode);
       RETURN_IF_FAILED(ret != 0, ret);
@@ -857,7 +857,7 @@ int CH264Cabac::
   } else if (mbAddrN_A >= 0) {
     H264_MB_PART_PRED_MODE mb_pred_mode = MB_PRED_MODE_NA;
 
-    ret = MacroBlock::MbPartPredMode2(
+    ret = MacroBlock::MbPartPredMode(
         picture.m_mbs[mbAddrN_A].m_name_of_mb_type, mbPartIdxN_A,
         picture.m_mbs[mbAddrN_A].transform_size_8x8_flag, mb_pred_mode);
     RETURN_IF_FAILED(ret != 0, ret);
@@ -951,7 +951,7 @@ int CH264Cabac::
   } else if (mbAddrN_B >= 0) {
     H264_MB_PART_PRED_MODE mb_pred_mode = MB_PRED_MODE_NA;
 
-    ret = MacroBlock::MbPartPredMode2(
+    ret = MacroBlock::MbPartPredMode(
         picture.m_mbs[mbAddrN_B].m_name_of_mb_type, mbPartIdxN_B,
         picture.m_mbs[mbAddrN_B].transform_size_8x8_flag, mb_pred_mode);
     RETURN_IF_FAILED(ret != 0, ret);
@@ -3219,9 +3219,8 @@ int CH264Cabac::decode_intra_chroma_pred_mode(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::
-    decode_prev_intra4x4_pred_mode_flag_or_prev_intra8x8_pred_mode_flag(
-        int32_t &synElVal) {
+int CH264Cabac::decode_prev_intra4x4_or_intra8x8_pred_mode_flag(
+    int32_t &synElVal) {
   int ret = 0;
 
   // int32_t maxBinIdxCtx = 0;
@@ -3250,7 +3249,7 @@ int CH264Cabac::
   return 0;
 }
 
-int CH264Cabac::decode_rem_intra4x4_pred_mode_or_rem_intra8x8_pred_mode(
+int CH264Cabac::decode_rem_intra4x4_or_intra8x8_pred_mode(
     int32_t &synElVal) {
   int ret = 0;
 

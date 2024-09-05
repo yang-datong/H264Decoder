@@ -5,6 +5,7 @@
 #include "H264Cabac.hpp"
 #include "SliceHeader.hpp"
 #include "Type.hpp"
+#include <cstdint>
 
 class PictureBase;
 class SliceData;
@@ -233,10 +234,6 @@ class MacroBlock {
                                      int32_t &_MbPartWidth,
                                      int32_t &_MbPartHeight);
 
-  static int MbPartPredMode2(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
-                             int32_t transform_size_8x8_flag,
-                             H264_MB_PART_PRED_MODE &mb_pred_mode);
-
   static int SubMbPredMode(int32_t slice_type, int32_t sub_mb_type,
                            int32_t &NumSubMbPart,
                            H264_MB_PART_PRED_MODE &SubMbPredMode,
@@ -248,6 +245,14 @@ class MacroBlock {
   int fix_mb_type(const int32_t slice_type_raw, const int32_t mb_type_raw,
                   int32_t &slice_type_fixed, int32_t &mb_type_fixed);
 
+  int MbPartPredMode();
+
+ public:
+  static int MbPartPredMode(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
+                            int32_t transform_size_8x8_flag,
+                            H264_MB_PART_PRED_MODE &mb_pred_mode);
+
+ private:
   int MbPartPredMode(int32_t slice_type, int32_t transform_size_8x8_flag,
                      int32_t _mb_type, int32_t index, int32_t &NumMbPart,
                      int32_t &CodedBlockPatternChroma,
@@ -255,8 +260,6 @@ class MacroBlock {
                      int32_t &_Intra16x16PredMode,
                      H264_MB_TYPE &name_of_mb_type,
                      H264_MB_PART_PRED_MODE &mb_pred_mode);
-
-  int MbPartPredMode();
 
   void initFromSlice(const SliceHeader &header, const SliceData &slice_data);
   int process_decode_mb_type(PictureBase &picture, SliceHeader &header,
@@ -269,10 +272,8 @@ class MacroBlock {
   int process_prev_intra8x8_pred_mode_flag(const int luma8x8BlkIdx);
   int process_rem_intra8x8_pred_mode(const int luma8x8BlkIdx);
   int process_intra_chroma_pred_mode();
-  int process_ref_idx_l0(const int mbPartIdx, const int32_t RefPicList0Length,
-                         const int32_t mb_field_decoding_flag);
-  int process_ref_idx_l1(const int mbPartIdx, const int32_t RefPicList1Length,
-                         const int32_t mb_field_decoding_flag);
+  int process_ref_idx_l0(int mbPartIdx, uint32_t num_ref_idx_l0_active_minus1);
+  int process_ref_idx_l1(int mbPartIdx, uint32_t num_ref_idx_l1_active_minus1);
   int process_mvd_l0(const int mbPartIdx, const int compIdx);
   int process_mvd_l1(const int mbPartIdx, const int compIdx);
 
