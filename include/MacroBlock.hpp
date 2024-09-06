@@ -13,6 +13,8 @@ class SliceData;
 
 class MacroBlock {
  public:
+  MacroBlock(){};
+  ~MacroBlock();
   /* 宏块类型，指示宏块的编码模式（如帧内、帧间、PCM等），取决于切片类型 */
   /* 对于I Slice: mb_type取值区间为：[0-25]
     * 对于P Slice: mb_type取值区间为：[0-4] + inferred (P_Skip)
@@ -223,6 +225,8 @@ class MacroBlock {
   CH264Golomb *_gb = nullptr;
   CH264Cabac *_cabac = nullptr;
   BitStream *_bs = nullptr;
+  CH264ResidualBlockCavlc *_cavlc = nullptr;
+  PictureBase *_picture = nullptr;
 
  public:
   int macroblock_layer(BitStream &bs, PictureBase &picture,
@@ -246,14 +250,13 @@ class MacroBlock {
   int fix_mb_type(const int32_t slice_type_raw, const int32_t mb_type_raw,
                   int32_t &slice_type_fixed, int32_t &mb_type_fixed);
 
-  int MbPartPredMode();
-
  public:
   static int MbPartPredMode(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
                             int32_t transform_size_8x8_flag,
                             H264_MB_PART_PRED_MODE &mb_pred_mode);
 
  private:
+  int MbPartPredMode();
   int MbPartPredMode(int32_t slice_type, int32_t transform_size_8x8_flag,
                      int32_t _mb_type, int32_t index, int32_t &NumMbPart,
                      int32_t &CodedBlockPatternChroma,
@@ -264,8 +267,7 @@ class MacroBlock {
 
   void initFromSlice(const SliceHeader &header, const SliceData &slice_data);
 
-  int process_mb_type(PictureBase &picture, SliceHeader &header,
-                      const int32_t slice_type);
+  int process_mb_type(SliceHeader &header, const int32_t slice_type);
   //Sub MacroBlock
   int process_sub_mb_type(const int mbPartIdx);
 
@@ -284,27 +286,21 @@ class MacroBlock {
   int process_mvd_l1(const int mbPartIdx, const int compIdx,
                      int32_t subMbPartIdx = 0);
 
-  int residual_block_DC(PictureBase &picture, CH264ResidualBlockCavlc &cavlc,
-                        int iCbCr, int32_t NumC8x8, uint32_t BlkIdx);
-  int residual_block_AC(PictureBase &picture, CH264ResidualBlockCavlc &cavlc,
-                        int iCbCr, int i8x8, int i4x4, uint32_t BlkIdx,
-                        int32_t startIdx, int32_t endIdx);
-
   int NumSubMbPartFunc(int mbPartIdx);
 
-  int mb_pred(PictureBase &picture, const SliceData &slice_data);
-  int sub_mb_pred(PictureBase &picture, const SliceData &slice_data);
+  int mb_pred(const SliceData &slice_data);
+  int sub_mb_pred(const SliceData &slice_data);
   void set_current_mb_info(SUB_MB_TYPE_P_MBS_T type, int mbPartIdx);
   void set_current_mb_info(SUB_MB_TYPE_B_MBS_T type, int mbPartIdx);
 
-  int residual(PictureBase &picture, int32_t startIdx, int32_t endIdx);
-
-  int residual_luma(PictureBase &picture, int32_t (&i16x16DClevel)[16],
-                    int32_t (&i16x16AClevel)[16][16],
-                    int32_t (&level4x4)[16][16], int32_t (&level8x8)[4][64],
-                    int32_t startIdx, int32_t endIdx,
+  int residual(int32_t startIdx, int32_t endIdx);
+  int residual_luma(int32_t startIdx, int32_t endIdx,
                     MB_RESIDUAL_LEVEL mb_residual_level_dc,
                     MB_RESIDUAL_LEVEL mb_residual_level_ac);
+  int residual_block_DC(int32_t coeffLevel[], int32_t startIdx, int32_t endIdx,
+                        int32_t maxNumCoeff, int iCbCr, int32_t BlkIdx);
+  int residual_block_AC(int32_t coeffLevel[], int32_t startIdx, int32_t endIdx,
+                        int32_t maxNumCoeff, int iCbCr, int32_t BlkIdx);
 };
 
 #endif /* end of include guard: MACROBLOCK_HPP_FBNXLFQV */
