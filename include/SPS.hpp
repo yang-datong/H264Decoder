@@ -2,6 +2,7 @@
 #define SPS_CPP_F6QSULFM
 
 #include "Common.hpp"
+#include <cstdint>
 
 #define Extended_SAR 255
 
@@ -59,7 +60,7 @@ class SPS {
   uint32_t pic_height_in_map_units_minus1 = 0;
 
   uint32_t MaxFrameNum = 0;
-  /* 是否使用直接 8x8 推断 */
+  /* 指示在宏块的直接模式（主要是指B帧，如B_Direct) 下是否可以使用8x8变换 */
   bool direct_8x8_inference_flag = 0;
 
   /* 等于 1 指定 4:4:4 色度格式的三个颜色分量分别编码。 separate_colour_plane_flag 等于 0 指定颜色分量不单独编码。当separate_colour_plane_flag不存在时，应推断其等于0。当separate_colour_plane_flag等于1时，主编码图像由三个单独的分量组成，每个分量由一个颜色平面（Y、Cb或Cr）的编码样本组成。 ），每个都使用单色编码语法。在这种情况下，每个颜色平面都与特定的 color_plane_id 值相关联。 */
@@ -118,9 +119,9 @@ class SPS {
   /* 帧顺序计数循环中参考帧的数量 */
   uint32_t num_ref_frames_in_pic_order_cnt_cycle = 0;
 
-  int Chroma_Format = 0;
-  int SubWidthC = 0;
-  int SubHeightC = 0;
+  int32_t Chroma_Format = 0;
+  int32_t SubWidthC = 0;
+  int32_t SubHeightC = 0;
   uint32_t pic_parametter_set_id = 0;
   uint8_t colour_plane_id = 0;
   uint32_t frame_num = 0; // u(v)

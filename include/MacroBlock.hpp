@@ -7,6 +7,7 @@
 #include "Type.hpp"
 #include <cstdint>
 
+class CH264ResidualBlockCavlc;
 class PictureBase;
 class SliceData;
 
@@ -63,10 +64,10 @@ class MacroBlock {
   /* 子宏块类型，指示子宏块的编码模式 */
   int32_t sub_mb_type[4] = {0};
 
-  /* 色度编码块模式，指示哪些色度块包含非零系数 */
-  int32_t CodedBlockPatternChroma = -1;
-  /* 亮度编码块模式，指示哪些亮度块包含非零系数 */
+  /* 亮度编码块模式，指示哪些亮度块包含非零系数，亮度块模式的值范围是0到15 */
   int32_t CodedBlockPatternLuma = -1;
+  /* 色度编码块模式，指示哪些色度块包含非零系数，色度块模式的值范围是0到3 */
+  int32_t CodedBlockPatternChroma = -1;
 
   /* QPY: 当前宏块的亮度量化参数。
     QSY: 当前宏块的亮度量化参数（备用）。
@@ -262,8 +263,12 @@ class MacroBlock {
                      H264_MB_PART_PRED_MODE &mb_pred_mode);
 
   void initFromSlice(const SliceHeader &header, const SliceData &slice_data);
-  int process_decode_mb_type(PictureBase &picture, SliceHeader &header,
-                             const int32_t slice_type);
+
+  int process_mb_type(PictureBase &picture, SliceHeader &header,
+                      const int32_t slice_type);
+  //Sub MacroBlock
+  int process_sub_mb_type(const int mbPartIdx);
+
   int process_transform_size_8x8_flag(int32_t &transform_size_8x8_flag_temp);
   int process_coded_block_pattern(const uint32_t ChromaArrayType);
   int process_mb_qp_delta();
@@ -274,13 +279,23 @@ class MacroBlock {
   int process_intra_chroma_pred_mode();
   int process_ref_idx_l0(int mbPartIdx, uint32_t num_ref_idx_l0_active_minus1);
   int process_ref_idx_l1(int mbPartIdx, uint32_t num_ref_idx_l1_active_minus1);
-  int process_mvd_l0(const int mbPartIdx, const int compIdx);
-  int process_mvd_l1(const int mbPartIdx, const int compIdx);
+  int process_mvd_l0(const int mbPartIdx, const int compIdx,
+                     int32_t subMbPartIdx = 0);
+  int process_mvd_l1(const int mbPartIdx, const int compIdx,
+                     int32_t subMbPartIdx = 0);
+
+  int residual_block_DC(PictureBase &picture, CH264ResidualBlockCavlc &cavlc,
+                        int iCbCr, int32_t NumC8x8, uint32_t BlkIdx);
+  int residual_block_AC(PictureBase &picture, CH264ResidualBlockCavlc &cavlc,
+                        int iCbCr, int i8x8, int i4x4, uint32_t BlkIdx,
+                        int32_t startIdx, int32_t endIdx);
 
   int NumSubMbPartFunc(int mbPartIdx);
 
   int mb_pred(PictureBase &picture, const SliceData &slice_data);
   int sub_mb_pred(PictureBase &picture, const SliceData &slice_data);
+  void set_current_mb_info(SUB_MB_TYPE_P_MBS_T type, int mbPartIdx);
+  void set_current_mb_info(SUB_MB_TYPE_B_MBS_T type, int mbPartIdx);
 
   int residual(PictureBase &picture, int32_t startIdx, int32_t endIdx);
 

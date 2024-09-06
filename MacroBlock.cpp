@@ -30,9 +30,9 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
       picture.m_slice.m_pps.constrained_intra_pred_flag;
   initFromSlice(header, slice_data);
   /* ------------------  End ------------------ */
-  process_decode_mb_type(picture, header, header.slice_type);
+  process_mb_type(picture, header, header.slice_type);
 
-  /* 1. 如果宏块类型是 I_PCM，则直接从比特流中读取未压缩的 PCM 样本数据 */
+  /* 1. 如果宏块类型是 I_PCM，则直接从比特流中读取未压缩的 PCM 样本数据（非帧内、帧间预测，直接copy原始数据） */
   if (m_mb_type_fixed == I_PCM) {
     while (!bs.byte_aligned())
       pcm_alignment_zero_bit = bs.readUn(1);
@@ -42,18 +42,19 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
     for (int i = 0; i < 2 * (int)(sps.MbWidthC * sps.MbHeightC); i++)
       pcm_sample_chroma[i] = bs.readUn(sps.BitDepthC);
 
-    /* 2. 如果宏块类型不是 I_PCM，则根据宏块类型和预测模式进行子宏块预测或宏块预测 */
+    /* 2. 如果宏块类型不是 I_PCM，则根据宏块类型和预测模式进行子宏块预测或宏块预测，根据宏块的类型和预测模式来决定如何处理宏块的预测信息。
+     * 对于I帧而言，首次进入时即为I_NxN, 对于P、B帧而言，m_mb_pred_mode,m_NumMbPart在macroblock_mb_skip()函数中已经计算过了 */
   } else {
     int32_t transform_size_8x8_flag_temp = 0;
+    /* 是否所有子宏块的大小都不小于8x8 */
     bool noSubMbPartSizeLessThan8x8Flag = 1;
-    /* 根据宏块的类型和预测模式来决定如何处理宏块的预测信息 */
-    // 对于I帧而言，首次进入时即为I_NxN*/
-    // 对于P、B帧而言，m_mb_pred_mode,m_NumMbPart在macroblock_mb_skip()函数中已经计算过了 */
+    // I_NxN，Intra_16x16 是一种帧内预测模式（所以这里表示的是帧间预测）
     if (m_name_of_mb_type != I_NxN && m_mb_pred_mode != Intra_16x16 &&
         m_NumMbPart == 4) {
-      /* 当前宏块是一个非Intra的宏块，并且被分成了4个子宏块 */
+      //------------------------------------- 帧间预测(P,B) ---------------------------------------
+      /* 当前宏块是一个非Intra的宏块，并且被分成了4个8x8子宏块（一般来说4个8x8就是为了运动预测），进行子宏块预测 */
       sub_mb_pred(picture, slice_data);
-      /* 检查子宏块的类型和大小 */
+      /* 3. 子宏块大小检查 */
       for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
         if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8) {
           if (NumSubMbPartFunc(mbPartIdx) > 1)
@@ -61,14 +62,27 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
         } else if (!sps.direct_8x8_inference_flag)
           noSubMbPartSizeLessThan8x8Flag = 0;
       }
+
     } else {
+      //------------------------------------- 帧内预测(I) ---------------------------------------
       if (pps.transform_8x8_mode_flag && m_name_of_mb_type == I_NxN)
         process_transform_size_8x8_flag(transform_size_8x8_flag_temp);
       mb_pred(picture, slice_data);
     }
 
+    /* 4. 处理编码块模式，在上面步骤中，不管是帧间、帧内都已经完成了运动矢量的计算 */
     if (m_mb_pred_mode != Intra_16x16) {
+      //------------------------------------- 帧间预测(P,B) ---------------------------------------
+      /* 对于帧内预测模式，表示整个宏块作为一个16x16的块进行预测和编码。在这种模式下，宏块不会被进一步分割成更小的块，因此不需要考虑8x8变换 */
+
+      //处理编码块模式（Coded Block Pattern, CBP），它决定了哪些块（亮度块和色度块）包含非零系数。
       process_coded_block_pattern(sps.ChromaArrayType);
+
+      /* - CodedBlockPatternLuma > 0: 说明宏块中至少有一个亮度块包含非零系数，因此需要对这些块进行逆变换和反量化。在这种情况下，可能需要考虑使用8x8变换;
+       * - pps.transform_8x8_mode_flag：检查是否编码器允许使用8x8变换;
+       * - I_NxN 是帧内预测模式的一种，表示宏块被分割成多个4x4的小块进行预测。在这种模式下，通常不会使用8x8变换，因为块的大小已经是4x4;
+       * - noSubMbPartSizeLessThan8x8Flag == 1 : 如果存在任一子宏块的大小小于8x8，那么使用8x8变换就不合适，因为变换块的大小应该与子宏块的大小匹配;
+       * - B_Direct_16x16 是B帧中的一种直接模式，表示整个宏块作为一个16x16的块进行直接预测*/
       if (CodedBlockPatternLuma > 0 && pps.transform_8x8_mode_flag &&
           m_name_of_mb_type != I_NxN && noSubMbPartSizeLessThan8x8Flag &&
           (m_name_of_mb_type != B_Direct_16x16 ||
@@ -79,7 +93,9 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
     /* 3. 如果宏块有残差数据（即 CodedBlockPatternLuma 或 CodedBlockPatternChroma 不为 0），则调用 residual 函数解码残差数据 */
     if (CodedBlockPatternLuma > 0 || CodedBlockPatternChroma > 0 ||
         m_mb_pred_mode == Intra_16x16) {
+      //------------------------------------- 帧内预测(I) ---------------------------------------
       process_mb_qp_delta();
+      /* 处理残差数据 */
       residual(picture, 0, 15);
     }
   }
@@ -298,144 +314,67 @@ int MacroBlock::mb_pred(PictureBase &picture, const SliceData &slice_data) {
   return 0;
 }
 
-/*
- * Page 58/80/812
- * 7.3.5.2 Sub-macroblock prediction syntax
- */
-/* TODO YangJing  <24-09-06 02:53:39> */
+void MacroBlock::set_current_mb_info(SUB_MB_TYPE_P_MBS_T type, int mbPartIdx) {
+  m_name_of_sub_mb_type[mbPartIdx] = type.name_of_sub_mb_type;
+  m_sub_mb_pred_mode[mbPartIdx] = type.SubMbPredMode;
+  NumSubMbPart[mbPartIdx] = type.NumSubMbPart;
+  SubMbPartWidth[mbPartIdx] = type.SubMbPartWidth;
+  SubMbPartHeight[mbPartIdx] = type.SubMbPartHeight;
+}
+
+void MacroBlock::set_current_mb_info(SUB_MB_TYPE_B_MBS_T type, int mbPartIdx) {
+  m_name_of_sub_mb_type[mbPartIdx] = type.name_of_sub_mb_type;
+  m_sub_mb_pred_mode[mbPartIdx] = type.SubMbPredMode;
+  NumSubMbPart[mbPartIdx] = type.NumSubMbPart;
+  SubMbPartWidth[mbPartIdx] = type.SubMbPartWidth;
+  SubMbPartHeight[mbPartIdx] = type.SubMbPartHeight;
+}
+
+// 7.3.5.2 Sub-macroblock prediction syntax （该函数与mb_pred非常相似）
+/* 一般来说在处理 P 帧和 B 帧时会分割为子宏块处理，这样才能更好的进行运动预测（帧间预测） */
+/* 作用：计算出子宏块的预测值。这些预测值将用于后续的残差计算和解码过程。 */
 int MacroBlock::sub_mb_pred(PictureBase &picture, const SliceData &slice_data) {
-  int ret = 0;
   const SliceHeader &header = picture.m_slice.slice_header;
-  const int is_ae = picture.m_slice.m_pps.entropy_coding_mode_flag;
 
-  //--------------------------
+  /* 1. 解析子宏块类型，至于这里为什么是固定4个，是因为在macroblock_layer()函数中，已经通过 if (m_name_of_mb_type != I_NxN && m_mb_pred_mode != Intra_16x16 && m_NumMbPart == 4)进行限定 */
+  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++)
+    process_sub_mb_type(mbPartIdx);
+
+  /* 2. 解析参考帧索引 */
   for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
-    if (is_ae)
-      ret = _cabac->decode_sub_mb_type(sub_mb_type[mbPartIdx]);
-    else
-      sub_mb_type[mbPartIdx] = _gb->get_ue_golomb(*_bs);
-    RET(ret);
-
-    //--------------------------------------------------
-    if (m_slice_type_fixed == SLICE_P && sub_mb_type[mbPartIdx] >= 0 &&
-        sub_mb_type[mbPartIdx] <= 3) {
-      m_name_of_sub_mb_type[mbPartIdx] =
-          sub_mb_type_P_mbs_define[sub_mb_type[mbPartIdx]].name_of_sub_mb_type;
-      m_sub_mb_pred_mode[mbPartIdx] =
-          sub_mb_type_P_mbs_define[sub_mb_type[mbPartIdx]].SubMbPredMode;
-      NumSubMbPart[mbPartIdx] =
-          sub_mb_type_P_mbs_define[sub_mb_type[mbPartIdx]].NumSubMbPart;
-      SubMbPartWidth[mbPartIdx] =
-          sub_mb_type_P_mbs_define[sub_mb_type[mbPartIdx]].SubMbPartWidth;
-      SubMbPartHeight[mbPartIdx] =
-          sub_mb_type_P_mbs_define[sub_mb_type[mbPartIdx]].SubMbPartHeight;
-    } else if (m_slice_type_fixed == SLICE_B && sub_mb_type[mbPartIdx] >= 0 &&
-               sub_mb_type[mbPartIdx] <= 12) {
-      m_name_of_sub_mb_type[mbPartIdx] =
-          sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]].name_of_sub_mb_type;
-      m_sub_mb_pred_mode[mbPartIdx] =
-          sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]].SubMbPredMode;
-      NumSubMbPart[mbPartIdx] =
-          sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]].NumSubMbPart;
-      SubMbPartWidth[mbPartIdx] =
-          sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]].SubMbPartWidth;
-      SubMbPartHeight[mbPartIdx] =
-          sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]].SubMbPartHeight;
-    } else
-      RET(-1);
-  }
-
-  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
-    //-----mb_type is one of 3=P_8x8, 4=P_8x8ref0, 22=B_8x8----------
     if ((header.num_ref_idx_l0_active_minus1 > 0 ||
          mb_field_decoding_flag != field_pic_flag) &&
         m_name_of_mb_type != P_8x8ref0 &&
         m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
-        m_sub_mb_pred_mode[mbPartIdx] != Pred_L1) {
-      if (is_ae) {
-        int32_t ref_idx_flag = 0;
-
-        ret = _cabac->decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
-                                        ref_idx_l0[mbPartIdx]);
-        RET(ret);
-      } else {
-        int range = picture.m_RefPicList0Length - 1;
-
-        if (mb_field_decoding_flag == 1) {
-          range = picture.m_RefPicList0Length * 2 - 1;
-        }
-
-        ref_idx_l0[mbPartIdx] = _gb->get_te_golomb(*_bs, range);
-      }
-    }
+        m_sub_mb_pred_mode[mbPartIdx] != Pred_L1)
+      process_ref_idx_l0(mbPartIdx, header.num_ref_idx_l0_active_minus1);
   }
 
   for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
-    //-----mb_type is one of 3=P_8x8, 4=P_8x8ref0, 22=B_8x8----------
     if ((header.num_ref_idx_l1_active_minus1 > 0 ||
          mb_field_decoding_flag != field_pic_flag) &&
         m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
-        m_sub_mb_pred_mode[mbPartIdx] != Pred_L0) {
-      if (is_ae) {
-        int32_t ref_idx_flag = 1;
-
-        ret = _cabac->decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
-                                        ref_idx_l1[mbPartIdx]);
-        RET(ret);
-      } else {
-        int range = picture.m_RefPicList1Length - 1;
-
-        if (mb_field_decoding_flag == 1) {
-          range = picture.m_RefPicList1Length * 2 - 1;
-        }
-
-        ref_idx_l1[mbPartIdx] = _gb->get_te_golomb(*_bs, range);
-      }
-    }
+        m_sub_mb_pred_mode[mbPartIdx] != Pred_L0)
+      process_ref_idx_l1(mbPartIdx, header.num_ref_idx_l1_active_minus1);
   }
 
   for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
-    //-----mb_type is one of 3=P_8x8, 4=P_8x8ref0, 22=B_8x8----------
     if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
         m_sub_mb_pred_mode[mbPartIdx] != Pred_L1) {
       for (int subMbPartIdx = 0; subMbPartIdx < NumSubMbPart[mbPartIdx];
-           subMbPartIdx++) {
-        for (int compIdx = 0; compIdx < 2; compIdx++) {
-          if (is_ae) {
-            int32_t mvd_flag = compIdx;
-            int32_t isChroma = 0;
-
-            ret = _cabac->decode_mvd_lX(
-                mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
-                mvd_l0[mbPartIdx][subMbPartIdx][compIdx]);
-            RETURN_IF_FAILED(ret != 0, ret);
-          } else
-            mvd_l0[mbPartIdx][subMbPartIdx][compIdx] = _gb->get_se_golomb(*_bs);
-        }
-      }
+           subMbPartIdx++)
+        for (int compIdx = 0; compIdx < 2; compIdx++)
+          process_mvd_l0(mbPartIdx, compIdx, subMbPartIdx);
     }
   }
 
   for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
-    //-----mb_type is one of 3=P_8x8, 4=P_8x8ref0, 22=B_8x8----------
     if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
         m_sub_mb_pred_mode[mbPartIdx] != Pred_L0) {
       for (int subMbPartIdx = 0; subMbPartIdx < NumSubMbPart[mbPartIdx];
-           subMbPartIdx++) {
-        for (int compIdx = 0; compIdx < 2; compIdx++) {
-          if (is_ae) {
-            int32_t mvd_flag = 2 + compIdx;
-            int32_t isChroma = 0;
-
-            ret = _cabac->decode_mvd_lX(
-                mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
-                mvd_l1[mbPartIdx][subMbPartIdx][compIdx]);
-            RETURN_IF_FAILED(ret != 0, ret);
-          } else {
-            mvd_l1[mbPartIdx][subMbPartIdx][compIdx] = _gb->get_se_golomb(*_bs);
-          }
-        }
-      }
+           subMbPartIdx++)
+        for (int compIdx = 0; compIdx < 2; compIdx++)
+          process_mvd_l1(mbPartIdx, compIdx, subMbPartIdx);
     }
   }
 
@@ -443,20 +382,17 @@ int MacroBlock::sub_mb_pred(PictureBase &picture, const SliceData &slice_data) {
 }
 
 int MacroBlock::NumSubMbPartFunc(int mbPartIdx) {
-  int NumSubMbPart;
-  if (m_slice_type_fixed == SLICE_P && sub_mb_type[mbPartIdx] >= 0 &&
-      sub_mb_type[mbPartIdx] <= 3) {
-    NumSubMbPart =
-        sub_mb_type_P_mbs_define[sub_mb_type[mbPartIdx]].NumSubMbPart;
-  } else if (m_slice_type_fixed == SLICE_B && sub_mb_type[mbPartIdx] >= 0 &&
-             sub_mb_type[mbPartIdx] <= 3) {
-    NumSubMbPart =
-        sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]].NumSubMbPart;
-  } else {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return -1;
-  }
+  int32_t NumSubMbPart = -1;
+  const int32_t type = sub_mb_type[mbPartIdx];
+  if (m_slice_type_fixed == SLICE_P && type >= 0 && type <= 3)
+    /* Table 7-17 – Sub-macroblock types in P macroblocks */
+    NumSubMbPart = sub_mb_type_P_mbs_define[type].NumSubMbPart;
+  /* TODO YangJing 这里不应该是[0,12]? 为什么是[0,3]?先用12,有问题再改回来 <24-09-07 00:01:26> */
+  else if (m_slice_type_fixed == SLICE_B && type >= 0 && type <= 12)
+    /* Table 7-18 – Sub-macroblock types in B macroblocks */
+    NumSubMbPart = sub_mb_type_B_mbs_define[type].NumSubMbPart;
+  else
+    RET(-1);
   return NumSubMbPart;
 }
 
@@ -1154,9 +1090,8 @@ void MacroBlock::initFromSlice(const SliceHeader &header,
   FilterOffsetB = header.FilterOffsetB;
 }
 
-int MacroBlock::process_decode_mb_type(PictureBase &picture,
-                                       SliceHeader &header,
-                                       const int32_t slice_type) {
+int MacroBlock::process_mb_type(PictureBase &picture, SliceHeader &header,
+                                const int32_t slice_type) {
   int ret = picture.inverse_macroblock_scanning_process(
       header.MbaffFrameFlag, CurrMbAddr, mb_field_decoding_flag,
       picture.m_mbs[CurrMbAddr].m_mb_position_x,
@@ -1182,6 +1117,30 @@ int MacroBlock::process_decode_mb_type(PictureBase &picture,
                        CodedBlockPatternLuma, Intra16x16PredMode,
                        m_name_of_mb_type, m_mb_pred_mode);
   RET(ret);
+  return 0;
+}
+
+int MacroBlock::process_sub_mb_type(const int mbPartIdx) {
+  int ret = 0;
+  if (_is_cabac)
+    ret = _cabac->decode_sub_mb_type(sub_mb_type[mbPartIdx]);
+  else
+    sub_mb_type[mbPartIdx] = _gb->get_ue_golomb(*_bs);
+  RET(ret);
+
+  /* 2. 根据子宏块类型设置预测模式等信息 */
+  if (m_slice_type_fixed == SLICE_P && sub_mb_type[mbPartIdx] >= 0 &&
+      sub_mb_type[mbPartIdx] <= 3)
+    // 设置 P 帧子宏块信息
+    set_current_mb_info(sub_mb_type_P_mbs_define[sub_mb_type[mbPartIdx]],
+                        mbPartIdx);
+  else if (m_slice_type_fixed == SLICE_B && sub_mb_type[mbPartIdx] >= 0 &&
+           sub_mb_type[mbPartIdx] <= 12)
+    // 设置 B 帧子宏块信息
+    set_current_mb_info(sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]],
+                        mbPartIdx);
+  else
+    RET(-1);
   return 0;
 }
 
@@ -1213,6 +1172,7 @@ int MacroBlock::process_transform_size_8x8_flag(int32_t &is_8x8_flag) {
   return 0;
 }
 
+// 编码块模式（Coded Block Pattern, CBP），用于指示哪些块（亮度块和色度块）包含非零的变换系数。CBP的值决定了在解码过程中哪些块需要进行逆变换和反量化。
 int MacroBlock::process_coded_block_pattern(const uint32_t ChromaArrayType) {
   int ret = 0;
   if (_is_cabac)
@@ -1221,7 +1181,9 @@ int MacroBlock::process_coded_block_pattern(const uint32_t ChromaArrayType) {
     coded_block_pattern =
         _gb->get_me_golomb(*_bs, ChromaArrayType, m_mb_pred_mode);
 
+  /* 亮度块模式的值范围是0到15，表示宏块中哪些4x4的亮度块包含非零系数。例如，CodedBlockPatternLuma = 5 表示宏块中第1和第3个4x4亮度块包含非零系数。 */
   CodedBlockPatternLuma = coded_block_pattern % 16;
+  /* 色度块模式的值范围是0到3，表示宏块中哪些色度块包含非零系数。例如，CodedBlockPatternChroma = 2 表示宏块中第2个色度块包含非零系数。 */
   CodedBlockPatternChroma = coded_block_pattern / 16;
   return ret;
 }
@@ -1229,9 +1191,9 @@ int MacroBlock::process_coded_block_pattern(const uint32_t ChromaArrayType) {
 int MacroBlock::process_mb_qp_delta() {
   int ret = 0;
   if (_is_cabac)
-    ret = _cabac->decode_mb_qp_delta(mb_qp_delta); // 2 se(v) | ae(v)
+    ret = _cabac->decode_mb_qp_delta(mb_qp_delta);
   else
-    mb_qp_delta = _gb->get_se_golomb(*_bs); // 2 se(v) | ae(v)
+    mb_qp_delta = _gb->get_se_golomb(*_bs);
   return ret;
 }
 
@@ -1329,155 +1291,148 @@ int MacroBlock::process_ref_idx_l1(int mbPartIdx,
   return ret;
 }
 
-int MacroBlock::process_mvd_l0(const int mbPartIdx, const int compIdx) {
+/* 如果是宏块调用则subMbPartIdx默认为0;反之，子宏块调用需要传入subMbPartIdx */
+int MacroBlock::process_mvd_l0(const int mbPartIdx, const int compIdx,
+                               int32_t subMbPartIdx) {
   int ret = 0;
-  if (_is_cabac) {
-    int32_t mvd_flag = compIdx;
-    int32_t subMbPartIdx = 0;
-    int32_t isChroma = 0;
-
+  int32_t isChroma = 0;
+  int32_t mvd_flag = compIdx;
+  if (_is_cabac)
     ret = _cabac->decode_mvd_lX(mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
-                                mvd_l0[mbPartIdx][0][compIdx]);
+                                mvd_l0[mbPartIdx][subMbPartIdx][compIdx]);
+  else
+    mvd_l0[mbPartIdx][subMbPartIdx][compIdx] = _gb->get_se_golomb(*_bs);
+  return ret;
+}
+
+/* 如果是宏块调用则subMbPartIdx默认为0;反之，子宏块调用需要传入subMbPartIdx */
+int MacroBlock::process_mvd_l1(const int mbPartIdx, const int compIdx,
+                               int32_t subMbPartIdx) {
+  int ret = 0;
+  int32_t isChroma = 0;
+  int32_t mvd_flag = 2 + compIdx;
+  if (_is_cabac)
+    ret = _cabac->decode_mvd_lX(mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
+                                mvd_l1[mbPartIdx][subMbPartIdx][compIdx]);
+  else
+    mvd_l1[mbPartIdx][subMbPartIdx][compIdx] = _gb->get_se_golomb(*_bs);
+  return ret;
+}
+
+int MacroBlock::residual_block_DC(PictureBase &picture,
+                                  CH264ResidualBlockCavlc &cavlc, int iCbCr,
+                                  int32_t NumC8x8, uint32_t BlkIdx) {
+  int ret = 0;
+  int TotalCoeff = 0;
+
+  if (_is_cabac) {
+    ret = _cabac->residual_block_cabac(ChromaDCLevel[iCbCr], 0, 4 * NumC8x8 - 1,
+                                       4 * NumC8x8, MB_RESIDUAL_ChromaDCLevel,
+                                       BlkIdx, iCbCr, TotalCoeff);
     RETURN_IF_FAILED(ret != 0, ret);
-  } else
-    mvd_l0[mbPartIdx][0][compIdx] = _gb->get_se_golomb(*_bs);
+  } else {
+    MB_RESIDUAL_LEVEL mb_level = (iCbCr == 0) ? MB_RESIDUAL_ChromaDCLevelCb
+                                              : MB_RESIDUAL_ChromaDCLevelCr;
+
+    ret = cavlc.residual_block_cavlc(picture, *_bs, ChromaDCLevel[iCbCr], 0,
+                                     4 * NumC8x8 - 1, 4 * NumC8x8, mb_level,
+                                     m_mb_pred_mode, BlkIdx,
+                                     TotalCoeff); // 3 | 4
+    RETURN_IF_FAILED(ret != 0, ret);
+  }
+
+  mb_chroma_4x4_non_zero_count_coeff[iCbCr][BlkIdx] = TotalCoeff;
   return ret;
 }
 
-int MacroBlock::process_mvd_l1(const int mbPartIdx, const int compIdx) {
+int MacroBlock::residual_block_AC(PictureBase &picture,
+                                  CH264ResidualBlockCavlc &cavlc, int iCbCr,
+                                  int i8x8, int i4x4, uint32_t BlkIdx,
+                                  int32_t startIdx, int32_t endIdx) {
   int ret = 0;
-  if (_is_cabac) {
-    int32_t mvd_flag = 2 + compIdx;
-    int32_t subMbPartIdx = 0;
-    int32_t isChroma = 0;
-    ret = _cabac->decode_mvd_lX(mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
-                                mvd_l1[mbPartIdx][0][compIdx]);
-  } else
-    mvd_l1[mbPartIdx][0][compIdx] = _gb->get_se_golomb(*_bs);
+  int TotalCoeff = 0;
+
+  MB_RESIDUAL_LEVEL mb_level =
+      (iCbCr == 0) ? MB_RESIDUAL_ChromaACLevelCb : MB_RESIDUAL_ChromaACLevelCr;
+
+  if (_is_cabac)
+    ret = _cabac->residual_block_cabac(
+        ChromaACLevel[iCbCr][i8x8 * 4 + i4x4], MAX(0, startIdx - 1), endIdx - 1,
+        15, MB_RESIDUAL_ChromaACLevel, BlkIdx, iCbCr, TotalCoeff);
+  else
+    ret = cavlc.residual_block_cavlc(
+        picture, *_bs, ChromaACLevel[iCbCr][i8x8 * 4 + i4x4],
+        MAX(0, startIdx - 1), endIdx - 1, 15, mb_level, m_mb_pred_mode, BlkIdx,
+        TotalCoeff);
+
+  RET(ret);
+
+  mb_chroma_4x4_non_zero_count_coeff[iCbCr][BlkIdx] = TotalCoeff;
   return ret;
 }
 
-/*
- * Page 59/81/812
- * 7.3.5.3 Residual data syntax
- */
+// 7.3.5.3 Residual data syntax
 int MacroBlock::residual(PictureBase &picture, int32_t startIdx,
                          int32_t endIdx) {
+
+  const uint32_t ChromaArrayType = picture.m_slice.m_sps.ChromaArrayType;
+  const int32_t SubWidthC = picture.m_slice.m_sps.SubWidthC;
+  const int32_t SubHeightC = picture.m_slice.m_sps.SubHeightC;
+
   int ret = 0;
-  int32_t i = 0;
-  int32_t iCbCr = 0;
-  int32_t i8x8 = 0;
-  int32_t i4x4 = 0;
-  int32_t BlkIdx = 0;
-  int32_t TotalCoeff = 0; // 该 4x4 block的残差中，总共有多少个非零系数
+  //int32_t TotalCoeff = 0; // 该 4x4 block的残差中，总共有多少个非零系数
   CH264ResidualBlockCavlc cavlc;
 
-  int is_ae =
-      picture.m_slice.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
-
-  //    if (!picture.m_slice.m_pps.entropy_coding_mode_flag)
-  //    {
-  //        residual_block = residual_block_cavlc;
-  //    }
-  //    else
-  //    {
-  //        residual_block = residual_block_cabac;
-  //    }
+  /* TODO YangJing 使用多态函数指针实现 <24-09-07 00:49:00> */
+  //typedef int (*residual_block)(int,int);
+  //if (!picture.m_slice.m_pps.entropy_coding_mode_flag) {
+  //residual_block = residual_block_cavlc;
+  //} else {
+  //residual_block = residual_block_cabac;
+  //}
 
   ret = residual_luma(picture, i16x16DClevel, i16x16AClevel, level4x4, level8x8,
                       startIdx, endIdx, MB_RESIDUAL_Intra16x16DCLevel,
-                      MB_RESIDUAL_Intra16x16ACLevel); // 3 | 4
-  RETURN_IF_FAILED(ret != 0, ret);
+                      MB_RESIDUAL_Intra16x16ACLevel);
+  RET(ret);
 
-  memcpy(Intra16x16DCLevel, i16x16DClevel, sizeof(int32_t) * 16);
-  memcpy(Intra16x16ACLevel, i16x16AClevel, sizeof(int32_t) * 16 * 16);
-  memcpy(LumaLevel4x4, level4x4, sizeof(int32_t) * 16 * 16);
-  memcpy(LumaLevel8x8, level8x8, sizeof(int32_t) * 4 * 64);
+  /* TODO YangJing 感觉这里性能有问题 <24-09-07 01:15:56> */
+  memcpy(Intra16x16DCLevel, i16x16DClevel, sizeof(i16x16DClevel));
+  memcpy(Intra16x16ACLevel, i16x16AClevel, sizeof(i16x16AClevel));
+  memcpy(LumaLevel4x4, level4x4, sizeof(level4x4));
+  memcpy(LumaLevel8x8, level8x8, sizeof(level8x8));
 
-  //-----------------------
-  if (picture.m_slice.m_sps.ChromaArrayType == 1 ||
-      picture.m_slice.m_sps.ChromaArrayType == 2) {
-    int32_t NumC8x8 = 4 / (picture.m_slice.m_sps.SubWidthC *
-                           picture.m_slice.m_sps.SubHeightC);
-    for (iCbCr = 0; iCbCr < 2; iCbCr++) {
-      if ((CodedBlockPatternChroma & 3) &&
-          startIdx == 0) // chroma DC residual present
-      {
-        BlkIdx = 0;
-        TotalCoeff = 0;
-
-        if (is_ae) // ae(v) 表示CABAC编码
-        {
-          ret = _cabac->residual_block_cabac(
-              ChromaDCLevel[iCbCr], 0, 4 * NumC8x8 - 1, 4 * NumC8x8,
-              MB_RESIDUAL_ChromaDCLevel, BlkIdx, iCbCr,
-              TotalCoeff); // 3 | 4
-          RETURN_IF_FAILED(ret != 0, ret);
-        } else // ue(v) 表示CAVLC编码
-        {
-          MB_RESIDUAL_LEVEL mb_level = (iCbCr == 0)
-                                           ? MB_RESIDUAL_ChromaDCLevelCb
-                                           : MB_RESIDUAL_ChromaDCLevelCr;
-
-          ret = cavlc.residual_block_cavlc(picture, *_bs, ChromaDCLevel[iCbCr],
-                                           0, 4 * NumC8x8 - 1, 4 * NumC8x8,
-                                           mb_level, m_mb_pred_mode, BlkIdx,
-                                           TotalCoeff); // 3 | 4
-          RETURN_IF_FAILED(ret != 0, ret);
-        }
-
-        mb_chroma_4x4_non_zero_count_coeff[iCbCr][BlkIdx] = TotalCoeff;
-      } else {
-        for (i = 0; i < 4 * NumC8x8; i++) {
+  if (ChromaArrayType == 1 || ChromaArrayType == 2) {
+    int32_t NumC8x8 = 4 / (SubWidthC * SubHeightC);
+    for (int iCbCr = 0; iCbCr < 2; iCbCr++) {
+      if ((CodedBlockPatternChroma & 3) && startIdx == 0)
+        /* TODO YangJing 后面要去掉这里的参数传递，以及cavlc这里是什么？ <24-09-07 01:26:13> */
+        residual_block_DC(picture, cavlc, iCbCr, NumC8x8, 0);
+      else
+        for (int i = 0; i < 4 * NumC8x8; i++)
           ChromaDCLevel[iCbCr][i] = 0;
-        }
-      }
     }
 
-    for (iCbCr = 0; iCbCr < 2; iCbCr++) {
-      for (i8x8 = 0; i8x8 < NumC8x8; i8x8++) {
-        for (i4x4 = 0; i4x4 < 4; i4x4++) {
-          if (CodedBlockPatternChroma & 2) // chroma AC residual present
-          {
-            BlkIdx = i8x8 * 4 + i4x4;
-            TotalCoeff = 0;
-
-            if (is_ae) // ae(v) 表示CABAC编码
-            {
-              ret = _cabac->residual_block_cabac(
-                  ChromaACLevel[iCbCr][i8x8 * 4 + i4x4], MAX(0, startIdx - 1),
-                  endIdx - 1, 15, MB_RESIDUAL_ChromaACLevel, BlkIdx, iCbCr,
-                  TotalCoeff); // 3 | 4
-              RETURN_IF_FAILED(ret != 0, ret);
-            } else // ue(v) 表示CAVLC编码
-            {
-              MB_RESIDUAL_LEVEL mb_level = (iCbCr == 0)
-                                               ? MB_RESIDUAL_ChromaACLevelCb
-                                               : MB_RESIDUAL_ChromaACLevelCr;
-
-              ret = cavlc.residual_block_cavlc(
-                  picture, *_bs, ChromaACLevel[iCbCr][i8x8 * 4 + i4x4],
-                  MAX(0, startIdx - 1), endIdx - 1, 15, mb_level,
-                  m_mb_pred_mode, BlkIdx, TotalCoeff); // 3 | 4
-              RETURN_IF_FAILED(ret != 0, ret);
-            }
-
-            mb_chroma_4x4_non_zero_count_coeff[iCbCr][BlkIdx] = TotalCoeff;
-          } else {
-            for (i = 0; i < 15; i++) {
+    for (int iCbCr = 0; iCbCr < 2; iCbCr++) {
+      for (int i8x8 = 0; i8x8 < NumC8x8; i8x8++)
+        for (int i4x4 = 0; i4x4 < 4; i4x4++) {
+          if (CodedBlockPatternChroma & 2)
+            /* TODO YangJing 后面要去掉这里的参数传递，以及cavlc这里是什么？ <24-09-07 01:26:13> */
+            residual_block_AC(picture, cavlc, iCbCr, i8x8, i4x4,
+                              i8x8 * 4 + i4x4, startIdx, endIdx);
+          else
+            for (int i = 0; i < 15; i++)
               ChromaACLevel[iCbCr][i8x8 * 4 + i4x4][i] = 0;
-            }
-          }
         }
-      }
     }
-  } else if (picture.m_slice.m_sps.ChromaArrayType == 3) {
+  } else if (ChromaArrayType == 3) {
     ret =
         residual_luma(picture, i16x16DClevel, i16x16AClevel, level4x4, level8x8,
                       startIdx, endIdx, MB_RESIDUAL_CbIntra16x16DCLevel,
-                      MB_RESIDUAL_CbIntra16x16ACLevel); // 3 | 4
-    RETURN_IF_FAILED(ret != 0, ret);
+                      MB_RESIDUAL_CbIntra16x16ACLevel);
+    RET(ret);
 
+    /* TODO YangJing 性能 <24-09-07 01:43:24> */
     memcpy(CbIntra16x16DCLevel, i16x16DClevel, sizeof(int32_t) * 16);
     memcpy(CbIntra16x16ACLevel, i16x16AClevel, sizeof(int32_t) * 16 * 16);
     memcpy(CbLevel4x4, level4x4, sizeof(int32_t) * 16 * 16);
@@ -1486,8 +1441,8 @@ int MacroBlock::residual(PictureBase &picture, int32_t startIdx,
     ret =
         residual_luma(picture, i16x16DClevel, i16x16AClevel, level4x4, level8x8,
                       startIdx, endIdx, MB_RESIDUAL_CrIntra16x16DCLevel,
-                      MB_RESIDUAL_CrIntra16x16ACLevel); // 3 | 4
-    RETURN_IF_FAILED(ret != 0, ret);
+                      MB_RESIDUAL_CrIntra16x16ACLevel);
+    RET(ret);
 
     memcpy(CrIntra16x16DCLevel, i16x16DClevel, sizeof(int32_t) * 16);
     memcpy(CrIntra16x16ACLevel, i16x16AClevel, sizeof(int32_t) * 16 * 16);
@@ -1498,10 +1453,7 @@ int MacroBlock::residual(PictureBase &picture, int32_t startIdx,
   return 0;
 }
 
-/*
- * Page 60/82/812
- * 7.3.5.3.1 Residual luma syntax
- */
+//7.3.5.3.1 Residual luma syntax
 int MacroBlock::residual_luma(PictureBase &picture,
                               int32_t (&i16x16DClevel)[16],
                               int32_t (&i16x16AClevel)[16][16],
@@ -1511,81 +1463,64 @@ int MacroBlock::residual_luma(PictureBase &picture,
                               MB_RESIDUAL_LEVEL mb_residual_level_dc,
                               MB_RESIDUAL_LEVEL mb_residual_level_ac) {
   int ret = 0;
-  int32_t i = 0;
-  int32_t i8x8 = 0;
-  int32_t i4x4 = 0;
   int32_t BlkIdx = 0;
   int32_t TotalCoeff = 0; // 该 4x4 block的残差中，总共有多少个非零系数
   // H264_MB_TYPE name_of_mb_type2 = MB_TYPE_NA;
   CH264ResidualBlockCavlc cavlc;
 
-  int is_ae =
-      picture.m_slice.m_pps.entropy_coding_mode_flag; // ae(v)表示CABAC编码
-
-  if (startIdx == 0 &&
-      m_mb_pred_mode ==
-          Intra_16x16) // MbPartPredMode(mb_type, 0) == Intra_16x16)
-  {
+  if (startIdx == 0 && m_mb_pred_mode == Intra_16x16) {
     BlkIdx = 0;
     TotalCoeff = 0;
 
-    if (is_ae) // ae(v) 表示CABAC编码
-    {
+    if (_is_cabac) {
       ret = _cabac->residual_block_cabac(i16x16DClevel, 0, 15, 16,
                                          mb_residual_level_dc, BlkIdx, -1,
-                                         TotalCoeff); // 3 | 4
+                                         TotalCoeff);
       RETURN_IF_FAILED(ret != 0, ret);
-    } else // ue(v) 表示CAVLC编码
-    {
+    } else {
       ret = cavlc.residual_block_cavlc(picture, *_bs, i16x16DClevel, 0, 15, 16,
                                        mb_residual_level_dc, m_mb_pred_mode,
-                                       BlkIdx, TotalCoeff); // 3 | 4
+                                       BlkIdx, TotalCoeff);
       RETURN_IF_FAILED(ret != 0, ret);
     }
 
     mb_luma_4x4_non_zero_count_coeff[BlkIdx] = TotalCoeff;
   }
 
-  for (i8x8 = 0; i8x8 < 4; i8x8++) {
+  for (int i8x8 = 0; i8x8 < 4; i8x8++) {
     if (!transform_size_8x8_flag ||
         !picture.m_slice.m_pps.entropy_coding_mode_flag) {
-      for (i4x4 = 0; i4x4 < 4; i4x4++) {
+      for (int i4x4 = 0; i4x4 < 4; i4x4++) {
         if (CodedBlockPatternLuma & (1 << i8x8)) {
           BlkIdx = i8x8 * 4 + i4x4;
           TotalCoeff = 0;
 
           if (m_mb_pred_mode == Intra_16x16) {
-            if (is_ae) // ae(v) 表示CABAC编码
-            {
+            if (_is_cabac) {
               ret = _cabac->residual_block_cabac(
                   i16x16AClevel[i8x8 * 4 + i4x4], MAX(0, startIdx - 1),
                   endIdx - 1, 15, MB_RESIDUAL_Intra16x16ACLevel, BlkIdx, -1,
-                  TotalCoeff); // 3 | 4
+                  TotalCoeff);
               RETURN_IF_FAILED(ret != 0, ret);
-            } else // ue(v) 表示CAVLC编码
-            {
+            } else {
               ret = cavlc.residual_block_cavlc(
                   picture, *_bs, i16x16AClevel[i8x8 * 4 + i4x4],
                   MAX(0, startIdx - 1), endIdx - 1, 15,
                   MB_RESIDUAL_Intra16x16ACLevel, m_mb_pred_mode, BlkIdx,
-                  TotalCoeff); // 3
+                  TotalCoeff);
               RETURN_IF_FAILED(ret != 0, ret);
             }
-          } else // Intra_4x4 or Intra_8x8
-          {
-            if (is_ae) // ae(v) 表示CABAC编码
-            {
+          } else {
+            if (_is_cabac) {
               ret = _cabac->residual_block_cabac(
                   level4x4[i8x8 * 4 + i4x4], startIdx, endIdx, 16,
-                  MB_RESIDUAL_LumaLevel4x4, BlkIdx, -1,
-                  TotalCoeff); // 3 | 4
+                  MB_RESIDUAL_LumaLevel4x4, BlkIdx, -1, TotalCoeff);
               RETURN_IF_FAILED(ret != 0, ret);
-            } else // ue(v) 表示CAVLC编码
-            {
+            } else {
               ret = cavlc.residual_block_cavlc(
                   picture, *_bs, level4x4[i8x8 * 4 + i4x4], startIdx, endIdx,
                   16, MB_RESIDUAL_LumaLevel4x4, m_mb_pred_mode, BlkIdx,
-                  TotalCoeff); // 3 | 4
+                  TotalCoeff);
               RETURN_IF_FAILED(ret != 0, ret);
             }
           }
@@ -1594,18 +1529,18 @@ int MacroBlock::residual_luma(PictureBase &picture,
           mb_luma_8x8_non_zero_count_coeff[i8x8] +=
               mb_luma_4x4_non_zero_count_coeff[i8x8 * 4 + i4x4];
         } else if (m_mb_pred_mode == Intra_16x16) {
-          for (i = 0; i < 15; i++) {
+          for (int i = 0; i < 15; i++) {
             i16x16AClevel[i8x8 * 4 + i4x4][i] = 0;
           }
         } else {
-          for (i = 0; i < 16; i++) {
+          for (int i = 0; i < 16; i++) {
             level4x4[i8x8 * 4 + i4x4][i] = 0;
           }
         }
 
         if (!picture.m_slice.m_pps.entropy_coding_mode_flag &&
             transform_size_8x8_flag) {
-          for (i = 0; i < 16; i++) {
+          for (int i = 0; i < 16; i++) {
             level8x8[i8x8][4 * i + i4x4] = level4x4[i8x8 * 4 + i4x4][i];
           }
           mb_luma_8x8_non_zero_count_coeff[i8x8] +=
@@ -1616,24 +1551,21 @@ int MacroBlock::residual_luma(PictureBase &picture,
       BlkIdx = i8x8;
       TotalCoeff = 0;
 
-      if (is_ae) // ae(v) 表示CABAC编码
-      {
+      if (_is_cabac) {
         ret = _cabac->residual_block_cabac(
             level8x8[i8x8], 4 * startIdx, 4 * endIdx + 3, 64,
-            MB_RESIDUAL_LumaLevel8x8, BlkIdx, -1, TotalCoeff); // 3 | 4
+            MB_RESIDUAL_LumaLevel8x8, BlkIdx, -1, TotalCoeff);
         RETURN_IF_FAILED(ret != 0, ret);
-      } else // ue(v) 表示CAVLC编码
-      {
+      } else {
         ret = cavlc.residual_block_cavlc(
             picture, *_bs, level8x8[i8x8], 4 * startIdx, 4 * endIdx + 3, 64,
-            MB_RESIDUAL_LumaLevel8x8, m_mb_pred_mode, BlkIdx,
-            TotalCoeff); // 3 | 4
+            MB_RESIDUAL_LumaLevel8x8, m_mb_pred_mode, BlkIdx, TotalCoeff);
         RETURN_IF_FAILED(ret != 0, ret);
       }
 
       mb_luma_8x8_non_zero_count_coeff[i8x8] = TotalCoeff;
     } else {
-      for (i = 0; i < 64; i++) {
+      for (int i = 0; i < 64; i++) {
         level8x8[i8x8][i] = 0;
       }
     }
