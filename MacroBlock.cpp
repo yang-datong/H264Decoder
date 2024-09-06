@@ -1300,9 +1300,9 @@ int MacroBlock::process_ref_idx_l0(int mbPartIdx,
      * — 否则（MbaffFrameFlag 等于 1 并且 mb_field_decoding_flag 等于 1），ref_idx_l0[ mbPartIdx ] 的值应在 0 到 2 * num_ref_idx_l0_active_minus1 + 1 的范围内（含）。  当仅使用一张参考图片进行帧间预测时，ref_idx_l0[mbPartIdx]的值应被推断为等于0。 */
     uint32_t size = 0;
     if (MbaffFrameFlag == 0 || mb_field_decoding_flag == 0)
-      size = num_ref_idx_l0_active_minus1 - 1;
+      size = num_ref_idx_l0_active_minus1;
     else
-      size = num_ref_idx_l0_active_minus1 * 2 - 1;
+      size = num_ref_idx_l0_active_minus1 * 2;
 
     ref_idx_l0[mbPartIdx] = _gb->get_te_golomb(*_bs, size);
   }
@@ -1319,9 +1319,9 @@ int MacroBlock::process_ref_idx_l1(int mbPartIdx,
   else {
     uint32_t size = 0;
     if (MbaffFrameFlag == 0 || mb_field_decoding_flag == 0)
-      size = num_ref_idx_l1_active_minus1 - 1;
+      size = num_ref_idx_l1_active_minus1;
     else
-      size = num_ref_idx_l1_active_minus1 * 2 - 1;
+      size = num_ref_idx_l1_active_minus1 * 2;
 
     ref_idx_l1[mbPartIdx] = _gb->get_te_golomb(*_bs, size);
   }
