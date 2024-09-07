@@ -227,6 +227,8 @@ class MacroBlock {
   BitStream *_bs = nullptr;
   CH264ResidualBlockCavlc *_cavlc = nullptr;
   PictureBase *_picture = nullptr;
+  MB_RESIDUAL_LEVEL _mb_residual_level_dc = MB_RESIDUAL_UNKOWN;
+  MB_RESIDUAL_LEVEL _mb_residual_level_ac = MB_RESIDUAL_UNKOWN;
 
  public:
   int macroblock_layer(BitStream &bs, PictureBase &picture,
@@ -294,9 +296,7 @@ class MacroBlock {
   void set_current_mb_info(SUB_MB_TYPE_B_MBS_T type, int mbPartIdx);
 
   int residual(int32_t startIdx, int32_t endIdx);
-  int residual_luma(int32_t startIdx, int32_t endIdx,
-                    MB_RESIDUAL_LEVEL mb_residual_level_dc,
-                    MB_RESIDUAL_LEVEL mb_residual_level_ac);
+  int residual_luma(int32_t startIdx, int32_t endIdx);
   int residual_block_DC(int32_t coeffLevel[], int32_t startIdx, int32_t endIdx,
                         int32_t maxNumCoeff, int iCbCr, int32_t BlkIdx);
   int residual_block_AC(int32_t coeffLevel[], int32_t startIdx, int32_t endIdx,

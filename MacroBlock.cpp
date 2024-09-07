@@ -774,21 +774,19 @@ int MacroBlock::residual_block_DC(int32_t coeffLevel[], int32_t startIdx,
   int ret = 0;
   int TotalCoeff = 0;
 
-  if (_is_cabac) {
+  if (_is_cabac)
     ret = _cabac->residual_block_cabac(coeffLevel, startIdx, endIdx,
                                        maxNumCoeff, MB_RESIDUAL_ChromaDCLevel,
                                        BlkIdx, iCbCr, TotalCoeff);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else {
+  else {
     MB_RESIDUAL_LEVEL mb_level = (iCbCr == 0) ? MB_RESIDUAL_ChromaDCLevelCb
                                               : MB_RESIDUAL_ChromaDCLevelCr;
 
-    ret = _cavlc->residual_block_cavlc(*_picture, *_bs, ChromaDCLevel[iCbCr], 0,
-                                       endIdx, maxNumCoeff, mb_level,
-                                       m_mb_pred_mode, BlkIdx,
-                                       TotalCoeff); // 3 | 4
-    RETURN_IF_FAILED(ret != 0, ret);
+    ret = _cavlc->residual_block_cavlc(coeffLevel, 0, endIdx, maxNumCoeff,
+                                       mb_level, m_mb_pred_mode, BlkIdx,
+                                       TotalCoeff);
   }
+  RET(ret);
 
   mb_chroma_4x4_non_zero_count_coeff[iCbCr][BlkIdx] = TotalCoeff;
   return ret;
@@ -809,9 +807,9 @@ int MacroBlock::residual_block_AC(int32_t coeffLevel[], int32_t startIdx,
                                        maxNumCoeff, MB_RESIDUAL_ChromaACLevel,
                                        BlkIdx, iCbCr, TotalCoeff);
   else
-    ret = _cavlc->residual_block_cavlc(*_picture, *_bs, coeffLevel, startIdx,
-                                       endIdx, maxNumCoeff, mb_level,
-                                       m_mb_pred_mode, BlkIdx, TotalCoeff);
+    ret = _cavlc->residual_block_cavlc(coeffLevel, startIdx, endIdx,
+                                       maxNumCoeff, mb_level, m_mb_pred_mode,
+                                       BlkIdx, TotalCoeff);
 
   RET(ret);
 
@@ -822,15 +820,16 @@ int MacroBlock::residual_block_AC(int32_t coeffLevel[], int32_t startIdx,
 // 7.3.5.3 Residual data syntax
 int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
 
-  if (!_cavlc) _cavlc = new CH264ResidualBlockCavlc();
+  if (!_cavlc) _cavlc = new CH264ResidualBlockCavlc(_picture, _bs);
   const uint32_t ChromaArrayType = _picture->m_slice.m_sps.ChromaArrayType;
   const int32_t SubWidthC = _picture->m_slice.m_sps.SubWidthC;
   const int32_t SubHeightC = _picture->m_slice.m_sps.SubHeightC;
 
   int ret = 0;
   //int32_t TotalCoeff = 0; // 该 4x4 block的残差中，总共有多少个非零系数
-  ret = residual_luma(startIdx, endIdx, MB_RESIDUAL_Intra16x16DCLevel,
-                      MB_RESIDUAL_Intra16x16ACLevel);
+  _mb_residual_level_dc = MB_RESIDUAL_Intra16x16DCLevel;
+  _mb_residual_level_ac = MB_RESIDUAL_Intra16x16ACLevel;
+  ret = residual_luma(startIdx, endIdx);
   RET(ret);
 
   /* TODO YangJing 感觉这里性能有问题 <24-09-07 01:15:56> */
@@ -843,7 +842,6 @@ int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
     int32_t NumC8x8 = 4 / (SubWidthC * SubHeightC);
     for (int iCbCr = 0; iCbCr < 2; iCbCr++) {
       if ((CodedBlockPatternChroma & 3) && startIdx == 0)
-        /* TODO YangJing 后面要去掉这里的参数传递，以及cavlc这里是什么？ <24-09-07 01:26:13> */
         residual_block_DC(ChromaDCLevel[iCbCr], 0, 4 * NumC8x8 - 1, 4 * NumC8x8,
                           iCbCr, 0);
       else
@@ -856,7 +854,6 @@ int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
         for (int i4x4 = 0; i4x4 < 4; i4x4++) {
           int32_t BlkIdx = i8x8 * 4 + i4x4;
           if (CodedBlockPatternChroma & 2)
-            /* TODO YangJing 后面要去掉这里的参数传递，以及cavlc这里是什么？ <24-09-07 01:26:13> */
             residual_block_AC(ChromaACLevel[iCbCr][BlkIdx],
                               MAX(0, startIdx - 1), endIdx - 1, 15, iCbCr,
                               BlkIdx);
@@ -866,8 +863,9 @@ int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
         }
     }
   } else if (ChromaArrayType == 3) {
-    ret = residual_luma(startIdx, endIdx, MB_RESIDUAL_CbIntra16x16DCLevel,
-                        MB_RESIDUAL_CbIntra16x16ACLevel);
+    _mb_residual_level_dc = MB_RESIDUAL_CbIntra16x16DCLevel;
+    _mb_residual_level_ac = MB_RESIDUAL_CbIntra16x16ACLevel;
+    ret = residual_luma(startIdx, endIdx);
     RET(ret);
 
     /* TODO YangJing 性能 <24-09-07 01:43:24> */
@@ -876,8 +874,9 @@ int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
     memcpy(CbLevel4x4, level4x4, sizeof(int32_t) * 16 * 16);
     memcpy(CbLevel8x8, level8x8, sizeof(int32_t) * 4 * 64);
 
-    ret = residual_luma(startIdx, endIdx, MB_RESIDUAL_CrIntra16x16DCLevel,
-                        MB_RESIDUAL_CrIntra16x16ACLevel);
+    _mb_residual_level_dc = MB_RESIDUAL_CrIntra16x16DCLevel;
+    _mb_residual_level_ac = MB_RESIDUAL_CrIntra16x16ACLevel;
+    ret = residual_luma(startIdx, endIdx);
     RET(ret);
 
     memcpy(CrIntra16x16DCLevel, i16x16DClevel, sizeof(int32_t) * 16);
@@ -890,30 +889,24 @@ int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
 }
 
 //7.3.5.3.1 Residual luma syntax
-int MacroBlock::residual_luma(int32_t startIdx, int32_t endIdx,
-                              MB_RESIDUAL_LEVEL mb_residual_level_dc,
-                              MB_RESIDUAL_LEVEL mb_residual_level_ac) {
+int MacroBlock::residual_luma(int32_t startIdx, int32_t endIdx) {
   int ret = 0;
   int32_t BlkIdx = 0;
   int32_t TotalCoeff = 0; // 该 4x4 block的残差中，总共有多少个非零系数
-  // H264_MB_TYPE name_of_mb_type2 = MB_TYPE_NA;
-  CH264ResidualBlockCavlc cavlc;
 
   if (startIdx == 0 && m_mb_pred_mode == Intra_16x16) {
     BlkIdx = 0;
     TotalCoeff = 0;
 
-    if (_is_cabac) {
+    if (_is_cabac)
       ret = _cabac->residual_block_cabac(i16x16DClevel, 0, 15, 16,
-                                         mb_residual_level_dc, BlkIdx, -1,
+                                         _mb_residual_level_dc, BlkIdx, -1,
                                          TotalCoeff);
-      RETURN_IF_FAILED(ret != 0, ret);
-    } else {
-      ret = cavlc.residual_block_cavlc(*_picture, *_bs, i16x16DClevel, 0, 15,
-                                       16, mb_residual_level_dc, m_mb_pred_mode,
-                                       BlkIdx, TotalCoeff);
-      RETURN_IF_FAILED(ret != 0, ret);
-    }
+    else
+      ret = _cavlc->residual_block_cavlc(i16x16DClevel, 0, 15, 16,
+                                         _mb_residual_level_dc, m_mb_pred_mode,
+                                         BlkIdx, TotalCoeff);
+    RET(ret);
 
     mb_luma_4x4_non_zero_count_coeff[BlkIdx] = TotalCoeff;
   }
@@ -934,11 +927,10 @@ int MacroBlock::residual_luma(int32_t startIdx, int32_t endIdx,
                   TotalCoeff);
               RETURN_IF_FAILED(ret != 0, ret);
             } else {
-              ret = cavlc.residual_block_cavlc(
-                  *_picture, *_bs, i16x16AClevel[i8x8 * 4 + i4x4],
-                  MAX(0, startIdx - 1), endIdx - 1, 15,
-                  MB_RESIDUAL_Intra16x16ACLevel, m_mb_pred_mode, BlkIdx,
-                  TotalCoeff);
+              ret = _cavlc->residual_block_cavlc(
+                  i16x16AClevel[i8x8 * 4 + i4x4], MAX(0, startIdx - 1),
+                  endIdx - 1, 15, MB_RESIDUAL_Intra16x16ACLevel, m_mb_pred_mode,
+                  BlkIdx, TotalCoeff);
               RETURN_IF_FAILED(ret != 0, ret);
             }
           } else {
@@ -948,10 +940,9 @@ int MacroBlock::residual_luma(int32_t startIdx, int32_t endIdx,
                   MB_RESIDUAL_LumaLevel4x4, BlkIdx, -1, TotalCoeff);
               RETURN_IF_FAILED(ret != 0, ret);
             } else {
-              ret = cavlc.residual_block_cavlc(
-                  *_picture, *_bs, level4x4[i8x8 * 4 + i4x4], startIdx, endIdx,
-                  16, MB_RESIDUAL_LumaLevel4x4, m_mb_pred_mode, BlkIdx,
-                  TotalCoeff);
+              ret = _cavlc->residual_block_cavlc(
+                  level4x4[i8x8 * 4 + i4x4], startIdx, endIdx, 16,
+                  MB_RESIDUAL_LumaLevel4x4, m_mb_pred_mode, BlkIdx, TotalCoeff);
               RETURN_IF_FAILED(ret != 0, ret);
             }
           }
@@ -988,8 +979,8 @@ int MacroBlock::residual_luma(int32_t startIdx, int32_t endIdx,
             MB_RESIDUAL_LumaLevel8x8, BlkIdx, -1, TotalCoeff);
         RETURN_IF_FAILED(ret != 0, ret);
       } else {
-        ret = cavlc.residual_block_cavlc(
-            *_picture, *_bs, level8x8[i8x8], 4 * startIdx, 4 * endIdx + 3, 64,
+        ret = _cavlc->residual_block_cavlc(
+            level8x8[i8x8], 4 * startIdx, 4 * endIdx + 3, 64,
             MB_RESIDUAL_LumaLevel8x8, m_mb_pred_mode, BlkIdx, TotalCoeff);
         RETURN_IF_FAILED(ret != 0, ret);
       }
