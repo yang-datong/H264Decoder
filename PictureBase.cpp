@@ -3357,51 +3357,44 @@ int PictureBase::neighbouring_locations_MBAFF(
   return 0;
 }
 
-//--------------------------------
 // 8.5.1 Specification of transform decoding process for 4x4 luma residual
-// blocks This specification applies when transform_size_8x8_flag is equal to 0.
-int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks(
+int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
     int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
     int32_t PicWidthInSamples, uint8_t *pic_buff) {
   int ret = 0;
 
-  if (m_mbs[CurrMbAddr].m_mb_pred_mode != Intra_16x16) {
+  /* ------------------ 设置别名 ------------------ */
+  MacroBlock &mb = m_mbs[CurrMbAddr];
+  bool isMbAff =
+      (m_slice.slice_header.MbaffFrameFlag && mb.mb_field_decoding_flag);
+  /* ------------------  End ------------------ */
+
+  /* 当当前宏块预测模式不等于Intra_16x16时，变量LumaLevel4x4包含亮度变换系数的级别。对于由 luma4x4BlkIdx = 0..15 索引的 4x4 亮度块，指定以下有序步骤： */
+  if (mb.m_mb_pred_mode != Intra_16x16) {
     ret = scaling_functions(isChroma, isChromaCb);
-    RETURN_IF_FAILED(ret != 0, ret);
+    RET(ret);
 
-    int32_t isMbAff = (m_slice.slice_header.MbaffFrameFlag == 1 &&
-                       m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
-                          ? 1
-                          : 0;
-
-    for (int32_t luma4x4BlkIdx = 0; luma4x4BlkIdx <= 15;
-         luma4x4BlkIdx++) // or CbLevel4x4 or CrLevel4x4
-    {
-      // 8.5.6 Inverse scanning process for 4x4 transform coefficients and
-      // scaling lists
-
+    for (int32_t luma4x4BlkIdx = 0; luma4x4BlkIdx <= 15; luma4x4BlkIdx++) {
+      //1. 使用 LumaLevel4x4[ luma4x4BlkIdx ] 作为输入和二维数组 c 作为输出来调用第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程。
       int32_t c[4][4] = {{0}};
+      ret = inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
+          mb.LumaLevel4x4[luma4x4BlkIdx], c,
+          mb.field_pic_flag | mb.mb_field_decoding_flag);
+      RET(ret);
+
+      //2. 使用 c 作为输入和 r 作为输出来调用第 8.5.12 节中指定的残差 4x4 块的缩放和变换过程。
       int32_t r[4][4] = {{0}};
-
-      ret =
-          Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
-              m_mbs[CurrMbAddr].LumaLevel4x4[luma4x4BlkIdx], c,
-              m_mbs[CurrMbAddr].field_pic_flag |
-                  m_mbs[CurrMbAddr].mb_field_decoding_flag);
-      RETURN_IF_FAILED(ret != 0, ret);
-
       ret = Scaling_and_transformation_process_for_residual_4x4_blocks(
           c, r, isChroma, isChromaCb);
-      RETURN_IF_FAILED(ret != 0, ret);
+      RET(ret);
 
-      if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1 &&
-          m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_4x4 &&
-          (m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx] == 0 ||
-           m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx] == 1)) {
+      //3. 当 TransformBypassModeFlag 等于 1，宏块预测模式等于 Intra_4x4，并且 Intra4x4PredMode[ luma4x4BlkIdx ] 等于 0 或 1 时，使用 nW 设置调用第 8.5.15 节中指定的帧内残差变换旁路解码过程。等于4，nH设置为等于4，horPredFlag设置为等于Intra4x4PredMode[luma4x4BlkIdx]，并且4x4数组r作为输入，并且输出是4x4数组r的修改版本。
+      if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_4x4 &&
+          (mb.Intra4x4PredMode[luma4x4BlkIdx] & ~1) == 0) {
         // 8.5.15 Intra residual transform-bypass decoding process
         int32_t nW = 4;
         int32_t nH = 4;
-        int32_t horPredFlag = m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx];
+        int32_t horPredFlag = mb.Intra4x4PredMode[luma4x4BlkIdx];
 
         int32_t f[4][4] = {{0}};
         for (int32_t i = 0; i <= nH - 1; i++) {
@@ -3432,7 +3425,7 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks(
         }
       }
 
-      //------------------------------------------------------
+      //4. 宏块内部具有索引 luma4x4BlkIdx 的 4x4 亮度块的左上角样本的位置是通过调用第 6.4.3 节中的逆 4x4 亮度块扫描过程来导出的，其中 luma4x4BlkIdx 作为输入，输出被分配给 ( xO ，yO ）
       // 6.4.3 Inverse 4x4 luma block scanning process
       // InverseRasterScan = (a % (d / b) ) * b;    if e == 0;
       // InverseRasterScan = (a / (d / b) ) * c;    if e == 1;
@@ -3444,8 +3437,9 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks(
       //--------帧内预测------------
       ret = Intra_4x4_sample_prediction(luma4x4BlkIdx, PicWidthInSamples,
                                         pic_buff, isChroma, BitDepth);
-      RETURN_IF_FAILED(ret != 0, ret);
+      RET(ret);
 
+      // 5.4x4 数组 u 的元素为 uij，i, j = 0..3 的推导如下：
       int32_t u[16] = {0};
 
       for (int32_t i = 0; i <= 3; i++) {
@@ -3456,17 +3450,17 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks(
           // (xO + j))] + r[i][j]);
           u[i * 4 + j] =
               CLIP3(0, (1 << BitDepth) - 1,
-                    pic_buff[(m_mbs[CurrMbAddr].m_mb_position_y +
-                              (yO + (i)) * (1 + isMbAff)) *
+                    pic_buff[(mb.m_mb_position_y + (yO + (i)) * (1 + isMbAff)) *
                                  PicWidthInSamples +
-                             (m_mbs[CurrMbAddr].m_mb_position_x + (xO + (j)))] +
+                             (mb.m_mb_position_x + (xO + (j)))] +
                         r[i][j]);
         }
       }
 
+      //6. 使用 u 和 luma4x4BlkIdx 作为输入来调用第 8.5.14 节中的去块滤波器过程之前的图像构造过程。
       ret = Picture_construction_process_prior_to_deblocking_filter_process(
           u, 4, 4, luma4x4BlkIdx, isChroma, PicWidthInSamples, pic_buff);
-      RETURN_IF_FAILED(ret != 0, ret);
+      RET(ret);
     }
   }
 
@@ -3476,7 +3470,7 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks(
 // 8.5.2 Specification of transform decoding process for luma samples of
 // Intra_16x16 macroblock prediction mode
 int PictureBase::
-    transform_decoding_process_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
+    transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
         int32_t isChroma, int32_t BitDepth, int32_t QP1,
         int32_t PicWidthInSamples, int32_t Intra16x16DCLevel[16],
         int32_t Intra16x16ACLevel[16][16], uint8_t *pic_buff) {
@@ -3490,11 +3484,10 @@ int PictureBase::
   int32_t c2[4][4] = {{0}};
   int32_t dcY[4][4] = {{0}};
 
-  ret =
-      Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
-          Intra16x16DCLevel, c2,
-          m_mbs[CurrMbAddr].field_pic_flag |
-              m_mbs[CurrMbAddr].mb_field_decoding_flag);
+  ret = inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
+      Intra16x16DCLevel, c2,
+      m_mbs[CurrMbAddr].field_pic_flag |
+          m_mbs[CurrMbAddr].mb_field_decoding_flag);
   RETURN_IF_FAILED(ret != 0, ret);
 
   ret =
@@ -3531,11 +3524,10 @@ int PictureBase::
     // lists
     int32_t c[4][4] = {{0}};
     int32_t r[4][4] = {{0}};
-    ret =
-        Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
-            lumaList, c,
-            m_mbs[CurrMbAddr].field_pic_flag |
-                m_mbs[CurrMbAddr].mb_field_decoding_flag);
+    ret = inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
+        lumaList, c,
+        m_mbs[CurrMbAddr].field_pic_flag |
+            m_mbs[CurrMbAddr].mb_field_decoding_flag);
     RETURN_IF_FAILED(ret != 0, ret);
 
     int32_t isChroma = 0;
@@ -3631,7 +3623,7 @@ int PictureBase::
 
 // 8.5.3 Specification of transform decoding process for 8x8 luma residual
 // blocks This specification applies when transform_size_8x8_flag is equal to 1.
-int PictureBase::transform_decoding_process_for_8x8_luma_residual_blocks(
+int PictureBase::transform_decoding_for_8x8_luma_residual_blocks(
     int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
     int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff) {
   int ret = 0;
@@ -3824,11 +3816,10 @@ int PictureBase::transform_decoding_process_for_chroma_samples(
       int32_t c[4][4] = {{0}};
       int32_t r[4][4] = {{0}};
 
-      ret =
-          Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
-              chromaList, c,
-              m_mbs[CurrMbAddr].field_pic_flag |
-                  m_mbs[CurrMbAddr].mb_field_decoding_flag);
+      ret = inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
+          chromaList, c,
+          m_mbs[CurrMbAddr].field_pic_flag |
+              m_mbs[CurrMbAddr].mb_field_decoding_flag);
       RETURN_IF_FAILED(ret != 0, ret);
 
       int32_t isChroma = 1;
@@ -3940,14 +3931,14 @@ int PictureBase::
   if (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_16x16) {
     if (isChromaCb == 1) {
       ret =
-          transform_decoding_process_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
+          transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
               isChroma, BitDepth, m_mbs[CurrMbAddr].QP1Cb, PicWidthInSamples,
               m_mbs[CurrMbAddr].CbIntra16x16DCLevel,
               m_mbs[CurrMbAddr].CbIntra16x16ACLevel, pic_buff);
     } else // if (isChromaCb == 0)
     {
       ret =
-          transform_decoding_process_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
+          transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
               isChroma, BitDepth, m_mbs[CurrMbAddr].QP1Cr, PicWidthInSamples,
               m_mbs[CurrMbAddr].CrIntra16x16DCLevel,
               m_mbs[CurrMbAddr].CrIntra16x16ACLevel, pic_buff);
@@ -3955,23 +3946,23 @@ int PictureBase::
     RETURN_IF_FAILED(ret != 0, ret);
   } else if (m_mbs[CurrMbAddr].transform_size_8x8_flag == 1) {
     if (isChromaCb == 1) {
-      ret = transform_decoding_process_for_8x8_luma_residual_blocks(
+      ret = transform_decoding_for_8x8_luma_residual_blocks(
           isChroma, isChromaCb, BitDepth, PicWidthInSamples,
           m_mbs[CurrMbAddr].CbLevel8x8, pic_buff);
     } else // if (isChromaCb == 0)
     {
-      ret = transform_decoding_process_for_8x8_luma_residual_blocks(
+      ret = transform_decoding_for_8x8_luma_residual_blocks(
           isChroma, isChromaCb, BitDepth, PicWidthInSamples,
           m_mbs[CurrMbAddr].CbLevel8x8, pic_buff);
     }
     RETURN_IF_FAILED(ret != 0, ret);
   } else {
     if (isChromaCb == 1) {
-      ret = transform_decoding_process_for_4x4_luma_residual_blocks(
+      ret = transform_decoding_for_4x4_luma_residual_blocks(
           isChroma, isChromaCb, BitDepth, PicWidthInSamples, pic_buff);
     } else // if (isChromaCb == 0)
     {
-      ret = transform_decoding_process_for_4x4_luma_residual_blocks(
+      ret = transform_decoding_for_4x4_luma_residual_blocks(
           isChroma, isChromaCb, BitDepth, PicWidthInSamples, pic_buff);
     }
     RETURN_IF_FAILED(ret != 0, ret);
@@ -4514,10 +4505,9 @@ int PictureBase::
   return 0;
 }
 
-// 8.5.6 Inverse scanning process for 4x4 transform coefficients and scaling
-// lists
+// 8.5.6 Inverse scanning process for 4x4 transform coefficients and scaling lists
 int PictureBase::
-    Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
+    inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
         int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag) {
   // Table 8-13 – Specification of mapping of idx to cij for zig-zag and field
   // scan
@@ -4860,13 +4850,12 @@ int PictureBase::scaling_functions(int32_t isChroma, int32_t isChromaCb) {
 
   int32_t weightScale4x4[4][4] = {{0}};
 
-  ret =
-      Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
-          (int32_t *)m_slice.slice_header
-              .ScalingList4x4[iYCbCr + ((mbIsInterFlag == 1) ? 3 : 0)],
-          weightScale4x4,
-          m_mbs[CurrMbAddr].field_pic_flag |
-              m_mbs[CurrMbAddr].mb_field_decoding_flag);
+  ret = inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
+      (int32_t *)m_slice.slice_header
+          .ScalingList4x4[iYCbCr + ((mbIsInterFlag == 1) ? 3 : 0)],
+      weightScale4x4,
+      m_mbs[CurrMbAddr].field_pic_flag |
+          m_mbs[CurrMbAddr].mb_field_decoding_flag);
   RETURN_IF_FAILED(ret != 0, ret);
 
   int32_t v4x4[6][3] = {

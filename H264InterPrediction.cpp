@@ -34,7 +34,7 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks_inter(
       int32_t r[4][4] = {{0}};
 
       ret =
-          Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
+          inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
               m_mbs[CurrMbAddr].LumaLevel4x4[luma4x4BlkIdx], c,
               m_mbs[CurrMbAddr].field_pic_flag |
                   m_mbs[CurrMbAddr].mb_field_decoding_flag);
@@ -316,7 +316,7 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
       int32_t r[4][4] = {{0}};
 
       ret =
-          Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
+          inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
               chromaList, c,
               m_mbs[CurrMbAddr].field_pic_flag |
                   m_mbs[CurrMbAddr].mb_field_decoding_flag);

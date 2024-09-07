@@ -54,8 +54,11 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture) {
         /* 当前处于MBAFF模式，且当前为 “顶宏块” 或者 “底宏块并且对应的顶宏块执行了跳过操作” */
         process_mb_field_decoding_flag(picture, m_pps.entropy_coding_mode_flag);
 
-      /* 这里包括了后续的，帧内预测、帧间预测、解码宏块、去块滤波 */
+      /* 在宏块层解码帧内、帧间所需要的必须信息 */
       do_macroblock_layer(picture);
+
+      /* 帧内预测、帧间预测、解码宏块、去块滤波 */
+      decoding_process(picture);
     }
 
     if (!m_pps.entropy_coding_mode_flag)
@@ -562,105 +565,70 @@ int SliceData::do_macroblock_layer(PictureBase &picture) {
   updatesLocationOfCurrentMacroblock(picture, header->MbaffFrameFlag);
   picture.mb_cnt++;
 
-  //--------熵解码------------
+  /* 在宏块层中对每个宏块处理得到对应帧内、帧间解码所需要的信息，以及解码当前的控制层的信息 */
   picture.m_mbs[picture.CurrMbAddr].macroblock_layer(*bs, picture, *this,
                                                      *cabac);
+  return 0;
+}
 
-  //--------帧内/间预测------------
-  //--------反量化------------
-  //--------反变换------------
+int SliceData::decoding_process(PictureBase &picture) {
+  /* ------------------ 设置别名 ------------------ */
+  const int32_t &picWidthInSamplesL = picture.PicWidthInSamplesL;
+  const int32_t &picWidthInSamplesC = picture.PicWidthInSamplesC;
+  const int32_t &BitDepth = picture.m_slice.m_sps.BitDepthY;
 
-  int32_t isChroma = 0;
-  int32_t isChromaCb = 0;
-  int32_t BitDepth = 0;
+  uint8_t *&pic_buff_luma = picture.m_pic_buff_luma;
+  uint8_t *&pic_buff_cb = picture.m_pic_buff_cb;
+  uint8_t *&pic_buff_cr = picture.m_pic_buff_cr;
 
-  int32_t picWidthInSamplesL = picture.PicWidthInSamplesL;
-  int32_t picWidthInSamplesC = picture.PicWidthInSamplesC;
+  MacroBlock &mb = picture.m_mbs[picture.CurrMbAddr];
+  /* ------------------  End ------------------ */
 
-  uint8_t *pic_buff_luma = picture.m_pic_buff_luma;
-  uint8_t *pic_buff_cb = picture.m_pic_buff_cb;
-  uint8_t *pic_buff_cr = picture.m_pic_buff_cr;
-  // 帧内预测
-  if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode == Intra_4x4) {
-    isChroma = 0;
-    isChromaCb = 0;
-    BitDepth = picture.m_slice.m_sps.BitDepthY;
+  //----------------------------------- 帧内预测 -----------------------------------
+  //8.5 Transform coefficient decoding process and picture construction process prior to deblocking filter process（根据不同类型的预测模式，进行去块滤波处理之前的变换系数解码处理和图片构造处理 ）
 
-    picture.transform_decoding_process_for_4x4_luma_residual_blocks(
-        isChroma, isChromaCb, BitDepth, picWidthInSamplesL, pic_buff_luma);
-
-    isChromaCb = 1;
-    picture.transform_decoding_process_for_chroma_samples(
-        isChromaCb, picWidthInSamplesC, pic_buff_cb);
-
-    isChromaCb = 0;
-    picture.transform_decoding_process_for_chroma_samples(
-        isChromaCb, picWidthInSamplesC, pic_buff_cr);
-
-  } else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode == Intra_8x8) {
-    isChroma = 0;
-    isChromaCb = 0;
-    BitDepth = picture.m_slice.m_sps.BitDepthY;
-
-    picture.transform_decoding_process_for_8x8_luma_residual_blocks(
-        isChroma, isChromaCb, BitDepth, picWidthInSamplesL,
-        picture.m_mbs[picture.CurrMbAddr].LumaLevel8x8, pic_buff_luma);
-
-    isChromaCb = 1;
-    picture.transform_decoding_process_for_chroma_samples(
-        isChromaCb, picWidthInSamplesC, pic_buff_cb);
-
-    isChromaCb = 0;
-    picture.transform_decoding_process_for_chroma_samples(
-        isChromaCb, picWidthInSamplesC, pic_buff_cr);
-
-  } else if (picture.m_mbs[picture.CurrMbAddr].m_mb_pred_mode == Intra_16x16) {
-    isChroma = 0;
-    isChromaCb = 0;
-    BitDepth = picture.m_slice.m_sps.BitDepthY;
-    int32_t QP1 = picture.m_mbs[picture.CurrMbAddr].QP1Y;
-
+  if (mb.m_mb_pred_mode == Intra_4x4)
+    /* TODO YangJing 仔细看函数内部 <24-09-08 01:07:08> */
+    picture.transform_decoding_for_4x4_luma_residual_blocks(
+        0, 0, BitDepth, picWidthInSamplesL, pic_buff_luma);
+  else if (mb.m_mb_pred_mode == Intra_8x8)
+    picture.transform_decoding_for_8x8_luma_residual_blocks(
+        0, 0, BitDepth, picWidthInSamplesL, mb.LumaLevel8x8, pic_buff_luma);
+  else if (mb.m_mb_pred_mode == Intra_16x16)
     picture
-        .transform_decoding_process_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
-            isChroma, BitDepth, QP1, picWidthInSamplesL,
-            picture.m_mbs[picture.CurrMbAddr].Intra16x16DCLevel,
-            picture.m_mbs[picture.CurrMbAddr].Intra16x16ACLevel, pic_buff_luma);
-    isChromaCb = 1;
-    picture.transform_decoding_process_for_chroma_samples(
-        isChromaCb, picWidthInSamplesC, pic_buff_cb);
+        .transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
+            0, BitDepth, mb.QP1Y, picWidthInSamplesL, mb.Intra16x16DCLevel,
+            mb.Intra16x16ACLevel, pic_buff_luma);
 
-    isChromaCb = 0;
-    picture.transform_decoding_process_for_chroma_samples(
-        isChromaCb, picWidthInSamplesC, pic_buff_cr);
-  } else if (picture.m_mbs[picture.CurrMbAddr].m_name_of_mb_type == I_PCM)
-    // 说明该宏块没有残差，也没有预测值，码流中的数据直接为原始像素值
+  else if (mb.m_name_of_mb_type == I_PCM) {
+    //----------------------------------- 原始数据 -----------------------------------
     picture.Sample_construction_process_for_I_PCM_macroblocks();
-  else {
+    return 0;
+  } else {
+    //----------------------------------- 帧间预测 -----------------------------------
+    /* 运动补偿 */
+    picture.inter_prediction_process();
 
-    // P,B帧，I帧不会进这里
-    picture.inter_prediction_process(); // 帧间预测
-
-    BitDepth = picture.m_slice.m_sps.BitDepthY;
-
-    //-------残差-----------
-    if (picture.m_mbs[picture.CurrMbAddr].transform_size_8x8_flag == 0) {
+    /* 选择 4x4 或 8x8 的残差块解码函数来处理亮度残差块 */
+    if (mb.transform_size_8x8_flag == 0)
       picture.transform_decoding_process_for_4x4_luma_residual_blocks_inter(
-          isChroma, isChromaCb, BitDepth, picWidthInSamplesL, pic_buff_luma);
-    } else {
+          0, 0, BitDepth, picWidthInSamplesL, pic_buff_luma);
+    else
       picture.transform_decoding_process_for_8x8_luma_residual_blocks_inter(
-          isChroma, isChromaCb, BitDepth, picWidthInSamplesL,
-          picture.m_mbs[picture.CurrMbAddr].LumaLevel8x8, pic_buff_luma);
-    }
+          0, 0, BitDepth, picWidthInSamplesL, mb.LumaLevel8x8, pic_buff_luma);
 
-    isChromaCb = 1;
+    /* 调用色度残差块的解码函数(Cb,Cr) */
     picture.transform_decoding_process_for_chroma_samples_inter(
-        isChromaCb, picWidthInSamplesC, pic_buff_cb);
-
-    isChromaCb = 0;
+        1, picWidthInSamplesC, pic_buff_cb);
     picture.transform_decoding_process_for_chroma_samples_inter(
-        isChromaCb, picWidthInSamplesC, pic_buff_cr);
+        0, picWidthInSamplesC, pic_buff_cr);
+    return 0;
   }
 
+  picture.transform_decoding_process_for_chroma_samples(1, picWidthInSamplesC,
+                                                        pic_buff_cb);
+  picture.transform_decoding_process_for_chroma_samples(0, picWidthInSamplesC,
+                                                        pic_buff_cr);
   return 0;
 }
 

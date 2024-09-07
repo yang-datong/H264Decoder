@@ -276,14 +276,14 @@ class PictureBase {
   int Derivation_process_for_8x8_luma_block_indices(
       uint8_t xP, uint8_t yP, uint8_t &luma8x8BlkIdx); // 6.4.13.3
 
-  int transform_decoding_process_for_4x4_luma_residual_blocks(
+  int transform_decoding_for_4x4_luma_residual_blocks(
       int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
       int32_t PicWidthInSamples, uint8_t *pic_buff); // 8.5.1
-  int transform_decoding_process_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
+  int transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
       int32_t isChroma, int32_t BitDepth, int32_t QP1,
       int32_t PicWidthInSamples, int32_t Intra16x16DCLevel[16],
       int32_t Intra16x16ACLevel[16][16], uint8_t *pic_buff); // 8.5.2
-  int transform_decoding_process_for_8x8_luma_residual_blocks(
+  int transform_decoding_for_8x8_luma_residual_blocks(
       int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
       int32_t PicWidthInSamples, int32_t Level8x8[4][64],
       uint8_t *pic_buff); // 8.5.3
@@ -305,7 +305,7 @@ class PictureBase {
   int Picture_construction_process_prior_to_deblocking_filter_process(
       int32_t *u, int32_t nW, int32_t nH, int32_t BlkIdx, int32_t isChroma,
       int32_t PicWidthInSamples, uint8_t *pic_buff); // 8.5.14
-  int Inverse_scanning_process_for_4x4_transform_coefficients_and_scaling_lists(
+  int inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
       int32_t values[16], int32_t (&c)[4][4],
       int32_t field_scan_flag); // 8.5.6
   int Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(

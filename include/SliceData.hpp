@@ -65,6 +65,8 @@ class SliceData {
 
   int do_macroblock_layer(PictureBase &picture);
 
+  int decoding_process(PictureBase &picture);
+
   int initCABAC();
 
   void printFrameReorderPriorityInfo(PictureBase &picture);
