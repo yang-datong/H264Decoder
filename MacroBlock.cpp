@@ -822,7 +822,7 @@ int MacroBlock::residual_block_AC(int32_t coeffLevel[], int32_t startIdx,
 // 7.3.5.3 Residual data syntax
 int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
 
-  if (_cavlc) _cavlc = new CH264ResidualBlockCavlc();
+  if (!_cavlc) _cavlc = new CH264ResidualBlockCavlc();
   const uint32_t ChromaArrayType = _picture->m_slice.m_sps.ChromaArrayType;
   const int32_t SubWidthC = _picture->m_slice.m_sps.SubWidthC;
   const int32_t SubHeightC = _picture->m_slice.m_sps.SubHeightC;
