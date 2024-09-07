@@ -66,9 +66,15 @@ class MacroBlock {
   /* 子宏块类型，指示子宏块的编码模式 */
   int32_t sub_mb_type[4] = {0};
 
-  /* 亮度编码块模式，指示哪些亮度块包含非零系数，亮度块模式的值范围是0到15 */
+  /* 亮度编码块模式，指示哪些亮度块包含非零系数，亮度块模式的值范围是0到15，即2^4 - 1 = 15，表示为3个bits位：
+   * 比如 0b1010（即二进制的 1010），从低位往高位数，这意味着第 2 和第 4 个 8x8 块包含亮度残差数据，而第 1 和第 3 个 8x8 块没有亮度残差数据，在后面可以看到 if (CodedBlockPatternLuma & (1 << i8x8)) 这样的判断就是在做这件事情 */
   int32_t CodedBlockPatternLuma = -1;
-  /* 色度编码块模式，指示哪些色度块包含非零系数，色度块模式的值范围是0到3 */
+
+  //Table 7-15 – Specification of CodedBlockPatternChroma values
+  /* 色度编码块模式，指示哪些色度块包含非零系数，色度块模式的值范围是0到2：
+   * 0: 所有色度变换系数级别都等于 0。
+   * 1: 一个或多个色度 DC 变换系数级别应为非零值。所有色度 AC 变换系数级别都等于 0。
+   * 2: 零个或多个色度 DC 变换系数级别是非零值。一个或多个色度 AC 变换系数级别应为非零值。*/
   int32_t CodedBlockPatternChroma = -1;
 
   /* QPY: 当前宏块的亮度量化参数。
@@ -301,6 +307,9 @@ class MacroBlock {
                         int32_t maxNumCoeff, int iCbCr, int32_t BlkIdx);
   int residual_block_AC(int32_t coeffLevel[], int32_t startIdx, int32_t endIdx,
                         int32_t maxNumCoeff, int iCbCr, int32_t BlkIdx);
+  int residual_block2(int32_t coeffLevel[], int32_t startIdx, int32_t endIdx,
+                      int32_t maxNumCoeff, MB_RESIDUAL_LEVEL mb_block_level,
+                      int iCbCr, int32_t BlkIdx, int &TotalCoeff);
 };
 
 #endif /* end of include guard: MACROBLOCK_HPP_FBNXLFQV */
