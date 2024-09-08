@@ -588,7 +588,6 @@ int SliceData::decoding_process(PictureBase &picture) {
   //8.5 Transform coefficient decoding process and picture construction process prior to deblocking filter process（根据不同类型的预测模式，进行去块滤波处理之前的变换系数解码处理和图片构造处理 ）
 
   if (mb.m_mb_pred_mode == Intra_4x4)
-    /* TODO YangJing 仔细看函数内部 <24-09-08 01:07:08> */
     picture.transform_decoding_for_4x4_luma_residual_blocks(
         0, 0, BitDepth, picWidthInSamplesL, pic_buff_luma);
   else if (mb.m_mb_pred_mode == Intra_8x8)

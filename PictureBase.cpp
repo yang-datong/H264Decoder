@@ -2,6 +2,8 @@
 #include "Bitmap.hpp"
 #include "Frame.hpp"
 #include "SliceHeader.hpp"
+#include "Type.hpp"
+#include <cstdint>
 
 extern int32_t g_PicNumCnt;
 
@@ -3371,9 +3373,9 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
 
   /* 当当前宏块预测模式不等于Intra_16x16时，变量LumaLevel4x4包含亮度变换系数的级别。对于由 luma4x4BlkIdx = 0..15 索引的 4x4 亮度块，指定以下有序步骤： */
   if (mb.m_mb_pred_mode != Intra_16x16) {
+    /* TODO YangJing 这里为什么有一个缩放举证？ <24-09-08 02:52:34> */
     ret = scaling_functions(isChroma, isChromaCb);
     RET(ret);
-
     for (int32_t luma4x4BlkIdx = 0; luma4x4BlkIdx <= 15; luma4x4BlkIdx++) {
       //1. 使用 LumaLevel4x4[ luma4x4BlkIdx ] 作为输入和二维数组 c 作为输出来调用第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程。
       int32_t c[4][4] = {{0}};
@@ -3391,44 +3393,15 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
       //3. 当 TransformBypassModeFlag 等于 1，宏块预测模式等于 Intra_4x4，并且 Intra4x4PredMode[ luma4x4BlkIdx ] 等于 0 或 1 时，使用 nW 设置调用第 8.5.15 节中指定的帧内残差变换旁路解码过程。等于4，nH设置为等于4，horPredFlag设置为等于Intra4x4PredMode[luma4x4BlkIdx]，并且4x4数组r作为输入，并且输出是4x4数组r的修改版本。
       if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_4x4 &&
           (mb.Intra4x4PredMode[luma4x4BlkIdx] & ~1) == 0) {
-        // 8.5.15 Intra residual transform-bypass decoding process
-        int32_t nW = 4;
-        int32_t nH = 4;
+        int32_t nW = 4, nH = 4;
         int32_t horPredFlag = mb.Intra4x4PredMode[luma4x4BlkIdx];
-
-        int32_t f[4][4] = {{0}};
-        for (int32_t i = 0; i <= nH - 1; i++) {
-          for (int32_t j = 0; j <= nW - 1; j++) {
-            f[i][j] = r[i][j];
-          }
-        }
-
-        if (horPredFlag == 0) {
-          for (int32_t i = 0; i <= nH - 1; i++) {
-            for (int32_t j = 0; j <= nW - 1; j++) {
-              r[i][j] = 0;
-              for (int32_t k = 0; k <= i; k++) {
-                r[i][j] += f[k][j];
-              }
-            }
-          }
-        } else // if (horPredFlag == 1)
-        {
-          for (int32_t i = 0; i <= nH - 1; i++) {
-            for (int32_t j = 0; j <= nW - 1; j++) {
-              r[i][j] = 0;
-              for (int32_t k = 0; k <= j; k++) {
-                r[i][j] += f[i][k];
-              }
-            }
-          }
-        }
+        // 8.5.15 Intra residual transform-bypass decoding process
+        intra_residual_transform_bypass_decoding(nW, nH, horPredFlag, r);
       }
 
       //4. 宏块内部具有索引 luma4x4BlkIdx 的 4x4 亮度块的左上角样本的位置是通过调用第 6.4.3 节中的逆 4x4 亮度块扫描过程来导出的，其中 luma4x4BlkIdx 作为输入，输出被分配给 ( xO ，yO ）
       // 6.4.3 Inverse 4x4 luma block scanning process
-      // InverseRasterScan = (a % (d / b) ) * b;    if e == 0;
-      // InverseRasterScan = (a / (d / b) ) * c;    if e == 1;
+      /* 逆 4x4 亮度块扫描过程由下式指定: */
       int32_t xO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
                    InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
       int32_t yO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
@@ -3441,29 +3414,61 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
 
       // 5.4x4 数组 u 的元素为 uij，i, j = 0..3 的推导如下：
       int32_t u[16] = {0};
-
-      for (int32_t i = 0; i <= 3; i++) {
-        for (int32_t j = 0; j <= 3; j++) {
-          // uij = Clip1Y( predL[ xO + j, yO + i ] + rij ) = Clip3( 0, ( 1 <<
-          // BitDepthY ) − 1, x ); u[i * 4 + j] = CLIP3(0, (1 << BitDepth) - 1,
-          // pic_buff[(mb_y * 16 + (yO + i)) * PicWidthInSamples + (mb_x * 16 +
-          // (xO + j))] + r[i][j]);
+      for (int32_t i = 0; i < 4; i++) {
+        for (int32_t j = 0; j < 4; j++) {
+          int32_t y = mb.m_mb_position_y + (yO + i) * (1 + isMbAff);
+          int32_t x = mb.m_mb_position_x + (xO + j);
           u[i * 4 + j] =
-              CLIP3(0, (1 << BitDepth) - 1,
-                    pic_buff[(mb.m_mb_position_y + (yO + (i)) * (1 + isMbAff)) *
-                                 PicWidthInSamples +
-                             (mb.m_mb_position_x + (xO + (j)))] +
-                        r[i][j]);
+              Clip1C(pic_buff[y * PicWidthInSamples + x] + r[i][j], BitDepth);
         }
       }
 
       //6. 使用 u 和 luma4x4BlkIdx 作为输入来调用第 8.5.14 节中的去块滤波器过程之前的图像构造过程。
-      ret = Picture_construction_process_prior_to_deblocking_filter_process(
+      ret = picture_construction_process_prior_to_deblocking_filter(
           u, 4, 4, luma4x4BlkIdx, isChroma, PicWidthInSamples, pic_buff);
       RET(ret);
     }
   }
 
+  return 0;
+}
+
+//8.5.15 Intra residual transform-bypass decoding process( 帧内残差变换-旁路解码过程)
+/* 当TransformBypassModeFlag等于1，宏块预测模式等于Intra_4x4、Intra_8x8或Intra_16x16，并且适用的帧内预测模式等于垂直或水平模式时，调用该过程。 Cb 和 Cr 分量的处理方式与亮度（L 或 Y）分量的处理方式相同。  
+ * 输入： – 两个变量 nW 和 nH， – 变量 horPredFlag， – 带有元素 rij 的 (nW)x(nH) 数组 r，它是与亮度分量的残差变换旁路块相关的数组，或者与 Cb 和 Cr 分量的残差变换旁路块相关的数组。  
+ * 输出: (nW)x(nH) 数组 r 的修改版本，其中元素 rij 包含帧内残差变换旁路解码过程的结果。 */
+int PictureBase::intra_residual_transform_bypass_decoding(int32_t nW,
+                                                          int32_t nH,
+                                                          int32_t horPredFlag,
+                                                          int32_t r[4][4]) {
+  /* 设 f 是一个临时 (nW)x(nH) 数组，其中元素 fij 是通过以下方式导出的： */
+  int32_t f[4][4] = {{0}};
+  for (int32_t i = 0; i <= nH - 1; i++)
+    for (int32_t j = 0; j <= nW - 1; j++)
+      f[i][j] = r[i][j];
+
+  /* 根据 horPredFlag，以下情况适用： 
+   * – 如果 horPredFlag 等于 0，则修改后的数组 r 通过以下方式导出： */
+  if (horPredFlag == 0) {
+    for (int32_t i = 0; i <= nH - 1; i++) {
+      for (int32_t j = 0; j <= nW - 1; j++) {
+        r[i][j] = 0;
+        for (int32_t k = 0; k <= i; k++) {
+          r[i][j] += f[k][j];
+        }
+      }
+    }
+  } else // if (horPredFlag == 1)
+  {
+    for (int32_t i = 0; i <= nH - 1; i++) {
+      for (int32_t j = 0; j <= nW - 1; j++) {
+        r[i][j] = 0;
+        for (int32_t k = 0; k <= j; k++) {
+          r[i][j] += f[i][k];
+        }
+      }
+    }
+  }
   return 0;
 }
 
@@ -3614,7 +3619,7 @@ int PictureBase::
   }
 
   int32_t BlkIdx = 0;
-  ret = Picture_construction_process_prior_to_deblocking_filter_process(
+  ret = picture_construction_process_prior_to_deblocking_filter(
       u, 16, 16, BlkIdx, isChroma, PicWidthInSamples, pic_buff);
   RETURN_IF_FAILED(ret != 0, ret);
 
@@ -3719,7 +3724,7 @@ int PictureBase::transform_decoding_for_8x8_luma_residual_blocks(
       }
     }
 
-    ret = Picture_construction_process_prior_to_deblocking_filter_process(
+    ret = picture_construction_process_prior_to_deblocking_filter(
         u, 8, 8, luma8x8BlkIdx, isChroma, PicWidthInSamples, pic_buff);
     RETURN_IF_FAILED(ret != 0, ret);
   }
@@ -3906,7 +3911,7 @@ int PictureBase::transform_decoding_process_for_chroma_samples(
 
     int32_t BlkIdx = 0;
     int32_t isChroma = 1;
-    ret = Picture_construction_process_prior_to_deblocking_filter_process(
+    ret = picture_construction_process_prior_to_deblocking_filter(
         u, MbWidthC, MbHeightC, BlkIdx, isChroma, PicWidthInSamples, pic_buff);
     RETURN_IF_FAILED(ret != 0, ret);
   }
@@ -4356,19 +4361,16 @@ int PictureBase::Scaling_and_transformation_process_for_residual_8x8_blocks(
   return 0;
 }
 
-// 8.5.14 Picture construction process prior to deblocking filter process
-// 环路滤波之前的图像的像素生成
-int PictureBase::
-    Picture_construction_process_prior_to_deblocking_filter_process(
-        int32_t *u, int32_t nW, int32_t nH, int32_t BlkIdx, int32_t isChroma,
-        int32_t PicWidthInSamples, uint8_t *pic_buff) {
+// 8.5.14 Picture construction process prior to deblocking filter process (去块过滤过程之前的图片构造过程)
+/* 输入： 
+ * – 包含元素 uij 的样本数组 u，它是 16x16 亮度块或 (MbWidthC)x(MbHeightC) 色度块或 4x4 亮度块或 4x4 色度块或 8x8 亮度块，或者，当 ChromaArrayType等于 3，8x8 色度块， 
+ * – 当 u 不是 16x16 亮度块或 (MbWidthC)x(MbHeightC) 色度块时，块索引 luma4x4BlkIdx 或 chroma4x4BlkIdx 或 luma8x8BlkIdx 或 cb4x4BlkIdx 或 cr4x4BlkIdx 或 cb8x8BlkIdx 或idx。*/
+int PictureBase::picture_construction_process_prior_to_deblocking_filter(
+    int32_t *u, int32_t nW, int32_t nH, int32_t BlkIdx, int32_t isChroma,
+    int32_t PicWidthInSamples, uint8_t *pic_buff) {
   int ret = 0;
-  //SliceHeader &slice_header = m_h264_slice_header;
 
-  int32_t xP = 0;
-  int32_t yP = 0;
-  int32_t xO = 0;
-  int32_t yO = 0;
+  int32_t xP = 0, yP = 0, xO = 0, yO = 0;
 
   // 6.4.1 Inverse macroblock scanning process
   ret = inverse_macroblock_scanning_process(

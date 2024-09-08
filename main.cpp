@@ -24,6 +24,8 @@ int main(int argc, char *argv[]) {
     //filePath = "./demo_10_frames_cavlc.h264";
     /* 714x624 场编码(CAVLC 熵编码模式) */
     //filePath = "./demo_10_frames_cavlc_and_interlace.h264";
+    /* 714x624 帧编码(CABAC 熵编码模式 + 无损编码(lossless=1) + TransformBypassMode + YUV444) */
+    //filePath = "./demo_10_frames_TransformBypassModeFlag.h264";
   }
 
   /* 1. 打开文件、读取NUL、存储NUL的操作 */

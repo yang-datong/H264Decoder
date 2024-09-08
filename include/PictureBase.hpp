@@ -13,7 +13,7 @@ class PictureBase {
  public:
   int32_t mb_x; // 存储当前正在解码的宏块的X坐标（相对于图片左上角位置）
   int32_t mb_y; // 存储当前正在解码的宏块的Y坐标（相对于图片左上角位置）
-/* 比如(0,0)表示最左上角的宏块，假设图像的分辨率是 1920x1080，宏块大小是 16x16 像素：
+  /* 比如(0,0)表示最左上角的宏块，假设图像的分辨率是 1920x1080，宏块大小是 16x16 像素：
  * 共有宏块： 1920 / 16 = 120,  1080 / 16 = 67.5, 120 * 68 = 8160
  * 若图像像素坐标为：(1919,1079)，对应映射的宏块坐标为：(1919 / 16 = 119.9375, 1079 / 16 = 67.4375) = (119,67)
  * */
@@ -302,7 +302,7 @@ class PictureBase {
   int Scaling_and_transformation_process_for_residual_8x8_blocks(
       int32_t c[8][8], int32_t (&r)[8][8], int32_t isChroma,
       int32_t isChromaCb); // 8.5.13
-  int Picture_construction_process_prior_to_deblocking_filter_process(
+  int picture_construction_process_prior_to_deblocking_filter(
       int32_t *u, int32_t nW, int32_t nH, int32_t BlkIdx, int32_t isChroma,
       int32_t PicWidthInSamples, uint8_t *pic_buff); // 8.5.14
   int inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
@@ -331,6 +331,9 @@ class PictureBase {
   int transform_decoding_process_for_chroma_samples_inter(
       int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff);
 
+  int intra_residual_transform_bypass_decoding(int32_t nW, int32_t nH,
+                                               int32_t horPredFlag,
+                                               int32_t r[4][4]);
   int inter_prediction_process(); // 8.4
   int derivation_motion_vector_components_and_reference_indices(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
@@ -420,13 +423,15 @@ class PictureBase {
       uint8_t
           *predPartCr); // out: predPartLXCr[partHeightC][partWidthC] //8.4.2.3
 
-  int derivation_prediction_weights(
-      int32_t refIdxL0, int32_t refIdxL1, int32_t predFlagL0,
-      int32_t predFlagL1, int32_t &logWDL, int32_t &w0L, int32_t &w1L,
-      int32_t &o0L, int32_t &o1L, int32_t &logWDCb, int32_t &w0Cb,
-      int32_t &w1Cb, int32_t &o0Cb, int32_t &o1Cb, int32_t &logWDCr,
-      int32_t &w0Cr, int32_t &w1Cr, int32_t &o0Cr,
-      int32_t &o1Cr); // 8.4.3
+  int derivation_prediction_weights(int32_t refIdxL0, int32_t refIdxL1,
+                                    int32_t predFlagL0, int32_t predFlagL1,
+                                    int32_t &logWDL, int32_t &w0L, int32_t &w1L,
+                                    int32_t &o0L, int32_t &o1L,
+                                    int32_t &logWDCb, int32_t &w0Cb,
+                                    int32_t &w1Cb, int32_t &o0Cb, int32_t &o1Cb,
+                                    int32_t &logWDCr, int32_t &w0Cr,
+                                    int32_t &w1Cr, int32_t &o0Cr,
+                                    int32_t &o1Cr); // 8.4.3
   int default_weighted_sample_prediction(
       int32_t predFlagL0, int32_t predFlagL1, int32_t partWidth,
       int32_t partHeight, int32_t partWidthC, int32_t partHeightC,

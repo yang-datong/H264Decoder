@@ -33,11 +33,10 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks_inter(
       int32_t c[4][4] = {{0}};
       int32_t r[4][4] = {{0}};
 
-      ret =
-          inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
-              m_mbs[CurrMbAddr].LumaLevel4x4[luma4x4BlkIdx], c,
-              m_mbs[CurrMbAddr].field_pic_flag |
-                  m_mbs[CurrMbAddr].mb_field_decoding_flag);
+      ret = inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
+          m_mbs[CurrMbAddr].LumaLevel4x4[luma4x4BlkIdx], c,
+          m_mbs[CurrMbAddr].field_pic_flag |
+              m_mbs[CurrMbAddr].mb_field_decoding_flag);
       RETURN_IF_FAILED(ret != 0, ret);
 
       ret = Scaling_and_transformation_process_for_residual_4x4_blocks(
@@ -113,7 +112,7 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks_inter(
         }
       }
 
-      ret = Picture_construction_process_prior_to_deblocking_filter_process(
+      ret = picture_construction_process_prior_to_deblocking_filter(
           u, 4, 4, luma4x4BlkIdx, isChroma, PicWidthInSamples, pic_buff);
       RETURN_IF_FAILED(ret != 0, ret);
     }
@@ -219,7 +218,7 @@ int PictureBase::transform_decoding_process_for_8x8_luma_residual_blocks_inter(
       }
     }
 
-    ret = Picture_construction_process_prior_to_deblocking_filter_process(
+    ret = picture_construction_process_prior_to_deblocking_filter(
         u, 8, 8, luma8x8BlkIdx, isChroma, PicWidthInSamples, pic_buff);
     RETURN_IF_FAILED(ret != 0, ret);
   }
@@ -315,11 +314,10 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
       int32_t c[4][4] = {{0}};
       int32_t r[4][4] = {{0}};
 
-      ret =
-          inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
-              chromaList, c,
-              m_mbs[CurrMbAddr].field_pic_flag |
-                  m_mbs[CurrMbAddr].mb_field_decoding_flag);
+      ret = inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
+          chromaList, c,
+          m_mbs[CurrMbAddr].field_pic_flag |
+              m_mbs[CurrMbAddr].mb_field_decoding_flag);
       RETURN_IF_FAILED(ret != 0, ret);
 
       int32_t isChroma = 1;
@@ -406,7 +404,7 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
 
     int32_t BlkIdx = 0;
     int32_t isChroma = 1;
-    ret = Picture_construction_process_prior_to_deblocking_filter_process(
+    ret = picture_construction_process_prior_to_deblocking_filter(
         u, MbWidthC, MbHeightC, BlkIdx, isChroma, PicWidthInSamples, pic_buff);
     RETURN_IF_FAILED(ret != 0, ret);
   }
