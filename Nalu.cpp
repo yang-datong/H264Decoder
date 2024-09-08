@@ -46,6 +46,7 @@ int Nalu::parseEBSP(EBSP &ebsp) {
   return 0;
 }
 
+//7.3.1 NAL unit syntax
 /* 注意，这里解析出来的RBSP是不包括RBSP head的一个字节的 */
 int Nalu::parseRBSP(EBSP &ebsp, RBSP &rbsp) {
   parseNALHeader(ebsp); // RBSP的头也是EBSP的头
@@ -61,14 +62,16 @@ int Nalu::parseRBSP(EBSP &ebsp, RBSP &rbsp) {
     else
       avc_3d_extension_flag = ebsp.buf[1] >> 7;
 
-    if (svc_extension_flag)
+    if (svc_extension_flag) /* TODO YangJing  <24-09-08 23:06:46> */
       // nal_unit_header_svc_extension();
       nalUnitHeaderBytes += 3;
     else if (avc_3d_extension_flag)
+      /* TODO YangJing  <24-09-08 23:06:46> */
       // nal_unit_header_3davc_extension()
       /* specified in Annex J */
       nalUnitHeaderBytes += 2;
     else
+      /* TODO YangJing  <24-09-08 23:06:46> */
       // nal_unit_header_mvc_extension()
       /* specified in Annex H */
       nalUnitHeaderBytes += 3;

@@ -255,7 +255,7 @@ int PictureBase::decoding_picture_order_count_type_2(
 int PictureBase::decoding_reference_picture_lists_construction(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16]) {
 
-  SliceHeader &slice_header = m_slice.slice_header;
+  const SliceHeader &slice_header = m_slice.slice_header;
   /* 解码的参考图片被标记为“用于短期参考”或“用于长期参考”，如比特流所指定的和第8.2.5节中所指定的。短期参考图片由frame_num 的值标识。长期参考图片被分配一个长期帧索引，该索引由比特流指定并在第 8.2.5 节中指定。 */
 
   // 8.2.5 Decoded reference picture marking process
@@ -556,7 +556,7 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], int32_t &RefPicList0Length) {
   const int32_t size_dpb = 16;
 
-  SliceHeader &slice_header = m_slice.slice_header;
+  const SliceHeader &slice_header = m_slice.slice_header;
   /* 1. 参考图片列表RefPicList0被排序，使得短期参考帧和短期互补参考场对具有比长期参考帧和长期互补参考场对更低的索引。 */
   vector<int32_t> indexTemp_short, indexTemp_long;
   for (int index = 0; index < (int)size_dpb; index++) {
@@ -590,14 +590,12 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
        });
 
   // 4. 生成排序后的参考序列
-  int j = 0;
+  RefPicList0Length = 0;
   for (int index = 0; index < (int)indexTemp_short.size(); ++index)
-    RefPicList0[j++] = dpb[indexTemp_short[index]];
+    RefPicList0[RefPicList0Length++] = dpb[indexTemp_short[index]];
 
   for (int index = 0; index < (int)indexTemp_long.size(); ++index)
-    RefPicList0[j++] = dpb[indexTemp_long[index]];
-
-  RefPicList0Length = j;
+    RefPicList0[RefPicList0Length++] = dpb[indexTemp_long[index]];
 
   //RefPicList0[ 0 ] is set equal to the short-term reference picture with PicNum = 303,
   //RefPicList0[ 1 ] is set equal to the short-term reference picture with PicNum = 302,
@@ -608,7 +606,7 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
   /* TODO YangJing 这里是在做什么？ <24-08-31 00:06:06> */
   if (slice_header.MbaffFrameFlag) {
     for (int index = 0; index < RefPicList0Length; ++index) {
-      Frame *ref_list_frame = RefPicList0[index];
+      Frame *&ref_list_frame = RefPicList0[index];
       Frame *&ref_list_top_filed = RefPicList0[16 + 2 * index];
       Frame *&ref_list_bottom_filed = RefPicList0[16 + 2 * index + 1];
 

@@ -628,25 +628,24 @@ int PictureBase::inter_prediction_process() {
         /* 同上帧宏块，只不过需要对顶、底同时处理 */
         for (int i = 0; i <= partHeight - 1; i++)
           for (int j = 0; j <= partWidth - 1; j++) {
-            int32_t y = (mb_y % 2) * PicWidthInSamplesL +
-                        (mb_y / 2) * MbHeightL + yP + yS + i;
+            int32_t y =
+                (mb_y % 2) * PicWidthInSamplesL +
+                ((mb_y / 2) * MbHeightL + yP + yS + i) * PicWidthInSamplesL * 2;
             int32_t x = mb_x * MbWidthL + xP + xS + j;
-            m_pic_buff_luma[y * PicWidthInSamplesL * 2 + x] =
-                predPartL[i * partWidth + j];
+            m_pic_buff_luma[y + x] = predPartL[i * partWidth + j];
           }
 
         if (ChromaArrayType != 0) {
           for (int i = 0; i <= partHeightC - 1; i++)
             for (int j = 0; j <= partWidthC - 1; j++) {
               int32_t y = (mb_y % 2) * PicWidthInSamplesC +
-                          (mb_y / 2) * MbHeightC + yP / SubHeightC +
-                          yS / SubHeightC + i;
+                          ((mb_y / 2) * MbHeightC + yP / SubHeightC +
+                           yS / SubHeightC + i) *
+                              PicWidthInSamplesC * 2;
               int32_t x = mb_x * MbWidthC + xP / SubWidthC + xS / SubWidthC + j;
 
-              m_pic_buff_cb[y * PicWidthInSamplesC * 2 + x] =
-                  predPartCb[i * partWidthC + j];
-              m_pic_buff_cr[y * PicWidthInSamplesC * 2 + x] =
-                  predPartCr[i * partWidthC + j];
+              m_pic_buff_cb[y + x] = predPartCb[i * partWidthC + j];
+              m_pic_buff_cr[y + x] = predPartCr[i * partWidthC + j];
             }
         }
       }

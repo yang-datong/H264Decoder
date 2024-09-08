@@ -40,10 +40,6 @@ class SliceHeader {
   /* 由slice_type计算出来 */
   bool IdrPicFlag = 0;
 
-  //uint32_t slice_id = 0;
-  //uint32_t slice_number = 0;
-  //uint32_t syntax_element_categories = 0;
-
   /* Slice中第一个宏块的索引。 
   如果first_mb_in_slice == 0，则表示这是该帧的第一个Slice（可以独立解码）。
   如果first_mb_in_slice != 0，则表示该Slice与前面的Slice共同组成一帧数据（需要组合解码）。*/
@@ -170,24 +166,21 @@ class SliceHeader {
   int32_t refIdxL1 = 0;
 
   // ref_pic_list_modification
-  int32_t ref_pic_list_modification_flag_l0;   // 2 u(1)
-  int32_t modification_of_pic_nums_idc[2][32]; // 2 ue(v)
-  int32_t abs_diff_pic_num_minus1[2][32];      // 2 ue(v)
-  int32_t long_term_pic_num[2][32];            // 2 ue(v)
-  int32_t ref_pic_list_modification_flag_l1;   // 2 u(1)
-  int32_t
-      ref_pic_list_modification_count_l0; // modification_of_pic_nums_idc[0]数组大小
-  int32_t
-      ref_pic_list_modification_count_l1; // modification_of_pic_nums_idc[1]数组大小
-                                          //
-                                          //
+  int32_t ref_pic_list_modification_flag_l0 = 0;
+  int32_t modification_of_pic_nums_idc[2][32] = {{0}};
+  int32_t abs_diff_pic_num_minus1[2][32] = {{0}};
+  int32_t long_term_pic_num[2][32] = {{0}};
+  int32_t ref_pic_list_modification_flag_l1 = 0;
+  int32_t ref_pic_list_modification_count_l0 = 0;
+  int32_t ref_pic_list_modification_count_l1 = 0;
+
   // dec_ref_pic_marking
-  int32_t no_output_of_prior_pics_flag;       // 2 | 5 u(1)
-  int32_t long_term_reference_flag;           // 2 | 5 u(1)
-  int32_t adaptive_ref_pic_marking_mode_flag; // 2 | 5 u(1)
+  int32_t no_output_of_prior_pics_flag = 0;
+  int32_t long_term_reference_flag = 0;
+  int32_t adaptive_ref_pic_marking_mode_flag = 0;
   DEC_REF_PIC_MARKING m_dec_ref_pic_marking[32];
-  int32_t dec_ref_pic_marking_count; // m_dec_ref_pic_marking[]数组大小
-                                     //
+  int32_t dec_ref_pic_marking_count = 0;
+  /* TODO YangJing 还有个函数dec_ref_pic_marking()，没写？ 7.3.3.3 Decoded reference picture marking syntax <24-09-08 23:02:13> */
   uint32_t ScalingList4x4[6][16] = {{0}};
   uint32_t ScalingList8x8[6][64] = {{0}};
 
