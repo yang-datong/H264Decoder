@@ -1,6 +1,7 @@
 ﻿#include "PictureBase.hpp"
 #include "Bitmap.hpp"
 #include "Frame.hpp"
+#include "MacroBlock.hpp"
 #include "SliceHeader.hpp"
 #include "Type.hpp"
 #include <cstdint>
@@ -3384,9 +3385,9 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
           mb.field_pic_flag | mb.mb_field_decoding_flag);
       RET(ret);
 
-      //2. 使用 c 作为输入和 r 作为输出来调用第 8.5.12 节中指定的残差 4x4 块的缩放和变换过程。
+      //2. 使用 c 作为输入和 r 作为输出来调用第 8.5.12 节中指定的残差 4x4 块的缩放和变换过程。（反量化与反整数变换）
       int32_t r[4][4] = {{0}};
-      ret = Scaling_and_transformation_process_for_residual_4x4_blocks(
+      ret = scaling_and_transformation_process_for_residual_4x4_blocks(
           c, r, isChroma, isChromaCb);
       RET(ret);
 
@@ -3531,7 +3532,7 @@ int PictureBase::
 
     int32_t isChroma = 0;
     int32_t isChromaCb = 0;
-    ret = Scaling_and_transformation_process_for_residual_4x4_blocks(
+    ret = scaling_and_transformation_process_for_residual_4x4_blocks(
         c, r, isChroma, isChromaCb);
     RETURN_IF_FAILED(ret != 0, ret);
 
@@ -3812,8 +3813,8 @@ int PictureBase::transform_decoding_for_chroma_samples(
       //* c. 使用 c 作为输入和 r 作为输出来调用第 8.5.12 节中指定的残差 4x4 块的缩放和变换过程。
       int32_t isChroma = 1;
       int32_t r[4][4] = {{0}};
-      // 8.5.12 Scaling and transformation process for residual 4x4 blocks
-      ret = Scaling_and_transformation_process_for_residual_4x4_blocks(
+      // 8.5.12 Scaling and transformation process for residual 4x4 blocks (反量化、反整数变换)
+      ret = scaling_and_transformation_process_for_residual_4x4_blocks(
           c, r, isChroma, isChromaCb);
       RET(ret);
 
@@ -3926,7 +3927,7 @@ int PictureBase::
   // SliceHeader &slice_header = m_h264_slice_header;
 
   // 8.5.8 Derivation process for chroma quantisation parameters
-  ret = get_chroma_quantisation_parameters(isChromaCb);
+  ret = derivation_chroma_quantisation_parameters(isChromaCb);
   RETURN_IF_FAILED(ret != 0, ret);
 
   // int32_t bitDepth = m_slice.m_sps.BitDepthC;
@@ -4040,139 +4041,136 @@ int PictureBase::
 }
 
 // 8.5.12 Scaling and transformation process for residual 4x4 blocks
-int PictureBase::Scaling_and_transformation_process_for_residual_4x4_blocks(
+/* 输入: 具有元素cij的4x4数组c，cij是与亮度分量的残差块相关的数组或与色度分量的残差块相关的数组。  
+ * 输出: 剩余样本值，为 4x4 数组 r，元素为 rij。*/
+/* 该函数包括了反量化、反整数变换（类IDCT变换）操作 */
+int PictureBase::scaling_and_transformation_process_for_residual_4x4_blocks(
     int32_t c[4][4], int32_t (&r)[4][4], int32_t isChroma, int32_t isChromaCb) {
-  int ret = 0;
-  // int32_t bitDepth = 0;
 
-  //SliceHeader &slice_header = m_h264_slice_header;
+  const uint32_t slice_type = m_slice.slice_header.slice_type % 5;
+  const MacroBlock &mb = m_mbs[CurrMbAddr];
 
-  // if (isChroma == 0) {
-  // bitDepth = m_slice.m_sps.BitDepthY;
-  //} else if (isChroma == 1) {
-  // bitDepth = m_slice.m_sps.BitDepthC;
-  //}
-
+  /* 变量 sMbFlag 的推导如下： 
+   * – 如果 mb_type 等于 SI 或宏块预测模式等于 SP 切片中的 Inter，则 sMbFlag 设置为等于 1， 
+   * – 否则（mb_type 不等于 SI 并且宏块预测模式为不等于 SP 切片中的 Inter），sMbFlag 设置为 0。 */
   int32_t sMbFlag = 0;
-
-  // If mb_type is equal to SI or the macroblock prediction mode is equal to
-  // Inter in an SP slice, sMbFlag is set equal to 1,
-  if (m_slice.slice_header.slice_type == SLICE_SI ||
-      (m_slice.slice_header.slice_type % 5 == SLICE_SP &&
-       IS_INTER_Prediction_Mode(m_mbs[CurrMbAddr].m_mb_pred_mode))) {
+  if (slice_type == SLICE_SI ||
+      (slice_type == SLICE_SP && IS_INTER_Prediction_Mode(mb.m_mb_pred_mode)))
     sMbFlag = 1;
-  } else {
-    sMbFlag = 0;
-  }
 
-  int32_t qP = 0;
-
+  /* 先得到色度量化参数 */
   // 8.5.8 Derivation process for chroma quantisation parameters
-  ret = get_chroma_quantisation_parameters(isChromaCb);
-  RETURN_IF_FAILED(ret != 0, ret);
+  int ret = derivation_chroma_quantisation_parameters(isChromaCb);
+  RET(ret);
 
-  if (isChroma == 0 && sMbFlag == 0) {
-    qP = m_mbs[CurrMbAddr].QP1Y;
-  } else if (isChroma == 0 && sMbFlag == 1) {
-    qP = m_mbs[CurrMbAddr].QSY;
-  } else if (isChroma == 1 && sMbFlag == 0) {
-    if (isChromaCb == 1) {
-      qP = m_mbs[CurrMbAddr].QP1Cb;
-    } else // if (isChromaCb == 0)
-    {
-      qP = m_mbs[CurrMbAddr].QP1Cr;
-    }
-  } else if (isChroma == 1 && sMbFlag == 1) {
-    if (isChromaCb == 1) {
-      qP = m_mbs[CurrMbAddr].QSCb;
-    } else // if (isChromaCb == 0)
-    {
-      qP = m_mbs[CurrMbAddr].QSCr;
-    }
-  }
+  /* 变量 qP(量化) 的推导如下： 
+   * – 如果输入数组 c 与亮度残差块相关且 sMbFlag 等于 0，
+   * – 否则，如果输入数组 c 与亮度残差块相关且 sMbFlag 等于 1，
+   * – 否则，如果输入数组 c 与色度残差块相关且 sMbFlag 等于 0，
+   * – 否则（输入数组 c 与色度残差块相关且 sMbFlag 等于 1），*/
+  int32_t qP = 0;
+  if (isChroma == 0 && sMbFlag == 0)
+    qP = mb.QP1Y;
+  else if (isChroma == 0 && sMbFlag)
+    qP = mb.QSY;
+  else if (isChroma && sMbFlag == 0)
+    qP = isChromaCb ? mb.QP1Cb : mb.QP1Cr;
+  else if (isChroma && sMbFlag)
+    qP = isChromaCb ? mb.QSCb : mb.QSCr;
 
-  //---------------------------------------------------
-  if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1) {
-    for (int32_t i = 0; i <= 3; i++) {
-      for (int32_t j = 0; j <= 3; j++) {
+  /* 根据 TransformBypassModeFlag 的值，以下内容适用：*/
+  if (mb.TransformBypassModeFlag) {
+    for (int32_t i = 0; i <= 3; i++)
+      for (int32_t j = 0; j <= 3; j++)
         r[i][j] = c[i][j];
-      }
-    }
   } else {
-    // 8.5.12.1 Scaling process for residual 4x4 blocks
+    /* 1. 使用 bitDepth、qP 和 c 作为输入来调用第 8.5.12.1 节中指定的残差 4x4 块的缩放过程，并将输出分配给具有元素 dij 的缩放变换系数的 4x4 数组 d。
+     * 2. 使用 bitDepth 和 d 作为输入来调用第 8.5.12.2 节中指定的残差 4x4 块的变换过程，并将输出分配给具有元素 rij 的残差样本值的 4x4 数组 r。*/
+
+    // 8.5.12.1 Scaling process for residual 4x4 blocks (反量化)
     int32_t d[4][4] = {{0}};
+    scaling_for_residual_4x4_blocks(d, c, isChroma, mb.m_mb_pred_mode, qP);
 
-    for (int32_t i = 0; i <= 3; i++) {
-      for (int32_t j = 0; j <= 3; j++) {
-        if (i == 0 && j == 0 &&
-            ((isChroma == 0 &&
-              m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_16x16) ||
-             isChroma == 1)) {
-          d[0][0] = c[0][0];
-        } else {
-          if (qP >= 24) {
-            d[i][j] = (c[i][j] * LevelScale4x4[qP % 6][i][j]) << (qP / 6 - 4);
-          } else // if (qP < 24)
-          {
-            d[i][j] = (c[i][j] * LevelScale4x4[qP % 6][i][j] +
-                       h264_power2(3 - qP / 6)) >>
-                      (4 - qP / 6);
-          }
-        }
-      }
-    }
+    // 8.5.12.2 Transformation process for residual 4x4 blocks （反整数变换）
+    transformation_for_residual_4x4_blocks(d, r);
+  }
 
-    /*
-            printf("%s(%d): start:\n", __FUNCTION__, __LINE__);
-            for (int32_t i = 0; i <= 3; i++)
-            {
-                for (int32_t j = 0; j <= 3; j++)
-                {
-                    printf(" %d", d[i][j]);
-                }
-                printf("\n");
-            }
-    */
+  return 0;
+}
 
-    // 8.5.12.2 Transformation process for residual 4x4 blocks
-    // 类似4x4 IDC离散余弦反变换蝶形运算
+//8.5.12.1 Scaling process for residual 4x4 blocks
+/* 输入： – 变量 bitDepth 和 qP， – 具有元素 cij 的 4x4 数组 c，它是与亮度分量的残差块相关的数组或与色度分量的残差块相关的数组。  
+ * 输出: 缩放变换系数 d 的 4x4 数组，其中元素为 dij。 */
+/* 反量化操作 */
+int PictureBase::scaling_for_residual_4x4_blocks(
+    int32_t d[4][4], int32_t c[4][4], int32_t isChroma,
+    const H264_MB_PART_PRED_MODE &m_mb_pred_mode, int32_t qP) {
 
-    int32_t f[4][4] = {{0}};
-    int32_t h[4][4] = {{0}};
-
-    for (int32_t i = 0; i <= 3; i++) // 先行变换
-    {
-      int32_t ei0 = d[i][0] + d[i][2];
-      int32_t ei1 = d[i][0] - d[i][2];
-      int32_t ei2 = (d[i][1] >> 1) - d[i][3];
-      int32_t ei3 = d[i][1] + (d[i][3] >> 1);
-
-      f[i][0] = ei0 + ei3;
-      f[i][1] = ei1 + ei2;
-      f[i][2] = ei1 - ei2;
-      f[i][3] = ei0 - ei3;
-    }
-
-    for (int32_t j = 0; j <= 3; j++) // 再列变换
-    {
-      int32_t g0j = f[0][j] + f[2][j];
-      int32_t g1j = f[0][j] - f[2][j];
-      int32_t g2j = (f[1][j] >> 1) - f[3][j];
-      int32_t g3j = f[1][j] + (f[3][j] >> 1);
-
-      h[0][j] = g0j + g3j;
-      h[1][j] = g1j + g2j;
-      h[2][j] = g1j - g2j;
-      h[3][j] = g0j - g3j;
-    }
-
-    //------------------------------------
-    for (int32_t i = 0; i <= 3; i++) {
-      for (int32_t j = 0; j <= 3; j++) {
-        r[i][j] = (h[i][j] + 32) >> 6;
+  /* 比特流不应包含导致 c 的任何元素 cij 的数据，其中 i, j = 0..3 超出从 −2(7 + bitDepth) 到 2(7 + bitDepth) − 1（含）的整数值范围。 */
+  for (int32_t i = 0; i <= 3; i++) {
+    for (int32_t j = 0; j <= 3; j++) {
+      /* 如果以下所有条件均为真： – i 等于 0， – j 等于 0， – c 与使用 Intra_16x16 宏块预测模式编码的亮度残差块相关，或者 c 与色度残差块相关。  变量 d00 的导出方式为 */
+      if (i == 0 && j == 0 &&
+          ((isChroma == 0 && m_mb_pred_mode == Intra_16x16) || isChroma))
+        d[0][0] = c[0][0];
+      /* 否则，适用以下规则： – 如果 qP 大于或等于 24，则缩放结果的推导如下： 其中i, j = 0..3，除非如上所述
+           *  – 否则（qP 小于 24），缩放结果导出为 */
+      else {
+        /* TODO YangJing 量化参数24这个数有什么特殊意义？ <24-09-08 18:46:35> */
+        if (qP >= 24)
+          d[i][j] = (c[i][j] * LevelScale4x4[qP % 6][i][j]) << (qP / 6 - 4);
+        else
+          d[i][j] = (c[i][j] * LevelScale4x4[qP % 6][i][j] +
+                     h264_power2(3 - qP / 6)) >>
+                    (4 - qP / 6);
       }
     }
   }
+  return 0;
+}
+
+// 8.5.12.2 Transformation process for residual 4x4 blocks
+// 类似4x4 IDCT离散余弦反变换蝶形运算
+/* 输入： – 变量 bitDepth， – 具有元素 dij 的缩放变换系数 d 的 4x4 数组。
+ * 输出: 剩余样本值，为 4x4 数组 r，元素为 rij。*/
+int PictureBase::transformation_for_residual_4x4_blocks(int32_t d[4][4],
+                                                        int32_t (&r)[4][4]) {
+
+  /* 比特流不得包含导致 d 的任何元素 dij 的数据，其中 i, j = 0..3 超出从 −2(7 + bitDepth) 到 2(7 + bitDepth) − 1（含）的整数值范围。  变换过程应以数学上等效的方式将缩放变换系数块转换为输出样本块。*/
+  int32_t f[4][4] = {{0}};
+  int32_t h[4][4] = {{0}};
+  for (int32_t i = 0; i <= 3; i++) {
+    // 首先，按如下方式使用一维逆变换对每一（水平）行缩放变换系数进行变换。  一组中间值的计算如下：
+    int32_t ei0 = d[i][0] + d[i][2];
+    int32_t ei1 = d[i][0] - d[i][2];
+    int32_t ei2 = (d[i][1] >> 1) - d[i][3];
+    int32_t ei3 = d[i][1] + (d[i][3] >> 1);
+
+    // 然后，根据这些中间值计算转换结果，如下所示：
+    f[i][0] = ei0 + ei3;
+    f[i][1] = ei1 + ei2;
+    f[i][2] = ei1 - ei2;
+    f[i][3] = ei0 - ei3;
+  }
+
+  for (int32_t j = 0; j <= 3; j++) {
+    //然后，使用相同的一维逆变换对所得矩阵的每个（垂直）列进行变换，如下所示。  一组中间值的计算如下：
+    int32_t g0j = f[0][j] + f[2][j];
+    int32_t g1j = f[0][j] - f[2][j];
+    int32_t g2j = (f[1][j] >> 1) - f[3][j];
+    int32_t g3j = f[1][j] + (f[3][j] >> 1);
+
+    //然后，根据这些中间值计算转换结果，如下所示：
+    h[0][j] = g0j + g3j;
+    h[1][j] = g1j + g2j;
+    h[2][j] = g1j - g2j;
+    h[3][j] = g0j - g3j;
+  }
+
+  /* 在执行一维水平逆变换和一维垂直逆变换以产生变换样本数组之后，最终构建的残差样本值导出为： */
+  for (int32_t i = 0; i <= 3; i++)
+    for (int32_t j = 0; j <= 3; j++)
+      r[i][j] = (h[i][j] + 32) >> 6;
 
   return 0;
 }
@@ -4627,28 +4625,24 @@ int PictureBase::
   return 0;
 }
 
-// 8.5.8 Derivation process for chroma quantisation parameters
-int PictureBase::get_chroma_quantisation_parameters(int32_t isChromaCb) {
+// 8.5.8 Derivation process for chroma quantisation parameters (色度量化参数的推导过程)
+/* 输出： – QPC：每个色度分量 Cb 和 Cr 的色度量化参数， 
+ * – QSC：解码 SP 和 SI 切片所需的每个色度分量 Cb 和 Cr 的附加色度量化参数（如果适用）*/
+int PictureBase::derivation_chroma_quantisation_parameters(int32_t isChromaCb) {
   int32_t qPOffset = 0;
-
-  //SliceHeader &slice_header = m_h264_slice_header;
-
-  if (isChromaCb == 1) // If the chroma component is the Cb component
-  {
+  if (isChromaCb == 1)
     qPOffset = m_slice.m_pps.chroma_qp_index_offset;
-  } else // the chroma component is the Cr component
-  {
+  else
     qPOffset = m_slice.m_pps.second_chroma_qp_index_offset;
-  }
 
   int32_t qPI = CLIP3(-(int32_t)m_slice.m_sps.QpBdOffsetC, 51,
                       m_mbs[CurrMbAddr].QPY + qPOffset);
 
   // Table 8-15 – Specification of QPC as a function of qPI
   int32_t QPC = 0;
-  if (qPI < 30) {
+  if (qPI < 30)
     QPC = qPI;
-  } else {
+  else {
     // int32_t qPIs[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
     // 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
     int32_t QPCs[] = {29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36,

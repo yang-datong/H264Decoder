@@ -39,7 +39,7 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks_inter(
               m_mbs[CurrMbAddr].mb_field_decoding_flag);
       RETURN_IF_FAILED(ret != 0, ret);
 
-      ret = Scaling_and_transformation_process_for_residual_4x4_blocks(
+      ret = scaling_and_transformation_process_for_residual_4x4_blocks(
           c, r, isChroma, isChromaCb);
       RETURN_IF_FAILED(ret != 0, ret);
 
@@ -318,7 +318,7 @@ int PictureBase::transform_decoding_for_chroma_samples_inter(
       RETURN_IF_FAILED(ret != 0, ret);
 
       int32_t isChroma = 1;
-      ret = Scaling_and_transformation_process_for_residual_4x4_blocks(
+      ret = scaling_and_transformation_process_for_residual_4x4_blocks(
           c, r, isChroma, isChromaCb);
       RETURN_IF_FAILED(ret != 0, ret);
 

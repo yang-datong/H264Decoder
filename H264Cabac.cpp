@@ -3249,8 +3249,7 @@ int CH264Cabac::decode_prev_intra4x4_or_intra8x8_pred_mode_flag(
   return 0;
 }
 
-int CH264Cabac::decode_rem_intra4x4_or_intra8x8_pred_mode(
-    int32_t &synElVal) {
+int CH264Cabac::decode_rem_intra4x4_or_intra8x8_pred_mode(int32_t &synElVal) {
   int ret = 0;
 
   // int32_t maxBinIdxCtx = 0;

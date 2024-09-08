@@ -288,38 +288,43 @@ class PictureBase {
       int32_t PicWidthInSamples, int32_t Level8x8[4][64],
       uint8_t *pic_buff); // 8.5.3
   int transform_decoding_for_chroma_samples(int32_t isChromaCb,
-                                                    int32_t PicWidthInSamples,
-                                                    uint8_t *pic_buff); // 8.5.4
+                                            int32_t PicWidthInSamples,
+                                            uint8_t *pic_buff); // 8.5.4
   int transform_decoding_for_chroma_samples_with_YUV444(
       int32_t isChromaCb, int32_t PicWidthInSamples,
       uint8_t *pic_buff); // 8.5.5
+  int inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
+      int32_t values[16], int32_t (&c)[4][4],
+      int32_t field_scan_flag); // 8.5.6
   int scaling_and_transformation_for_chroma_DC_transform_coefficients(
       int32_t isChromaCb, int32_t c[4][2], int32_t nW, int32_t nH,
       int32_t (&dcC)[4][2]); // 8.5.11
-  int Scaling_and_transformation_process_for_residual_4x4_blocks(
+  int scaling_and_transformation_process_for_residual_4x4_blocks(
       int32_t c[4][4], int32_t (&r)[4][4], int32_t isChroma,
       int32_t isChromaCb); // 8.5.12
+  int scaling_for_residual_4x4_blocks(
+      int32_t d[4][4], int32_t c[4][4], int32_t isChroma,
+      const H264_MB_PART_PRED_MODE &m_mb_pred_mode, int32_t qP);
+  int transformation_for_residual_4x4_blocks(int32_t d[4][4],
+                                             int32_t (&r)[4][4]);
+
   int Scaling_and_transformation_process_for_residual_8x8_blocks(
       int32_t c[8][8], int32_t (&r)[8][8], int32_t isChroma,
       int32_t isChromaCb); // 8.5.13
   int picture_construction_process_prior_to_deblocking_filter(
       int32_t *u, int32_t nW, int32_t nH, int32_t BlkIdx, int32_t isChroma,
       int32_t PicWidthInSamples, uint8_t *pic_buff); // 8.5.14
-  int inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
-      int32_t values[16], int32_t (&c)[4][4],
-      int32_t field_scan_flag); // 8.5.6
+  int Decoding_process_for_P_macroblocks_in_SP_slices_or_SI_macroblocks(); // 8.6
   int Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
       int32_t values[64], int32_t (&c)[8][8],
-      int32_t field_scan_flag);                               // 8.5.7
-  int get_chroma_quantisation_parameters(int32_t isChromaCb); // 8.5.8
+      int32_t field_scan_flag);                                      // 8.5.7
+  int derivation_chroma_quantisation_parameters(int32_t isChromaCb); // 8.5.8
   int get_chroma_quantisation_parameters2(int32_t QPY, int32_t isChromaCb,
                                           int32_t &QPC);       // 8.5.8
   int scaling_functions(int32_t isChroma, int32_t isChromaCb); // 8.5.9
   int Scaling_and_transformation_process_for_DC_transform_coefficients_for_Intra_16x16_macroblock_type(
       int32_t bitDepth, int32_t qP, int32_t c[4][4],
       int32_t (&dcY)[4][4]); // 8.5.10
-
-  int Decoding_process_for_P_macroblocks_in_SP_slices_or_SI_macroblocks(); // 8.6
 
   //--------------帧间预测------------------------
   int transform_decoding_for_4x4_luma_residual_blocks_inter(
@@ -328,11 +333,11 @@ class PictureBase {
   int transform_decoding_for_8x8_luma_residual_blocks_inter(
       int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
       int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff);
-  int transform_decoding_for_chroma_samples_inter(
-      int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff);
+  int transform_decoding_for_chroma_samples_inter(int32_t isChromaCb,
+                                                  int32_t PicWidthInSamples,
+                                                  uint8_t *pic_buff);
   int intra_residual_transform_bypass_decoding(int32_t nW, int32_t nH,
-                                               int32_t horPredFlag,
-                                               int32_t* r);
+                                               int32_t horPredFlag, int32_t *r);
   int inter_prediction_process(); // 8.4
   int derivation_motion_vector_components_and_reference_indices(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,

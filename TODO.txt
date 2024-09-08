@@ -73,3 +73,9 @@ H264中，场图像（field_pic_flag）与场宏块（mb_field_decoding_flag）�
 
 
 
+
+H264中量化操作的关键字： Scaling process(量化涉及缩放因子应用到变换系数上，反量化则是将缩放后的系数转换回近似的原始值。)
+
+
+H264中使用了简单的DCT变换（整数变换，因为浮点数运算太慢了,如JPEG）
+
