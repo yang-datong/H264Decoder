@@ -4,7 +4,7 @@
 
 GOP::GOP() { init(); }
 
-GOP::~GOP() {unInit(); }
+GOP::~GOP() { unInit(); }
 
 int GOP::init() {
   m_gop_size = 0;
@@ -76,15 +76,13 @@ int GOP::getOneOutPicture(Frame *newDecodedPic, Frame *&outPic) {
     }
   }
 
-  if (newDecodedPic == NULL) // 一般表示解码结束时的flush操作
-  {
-    if (m_dpb_for_output_length >
-        0) // 说明m_dpb_index_for_output[]数组还残留有未输出的帧
-    {
-      if (index >= 0) {
+  if (newDecodedPic == NULL) {
+    // 一般表示解码结束时的flush操作
+    if (m_dpb_for_output_length > 0) {
+      // 说明m_dpb_index_for_output[]数组还残留有未输出的帧
+      if (index >= 0)
         outPic = m_dpb_for_output[index]; // 输出DPB中的POC最小的那一帧
-      } else // if (index < 0) //说明缓存中没有帧了
-      {
+      else {                              //说明缓存中没有帧了
         outPic = NULL;
         m_dpb_for_output_length = 0;
         return 0;
@@ -96,27 +94,23 @@ int GOP::getOneOutPicture(Frame *newDecodedPic, Frame *&outPic) {
         m_dpb_for_output[i] =
             m_dpb_for_output[i + 1]; // 数组元素整体向前移动一个单元
       }
-    } else {
+    } else
       outPic = NULL; // 说明缓存中彻底没有帧了
-    }
-  } else // if (newDecodedPic != NULL)
-  // //一般表示解码过程中的push_a_decoded_frame_and_get_a_display_frame操作
-  {
-    if (m_dpb_for_output_length <
-        max_num_reorder_frames) // 说明m_dpb_index_for_output[]数组还没塞满，只push，不get
-    {
+  } else {
+    // //一般表示解码过程中的push_a_decoded_frame_and_get_a_display_frame操作
+    if (m_dpb_for_output_length < max_num_reorder_frames) {
+      // 说明m_dpb_index_for_output[]数组还没塞满，只push，不get
       m_dpb_for_output[m_dpb_for_output_length] = newDecodedPic;
       m_dpb_for_output_length++;
       outPic = NULL; // 目前还没有可输出的帧
-    } else           // if (m_dpb_for_output_length >= max_num_reorder_frames)
-    // //说明m_dpb_index_for_output[]数组已满，先get，再push
-    {
+    } else {
+      // //说明m_dpb_index_for_output[]数组已满，先get，再push
       RETURN_IF_FAILED(index < 0, -1);
 
       if (newDecodedPic->m_picture_frame.PicOrderCnt <
           m_dpb_for_output[index]->m_picture_frame.PicOrderCnt) {
-        outPic =
-            newDecodedPic; // 说明当前新输入的已解码帧的POC是最小的，一般为B帧
+        outPic = newDecodedPic;
+        // 说明当前新输入的已解码帧的POC是最小的，一般为B帧
       } else {
         outPic = m_dpb_for_output[index]; // 输出DPB中的POC最小的那一帧
         m_dpb_for_output[index] = newDecodedPic; // 相当于push a frame

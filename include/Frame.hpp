@@ -13,7 +13,7 @@ class Frame {
   virtual void decode();
 
   /* 开始解码图像 */
-  int decode(BitStream &bitStream, Frame *(&dpb)[16], SPS &sps, PPS &pps);
+  int decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop);
 
   //protected:
   //std::vector<Slice *> slices;

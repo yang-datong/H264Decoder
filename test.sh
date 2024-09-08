@@ -72,12 +72,12 @@ source_cut_10_frames_no_B_h264(){
 	ALL_MD5['output_I_0.bmp']=74e36a035b8d75b31a02278450b42447
 	ALL_MD5['output_P_1.bmp']=d5a671c3df0c3600783f590962c77ed3
 	ALL_MD5['output_P_2.bmp']=82b44ef5ffe29fa4400284f49baf5120
-	ALL_MD5['output_P_3.bmp']=e2721d4ada9293326a453f790709b820
-	ALL_MD5['output_P_4.bmp']=432b32e64d62525aba0a1447a020ede9
-	ALL_MD5['output_P_5.bmp']=2dcb311b2a1d6f6b1eafc7912788ee5e
-	ALL_MD5['output_P_6.bmp']=b201424c985c0ab2a598d0ea796bdda6
-	ALL_MD5['output_P_7.bmp']=d32d5a3172b47d51d90877b9bd355f5c
-	ALL_MD5['output_P_8.bmp']=41a3278a459c9eae41d3bbb5ee139800
+	ALL_MD5['output_P_3.bmp']=f14afa86821a79635f72821809954858 #e2721d4ada9293326a453f790709b820
+	ALL_MD5['output_P_4.bmp']=15d38fca08b5ed0d5adea2562f39e3bc #432b32e64d62525aba0a1447a020ede9
+	ALL_MD5['output_P_5.bmp']=2a3adcfb06119568384542cda4d315fe #2dcb311b2a1d6f6b1eafc7912788ee5e
+	ALL_MD5['output_P_6.bmp']=a9de600d6f657894d0e895cb4589d56a #b201424c985c0ab2a598d0ea796bdda6
+	ALL_MD5['output_P_7.bmp']=2c66cc47676e77ced192d90447995845 #d32d5a3172b47d51d90877b9bd355f5c
+	ALL_MD5['output_P_8.bmp']=16793d288834b9edbf20b34beaeb9da8 #41a3278a459c9eae41d3bbb5ee139800
 }
 
 

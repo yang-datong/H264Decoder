@@ -13,11 +13,11 @@ void Frame::encode() {
 
 void Frame::decode() {}
 
-int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], SPS &sps, PPS &pps) {
+int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop) {
   static int index = 0;
   string output_file;
   //for (auto &slice : slices) {
-  slice->decode(bitStream, dpb, sps, pps, this);
+  slice->decode(bitStream, dpb, gop.m_spss[0], gop.m_ppss[0], this);
   if (slice->slice_header.slice_type == SLICE_I)
     output_file = "output_I_" + to_string(index++) + ".bmp";
   else if (slice->slice_header.slice_type == SLICE_P)
@@ -30,6 +30,9 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], SPS &sps, PPS &pps) {
   }
   //}
   m_picture_frame.saveToBmpFile(output_file.c_str());
+  /* TODO YangJing 处理GOP flush <24-09-09 00:45:52> */
+  Frame *outPicture = nullptr;
+  gop.getOneOutPicture(this, outPicture);
   return 0;
 }
 

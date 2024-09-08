@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
     /* 1920x1080 无B帧*/
     //filePath = "./source_cut_10_frames_no_B.h264";
     /* 714x624 帧编码 */
-    filePath = "./demo_10_frames.h264";
+    //filePath = "./demo_10_frames.h264";
     /* 714x624 场编码(IDR帧解码出来的图片部分绿屏，找到原因了，宏块数量不对，会是slice_skip_flag的问题吗？） */
     //filePath = "./demo_10_frames_interlace.h264";
     /* 714x624 帧编码(CAVLC 熵编码模式,即profile=baseline) */
@@ -26,6 +26,8 @@ int main(int argc, char *argv[]) {
     //filePath = "./demo_10_frames_cavlc_and_interlace.h264";
     /* 714x624 帧编码(CABAC 熵编码模式 + 无损编码(lossless=1) + TransformBypassMode + YUV444 ,段错误。。) */
     //filePath = "./demo_10_frames_TransformBypassModeFlag.h264";
+    //TODO: 满了16个buff后出现了段错误问题
+    filePath = "./1280x720_60_fps.h264";
   }
 
   /* 1. 打开文件、读取NUL、存储NUL的操作 */
@@ -89,8 +91,7 @@ int main(int argc, char *argv[]) {
         bitStream = new BitStream(rbsp.buf, rbsp.len);
         /* 此处根据SliceHeader可判断A Frame =? A Slice */
         nalu.extractSliceparameters(*bitStream, *gop, *frame);
-        frame->decode(*bitStream, gop->m_DecodedPictureBuffer, gop->m_spss[0],
-                      gop->m_ppss[0]);
+        frame->decode(*bitStream, gop->m_DecodedPictureBuffer, *gop);
         cout << " }" << endl;
         break;
       case 2: /* DPA(non-VCL) */
@@ -111,8 +112,7 @@ int main(int argc, char *argv[]) {
         bitStream = new BitStream(rbsp.buf, rbsp.len);
         /* 这里通过解析SliceHeader后可以知道一个Frame到底是几个Slice，通过直接调用frame->decode，在内部对每个Slice->decode() （如果存在多个Slice的情况，可以通过first_mb_in_slice判断，如果每个Slice都为0,则表示每个Slice都是一帧数据，当first_mb_in_slice>0，则表示与前面的一个或多个Slice共同组成一个Frame） */
         nalu.extractIDRparameters(*bitStream, *gop, *frame);
-        frame->decode(*bitStream, gop->m_DecodedPictureBuffer, gop->m_spss[0],
-                      gop->m_ppss[0]);
+        frame->decode(*bitStream, gop->m_DecodedPictureBuffer, *gop);
         cout << " }" << endl;
         break;
       case 6: /* SEI（补充信息）(VCL) */

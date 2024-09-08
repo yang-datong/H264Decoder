@@ -81,5 +81,36 @@ H264中使用了简单的DCT变换（整数变换，因为浮点数运算太慢�
 
 
 
-/* TODO YangJing 明白了，这里是因为越界了，覆盖了RefPicList0的数据，原来只有16个大小，而这里刚好覆盖了数组的下届内存，即RefPicList0Length <24-09-08 22:03:12> */
-先处理dpb大小问题
+IDR与I Slice: 
+1. I 帧（Intra Frame）：
+
+    I 帧是帧内编码的帧，它只依赖于自身进行解码，不依赖其他帧。
+    I 帧可以出现在 GOP 的任意位置。
+    I 帧不一定是 IDR 帧，这意味着后续的 P 帧或 B 帧仍然可以参考 I 帧之前的帧（即跨 GOP 参考）。
+
+2. IDR 帧（Instantaneous Decoder Refresh Frame）：
+
+    IDR 帧是一种特殊的 I 帧，它不仅是帧内编码的，还会强制解码器丢弃之前的所有参考帧。
+    当解码器遇到 IDR 帧时，后续的帧不会再参考 IDR 帧之前的任何帧，IDR 帧会刷新解码器的参考帧缓存。
+    IDR 帧通常是 GOP 的起始帧。
+
+I 帧不是 IDR 帧的情况：
+    当编码器插入一个 I 帧，但不希望刷新解码器的参考帧缓存时，这个 I 帧就不是 IDR 帧。
+    这种情况下，后续的 P 帧或 B 帧仍然可以参考 I 帧之前的帧（即跨 GOP 参考）。
+    这种非 IDR 的 I 帧可以用于减少关键帧的插入频率，同时保持较高的压缩效率。
+
+具体场景：
+    场景切换检测：编码器可能会在场景切换时插入 I 帧，但不一定是 IDR 帧，因为场景切换可能不需要完全刷新参考帧。
+    低延迟编码：在一些低延迟应用中，编码器可能会插入 I 帧而不是 IDR 帧，以减少解码器的延迟，同时允许跨 GOP 参考。
+
+使用ffmpeg生成多I帧（非IDR帧）:
+ffmpeg -i input.mp4 -c:v libx264 -g 100 -keyint_min 100 -x264-params "scenecut=0" -force_key_frames "expr:gte(t,n_forced*2)" output.h264
+
+-g 100：设置 GOP 的大小为 100 帧（即每 100 帧插入一个 IDR 帧）。
+-keyint_min 100：确保最小关键帧间隔为 100 帧。
+-x264-params "scenecut=0"：禁用场景切换检测，防止自动插入 IDR 帧。
+-force_key_frames "expr:gte(t,n_forced*2)"：每 2 秒强制插入一个 I 帧（非 IDR 帧）。
+
+
+该命令会在每 2 秒插入一个 I 帧，但这些 I 帧不会是 IDR 帧，因此后续的 P 帧或 B 帧仍然可以参考这些 I 帧之前的帧。每 100 帧会有一个 IDR 帧，以确保 GOP 的结构。
+
