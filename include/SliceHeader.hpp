@@ -180,7 +180,6 @@ class SliceHeader {
   int32_t adaptive_ref_pic_marking_mode_flag = 0;
   DEC_REF_PIC_MARKING m_dec_ref_pic_marking[32];
   int32_t dec_ref_pic_marking_count = 0;
-  /* TODO YangJing 还有个函数dec_ref_pic_marking()，没写？ 7.3.3.3 Decoded reference picture marking syntax <24-09-08 23:02:13> */
   uint32_t ScalingList4x4[6][16] = {{0}};
   uint32_t ScalingList8x8[6][64] = {{0}};
 

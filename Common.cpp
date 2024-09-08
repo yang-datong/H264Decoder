@@ -40,19 +40,14 @@ int32_t h264_power2(int32_t value) {
 void scaling_list(BitStream &bs, uint32_t *scalingList,
                   uint32_t sizeOfScalingList,
                   uint32_t &useDefaultScalingMatrixFlag) {
-  int32_t lastScale = 8;
-  int32_t nextScale = 8;
-  CH264Golomb gb;
+  int32_t lastScale = 8, nextScale = 8;
 
   for (int j = 0; j < (int)sizeOfScalingList; j++) {
     if (nextScale != 0) {
-      int delta_scale = gb.get_se_golomb(bs); // delta_scale 0 | 1 se(v)
+      int delta_scale = bs.readSE();
       nextScale = (lastScale + delta_scale + 256) % 256;
       useDefaultScalingMatrixFlag = (j == 0 && nextScale == 0);
     }
-    // FIXE: What meaning 'When useDefaultScalingMatrixFlag is derived to be
-    // equal to 1, the scaling list shall be inferred to be equal to the default
-    // scaling list as specified in Table 7-2.'
     scalingList[j] = (nextScale == 0) ? lastScale : nextScale;
     lastScale = scalingList[j];
   }

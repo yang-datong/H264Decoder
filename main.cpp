@@ -22,9 +22,9 @@ int main(int argc, char *argv[]) {
     //filePath = "./demo_10_frames_interlace.h264";
     /* 714x624 帧编码(CAVLC 熵编码模式,即profile=baseline) */
     //filePath = "./demo_10_frames_cavlc.h264";
-    /* 714x624 场编码(CAVLC 熵编码模式) */
+    /* 714x624 场编码(CAVLC 熵编码模式，有一点点绿色宏块) */
     //filePath = "./demo_10_frames_cavlc_and_interlace.h264";
-    /* 714x624 帧编码(CABAC 熵编码模式 + 无损编码(lossless=1) + TransformBypassMode + YUV444) */
+    /* 714x624 帧编码(CABAC 熵编码模式 + 无损编码(lossless=1) + TransformBypassMode + YUV444 ,段错误。。) */
     //filePath = "./demo_10_frames_TransformBypassModeFlag.h264";
   }
 
@@ -79,7 +79,6 @@ int main(int argc, char *argv[]) {
       case 1: /* Slice(non-VCL) */
         /* 11-2. 解码普通帧 */
         cout << "Original Slice -> {" << endl;
-
         Frame *newEmptyPicture;
         frame->m_current_picture_ptr
             ->end_decode_the_picture_and_get_a_new_empty_picture(
@@ -92,7 +91,6 @@ int main(int argc, char *argv[]) {
         nalu.extractSliceparameters(*bitStream, *gop, *frame);
         frame->decode(*bitStream, gop->m_DecodedPictureBuffer, gop->m_spss[0],
                       gop->m_ppss[0]);
-
         cout << " }" << endl;
         break;
       case 2: /* DPA(non-VCL) */
@@ -107,7 +105,6 @@ int main(int argc, char *argv[]) {
       case 5: /* IDR Slice(VCL) */
         /* 11-1. 解码立即刷新帧 GOP[0] */
         cout << "IDR Slice -> {" << endl;
-
         /* 提供给外层程序一定是Frame，即一帧数据，而不是一个Slice，因为如果存在多个Slice为一帧的情况外层处理就很麻烦 */
 
         /* 初始化bit处理器，填充idr的数据 */
@@ -138,8 +135,41 @@ int main(int argc, char *argv[]) {
                                   gop->m_spss[0].chroma_format_idc);
         cout << " }" << endl;
         break;
+      case 9: /* 7.3.2.4 Access unit delimiter RBSP syntax */
+        //access_unit_delimiter_rbsp();
+        break;
+      case 10:
+        //end_of_seq_rbsp();
+        break;
+      case 11:
+        //end_of_stream_rbsp();
+        break;
+      case 12:
+        //filler_data_rbsp();
+        break;
+      case 13:
+        //seq_parameter_set_extension_rbsp();
+        break;
+      case 14:
+        //prefix_nal_unit_rbsp();
+        break;
+      case 15:
+        //subset_seq_parameter_set_rbsp();
+        break;
+      case 16:
+        //depth_parameter_set_rbsp();
+        break;
+      case 19:
+        //slice_layer_without_partitioning_rbsp();
+        break;
+      case 20:
+        //slice_layer_extension_rbsp();
+        break;
+      case 21: /* 3D-AVC texture view */
+        //slice_layer_extension_rbsp();
+        break;
       default:
-        cout << "nal_unit_type:" << nalu.nal_unit_type << endl;
+        cout << "Error nal_unit_type:" << nalu.nal_unit_type << endl;
       }
 
       /* 已读取完成所有NAL */

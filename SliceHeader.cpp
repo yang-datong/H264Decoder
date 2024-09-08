@@ -1,6 +1,7 @@
 #include "SliceHeader.hpp"
 #include "Nalu.hpp"
 #include "Type.hpp"
+#include <cstdint>
 #include <cstring>
 
 int SliceHeader::set_scaling_lists_values() {
@@ -204,6 +205,7 @@ int SliceHeader::set_scaling_lists_values() {
 /* Slice header syntax -> 51 page */
 int SliceHeader::parseSliceHeader(BitStream &bitStream) {
   first_mb_in_slice = bitStream.readUE();
+  /* TODO YangJing 好像现在还不用%5，如果真的有变分辨率的Slice 呢？ <24-09-08 23:30:50> */
   slice_type = bitStream.readUE() % 5;
   switch (slice_type % 5) {
   case SLICE_P:
@@ -341,13 +343,13 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream) {
       m_pps.slice_group_map_type <= 5)
     slice_group_change_cycle = bitStream.readUE();
 
-  //----------- 下面都是一些需要进行额外计算的（文档都有需要自己找）------------
+  //----------- 下面都是一些额外信息，比如还原偏移，或者事先计算一些值，后面方便用 ------------
   int SliceGroupChangeRate = m_pps.slice_group_change_rate_minus1 + 1;
   if (m_pps.num_slice_groups_minus1 > 0 && m_pps.slice_group_map_type >= 3 &&
       m_pps.slice_group_map_type <= 5) {
     int32_t temp = m_sps.PicSizeInMapUnits / SliceGroupChangeRate + 1;
-    int32_t v = h264_log2(
-        temp); // Ceil( Log2( PicSizeInMapUnits ÷ SliceGroupChangeRate + 1 ) );
+    int32_t v = h264_log2(temp);
+    // Ceil( Log2( PicSizeInMapUnits ÷ SliceGroupChangeRate + 1 ) );
     slice_group_change_cycle = bitStream.readUn(v); // 2 u(v)
   }
   if (slice_group_change_cycle != 0)
@@ -523,32 +525,40 @@ void SliceHeader::pred_weight_table(BitStream &bitStream) {
   }
 }
 
-void SliceHeader::dec_ref_pic_marking(BitStream &bitStream) {
+void SliceHeader::dec_ref_pic_marking(BitStream &bs) {
   if (IdrPicFlag) {
-    no_output_of_prior_pics_flag = bitStream.readU1();
-    long_term_reference_flag = bitStream.readU1();
+    no_output_of_prior_pics_flag = bs.readU1();
+    long_term_reference_flag = bs.readU1();
   } else {
-    bool adaptive_ref_pic_marking_mode_flag = bitStream.readU1();
-
-    uint32_t memory_management_control_operation;
+    adaptive_ref_pic_marking_mode_flag = bs.readU1();
     if (adaptive_ref_pic_marking_mode_flag) {
+      uint32_t i = 0;
       do {
-        memory_management_control_operation = bitStream.readUE();
-        if (memory_management_control_operation == 1 ||
-            memory_management_control_operation == 3)
-          /*uint32_t difference_of_pic_nums_minus1 = */ bitStream.readUE();
-        /* TODO YangJing 应该还需要进一步写入到结构体中 <24-09-01 00:38:22> */
-        if (memory_management_control_operation == 2)
-          /*uint32_t long_term_pic_num = */ bitStream.readUE();
-        /* TODO YangJing 应该还需要进一步写入到结构体中 <24-09-01 00:38:22> */
-        if (memory_management_control_operation == 3 ||
-            memory_management_control_operation == 6)
-          /*uint32_t long_term_frame_idx = */ bitStream.readUE();
-        /* TODO YangJing 应该还需要进一步写入到结构体中 <24-09-01 00:38:22> */
-        if (memory_management_control_operation == 4)
-          /*uint32_t max_long_term_frame_idx_plus1 = */ bitStream.readUE();
-        /* TODO YangJing 应该还需要进一步写入到结构体中 <24-09-01 00:38:22> */
-      } while (memory_management_control_operation != 0);
+        if (i > 31) {
+          std::cerr << "An error occurred on " << __FUNCTION__
+                    << "():" << __LINE__ << std::endl;
+          break;
+        }
+        m_dec_ref_pic_marking[i].memory_management_control_operation =
+            bs.readUE();
+        if (m_dec_ref_pic_marking[i].memory_management_control_operation == 1 ||
+            m_dec_ref_pic_marking[i].memory_management_control_operation == 3) {
+          m_dec_ref_pic_marking[i].difference_of_pic_nums_minus1 = bs.readUE();
+        }
+        if (m_dec_ref_pic_marking[i].memory_management_control_operation == 2) {
+          m_dec_ref_pic_marking[i].long_term_pic_num_2 = bs.readUE();
+        }
+        if (m_dec_ref_pic_marking[i].memory_management_control_operation == 3 ||
+            m_dec_ref_pic_marking[i].memory_management_control_operation == 6) {
+          m_dec_ref_pic_marking[i].long_term_frame_idx = bs.readUE();
+        }
+        if (m_dec_ref_pic_marking[i].memory_management_control_operation == 4) {
+          m_dec_ref_pic_marking[i].max_long_term_frame_idx_plus1 = bs.readUE();
+        }
+        i++;
+      } while (
+          m_dec_ref_pic_marking[i - 1].memory_management_control_operation);
+      dec_ref_pic_marking_count = i;
     }
   }
 }

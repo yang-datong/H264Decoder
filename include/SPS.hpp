@@ -250,6 +250,7 @@ class SPS {
  public:
   void vui_parameters(BitStream &bitStream);
   void hrd_parameters(BitStream &bitStream);
+  int seq_parameter_set_extension_rbsp();
 };
 
 #endif /* end of include guard: SPS_CPP_F6QSULFM */

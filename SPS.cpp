@@ -353,3 +353,15 @@ The value of log2_max_frame_num_minus4 shall be in the range of 0 to
 
   return 0;
 }
+
+// 7.3.2.1.2 Sequence parameter set extension RBSP syntax
+int SPS::seq_parameter_set_extension_rbsp(){
+  /* TODO YangJing  <24-09-08 23:19:32> */
+  return 0;
+}
+
+// 7.3.2.1.3 Subset sequence parameter set RBSP syntax
+int subset_seq_parameter_set_rbsp(){
+  /* TODO YangJing  <24-09-08 23:20:38> */
+  return 0;
+}
