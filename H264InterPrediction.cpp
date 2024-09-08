@@ -10,7 +10,7 @@
 
 // 8.5.1 Specification of transform decoding process for 4x4 luma residual
 // blocks This specification applies when transform_size_8x8_flag is equal to 0.
-int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks_inter(
+int PictureBase::transform_decoding_for_4x4_luma_residual_blocks_inter(
     int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
     int32_t PicWidthInSamples, uint8_t *pic_buff) {
   int ret = 0;
@@ -123,7 +123,7 @@ int PictureBase::transform_decoding_process_for_4x4_luma_residual_blocks_inter(
 
 // 8.5.3 Specification of transform decoding process for 8x8 luma residual
 // blocks This specification applies when transform_size_8x8_flag is equal to 1.
-int PictureBase::transform_decoding_process_for_8x8_luma_residual_blocks_inter(
+int PictureBase::transform_decoding_for_8x8_luma_residual_blocks_inter(
     int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
     int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff) {
   int ret = 0;
@@ -229,7 +229,7 @@ int PictureBase::transform_decoding_process_for_8x8_luma_residual_blocks_inter(
 // 8.5.4 Specification of transform decoding process for chroma samples
 // This process is invoked for each chroma component Cb and Cr separately when
 // ChromaArrayType is not equal to 0.
-int PictureBase::transform_decoding_process_for_chroma_samples_inter(
+int PictureBase::transform_decoding_for_chroma_samples_inter(
     int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
   int ret = 0;
 
@@ -242,9 +242,8 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
   if (m_slice.m_sps.ChromaArrayType == 3) {
     // 8.5.5 Specification of transform decoding process for chroma samples with
     // ChromaArrayType equal to 3
-    ret =
-        transform_decoding_process_for_chroma_samples_with_ChromaArrayType_equal_to_3(
-            isChromaCb, PicWidthInSamples, pic_buff);
+    ret = transform_decoding_for_chroma_samples_with_YUV444(
+        isChromaCb, PicWidthInSamples, pic_buff);
     RETURN_IF_FAILED(ret != 0, ret);
   } else // if (m_slice.m_sps.ChromaArrayType != 3)
   {
@@ -261,9 +260,8 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
       c[1][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][2];
       c[1][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][3];
 
-      ret =
-          Scaling_and_transformation_process_for_chroma_DC_transform_coefficients(
-              isChromaCb, c, 2, 2, dcC);
+      ret = scaling_and_transformation_for_chroma_DC_transform_coefficients(
+          isChromaCb, c, 2, 2, dcC);
       RETURN_IF_FAILED(ret != 0, ret);
     } else if (m_slice.m_sps.ChromaArrayType == 2) // YUV422
     {
@@ -277,9 +275,8 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
       c[3][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][6];
       c[3][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][7];
 
-      ret =
-          Scaling_and_transformation_process_for_chroma_DC_transform_coefficients(
-              isChromaCb, c, 2, 4, dcC);
+      ret = scaling_and_transformation_for_chroma_DC_transform_coefficients(
+          isChromaCb, c, 2, 4, dcC);
       RETURN_IF_FAILED(ret != 0, ret);
     }
 
@@ -416,12 +413,15 @@ int PictureBase::transform_decoding_process_for_chroma_samples_inter(
 // This process is invoked when decoding P and B macroblock types.
 /* 该过程的输出是当前宏块的帧间预测样本，它们是亮度样本的 16x16 数组 predL，并且当 ChromaArrayType 不等于 0 时，是色度样本的两个 (MbWidthC)x(MbHeightC) 数组 predCb 和 predCr，每个数组对应一个色度分量 Cb 和 Cr。*/
 int PictureBase::inter_prediction_process() {
-  int ret;
   const SliceHeader &header = m_slice.slice_header;
+  const uint32_t ChromaArrayType = m_slice.m_sps.ChromaArrayType;
+  const int32_t SubHeightC = m_slice.m_sps.SubHeightC;
+  const int32_t SubWidthC = m_slice.m_sps.SubWidthC;
+  MacroBlock &mb = m_mbs[CurrMbAddr];
 
   /* 宏块部分数量，指示当前宏块被划分成的部分数量 */
   int32_t NumMbPart = 0, NumSubMbPart = 0;
-  MacroBlock &mb = m_mbs[CurrMbAddr];
+  int ret;
 
   /* 宏块的划分由mb_type指定。每个宏块分区由 mbPartIdx 引用。当宏块划分由等于子宏块的分区组成时，每个子宏块可以进一步划分为由sub_mb_type[mbPartIdx]指定的子宏块分区。每个子宏块分区由 subMbPartIdx 引用。当宏块划分不由子宏块组成时，subMbPartIdx设置为等于0。 */
 
@@ -450,11 +450,7 @@ int PictureBase::inter_prediction_process() {
     ret = MacroBlock::SubMbPredMode(
         header.slice_type, mb.sub_mb_type[mbPartIdx], NumSubMbPart,
         SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
-    if (ret) {
-      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-                << std::endl;
-      return ret;
-    }
+    RET(ret);
 
     /* NOTE: 这里设计到了一个直接模式：没有显式编码运动矢量，通过周围块的信息来推导运动矢量。 */
 
@@ -489,9 +485,9 @@ int PictureBase::inter_prediction_process() {
 
     int32_t partWidthC = 0, partHeightC = 0;
     /* 当ChromaArrayType不等于0时，变量partWidthC和partHeightC导出为：*/
-    if (m_slice.m_sps.ChromaArrayType != 0) {
-      partWidthC = partWidth / m_slice.m_sps.SubWidthC;
-      partHeightC = partHeight / m_slice.m_sps.SubHeightC;
+    if (ChromaArrayType != 0) {
+      partWidthC = partWidth / SubWidthC;
+      partHeightC = partHeight / SubHeightC;
     }
 
     int32_t xP =
@@ -609,66 +605,49 @@ int PictureBase::inter_prediction_process() {
        * */
       if (mb.mb_field_decoding_flag == 0) {
         for (int i = 0; i <= partHeight - 1; i++)
-          for (int j = 0; j <= partWidth - 1; j++)
-            m_pic_buff_luma[(mb_y * MbHeightL + yP + yS + i) *
-                                PicWidthInSamplesL +
-                            (mb_x * MbWidthL + xP + xS + j)] =
+          for (int j = 0; j <= partWidth - 1; j++) {
+            int32_t y = mb_y * MbHeightL + yP + yS + i;
+            int32_t x = mb_x * MbWidthL + xP + xS + j;
+            m_pic_buff_luma[y * PicWidthInSamplesL + x] =
                 predPartL[i * partWidth + j];
+          }
 
         /* 当 ChromaArrayType 不等于 0 时，变量 predC 的 x = 0..partWidthC − 1，y = 0..partHeightC − 1，并且 predC 和 predPartC 中的 C 被 Cb 或 Cr 替换，推导如下： */
-        if (m_slice.m_sps.ChromaArrayType != 0) {
-          for (int i = 0; i <= partHeightC - 1; i++) {
+        if (ChromaArrayType != 0) {
+          for (int i = 0; i <= partHeightC - 1; i++)
             for (int j = 0; j <= partWidthC - 1; j++) {
-              m_pic_buff_cb[(mb_y * MbHeightC + yP / m_slice.m_sps.SubHeightC +
-                             yS / m_slice.m_sps.SubHeightC + i) *
-                                PicWidthInSamplesC +
-                            (mb_x * MbWidthC + xP / m_slice.m_sps.SubWidthC +
-                             xS / m_slice.m_sps.SubWidthC + j)] =
-                  predPartCb[i * partWidthC + j];
-
-              m_pic_buff_cr[(mb_y * MbHeightC + yP / m_slice.m_sps.SubHeightC +
-                             yS / m_slice.m_sps.SubHeightC + i) *
-                                PicWidthInSamplesC +
-                            (mb_x * MbWidthC + xP / m_slice.m_sps.SubWidthC +
-                             xS / m_slice.m_sps.SubWidthC + j)] =
-                  predPartCr[i * partWidthC + j];
+              int32_t y =
+                  mb_y * MbHeightC + yP / SubHeightC + yS / SubHeightC + i;
+              int32_t x = mb_x * MbWidthC + xP / SubWidthC + xS / SubWidthC + j;
+              uint32_t index = y * PicWidthInSamplesC + x;
+              m_pic_buff_cb[index] = predPartCb[i * partWidthC + j];
+              m_pic_buff_cr[index] = predPartCr[i * partWidthC + j];
             }
-          }
         }
       } else {
         /* 同上帧宏块，只不过需要对顶、底同时处理 */
-        for (int i = 0; i <= partHeight - 1; i++) {
+        for (int i = 0; i <= partHeight - 1; i++)
           for (int j = 0; j <= partWidth - 1; j++) {
-            m_pic_buff_luma[(mb_y % 2) * PicWidthInSamplesL +
-                            ((mb_y / 2) * MbHeightL + yP + yS + i) *
-                                PicWidthInSamplesL * 2 +
-                            (mb_x * MbWidthL + xP + xS + j)] =
+            int32_t y = (mb_y % 2) * PicWidthInSamplesL +
+                        (mb_y / 2) * MbHeightL + yP + yS + i;
+            int32_t x = mb_x * MbWidthL + xP + xS + j;
+            m_pic_buff_luma[y * PicWidthInSamplesL * 2 + x] =
                 predPartL[i * partWidth + j];
           }
-        }
 
-        if (m_slice.m_sps.ChromaArrayType != 0) {
-          for (int i = 0; i <= partHeightC - 1; i++) {
+        if (ChromaArrayType != 0) {
+          for (int i = 0; i <= partHeightC - 1; i++)
             for (int j = 0; j <= partWidthC - 1; j++) {
-              m_pic_buff_cb[(mb_y % 2) * PicWidthInSamplesC +
-                            ((mb_y / 2) * MbHeightC +
-                             yP / m_slice.m_sps.SubHeightC +
-                             yS / m_slice.m_sps.SubHeightC + i) *
-                                PicWidthInSamplesC * 2 +
-                            (mb_x * MbWidthC + xP / m_slice.m_sps.SubWidthC +
-                             xS / m_slice.m_sps.SubWidthC + j)] =
-                  predPartCb[i * partWidthC + j];
+              int32_t y = (mb_y % 2) * PicWidthInSamplesC +
+                          (mb_y / 2) * MbHeightC + yP / SubHeightC +
+                          yS / SubHeightC + i;
+              int32_t x = mb_x * MbWidthC + xP / SubWidthC + xS / SubWidthC + j;
 
-              m_pic_buff_cr[(mb_y % 2) * PicWidthInSamplesC +
-                            ((mb_y / 2) * MbHeightC +
-                             yP / m_slice.m_sps.SubHeightC +
-                             yS / m_slice.m_sps.SubHeightC + i) *
-                                PicWidthInSamplesC * 2 +
-                            (mb_x * MbWidthC + xP / m_slice.m_sps.SubWidthC +
-                             xS / m_slice.m_sps.SubWidthC + j)] =
+              m_pic_buff_cb[y * PicWidthInSamplesC * 2 + x] =
+                  predPartCb[i * partWidthC + j];
+              m_pic_buff_cr[y * PicWidthInSamplesC * 2 + x] =
                   predPartCr[i * partWidthC + j];
             }
-          }
         }
       }
 

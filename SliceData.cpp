@@ -588,6 +588,7 @@ int SliceData::decoding_process(PictureBase &picture) {
   //8.5 Transform coefficient decoding process and picture construction process prior to deblocking filter process（根据不同类型的预测模式，进行去块滤波处理之前的变换系数解码处理和图片构造处理 ）
 
   if (mb.m_mb_pred_mode == Intra_4x4)
+    /* 至此Luma数据完成全部解码工作，输出的pic_buff_luma即为解码的原始数据 */
     picture.transform_decoding_for_4x4_luma_residual_blocks(
         0, 0, BitDepth, picWidthInSamplesL, pic_buff_luma);
   else if (mb.m_mb_pred_mode == Intra_8x8)
@@ -595,7 +596,7 @@ int SliceData::decoding_process(PictureBase &picture) {
         0, 0, BitDepth, picWidthInSamplesL, mb.LumaLevel8x8, pic_buff_luma);
   else if (mb.m_mb_pred_mode == Intra_16x16)
     picture
-        .transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
+        .transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction(
             0, BitDepth, mb.QP1Y, picWidthInSamplesL, mb.Intra16x16DCLevel,
             mb.Intra16x16ACLevel, pic_buff_luma);
 
@@ -605,29 +606,32 @@ int SliceData::decoding_process(PictureBase &picture) {
     return 0;
   } else {
     //----------------------------------- 帧间预测 -----------------------------------
-    /* 运动补偿 */
     picture.inter_prediction_process();
 
     /* 选择 4x4 或 8x8 的残差块解码函数来处理亮度残差块 */
     if (mb.transform_size_8x8_flag == 0)
-      picture.transform_decoding_process_for_4x4_luma_residual_blocks_inter(
+      picture.transform_decoding_for_4x4_luma_residual_blocks_inter(
           0, 0, BitDepth, picWidthInSamplesL, pic_buff_luma);
     else
-      picture.transform_decoding_process_for_8x8_luma_residual_blocks_inter(
+      picture.transform_decoding_for_8x8_luma_residual_blocks_inter(
           0, 0, BitDepth, picWidthInSamplesL, mb.LumaLevel8x8, pic_buff_luma);
 
     /* 调用色度残差块的解码函数(Cb,Cr) */
-    picture.transform_decoding_process_for_chroma_samples_inter(
-        1, picWidthInSamplesC, pic_buff_cb);
-    picture.transform_decoding_process_for_chroma_samples_inter(
-        0, picWidthInSamplesC, pic_buff_cr);
+    picture.transform_decoding_for_chroma_samples_inter(1, picWidthInSamplesC,
+                                                        pic_buff_cb);
+    picture.transform_decoding_for_chroma_samples_inter(0, picWidthInSamplesC,
+                                                        pic_buff_cr);
     return 0;
   }
 
-  picture.transform_decoding_process_for_chroma_samples(1, picWidthInSamplesC,
-                                                        pic_buff_cb);
-  picture.transform_decoding_process_for_chroma_samples(0, picWidthInSamplesC,
-                                                        pic_buff_cr);
+  /* 当存在色度采样时，即YUV420,YUV422,YUV444进行色度解码; 反之，如果是YUV400，则不进行色度解码 */
+  if (m_sps.ChromaArrayType != 0) {
+    picture.transform_decoding_for_chroma_samples(1, picWidthInSamplesC,
+                                                  pic_buff_cb);
+    picture.transform_decoding_for_chroma_samples(0, picWidthInSamplesC,
+                                                  pic_buff_cr);
+  }
+  /* 至此原始数据完成全部解码工作，输出的pic_buff_luma,pic_buff_cb,pic_buff_cr即为解码的原始数据 */
   return 0;
 }
 

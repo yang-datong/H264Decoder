@@ -279,7 +279,7 @@ class PictureBase {
   int transform_decoding_for_4x4_luma_residual_blocks(
       int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
       int32_t PicWidthInSamples, uint8_t *pic_buff); // 8.5.1
-  int transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction_mode(
+  int transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction(
       int32_t isChroma, int32_t BitDepth, int32_t QP1,
       int32_t PicWidthInSamples, int32_t Intra16x16DCLevel[16],
       int32_t Intra16x16ACLevel[16][16], uint8_t *pic_buff); // 8.5.2
@@ -287,13 +287,13 @@ class PictureBase {
       int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
       int32_t PicWidthInSamples, int32_t Level8x8[4][64],
       uint8_t *pic_buff); // 8.5.3
-  int transform_decoding_process_for_chroma_samples(int32_t isChromaCb,
+  int transform_decoding_for_chroma_samples(int32_t isChromaCb,
                                                     int32_t PicWidthInSamples,
                                                     uint8_t *pic_buff); // 8.5.4
-  int transform_decoding_process_for_chroma_samples_with_ChromaArrayType_equal_to_3(
+  int transform_decoding_for_chroma_samples_with_YUV444(
       int32_t isChromaCb, int32_t PicWidthInSamples,
       uint8_t *pic_buff); // 8.5.5
-  int Scaling_and_transformation_process_for_chroma_DC_transform_coefficients(
+  int scaling_and_transformation_for_chroma_DC_transform_coefficients(
       int32_t isChromaCb, int32_t c[4][2], int32_t nW, int32_t nH,
       int32_t (&dcC)[4][2]); // 8.5.11
   int Scaling_and_transformation_process_for_residual_4x4_blocks(
@@ -322,18 +322,17 @@ class PictureBase {
   int Decoding_process_for_P_macroblocks_in_SP_slices_or_SI_macroblocks(); // 8.6
 
   //--------------帧间预测------------------------
-  int transform_decoding_process_for_4x4_luma_residual_blocks_inter(
+  int transform_decoding_for_4x4_luma_residual_blocks_inter(
       int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
       int32_t PicWidthInSamples, uint8_t *pic_buff);
-  int transform_decoding_process_for_8x8_luma_residual_blocks_inter(
+  int transform_decoding_for_8x8_luma_residual_blocks_inter(
       int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
       int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff);
-  int transform_decoding_process_for_chroma_samples_inter(
+  int transform_decoding_for_chroma_samples_inter(
       int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff);
-
   int intra_residual_transform_bypass_decoding(int32_t nW, int32_t nH,
                                                int32_t horPredFlag,
-                                               int32_t r[4][4]);
+                                               int32_t* r);
   int inter_prediction_process(); // 8.4
   int derivation_motion_vector_components_and_reference_indices(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
