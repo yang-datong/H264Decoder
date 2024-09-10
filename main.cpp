@@ -1,8 +1,12 @@
 #include "AnnexBReader.hpp"
+#include "Frame.hpp"
 #include "GOP.hpp"
 #include "Nalu.hpp"
+#include <ostream>
 
 int32_t g_PicNumCnt = 0;
+
+int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR);
 
 int main(int argc, char *argv[]) {
   /* 关闭io输出同步 */
@@ -26,8 +30,11 @@ int main(int argc, char *argv[]) {
     //filePath = "./demo_10_frames_cavlc_and_interlace.h264";
     /* 714x624 帧编码(CABAC 熵编码模式 + 无损编码(lossless=1) + TransformBypassMode + YUV444 ,段错误。。) */
     //filePath = "./demo_10_frames_TransformBypassModeFlag.h264";
-    //TODO: 满了16个buff后出现了段错误问题
-    filePath = "./1280x720_60_fps.h264";
+    //ok
+    //filePath = "./1280x720_60_fps.h264";
+    //用于测试GOP, IDR的处理（ok，其中NAL[3527], GOP[3204], 161个IDR帧
+    //filePath = "./854x480_60_fps_20_gop.h264";
+    filePath = "./854x480_60_fps_20_gop_and_I_Slice.h264";
   }
 
   /* 1. 打开文件、读取NUL、存储NUL的操作 */
@@ -73,7 +80,6 @@ int main(int argc, char *argv[]) {
       // nalu.parseSODB(rbsp, SODB);
 
       /* 见T-REC-H.264-202108-I!!PDF-E.pdf 87页 */
-      // int is_need_flush = 0;
       if (nalu.nal_unit_type > 21)
         std::cout << "Unknown Nalu Type !!!" << std::endl;
 
@@ -81,12 +87,7 @@ int main(int argc, char *argv[]) {
       case 1: /* Slice(non-VCL) */
         /* 11-2. 解码普通帧 */
         cout << "Original Slice -> {" << endl;
-        Frame *newEmptyPicture;
-        frame->m_current_picture_ptr
-            ->end_decode_the_picture_and_get_a_new_empty_picture(
-                newEmptyPicture);
-        frame = newEmptyPicture;
-
+        flushFrame(gop, frame, false);
         /* 初始化bit处理器，填充slice的数据 */
         bitStream = new BitStream(rbsp.buf, rbsp.len);
         /* 此处根据SliceHeader可判断A Frame =? A Slice */
@@ -104,10 +105,11 @@ int main(int argc, char *argv[]) {
         std::cout << "Not Support DPC!" << std::endl;
         break;
       case 5: /* IDR Slice(VCL) */
+        //gop->flush();
         /* 11-1. 解码立即刷新帧 GOP[0] */
         cout << "IDR Slice -> {" << endl;
         /* 提供给外层程序一定是Frame，即一帧数据，而不是一个Slice，因为如果存在多个Slice为一帧的情况外层处理就很麻烦 */
-
+        flushFrame(gop, frame, true);
         /* 初始化bit处理器，填充idr的数据 */
         bitStream = new BitStream(rbsp.buf, rbsp.len);
         /* 这里通过解析SliceHeader后可以知道一个Frame到底是几个Slice，通过直接调用frame->decode，在内部对每个Slice->decode() （如果存在多个Slice的情况，可以通过first_mb_in_slice判断，如果每个Slice都为0,则表示每个Slice都是一帧数据，当first_mb_in_slice>0，则表示与前面的一个或多个Slice共同组成一个Frame） */
@@ -181,6 +183,31 @@ int main(int argc, char *argv[]) {
     }
     std::cout << std::endl;
   }
+
+  /* 读取完所有Nalu，并送入解码后，则flush操作，准备退出 */
+  gop->flush();
   reader.close();
+  return 0;
+}
+
+/* 清空单帧，若当IDR解码完成时，则对整个GOP进行flush */
+int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR) {
+  if (frame != NULL && frame->m_current_picture_ptr != NULL) {
+    Frame *newEmptyPicture = nullptr;
+    frame->m_current_picture_ptr
+        ->end_decode_the_picture_and_get_a_new_empty_picture(newEmptyPicture);
+
+    //当上一帧完成解码后，且解码帧为IDR帧，则进行GOP -> flush
+    if (isFromIDR == false)
+      if (frame->m_picture_frame.m_slice.slice_header.IdrPicFlag) gop->flush();
+
+    Frame *outPicture = nullptr;
+    gop->getOneOutPicture(frame, outPicture);
+    if (outPicture != nullptr)
+      //标记为闲置状态，以便后续回收重复利用
+      outPicture->m_is_in_use = 0;
+
+    frame = newEmptyPicture;
+  }
   return 0;
 }

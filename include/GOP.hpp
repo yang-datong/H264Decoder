@@ -42,6 +42,7 @@ class GOP {
 
   int getOneEmptyPicture(Frame *&pic);
   int getOneOutPicture(Frame *newDecodedPic, Frame *&outPic);
+  int flush();
 };
 
 #endif /* end of include guard: GOP_HPP_PUYEPJDM */

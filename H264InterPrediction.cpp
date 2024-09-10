@@ -2904,6 +2904,7 @@ int PictureBase::derivation_prediction_weights(
     //8.4.1.2.3 Derivation process for temporal direct luma motion vector and reference index prediction mode -> page 161
     int32_t tb = CLIP3(-128, 127, DiffPicOrderCnt(currPicOrField, pic0));
     int32_t td = CLIP3(-128, 127, DiffPicOrderCnt(pic1, pic0));
+    if (td == 0) RET(-1);
     int32_t tx = (16384 + ABS(td / 2)) / td;
     int32_t DistScaleFactor = CLIP3(-1024, 1023, (tb * tx + 32) >> 6);
 

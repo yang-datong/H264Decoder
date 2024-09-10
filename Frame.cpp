@@ -30,9 +30,7 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop) {
   }
   //}
   m_picture_frame.saveToBmpFile(output_file.c_str());
-  /* TODO YangJing 处理GOP flush <24-09-09 00:45:52> */
-  Frame *outPicture = nullptr;
-  gop.getOneOutPicture(this, outPicture);
+
   return 0;
 }
 

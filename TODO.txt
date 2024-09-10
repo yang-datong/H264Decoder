@@ -105,6 +105,8 @@ I 帧不是 IDR 帧的情况：
 
 使用ffmpeg生成多I帧（非IDR帧）:
 ffmpeg -i input.mp4 -c:v libx264 -g 100 -keyint_min 100 -x264-params "scenecut=0" -force_key_frames "expr:gte(t,n_forced*2)" output.h264
+ffmpeg -i input.mp4 -c:v libx264 -x264opts keyint=50:scenecut=0 -force_key_frames "expr:gte(t,n_forced*2)" output.mp4
+
 
 -g 100：设置 GOP 的大小为 100 帧（即每 100 帧插入一个 IDR 帧）。
 -keyint_min 100：确保最小关键帧间隔为 100 帧。

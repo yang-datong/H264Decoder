@@ -120,3 +120,17 @@ int GOP::getOneOutPicture(Frame *newDecodedPic, Frame *&outPic) {
 
   return 0;
 }
+
+int GOP::flush() {
+  Frame *outPicture = NULL;
+  while (true) {
+    //从gop保存的帧数组中一个个读取输出
+    int ret = getOneOutPicture(NULL, outPicture);
+    RET(ret);
+    if (outPicture)
+      outPicture->m_is_in_use = 0;
+    else // flush完毕，DPB缓存中已无可输出帧
+      break;
+  }
+  return 0;
+}

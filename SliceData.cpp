@@ -1,7 +1,9 @@
 #include "SliceData.hpp"
 #include "BitStream.hpp"
 #include "Frame.hpp"
+#include "GOP.hpp"
 #include "PictureBase.hpp"
+#include "Type.hpp"
 #include <cstdint>
 #include <cstring>
 
@@ -648,14 +650,17 @@ int NextMbAddress(int currMbAddr, SliceHeader *header) {
 void SliceData::printFrameReorderPriorityInfo(PictureBase &picture) {
   string sliceType = "UNKNOWN";
   std::cout << "\tGOP[" << picture.m_PicNumCnt + 1 << "] -> {" << std::endl;
-  for (int i = 0; i < picture.m_PicNumCnt + 1; ++i) {
+  for (int i = 0; i < GOP_SIZE; ++i) {
     const auto &refPic = picture.m_dpb[i];
     if (refPic) {
       auto &frame = refPic->m_picture_frame;
       auto &sliceHeader = frame.m_slice.slice_header;
 
+      if (sliceHeader.slice_type != SLICE_I && frame.PicOrderCnt == 0 &&
+          frame.PicNum == 0 && frame.m_PicNumCnt == 0)
+        continue;
       sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader.slice_type);
-      std::cout << "\t\t m_RefPicList0[" << i << "]: " << sliceType
+      std::cout << "\t\t DPB[" << i << "]: " << sliceType
                 << "; PicOrderCnt(显示顺序)=" << frame.PicOrderCnt
                 << "; PicNum(帧编号)=" << frame.PicNum
                 << "; PicNumCnt(位置)=" << frame.m_PicNumCnt << ";\n";
