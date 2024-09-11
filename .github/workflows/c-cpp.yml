@@ -19,21 +19,16 @@ jobs:
       run: cmake --build build -j 4
     - name: test1
       run: cd test/ && ../build/a.out demo_10_frames.h264
-    - name: test1 and gen md5
       run: ./test.sh demo_10_frames.h264 && rm output_*.bmp
     - name: test2
-      run: ../build/a.out demo_10_frames_cavlc.h264
-    - name: test2 and gen md5
+      run: cd test/ && ../build/a.out demo_10_frames_cavlc.h264
       run: ./test.sh demo_10_frames_cavlc.h264 && rm output_*.bmp
     - name: test3
-      run: ../build/a.out source_cut_10_frames.h264
-    - name: test3 and gen md5
+      run: cd test/ && ../build/a.out source_cut_10_frames.h264
       run: ./test.sh source_cut_10_frames.h264 && rm output_*.bmp
     - name: test4
-      run: ../build/a.out source_cut_10_frames_no_B.h264
-    - name: test4 and gen md5
+      run: cd test/ && ../build/a.out source_cut_10_frames_no_B.h264
       run: ./test.sh source_cut_10_frames_no_B.h264 && rm output_*.bmp
     - name: test5
-      run: ../build/a.out demo_10_frames_cavlc_and_interlace.h264
-    - name: test5 and gen md5
+      run: cd test/ && ../build/a.out demo_10_frames_cavlc_and_interlace.h264
       run: ./test.sh demo_10_frames_cavlc_and_interlace.h264 && rm output_*.bmp
