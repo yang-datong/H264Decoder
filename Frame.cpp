@@ -25,8 +25,9 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop) {
   else if (slice->slice_header.slice_type == SLICE_B)
     output_file = "output_B_" + to_string(index++) + ".bmp";
   else {
-    std::cerr << "未知帧" << std::endl;
-    exit(0);
+    std::cerr << "Unrecognized slice type:" << slice->slice_header.slice_type
+              << std::endl;
+    return -1;
   }
   //}
   m_picture_frame.saveToBmpFile(output_file.c_str());

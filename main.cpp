@@ -24,10 +24,12 @@ int main(int argc, char *argv[]) {
     //filePath = "./demo_10_frames.h264";
     /* 714x624 场编码(IDR帧解码出来的图片部分绿屏，找到原因了，宏块数量不对，会是slice_skip_flag的问题吗？） */
     //filePath = "./demo_10_frames_interlace.h264";
+    /* 714x624 场编码(隔行扫描，顶场优先)*/
+    filePath = "./demo_10_frames_TFF.h264";
     /* 714x624 帧编码(CAVLC 熵编码模式,即profile=baseline) */
     //filePath = "./demo_10_frames_cavlc.h264";
-    /* 714x624 场编码(CAVLC 熵编码模式，有一点点绿色宏块) */
-    filePath = "./demo_10_frames_cavlc_and_interlace.h264";
+    /* 714x624 场编码(CAVLC 熵编码模式，有一点点绿色宏块) TODO:会有一些空白的SEI打印很频繁，看看是为什么 */
+    //filePath = "./demo_10_frames_cavlc_and_interlace.h264";
     /* 714x624 帧编码(CABAC 熵编码模式 + 无损编码(lossless=1) + TransformBypassMode + YUV444 ,段错误。。) */
     //filePath = "./demo_10_frames_TransformBypassModeFlag.h264";
     //ok
@@ -118,7 +120,8 @@ int main(int argc, char *argv[]) {
         cout << " }" << endl;
         break;
       case 6: /* SEI（补充信息）(VCL) */
-        /* 10. 解码SEI补充增强信息 */
+        /* 10. 解码SEI补充增强信息：
+         * 场编码的图像在每个Slice前出现SEI以提供必要的解码辅助信息 */
         cout << "SEI -> {" << endl;
         nalu.extractSEIparameters(rbsp, sei, gop->m_spss[0]);
         cout << " }" << endl;
@@ -203,7 +206,7 @@ int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR) {
 
     Frame *outPicture = nullptr;
     gop->getOneOutPicture(frame, outPicture);
-    if (outPicture != nullptr){
+    if (outPicture != nullptr) {
       //标记为闲置状态，以便后续回收重复利用
       outPicture->m_is_in_use = 0;
       //outPicture->m_picture_frame.writeYUV("output.yuv");
