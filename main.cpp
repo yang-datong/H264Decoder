@@ -191,12 +191,12 @@ int main(int argc, char *argv[]) {
     std::cout << std::endl;
   }
 
-  /* 读取完所有Nalu，并送入解码后，则flush操作，准备退出 */
-  gop->flush();
+  /* 读取完所有Nalu，并送入解码后，则将缓存中所有的Frame读取出来，准备退出 */
   reader.close();
   return 0;
 }
 
+/* TODO：GOP flush还有问题，最后两帧如何处理？ */
 /* 清空单帧，若当IDR解码完成时，则对整个GOP进行flush */
 int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
                OUTPUT_FILE_TYPE output_file_type) {
@@ -215,20 +215,7 @@ int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
       //标记为闲置状态，以便后续回收重复利用
       outPicture->m_is_in_use = 0;
       if (output_file_type == BMP) {
-        static int index = 0;
-        string output_file;
-        if (frame->slice->slice_header.slice_type == SLICE_I)
-          output_file = "output_I_" + to_string(index++) + ".bmp";
-        else if (frame->slice->slice_header.slice_type == SLICE_P)
-          output_file = "output_P_" + to_string(index++) + ".bmp";
-        else if (frame->slice->slice_header.slice_type == SLICE_B)
-          output_file = "output_B_" + to_string(index++) + ".bmp";
-        else {
-          std::cerr << "Unrecognized slice type:"
-                    << frame->slice->slice_header.slice_type << std::endl;
-          return -1;
-        }
-        frame->m_picture_frame.saveToBmpFile(output_file.c_str());
+
       } else if (output_file_type == YUV) {
         outPicture->m_picture_frame.writeYUV("output.yuv");
         if (frame->m_picture_frame.m_slice.slice_header.IdrPicFlag)
