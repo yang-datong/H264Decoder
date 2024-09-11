@@ -4,6 +4,7 @@
 #include "MacroBlock.hpp"
 #include "SliceHeader.hpp"
 #include "Type.hpp"
+#include <algorithm>
 #include <cstdint>
 
 extern int32_t g_PicNumCnt;
@@ -606,14 +607,21 @@ int PictureBase::saveBmp(const char *filename, MY_BITMAP *pBitmap) {
   return ret;
 }
 
+#include <fstream>
+
 /* 所有解码的帧写入到一个文件 */
 int PictureBase::writeYUV(const char *filename) {
   int ret = 0;
 
-  FILE *fp = fopen(filename, "ab+");
-  if (fp == NULL) {
-    return -1;
+  static bool isFrist = false;
+  if (isFrist == false) {
+    std::ifstream f(filename);
+    if (f.good()) remove(filename);
+    isFrist = true;
   }
+
+  FILE *fp = fopen(filename, "ab+");
+  if (fp == NULL) return -1;
 
   fwrite(m_pic_buff_luma, PicWidthInSamplesL * PicHeightInSamplesL, 1, fp);
   fwrite(m_pic_buff_cb, PicWidthInSamplesC * PicHeightInSamplesC, 1, fp);

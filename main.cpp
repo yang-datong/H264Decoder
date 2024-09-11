@@ -2,11 +2,15 @@
 #include "Frame.hpp"
 #include "GOP.hpp"
 #include "Nalu.hpp"
+#include "Type.hpp"
 #include <ostream>
+
+typedef enum _OUTPUT_FILE_TYPE { NON, BMP, YUV } OUTPUT_FILE_TYPE;
 
 int32_t g_PicNumCnt = 0;
 
-int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR);
+int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
+               OUTPUT_FILE_TYPE output_file_type = NON);
 
 int main(int argc, char *argv[]) {
   /* 关闭io输出同步 */
@@ -89,7 +93,7 @@ int main(int argc, char *argv[]) {
       case 1: /* Slice(non-VCL) */
         /* 11-2. 解码普通帧 */
         cout << "Original Slice -> {" << endl;
-        flushFrame(gop, frame, false);
+        flushFrame(gop, frame, false, BMP);
         /* 初始化bit处理器，填充slice的数据 */
         bitStream = new BitStream(rbsp.buf, rbsp.len);
         /* 此处根据SliceHeader可判断A Frame =? A Slice */
@@ -111,7 +115,7 @@ int main(int argc, char *argv[]) {
         /* 11-1. 解码立即刷新帧 GOP[0] */
         cout << "IDR Slice -> {" << endl;
         /* 提供给外层程序一定是Frame，即一帧数据，而不是一个Slice，因为如果存在多个Slice为一帧的情况外层处理就很麻烦 */
-        flushFrame(gop, frame, true);
+        flushFrame(gop, frame, true, BMP);
         /* 初始化bit处理器，填充idr的数据 */
         bitStream = new BitStream(rbsp.buf, rbsp.len);
         /* 这里通过解析SliceHeader后可以知道一个Frame到底是几个Slice，通过直接调用frame->decode，在内部对每个Slice->decode() （如果存在多个Slice的情况，可以通过first_mb_in_slice判断，如果每个Slice都为0,则表示每个Slice都是一帧数据，当first_mb_in_slice>0，则表示与前面的一个或多个Slice共同组成一个Frame） */
@@ -194,7 +198,8 @@ int main(int argc, char *argv[]) {
 }
 
 /* 清空单帧，若当IDR解码完成时，则对整个GOP进行flush */
-int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR) {
+int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
+               OUTPUT_FILE_TYPE output_file_type) {
   if (frame != NULL && frame->m_current_picture_ptr != NULL) {
     Frame *newEmptyPicture = nullptr;
     frame->m_current_picture_ptr
@@ -209,7 +214,29 @@ int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR) {
     if (outPicture != nullptr) {
       //标记为闲置状态，以便后续回收重复利用
       outPicture->m_is_in_use = 0;
-      //outPicture->m_picture_frame.writeYUV("output.yuv");
+      if (output_file_type == BMP) {
+        static int index = 0;
+        string output_file;
+        if (frame->slice->slice_header.slice_type == SLICE_I)
+          output_file = "output_I_" + to_string(index++) + ".bmp";
+        else if (frame->slice->slice_header.slice_type == SLICE_P)
+          output_file = "output_P_" + to_string(index++) + ".bmp";
+        else if (frame->slice->slice_header.slice_type == SLICE_B)
+          output_file = "output_B_" + to_string(index++) + ".bmp";
+        else {
+          std::cerr << "Unrecognized slice type:"
+                    << frame->slice->slice_header.slice_type << std::endl;
+          return -1;
+        }
+        frame->m_picture_frame.saveToBmpFile(output_file.c_str());
+      } else if (output_file_type == YUV) {
+        outPicture->m_picture_frame.writeYUV("output.yuv");
+        if (frame->m_picture_frame.m_slice.slice_header.IdrPicFlag)
+          std::cout << "\tffplay -video_size "
+                    << outPicture->m_picture_frame.PicWidthInSamplesL << "x"
+                    << outPicture->m_picture_frame.PicHeightInSamplesL
+                    << " output.yuv" << std::endl;
+      }
     }
 
     frame = newEmptyPicture;

@@ -14,24 +14,9 @@ void Frame::encode() {
 void Frame::decode() {}
 
 int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop) {
-  static int index = 0;
-  string output_file;
   //for (auto &slice : slices) {
   slice->decode(bitStream, dpb, gop.m_spss[0], gop.m_ppss[0], this);
-  if (slice->slice_header.slice_type == SLICE_I)
-    output_file = "output_I_" + to_string(index++) + ".bmp";
-  else if (slice->slice_header.slice_type == SLICE_P)
-    output_file = "output_P_" + to_string(index++) + ".bmp";
-  else if (slice->slice_header.slice_type == SLICE_B)
-    output_file = "output_B_" + to_string(index++) + ".bmp";
-  else {
-    std::cerr << "Unrecognized slice type:" << slice->slice_header.slice_type
-              << std::endl;
-    return -1;
-  }
   //}
-  m_picture_frame.saveToBmpFile(output_file.c_str());
-
   return 0;
 }
 

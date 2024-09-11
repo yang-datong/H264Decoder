@@ -1,6 +1,7 @@
 # Mac OS
 *.DS_Store
 
+*.yuv
 *.bmp
 
 # CMakeFiles

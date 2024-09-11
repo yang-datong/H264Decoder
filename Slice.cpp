@@ -38,9 +38,10 @@ int Slice::decode(BitStream &bitStream, Frame *(&dpb)[16], SPS &sps, PPS &pps,
   frame->m_picture_bottom_filed.init(*this);
 
   /* 当前解码的Slice为场编码（可能下一帧又是帧编码了）即隔行扫描方式 */
-  /* TODO YangJing  <24-09-11 14:57:34> */
+  /* TODO YangJing slice_header.field_pic_flag <24-09-11 17:34:02> */
   if (slice_header.field_pic_flag) // 场编码->顶场，底场
-    exit(0);
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
   //std::cout << "\t场编码(暂不处理)" << std::endl;
   //else  // 帧
   //std::cout << "\t帧编码" << std::endl;
