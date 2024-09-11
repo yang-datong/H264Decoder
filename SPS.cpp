@@ -1,5 +1,6 @@
 #include "SPS.hpp"
 #include "Type.hpp"
+#include <cstdint>
 #include <iostream>
 #include <ostream>
 
@@ -69,10 +70,8 @@ void SPS::vui_parameters(BitStream &bitStream) {
 
   nal_hrd_parameters_present_flag = bitStream.readU1();
   vcl_hrd_parameters_present_flag = bitStream.readU1();
-  if (nal_hrd_parameters_present_flag)
-    hrd_parameters(bitStream);
-  if (vcl_hrd_parameters_present_flag)
-    hrd_parameters(bitStream);
+  if (nal_hrd_parameters_present_flag) hrd_parameters(bitStream);
+  if (vcl_hrd_parameters_present_flag) hrd_parameters(bitStream);
   std::cout << "\t\t存在NAL HRD（网络提取率控制）参数:"
             << nal_hrd_parameters_present_flag
             << ",存在VCL HRD参数:" << vcl_hrd_parameters_present_flag
@@ -110,6 +109,29 @@ void SPS::vui_parameters(BitStream &bitStream) {
     std::cout << "\t\t最大解码帧缓冲区大小:" << max_dec_frame_buffering
               << std::endl;
   }
+
+  if (max_num_reorder_frames == -1) {
+    if ((profile_idc == 44 || profile_idc == 86 || profile_idc == 100 ||
+         profile_idc == 110 || profile_idc == 122 || profile_idc == 244) &&
+        constraint_set3_flag)
+      max_num_reorder_frames = 0;
+    else {
+      int32_t MaxDpbFrames = 0;
+      for (int i = 0; i < 19; ++i) {
+        if (level_idc == LevelNumber_MaxDpbMbs[i][0])
+          MaxDpbFrames = MIN(LevelNumber_MaxDpbMbs[i][1] /
+                                 (PicWidthInMbs * frameHeightInMbs),
+                             16);
+        break;
+      }
+      max_num_reorder_frames = MaxDpbFrames;
+    }
+  }
+
+  int32_t fps = 0;
+  if (vui_parameters_present_flag && timing_info_present_flag)
+    fps = time_scale / num_units_in_tick / 2;
+  std::cout << "\t\tfps:" << fps << std::endl;
   std::cout << "\t }" << std::endl;
 }
 
@@ -139,7 +161,12 @@ int SPS::extractParameters() {
 
   /* 读取profile_idc等等(4 bytes) */
   profile_idc = bitStream.readUn(8); // 0x64
-  constraint_set0_5_flag = bitStream.readUn(6);
+  constraint_set0_flag = bitStream.readUn(1);
+  constraint_set1_flag = bitStream.readUn(1);
+  constraint_set2_flag = bitStream.readUn(1);
+  constraint_set3_flag = bitStream.readUn(1);
+  constraint_set4_flag = bitStream.readUn(1);
+  constraint_set5_flag = bitStream.readUn(1);
   reserved_zero_2bits = bitStream.readUn(2);
   level_idc = bitStream.readUn(8); // 0
   seq_parameter_set_id = bitStream.readUE();
@@ -259,8 +286,7 @@ int SPS::extractParameters() {
   std::cout << "\t存在视频用户界面(VUI)参数:" << vui_parameters_present_flag
             << std::endl;
 
-  if (vui_parameters_present_flag)
-    vui_parameters(bitStream);
+  if (vui_parameters_present_flag) vui_parameters(bitStream);
 
   /* 计算宏块大小以及图像宽、高 */
   PicWidthInMbs = pic_width_in_mbs_minus1 + 1;
@@ -270,24 +296,13 @@ int SPS::extractParameters() {
   PicSizeInMapUnits = PicWidthInMbs * PicHeightInMapUnits;
   // 宏块单位的图像大小 = 宽 * 高
   frameHeightInMbs = (2 - frame_mbs_only_flag) * PicHeightInMapUnits;
-  // 指示图像是否仅包含帧（而不是场）。
-  // frame_mbs_only_flag 为1，则图像仅包含帧，并且帧高度等于图像高度。
-  // frame_mbs_only_flag 为0，则图像包含场，并且帧高度等于图像高度的一半。
 
   //----------- 下面都是一些需要进行额外计算的（文档都有需要自己找）------------
-  int width = PicWidthInMbs * 16;
-  int height = PicHeightInMapUnits * 16;
-  printf("\tprediction width:%d, prediction height:%d\n", width, height);
+  std::cout << "\tCodec width:" << PicWidthInMbs * 16
+            << ", Codec height:" << PicHeightInMapUnits * 16 << std::endl;
 
-  /* TODO 获取帧率YangJing  <24-04-05 00:22:50> */
-
-  /* TODO 获取B帧是否配置YangJing  <24-04-05 00:30:03> */
-
-  /* 确定色度数组类型 74 page */
-  if (separate_colour_plane_flag == 0)
-    ChromaArrayType = chroma_format_idc;
-  else
-    ChromaArrayType = 0;
+  /* 确定色度数组类型,YUV400,YUV420,YUV422,YUV444... 74 page */
+  ChromaArrayType = (separate_colour_plane_flag) ? 0 : chroma_format_idc;
 
   /* 7.4.2.1.1 Sequence parameter set data semantics */
   BitDepthY = bit_depth_luma_minus8 + 8;
@@ -345,23 +360,23 @@ The value of log2_max_frame_num_minus4 shall be in the range of 0 to
 
   /* 计算预期图像顺序计数周期增量 */
   //if (pic_order_cnt_type == 1) {
-    //int expectedDeltaPerPicOrderCntCycle = 0;
-    //for (int i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++) {
-      //expectedDeltaPerPicOrderCntCycle += offset_for_ref_frame[i];
-    //}
+  //int expectedDeltaPerPicOrderCntCycle = 0;
+  //for (int i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++) {
+  //expectedDeltaPerPicOrderCntCycle += offset_for_ref_frame[i];
+  //}
   //}
 
   return 0;
 }
 
 // 7.3.2.1.2 Sequence parameter set extension RBSP syntax
-int SPS::seq_parameter_set_extension_rbsp(){
+int SPS::seq_parameter_set_extension_rbsp() {
   /* TODO YangJing  <24-09-08 23:19:32> */
   return 0;
 }
 
 // 7.3.2.1.3 Subset sequence parameter set RBSP syntax
-int subset_seq_parameter_set_rbsp(){
+int subset_seq_parameter_set_rbsp() {
   /* TODO YangJing  <24-09-08 23:20:38> */
   return 0;
 }

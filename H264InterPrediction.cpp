@@ -3149,10 +3149,7 @@ int PictureBase::
         H264_MB_TYPE mb_type_, H264_MB_TYPE subMbType_[4], int32_t xP,
         int32_t yP, int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
   int ret = 0;
-  if (mb_type_ == MB_TYPE_NA) {
-    LOG_ERROR("mb_type_ == MB_TYPE_NA\n");
-    return -1;
-  }
+  if (mb_type_ == MB_TYPE_NA) RET(-1);
 
   //---------------------
   if (mb_type_ >= I_NxN &&

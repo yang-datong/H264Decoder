@@ -27,14 +27,14 @@ int main(int argc, char *argv[]) {
     /* 714x624 帧编码(CAVLC 熵编码模式,即profile=baseline) */
     //filePath = "./demo_10_frames_cavlc.h264";
     /* 714x624 场编码(CAVLC 熵编码模式，有一点点绿色宏块) */
-    //filePath = "./demo_10_frames_cavlc_and_interlace.h264";
+    filePath = "./demo_10_frames_cavlc_and_interlace.h264";
     /* 714x624 帧编码(CABAC 熵编码模式 + 无损编码(lossless=1) + TransformBypassMode + YUV444 ,段错误。。) */
     //filePath = "./demo_10_frames_TransformBypassModeFlag.h264";
     //ok
     //filePath = "./1280x720_60_fps.h264";
     //用于测试GOP, IDR的处理（ok，其中NAL[3527], GOP[3204], 161个IDR帧
     //filePath = "./854x480_60_fps_20_gop.h264";
-    filePath = "./854x480_60_fps_20_gop_and_I_Slice.h264";
+    //filePath = "./854x480_60_fps_20_gop_and_I_Slice.h264";
   }
 
   /* 1. 打开文件、读取NUL、存储NUL的操作 */

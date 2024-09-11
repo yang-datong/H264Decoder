@@ -13,6 +13,13 @@
   256 // 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle shall be in the range \
       // of 0 to 255, inclusive.
 
+const int32_t LevelNumber_MaxDpbMbs[19][2] = {
+    {10, 396},    {11, 900},    {12, 2376},   {13, 2376},   {20, 2376},
+    {21, 4752},   {22, 8100},   {30, 8100},   {31, 18000},  {32, 20480},
+    {40, 32768},  {41, 32768},  {42, 34816},  {50, 110400}, {51, 184320},
+    {52, 184320}, {60, 696320}, {61, 696320}, {62, 696320},
+};
+
 struct CHROMA_FORMAT_IDC_T {
   int32_t chroma_format_idc;
   int32_t separate_colour_plane_flag;
@@ -40,7 +47,12 @@ class SPS {
   /* 当 chroma_format_idc 不存在时，应推断其等于 1（4:2:0 色度格式）。page 74 */
   uint32_t chroma_format_idc = 1;
 
-  uint8_t constraint_set0_5_flag = 0;
+  uint8_t constraint_set0_flag = 0;
+  uint8_t constraint_set1_flag = 0;
+  uint8_t constraint_set2_flag = 0;
+  uint8_t constraint_set3_flag = 0;
+  uint8_t constraint_set4_flag = 0;
+  uint8_t constraint_set5_flag = 0;
   uint8_t reserved_zero_2bits = 0;
   /* 用于计算帧号的最大值 */
   uint32_t log2_max_pic_order_cnt_lsb_minus4 = 0;
@@ -78,7 +90,10 @@ class SPS {
   uint32_t BitDepthC = 0;
   uint32_t QpBdOffsetC = 0;
 
-  /* 图像是否仅包含帧（一个完整的帧） */
+  /* 整个视频序列是以帧为单位编码，还是允许场编码：
+   * 只有帧编码，即每个宏块（macroblock）都对应一整帧的图像。
+   * 允许场编码，即可以使用场编码模式（每个宏块可以对应一个场，而不是一整帧）
+   * 这个flag为场编码的前提下，需要进步一步判断Slice Header中的field_pic_flag，指示当前图片（picture）是帧图像还是场图像。*/
   bool frame_mbs_only_flag = 0;
   /* 帧顺序计数增量是否始终为零 */
   bool delta_pic_order_always_zero_flag = 0;
@@ -243,7 +258,7 @@ class SPS {
   /* 垂直运动矢量的最大长度的对数值 */
   uint32_t log2_max_mv_length_vertical = 0;
   /* 最大重排序帧数 */
-  uint32_t max_num_reorder_frames = 0;
+  int32_t max_num_reorder_frames = -1;
   /* 最大解码帧缓冲区大小 */
   uint32_t max_dec_frame_buffering = 0;
 

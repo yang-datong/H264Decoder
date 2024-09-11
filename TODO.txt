@@ -116,3 +116,5 @@ ffmpeg -i input.mp4 -c:v libx264 -x264opts keyint=50:scenecut=0 -force_key_frame
 
 该命令会在每 2 秒插入一个 I 帧，但这些 I 帧不会是 IDR 帧，因此后续的 P 帧或 B 帧仍然可以参考这些 I 帧之前的帧。每 100 帧会有一个 IDR 帧，以确保 GOP 的结构。
 
+
+帧、场：逐行扫描与隔行扫描

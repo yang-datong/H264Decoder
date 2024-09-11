@@ -1,5 +1,6 @@
 ﻿#include "H264Cabac.hpp"
 #include "Constants.hpp"
+#include "MacroBlock.hpp"
 #include "PictureBase.hpp"
 #include "Type.hpp"
 
@@ -492,35 +493,34 @@ int CH264Cabac::
 }
 
 // 9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element
-// mb_qp_delta
 int CH264Cabac::
     Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_qp_delta(
         int32_t &ctxIdxInc) {
-  // Let prevMbAddr be the macroblock address of the macroblock that precedes
-  // the current macroblock in decoding order.
-  int32_t prevMbAddr = picture.CurrMbAddr - 1;
 
-  // When the current macroblock is the first macroblock of a slice, prevMbAddr
-  // is marked as not available.
+  /* 令 prevMbAddr 为按解码顺序位于当前宏块之前的宏块的宏块地址。当当前宏块是切片的第一个宏块时，prevMbAddr被标记为不可用。 */
+  int32_t prevMbAddr = picture.CurrMbAddr - 1;
+  const MacroBlock &pre_mb = picture.m_mbs[prevMbAddr];
 
   int32_t FirstMbAddrOfSlice =
       picture.m_slice.slice_header.first_mb_in_slice *
       (1 + picture.m_slice.slice_header.MbaffFrameFlag);
-  if (picture.CurrMbAddr == FirstMbAddrOfSlice) {
-    prevMbAddr = -1;
-  }
+  if (picture.CurrMbAddr == FirstMbAddrOfSlice) prevMbAddr = -1;
 
-  if (prevMbAddr < 0 || picture.m_mbs[prevMbAddr].m_name_of_mb_type == P_Skip ||
-      picture.m_mbs[prevMbAddr].m_name_of_mb_type == B_Skip ||
-      picture.m_mbs[prevMbAddr].m_name_of_mb_type == I_PCM ||
-      (picture.m_mbs[prevMbAddr].m_mb_pred_mode != Intra_16x16 &&
-       picture.m_mbs[prevMbAddr].CodedBlockPatternLuma == 0 &&
-       picture.m_mbs[prevMbAddr].CodedBlockPatternChroma == 0) ||
-      picture.m_mbs[prevMbAddr].mb_qp_delta == 0) {
+  /* 变量 ctxIdxInc 的推导如下： 
+   * – 如果以下任一条件成立，则 ctxIdxInc 设置为等于 0： 
+     * – prevMbAddr 不可用或宏块 prevMbAddr 的 mb_type 等于 P_Skip 或 B_Skip， 
+     * – 宏块 prevMbAddr 的 mb_type 为等于 I_PCM， 
+     * – 宏块 prevMbAddr 未在 Intra_16x16 宏块预测模式下编码，且宏块 prevMbAddr 的 CodedBlockPatternLuma 和 CodedBlockPatternChroma 均等于 0， 
+     * – 宏块 prevMbAddr 的 mb_qp_delta 等于 0。 
+   * – 否则，将 ctxIdxInc 设置为等于 1 。 */
+  ctxIdxInc = 1;
+  if (prevMbAddr < 0 || pre_mb.m_name_of_mb_type == P_Skip ||
+      pre_mb.m_name_of_mb_type == B_Skip || pre_mb.m_name_of_mb_type == I_PCM ||
+      (pre_mb.m_mb_pred_mode != Intra_16x16 &&
+       pre_mb.CodedBlockPatternLuma == 0 &&
+       pre_mb.CodedBlockPatternChroma == 0) ||
+      pre_mb.mb_qp_delta == 0)
     ctxIdxInc = 0;
-  } else {
-    ctxIdxInc = 1;
-  }
 
   return 0;
 }
@@ -3073,6 +3073,7 @@ int CH264Cabac::decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
   return 0;
 }
 
+//9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element mb_qp_delta
 int CH264Cabac::decode_mb_qp_delta(int32_t &synElVal) {
   int ret = 0;
 
@@ -3100,9 +3101,7 @@ int CH264Cabac::decode_mb_qp_delta(int32_t &synElVal) {
   // significant_coeff_flag, last_significant_coeff_flag, and
   // coeff_abs_level_minus1
 
-  // 0,1 (clause 9.3.3.1.1.5)
   // 9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element
-  // mb_qp_delta
   ret = Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_qp_delta(
       ctxIdxInc);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -3134,8 +3133,14 @@ int CH264Cabac::decode_mb_qp_delta(int32_t &synElVal) {
 
       binIdx++;
 
-      RETURN_IF_FAILED(binIdx > 2 * mb_qp_max, -1); // error:
-                                                    // mb_qp_delta值太大了
+      if (binIdx > 2 * mb_qp_max) {
+        // mb_qp_delta值太大了
+        std::cerr << "An error occurred on binIdx:" << binIdx << " > "
+                  << 2 * mb_qp_max << " ," << __FUNCTION__ << "():" << __LINE__
+                  << std::endl;
+        binIdx = 2 * mb_qp_max;
+        break;
+      }
     }
 
     //----------Table 9-3 se(v)-------------
