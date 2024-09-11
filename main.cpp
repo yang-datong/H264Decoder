@@ -203,9 +203,11 @@ int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR) {
 
     Frame *outPicture = nullptr;
     gop->getOneOutPicture(frame, outPicture);
-    if (outPicture != nullptr)
+    if (outPicture != nullptr){
       //标记为闲置状态，以便后续回收重复利用
       outPicture->m_is_in_use = 0;
+      //outPicture->m_picture_frame.writeYUV("output.yuv");
+    }
 
     frame = newEmptyPicture;
   }

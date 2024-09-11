@@ -606,10 +606,11 @@ int PictureBase::saveBmp(const char *filename, MY_BITMAP *pBitmap) {
   return ret;
 }
 
+/* 所有解码的帧写入到一个文件 */
 int PictureBase::writeYUV(const char *filename) {
   int ret = 0;
 
-  FILE *fp = fopen(filename, "wb");
+  FILE *fp = fopen(filename, "ab+");
   if (fp == NULL) {
     return -1;
   }
