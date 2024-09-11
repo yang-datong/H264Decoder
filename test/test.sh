@@ -40,6 +40,7 @@ demo_10_frames_cavlc_h264(){
 
 
 demo_10_frames_cavlc_and_interlace_h264(){
+	index=11
 	ALL_MD5['output_I_0.bmp']=052be97c86acde1b1938b22ca2aeac46
 	ALL_MD5['output_P_1.bmp']=de0e6a202710c0e47b2ab8aedf85dfef
 	ALL_MD5['output_P_2.bmp']=eff652585d19bf9c883485311b298452
@@ -113,7 +114,7 @@ elif [ "$1" == "demo_10_frames_interlace.h264" ];then
 	demo_10_frames_interlace_h264
 elif [ "$1" == "demo_10_frames_cavlc.h264" ];then
 	demo_10_frames_cavlc_h264
-elif [ "$1" == "demo_10_frames_cavlc_and_interlace_h264" ];then
+elif [ "$1" == "demo_10_frames_cavlc_and_interlace.h264" ];then
 	demo_10_frames_cavlc_and_interlace_h264
 elif [ "$1" == "source_cut_10_frames.h264" ];then
 	source_cut_10_frames_h264
