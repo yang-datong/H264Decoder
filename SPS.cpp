@@ -211,6 +211,10 @@ int SPS::extractParameters(BitStream &bs) {
       separate_colour_plane_flag = bs.readU1();
       break;
     }
+
+    /* 确定色度数组类型,YUV400,YUV420,YUV422,YUV444... 74 page */
+    ChromaArrayType = (separate_colour_plane_flag) ? 0 : chroma_format_idc;
+
     bit_depth_luma_minus8 = bs.readUE();
     bit_depth_chroma_minus8 = bs.readUE();
 
@@ -230,11 +234,11 @@ int SPS::extractParameters(BitStream &bs) {
 
     qpprime_y_zero_transform_bypass_flag = bs.readU1();
     seq_scaling_matrix_present_flag = bs.readU1();
-    std::cout << "\t编码器时候提供量化矩阵:" << seq_scaling_matrix_present_flag
+    std::cout << "\t编码器是否提供量化矩阵:" << seq_scaling_matrix_present_flag
               << std::endl;
-    /* TODO YangJing page -> 75-76 <24-09-13 01:28:57> */
 
     if (seq_scaling_matrix_present_flag) {
+      /* 读取编码器提供的特定量化矩阵 */
       for (int i = 0; i < ((chroma_format_idc != 3) ? 8 : 12); i++) {
         seq_scaling_list_present_flag[i] = bs.readU1();
         if (seq_scaling_list_present_flag[i]) {
@@ -251,19 +255,21 @@ int SPS::extractParameters(BitStream &bs) {
 
   log2_max_frame_num_minus4 = bs.readUE();
   pic_order_cnt_type = bs.readUE();
+  /* 计算最大帧号和最大图像顺序计数 LSB (7-10,7-11)*/
+  MaxFrameNum = pow(log2_max_frame_num_minus4 + 4, 2);
+  MaxPicOrderCntLsb = pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
 
   int32_t *offset_for_ref_frame = nullptr;
 
-  if (pic_order_cnt_type == 0) {
+  if (pic_order_cnt_type == 0)
     log2_max_pic_order_cnt_lsb_minus4 = bs.readUE();
-  } else if (pic_order_cnt_type == 1) {
+  else if (pic_order_cnt_type == 1) {
     delta_pic_order_always_zero_flag = bs.readU1();
     offset_for_non_ref_pic = bs.readSE();
     offset_for_top_to_bottom_field = bs.readSE();
     num_ref_frames_in_pic_order_cnt_cycle = bs.readUE();
     if (num_ref_frames_in_pic_order_cnt_cycle != 0)
       offset_for_ref_frame = new int32_t[num_ref_frames_in_pic_order_cnt_cycle];
-    /* TODO YangJing [offset_for_ref_frame -> delete] <24-04-04 01:24:42> */
 
     for (int i = 0; i < (int)num_ref_frames_in_pic_order_cnt_cycle; i++)
       offset_for_ref_frame[i] = bs.readSE();
@@ -306,21 +312,23 @@ int SPS::extractParameters(BitStream &bs) {
 
   if (vui_parameters_present_flag) vui_parameters(bs);
 
-  /* 计算宏块大小以及图像宽、高 */
+  // 宏块单位的图像宽度 = pic_width_in_mbs_minus1 + 1 (7-13)
   PicWidthInMbs = pic_width_in_mbs_minus1 + 1;
-  // 宏块单位的图像宽度 = pic_width_in_mbs_minus1 + 1
-  PicHeightInMapUnits = pic_height_in_map_units_minus1 + 1;
   // 宏块单位的图像高度 = pic_height_in_map_units_minus1 + 1
-  PicSizeInMapUnits = PicWidthInMbs * PicHeightInMapUnits;
+  PicHeightInMapUnits = pic_height_in_map_units_minus1 + 1;
   // 宏块单位的图像大小 = 宽 * 高
+  PicSizeInMapUnits = PicWidthInMbs * PicHeightInMapUnits;
+
+  //(7-18)
   frameHeightInMbs = (2 - frame_mbs_only_flag) * PicHeightInMapUnits;
 
-  //----------- 下面都是一些需要进行额外计算的（文档都有需要自己找）------------
-  std::cout << "\tCodec width:" << PicWidthInMbs * 16
-            << ", Codec height:" << PicHeightInMapUnits * 16 << std::endl;
+  /* 计算采样宽度和比特深度 */
+  picWidthInSamplesL = PicWidthInMbs * 16;
+  // 亮度分量的采样宽度，等于宏块宽度乘以 16
+  picWidthInSamplesC = PicWidthInMbs * MbWidthC;
 
-  /* 确定色度数组类型,YUV400,YUV420,YUV422,YUV444... 74 page */
-  ChromaArrayType = (separate_colour_plane_flag) ? 0 : chroma_format_idc;
+  std::cout << "\tCodec width:" << picWidthInSamplesL
+            << ", Codec height:" << PicHeightInMapUnits * 16 << std::endl;
 
   CHROMA_FORMAT_IDC_T g_chroma_format_idcs[5] = {
       {0, 0, MONOCHROME, NA, NA},
@@ -330,6 +338,7 @@ int SPS::extractParameters(BitStream &bs) {
       {3, 1, CHROMA_FORMAT_IDC_444, NA, NA},
   };
 
+  /* TODO YangJing 睡觉了 <24-09-13 02:05:22> */
   /* 计算色度子采样参数 */
   if (chroma_format_idc == 0 || separate_colour_plane_flag == 1) {
     // 色度子采样宽度和高度均为 0。
@@ -345,36 +354,9 @@ int SPS::extractParameters(BitStream &bs) {
     SubHeightC = g_chroma_format_idcs[index].SubHeightC;
     //  根据 chroma_format_idc
     //  查找色度格式、色度子采样宽度和色度子采样高度。
-
     MbWidthC = 16 / SubWidthC;
     MbHeightC = 16 / SubHeightC;
   }
-
-  /* 计算采样宽度和比特深度 */
-  picWidthInSamplesL = PicWidthInMbs * 16;
-  // 亮度分量的采样宽度，等于宏块宽度乘以 16
-  picWidthInSamplesC = PicWidthInMbs * MbWidthC;
-
-  /* 计算最大帧号和最大图像顺序计数 LSB  in 77 page*/
-  /*
-   *log2_max_frame_num_minus4 specifies the value of the variable
-slice.MaxFrameNum that is used in frame_num related derivations as follows:
-$$
-    slice.MaxFrameNum = 2^{( log2_max_frame_num_minus4 + 4 )}
-$$
-The value of log2_max_frame_num_minus4 shall be in the range of 0 to
-12,inclusive.
-   * */
-  MaxFrameNum = pow(log2_max_frame_num_minus4 + 4, 2);
-  MaxPicOrderCntLsb = pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
-
-  /* 计算预期图像顺序计数周期增量 */
-  //if (pic_order_cnt_type == 1) {
-  //int expectedDeltaPerPicOrderCntCycle = 0;
-  //for (int i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++) {
-  //expectedDeltaPerPicOrderCntCycle += offset_for_ref_frame[i];
-  //}
-  //}
 
   return 0;
 }
