@@ -108,6 +108,11 @@ bool BitStream::more_rbsp_data() {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
+/* rbsp_trailing_bits( ) 语法结构出现在 SODB 之后，如下所示：
+ * 1. 最终 RBSP 字节的第一个（最高有效、最左边）位包含 SODB 的其余位（如果有）。
+ * 2. 下一位由等于 1 的单个位组成（即 rbsp_stop_one_bit）。
+ * 3. 当 rbsp_stop_one_bit 不是字节对齐字节的最后一位时，出现一个或多个零值位（即 rbsp_alignment_zero_bit 的实例）以导致字节对齐。*/
+//page -> 67
 int BitStream::rbsp_trailing_bits() {
   if (getP() >= getEndBuf()) return 0;
   int32_t rbsp_stop_one_bit = readU1(); // /* equal to 1 */ All f(1)

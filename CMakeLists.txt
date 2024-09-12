@@ -8,14 +8,19 @@ project(project_name)
 
 # C++ version used, added compilation parameters
 set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g3 -O0 -Wno-restrict -Wno-comment -Wno-class-memaccess")
+
+IF (LINUX)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g3 -O0 -Wno-restrict -Wno-comment -Wno-class-memaccess")
+ELSEIF (APPLE)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-system-headers -Wall -g3 -O0 -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 -isystem /Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include")
+ENDIF()
 
 # Specify header file directory
 include_directories(include)
 
 # Find all source files in the current directory
 aux_source_directory(. SOURCES)
- 
+
 # Compile all source code together and link it to an executable file 'a.out'
 add_executable(a.out ${SOURCES})
 

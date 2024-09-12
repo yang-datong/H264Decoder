@@ -14,8 +14,10 @@ class Frame;
 class GOP {
  public:
   SPS m_spss[H264_MAX_SPS_COUNT]; // sps[32]
+  uint32_t curr_sps_id = 0;
   // SPSExt m_sps_ext;
   PPS m_ppss[H264_MAX_PPS_COUNT]; // pps[256]
+  uint32_t curr_pps_id = 0;
   SEI m_sei;
 
   Frame *m_DecodedPictureBuffer

@@ -244,6 +244,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream) {
       std::cout << "\t底场标志:" << bottom_field_flag << std::endl;
     }
   }
+  //7.4.1 NAL unit semantics (7-1)
   IdrPicFlag = ((nal_unit_type == 5) ? 1 : 0);
   if (IdrPicFlag) {
     idr_pic_id = bitStream.readUE();

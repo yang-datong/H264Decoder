@@ -1,10 +1,8 @@
 #include "PPS.hpp"
+#include "BitStream.hpp"
 #include <iostream>
 
-int PPS::extractParameters(uint32_t chroma_format_idc) {
-  /* 初始化bit处理器，填充pps的数据 */
-  BitStream bs(_buf, _len);
-
+int PPS::extractParameters(BitStream &bs, uint32_t chroma_format_idc) {
   pic_parameter_set_id = bs.readUE();
   seq_parameter_set_id = bs.readUE();
   std::cout << "\tPPS ID:" << pic_parameter_set_id

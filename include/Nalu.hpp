@@ -57,8 +57,10 @@ class Nalu {
   int parseRBSP(EBSP &ebsp, RBSP &rbsp);
 
   /* Non-VCL */
-  int extractSPSparameters(RBSP &rbsp, SPS &sps);
-  int extractPPSparameters(RBSP &rbsp, PPS &pps, uint32_t chroma_format_idc);
+  int extractSPSparameters(RBSP &rbsp, SPS spss[H264_MAX_SPS_COUNT],
+                           uint32_t &curr_sps_id);
+  int extractPPSparameters(RBSP &rbsp, PPS ppss[H264_MAX_PPS_COUNT],
+                           uint32_t &curr_pps_id, uint32_t chroma_format_idc);
   int extractSEIparameters(RBSP &rbsp, SEI &sei, SPS &sps);
 
   /* VCL */

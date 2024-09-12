@@ -2,7 +2,6 @@
 #include "BitStream.hpp"
 #include "PictureBase.hpp"
 #include "Slice.hpp"
-#include <cmath>
 #include <cstdint>
 
 Nalu::Nalu() {}
@@ -112,19 +111,26 @@ int Nalu::parseNALHeader(EBSP &ebsp) {
 }
 
 /* 在T-REC-H.264-202108-I!!PDF-E.pdf -43页 */
-int Nalu::extractSPSparameters(RBSP &rbsp, SPS &sps) {
-  sps._buf = rbsp.buf;
-  sps._len = rbsp.len;
-  sps.extractParameters();
+int Nalu::extractSPSparameters(RBSP &rbsp, SPS spss[H264_MAX_SPS_COUNT],
+                               uint32_t &curr_sps_id) {
+  /* 初始化bit处理器，填充sps的数据 */
+  BitStream bitStream(rbsp.buf, rbsp.len);
+  SPS *sps = new SPS();
+  sps->extractParameters(bitStream);
+  spss[sps->seq_parameter_set_id] = *sps;
+  curr_sps_id = sps->seq_parameter_set_id;
   return 0;
 }
 
 /* 在T-REC-H.264-202108-I!!PDF-E.pdf -47页 */
-int Nalu::extractPPSparameters(RBSP &rbsp, PPS &pps,
+int Nalu::extractPPSparameters(RBSP &rbsp, PPS ppss[H264_MAX_PPS_COUNT],
+                               uint32_t &curr_pps_id,
                                uint32_t chroma_format_idc) {
-  pps._buf = rbsp.buf;
-  pps._len = rbsp.len;
-  pps.extractParameters(chroma_format_idc);
+  BitStream bitStream(rbsp.buf, rbsp.len);
+  PPS *pps = new PPS();
+  pps->extractParameters(bitStream, chroma_format_idc);
+  ppss[pps->pic_parameter_set_id] = *pps;
+  curr_pps_id = pps->pic_parameter_set_id;
   return 0;
 }
 
@@ -138,8 +144,8 @@ int Nalu::extractSEIparameters(RBSP &rbsp, SEI &sei, SPS &sps) {
 
 int Nalu::extractSliceparameters(BitStream &bitStream, GOP &gop, Frame &frame) {
   Slice *slice = new Slice();
-  slice->setSPS(gop.m_spss[0]);
-  slice->setPPS(gop.m_ppss[0]);
+  slice->setSPS(gop.m_spss[gop.curr_sps_id]);
+  slice->setPPS(gop.m_ppss[gop.curr_pps_id]);
   //slice_header.m_idr = idr;
   slice->slice_header.nal_unit_type = nal_unit_type;
   slice->slice_header.nal_ref_idc = nal_ref_idc;

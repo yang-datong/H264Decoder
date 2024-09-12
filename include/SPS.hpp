@@ -32,7 +32,7 @@ class SPS {
  public:
   uint8_t *_buf = nullptr;
   int _len = 0;
-  int extractParameters();
+  int extractParameters(BitStream &bitStream);
 
  public:
   /* 表示编码配置文件 */
@@ -117,7 +117,7 @@ class SPS {
   /* 是否对亮度分量中的零系数块应用变换旁路 */
   bool qpprime_y_zero_transform_bypass_flag = 0;
 
-  /* 是否在序列级别存在缩放矩阵 */
+  /* 是否在存在缩放(量化)矩阵 */
   bool seq_scaling_matrix_present_flag = 0;
 
   /* 等于 1 指定缩放列表 i 的语法结构存在于序列参数集中。 seq_scaling_list_present_flag[ i ] 等于 0 指定缩放列表 i 的语法结构不存在于序列参数集中，并且表 7-2 中指定的缩放列表回退规则集 A 将用于推断序列级缩放索引 i 的列表。 */

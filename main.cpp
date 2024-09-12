@@ -126,24 +126,27 @@ int main(int argc, char *argv[]) {
         /* 10. 解码SEI补充增强信息：
          * 场编码的图像在每个Slice前出现SEI以提供必要的解码辅助信息 */
         cout << "SEI -> {" << endl;
-        nalu.extractSEIparameters(rbsp, sei, gop->m_spss[0]);
+        nalu.extractSEIparameters(rbsp, sei, gop->m_spss[gop->curr_pps_id]);
         cout << " }" << endl;
         break;
       case 7: /* SPS(VCL) */
         /* 8. 解码SPS中信息 */
         cout << "SPS -> {" << endl;
-        nalu.extractSPSparameters(rbsp, gop->m_spss[0]);
-        gop->max_num_reorder_frames = gop->m_spss[0].max_num_reorder_frames;
+        nalu.extractSPSparameters(rbsp, gop->m_spss, gop->curr_sps_id);
+        gop->max_num_reorder_frames =
+            gop->m_spss[gop->curr_sps_id].max_num_reorder_frames;
         cout << " }" << endl;
         break;
       case 8: /* PPS(VCL) */
         /* 9. 解码PPS中信息 */
         cout << "PPS -> {" << endl;
-        nalu.extractPPSparameters(rbsp, gop->m_ppss[0],
-                                  gop->m_spss[0].chroma_format_idc);
+        nalu.extractPPSparameters(
+            rbsp, gop->m_ppss, gop->curr_pps_id,
+            gop->m_spss[gop->curr_sps_id].chroma_format_idc);
         cout << " }" << endl;
         break;
       case 9: /* 7.3.2.4 Access unit delimiter RBSP syntax */
+        /* 该Nalu的优先级很高，如果存在则它会在SPS前出现 */
         //access_unit_delimiter_rbsp();
         break;
       case 10:

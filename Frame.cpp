@@ -29,7 +29,8 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop) {
               << std::endl;
     return -1;
   }
-  slice->decode(bitStream, dpb, gop.m_spss[0], gop.m_ppss[0], this);
+  slice->decode(bitStream, dpb, gop.m_spss[gop.curr_sps_id],
+                gop.m_ppss[gop.curr_pps_id], this);
   m_picture_frame.saveToBmpFile(output_file.c_str());
   //}
   return 0;

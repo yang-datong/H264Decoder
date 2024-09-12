@@ -155,21 +155,18 @@ void SPS::hrd_parameters(BitStream &bitStream) {
   time_offset_length = bitStream.readUn(5);
 }
 
-int SPS::extractParameters() {
-  /* 初始化bit处理器，填充sps的数据 */
-  BitStream bitStream(_buf, _len);
-
+int SPS::extractParameters(BitStream &bs) {
   /* 读取profile_idc等等(4 bytes) */
-  profile_idc = bitStream.readUn(8); // 0x64
-  constraint_set0_flag = bitStream.readUn(1);
-  constraint_set1_flag = bitStream.readUn(1);
-  constraint_set2_flag = bitStream.readUn(1);
-  constraint_set3_flag = bitStream.readUn(1);
-  constraint_set4_flag = bitStream.readUn(1);
-  constraint_set5_flag = bitStream.readUn(1);
-  reserved_zero_2bits = bitStream.readUn(2);
-  level_idc = bitStream.readUn(8); // 0
-  seq_parameter_set_id = bitStream.readUE();
+  profile_idc = bs.readUn(8); // 0x64
+  constraint_set0_flag = bs.readUn(1);
+  constraint_set1_flag = bs.readUn(1);
+  constraint_set2_flag = bs.readUn(1);
+  constraint_set3_flag = bs.readUn(1);
+  constraint_set4_flag = bs.readUn(1);
+  constraint_set5_flag = bs.readUn(1);
+  reserved_zero_2bits = bs.readUn(2);
+  level_idc = bs.readUn(8); // 0
+  seq_parameter_set_id = bs.readUE();
   std::cout << "\tSPS ID:" << seq_parameter_set_id << std::endl;
   std::cout << "\tlevel_idc:" << (int)level_idc << std::endl;
   // 通过gdb断点到这里然后 "p /t {ssp._buf[1],profile_idc}"即可判断是否读取正确
@@ -188,12 +185,17 @@ int SPS::extractParameters() {
     break;
   }
 
+  //constraint_set5_flag is specified as follows -> page 74
+  if ((profile_idc == 77 || profile_idc == 88 || profile_idc == 100) &&
+      constraint_set5_flag)
+    std::cout << "\t当前含有B Slice" << std::endl;
+
   if (profile_idc == 100 || profile_idc == 110 || profile_idc == 122 ||
       profile_idc == 244 || profile_idc == 44 || profile_idc == 83 ||
       profile_idc == 86 || profile_idc == 118 || profile_idc == 128 ||
       profile_idc == 138 || profile_idc == 139 || profile_idc == 134 ||
       profile_idc == 135) {
-    chroma_format_idc = bitStream.readUE();
+    chroma_format_idc = bs.readUE();
     switch (chroma_format_idc) {
     case 0:
       std::cout << "\tchroma_format_idc:YUV400" << std::endl;
@@ -206,87 +208,103 @@ int SPS::extractParameters() {
       break;
     case 3:
       std::cout << "\tchroma_format_idc:YUB444" << std::endl;
-      separate_colour_plane_flag = bitStream.readU1();
+      separate_colour_plane_flag = bs.readU1();
       break;
     }
-    bit_depth_luma_minus8 = bitStream.readUE();
-    bit_depth_chroma_minus8 = bitStream.readUE();
-    std::cout << "\t亮度分量位深:" << bit_depth_luma_minus8 + 8
-              << ",色度分量位深:" << bit_depth_chroma_minus8 + 8 << std::endl;
-    qpprime_y_zero_transform_bypass_flag = bitStream.readU1();
-    seq_scaling_matrix_present_flag = bitStream.readU1();
+    bit_depth_luma_minus8 = bs.readUE();
+    bit_depth_chroma_minus8 = bs.readUE();
+
+    /* 7.4.2.1.1 Sequence parameter set data semantics -> (7-3) */
+    BitDepthY = bit_depth_luma_minus8 + 8;
+    QpBdOffsetY = bit_depth_luma_minus8 * 6;
+    BitDepthC = bit_depth_chroma_minus8 + 8;
+    QpBdOffsetC = bit_depth_chroma_minus8 * 6;
+
+    std::cout << "\t亮度分量位深:" << BitDepthY << ",色度分量位深:" << BitDepthC
+              << std::endl;
+    std::cout << "\t亮度分量Qp:" << QpBdOffsetY << ",色度分量Qp:" << QpBdOffsetC
+              << std::endl;
+
+    // 色度分量的采样宽度  (7-7)
+    RawMbBits = 256 * BitDepthY + 2 * MbWidthC * MbHeightC * BitDepthC;
+
+    qpprime_y_zero_transform_bypass_flag = bs.readU1();
+    seq_scaling_matrix_present_flag = bs.readU1();
+    std::cout << "\t编码器时候提供量化矩阵:" << seq_scaling_matrix_present_flag
+              << std::endl;
+    /* TODO YangJing page -> 75-76 <24-09-13 01:28:57> */
 
     if (seq_scaling_matrix_present_flag) {
       for (int i = 0; i < ((chroma_format_idc != 3) ? 8 : 12); i++) {
-        seq_scaling_list_present_flag[i] = bitStream.readU1();
+        seq_scaling_list_present_flag[i] = bs.readU1();
         if (seq_scaling_list_present_flag[i]) {
-          if (i < 6)
-            scaling_list(bitStream, ScalingList4x4[i], 16,
+          if (i <= 5)
+            scaling_list(bs, ScalingList4x4[i], 16,
                          UseDefaultScalingMatrix4x4Flag[i]);
           else
-            scaling_list(bitStream, ScalingList8x8[i - 6], 64,
+            scaling_list(bs, ScalingList8x8[i - 6], 64,
                          UseDefaultScalingMatrix8x8Flag[i - 6]);
         }
       }
     }
   }
 
-  log2_max_frame_num_minus4 = bitStream.readUE();
-  pic_order_cnt_type = bitStream.readUE();
+  log2_max_frame_num_minus4 = bs.readUE();
+  pic_order_cnt_type = bs.readUE();
 
   int32_t *offset_for_ref_frame = nullptr;
 
   if (pic_order_cnt_type == 0) {
-    log2_max_pic_order_cnt_lsb_minus4 = bitStream.readUE();
+    log2_max_pic_order_cnt_lsb_minus4 = bs.readUE();
   } else if (pic_order_cnt_type == 1) {
-    delta_pic_order_always_zero_flag = bitStream.readU1();
-    offset_for_non_ref_pic = bitStream.readSE();
-    offset_for_top_to_bottom_field = bitStream.readSE();
-    num_ref_frames_in_pic_order_cnt_cycle = bitStream.readUE();
+    delta_pic_order_always_zero_flag = bs.readU1();
+    offset_for_non_ref_pic = bs.readSE();
+    offset_for_top_to_bottom_field = bs.readSE();
+    num_ref_frames_in_pic_order_cnt_cycle = bs.readUE();
     if (num_ref_frames_in_pic_order_cnt_cycle != 0)
       offset_for_ref_frame = new int32_t[num_ref_frames_in_pic_order_cnt_cycle];
     /* TODO YangJing [offset_for_ref_frame -> delete] <24-04-04 01:24:42> */
 
     for (int i = 0; i < (int)num_ref_frames_in_pic_order_cnt_cycle; i++)
-      offset_for_ref_frame[i] = bitStream.readSE();
+      offset_for_ref_frame[i] = bs.readSE();
   }
 
-  max_num_ref_frames = bitStream.readUE();
+  max_num_ref_frames = bs.readUE();
   std::cout << "\t解码器需要支持的最大参考帧数:" << max_num_ref_frames
             << std::endl;
-  gaps_in_frame_num_value_allowed_flag = bitStream.readU1();
-  pic_width_in_mbs_minus1 = bitStream.readUE();
-  pic_height_in_map_units_minus1 = bitStream.readUE();
+  gaps_in_frame_num_value_allowed_flag = bs.readU1();
+  pic_width_in_mbs_minus1 = bs.readUE();
+  pic_height_in_map_units_minus1 = bs.readUE();
 
-  frame_mbs_only_flag = bitStream.readU1();
+  frame_mbs_only_flag = bs.readU1();
   if (!frame_mbs_only_flag) {
     std::cout << "\t当前存在场编码:" << !frame_mbs_only_flag << std::endl;
-    mb_adaptive_frame_field_flag = bitStream.readU1();
+    mb_adaptive_frame_field_flag = bs.readU1();
     std::cout << "\t是否使用基于宏块的自适应帧/场编码:"
               << mb_adaptive_frame_field_flag << std::endl;
   } else
     std::cout << "\t仅有帧编码:" << frame_mbs_only_flag << std::endl;
 
-  direct_8x8_inference_flag = bitStream.readU1();
-  frame_cropping_flag = bitStream.readU1();
+  direct_8x8_inference_flag = bs.readU1();
+  frame_cropping_flag = bs.readU1();
   if (frame_cropping_flag) {
-    frame_crop_left_offset = bitStream.readUE();
+    frame_crop_left_offset = bs.readUE();
     std::cout << "\t";
     std::cout << "帧裁剪左偏移量:" << frame_crop_left_offset;
-    frame_crop_right_offset = bitStream.readUE();
+    frame_crop_right_offset = bs.readUE();
     std::cout << ",帧裁剪右偏移量:" << frame_crop_left_offset;
-    frame_crop_top_offset = bitStream.readUE();
+    frame_crop_top_offset = bs.readUE();
     std::cout << ",帧裁剪顶偏移量:" << frame_crop_left_offset;
-    frame_crop_bottom_offset = bitStream.readUE();
+    frame_crop_bottom_offset = bs.readUE();
     std::cout << ",帧裁剪底偏移量:" << frame_crop_left_offset;
     std::cout << std::endl;
   }
 
-  vui_parameters_present_flag = bitStream.readU1();
+  vui_parameters_present_flag = bs.readU1();
   std::cout << "\t存在视频用户界面(VUI)参数:" << vui_parameters_present_flag
             << std::endl;
 
-  if (vui_parameters_present_flag) vui_parameters(bitStream);
+  if (vui_parameters_present_flag) vui_parameters(bs);
 
   /* 计算宏块大小以及图像宽、高 */
   PicWidthInMbs = pic_width_in_mbs_minus1 + 1;
@@ -303,14 +321,6 @@ int SPS::extractParameters() {
 
   /* 确定色度数组类型,YUV400,YUV420,YUV422,YUV444... 74 page */
   ChromaArrayType = (separate_colour_plane_flag) ? 0 : chroma_format_idc;
-
-  /* 7.4.2.1.1 Sequence parameter set data semantics */
-  BitDepthY = bit_depth_luma_minus8 + 8;
-  QpBdOffsetY = bit_depth_luma_minus8 * 6;
-  BitDepthC = bit_depth_chroma_minus8 + 8;
-  QpBdOffsetC = bit_depth_chroma_minus8 * 6;
-  // 色度分量的采样宽度
-  RawMbBits = 256 * BitDepthY + 2 * MbWidthC * MbHeightC * BitDepthC;
 
   CHROMA_FORMAT_IDC_T g_chroma_format_idcs[5] = {
       {0, 0, MONOCHROME, NA, NA},

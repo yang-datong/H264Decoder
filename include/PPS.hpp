@@ -10,7 +10,7 @@ class PPS {
  public:
   uint8_t *_buf = nullptr;
   int _len = 0;
-  int extractParameters(uint32_t chroma_format_idc);
+  int extractParameters(BitStream &bs, uint32_t chroma_format_idc);
 
  public:
   /* PPS 的唯一标识符 */
