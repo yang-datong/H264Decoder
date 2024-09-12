@@ -4,8 +4,8 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
-#include <iostream>
-#include <string.h>
+#include <iostream> // IWYU pragma: export
+#include <string.h> // IWYU pragma: export
 
 using namespace std;
 

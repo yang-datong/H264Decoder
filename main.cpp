@@ -2,7 +2,6 @@
 #include "Frame.hpp"
 #include "GOP.hpp"
 #include "Nalu.hpp"
-#include "Type.hpp"
 #include <ostream>
 
 typedef enum _OUTPUT_FILE_TYPE { NON, BMP, YUV } OUTPUT_FILE_TYPE;

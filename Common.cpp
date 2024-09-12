@@ -1,5 +1,4 @@
 #include "Common.hpp"
-#include "CH264Golomb.hpp"
 #include <assert.h>
 
 int h264_log2(int32_t value) {
@@ -14,22 +13,16 @@ int h264_log2(int32_t value) {
 
 void *my_malloc(size_t size) {
   void *ptr = malloc(size);
-  // printf("%s: size=%ld; ptr=%p;\n", __FUNCTION__, size, ptr);
   return ptr;
 }
 
-void my_free(void *ptr) {
-  // printf("%s: ptr=%p;\n", __FUNCTION__, ptr);
-  return free(ptr);
-}
+void my_free(void *ptr) { return free(ptr); }
 
 int32_t h264_power2(int32_t value) {
   int32_t power2 = 1;
-  for (int32_t i = 0; i < value; ++i) {
+  for (int32_t i = 0; i < value; ++i)
     power2 *= 2;
-  }
   return power2;
-  //    return 1 << value;
 }
 
 /*
