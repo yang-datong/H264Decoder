@@ -106,10 +106,13 @@ bool BitStream::more_rbsp_data() {
   return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
 int BitStream::rbsp_trailing_bits() {
   if (getP() >= getEndBuf()) return 0;
-  /*int32_t rbsp_stop_one_bit =*/readU1(); // /* equal to 1 */ All f(1)
+  int32_t rbsp_stop_one_bit = readU1(); // /* equal to 1 */ All f(1)
   while (!byte_aligned())
-    /*int32_t rbsp_alignment_zero_bit =*/readU1();
+    int32_t rbsp_alignment_zero_bit = readU1();
   return 0;
 }
+#pragma GCC diagnostic pop
