@@ -137,21 +137,6 @@ class SPS {
   int32_t Chroma_Format = 0;
   int32_t SubWidthC = 0;
   int32_t SubHeightC = 0;
-  uint32_t pic_parametter_set_id = 0;
-  uint8_t colour_plane_id = 0;
-  uint32_t frame_num = 0; // u(v)
-  bool bottom_field_flag = 0;
-  uint32_t idr_pic_id = 0;
-  uint32_t pic_order_cnt_lsb = 0;
-  int32_t delta_pic_order_cnt_bottom = 0;
-  int32_t delta_pic_order_cnt[2] = {0};
-  uint32_t redundant_pic_cnt = 0;
-  bool direct_spatial_mv_pred_flag = 0;
-  bool num_ref_idx_active_override_flag = 0;
-  uint32_t cabac_init_idc = 0;
-  int32_t slice_qp_delta = 0;
-  bool sp_for_switch_flag = 0;
-  uint32_t disable_deblocking_filter_idc = 0;
 
   uint32_t MaxPicOrderCntLsb;
   int32_t ExpectedDeltaPerPicOrderCntCycle;

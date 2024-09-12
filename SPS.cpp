@@ -196,7 +196,7 @@ int SPS::extractParameters() {
     chroma_format_idc = bitStream.readUE();
     switch (chroma_format_idc) {
     case 0:
-      std::cout << "\tchroma_format_idc:单色" << std::endl;
+      std::cout << "\tchroma_format_idc:YUV400" << std::endl;
       break;
     case 1:
       std::cout << "\tchroma_format_idc:YUV420" << std::endl;

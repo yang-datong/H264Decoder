@@ -81,7 +81,7 @@ class SliceHeader {
   /* 场图像标志 */
   bool field_pic_flag = 0;
 
-  /* 颜色平面ID */
+  /* 颜色平面ID：当存在色度子采样时，两个相应的色度采样阵列，颜色分量的每个宏块恰好包含在一个切片中（即，图片的每个宏块的信息恰好存在于三个切片中，并且这三个切片具有不同的colour_plane_id值）。*/
   uint8_t colour_plane_id = 0;
   /* 当前帧的编号 */
   uint32_t frame_num = 0;
