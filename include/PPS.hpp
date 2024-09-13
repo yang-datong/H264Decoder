@@ -3,19 +3,17 @@
 
 #include "Common.hpp"
 
-#define H264_MAX_PPS_COUNT 256
-// 7.4.2.2: pic_parameter_set_id shall be in the range of 0 to 255,
-// inclusive.
+#define MAX_PPS_COUNT 256
+
 class PPS {
  public:
-  uint8_t *_buf = nullptr;
-  int _len = 0;
   int extractParameters(BitStream &bs, uint32_t chroma_format_idc);
 
  public:
   /* PPS 的唯一标识符 */
   uint32_t pic_parameter_set_id = 0;
   /* 该PPS对应的SSP标识符 */
+  /* TODO：这里的sps id并没有使用到 */
   uint32_t seq_parameter_set_id = 0;
   /* 表示使用的熵编码模式，其中：0: 表示使用 CAVLC, 1: 表示使用 CABAC */
   bool entropy_coding_mode_flag = 0;

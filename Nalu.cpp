@@ -111,7 +111,7 @@ int Nalu::parseNALHeader(EBSP &ebsp) {
 }
 
 /* 在T-REC-H.264-202108-I!!PDF-E.pdf -43页 */
-int Nalu::extractSPSparameters(RBSP &rbsp, SPS spss[H264_MAX_SPS_COUNT],
+int Nalu::extractSPSparameters(RBSP &rbsp, SPS spss[MAX_SPS_COUNT],
                                uint32_t &curr_sps_id) {
   /* 初始化bit处理器，填充sps的数据 */
   BitStream bitStream(rbsp.buf, rbsp.len);
@@ -123,7 +123,7 @@ int Nalu::extractSPSparameters(RBSP &rbsp, SPS spss[H264_MAX_SPS_COUNT],
 }
 
 /* 在T-REC-H.264-202108-I!!PDF-E.pdf -47页 */
-int Nalu::extractPPSparameters(RBSP &rbsp, PPS ppss[H264_MAX_PPS_COUNT],
+int Nalu::extractPPSparameters(RBSP &rbsp, PPS ppss[MAX_PPS_COUNT],
                                uint32_t &curr_pps_id,
                                uint32_t chroma_format_idc) {
   BitStream bitStream(rbsp.buf, rbsp.len);

@@ -363,7 +363,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream) {
 
   MbaffFrameFlag = (m_sps.mb_adaptive_frame_field_flag && !field_pic_flag);
   std::cout << "\t宏块自适应帧场标志:" << MbaffFrameFlag << std::endl;
-  PicHeightInMbs = m_sps.frameHeightInMbs / (1 + field_pic_flag);
+  PicHeightInMbs = m_sps.FrameHeightInMbs / (1 + field_pic_flag);
   PicHeightInSamplesL = PicHeightInMbs * 16;
   PicHeightInSamplesC = PicHeightInMbs * m_sps.MbHeightC;
   std::cout << "\t图像高度（宏块数）:" << PicHeightInMbs

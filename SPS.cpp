@@ -1,9 +1,9 @@
 #include "SPS.hpp"
-#include "Type.hpp"
 #include <cstdint>
 #include <iostream>
 #include <ostream>
 
+/* TODO YangJing 这个函数后续好好看一下 <24-09-13 10:16:29> */
 void SPS::vui_parameters(BitStream &bitStream) {
   std::cout << "\tVUI -> {" << std::endl;
   aspect_ratio_info_present_flag = bitStream.readU1();
@@ -120,7 +120,7 @@ void SPS::vui_parameters(BitStream &bitStream) {
       for (int i = 0; i < 19; ++i) {
         if (level_idc == LevelNumber_MaxDpbMbs[i][0])
           MaxDpbFrames = MIN(LevelNumber_MaxDpbMbs[i][1] /
-                                 (PicWidthInMbs * frameHeightInMbs),
+                                 (PicWidthInMbs * FrameHeightInMbs),
                              16);
         break;
       }
@@ -320,44 +320,39 @@ int SPS::extractParameters(BitStream &bs) {
   PicSizeInMapUnits = PicWidthInMbs * PicHeightInMapUnits;
 
   //(7-18)
-  frameHeightInMbs = (2 - frame_mbs_only_flag) * PicHeightInMapUnits;
+  FrameHeightInMbs = (2 - frame_mbs_only_flag) * PicHeightInMapUnits;
 
   /* 计算采样宽度和比特深度 */
   picWidthInSamplesL = PicWidthInMbs * 16;
   // 亮度分量的采样宽度，等于宏块宽度乘以 16
   picWidthInSamplesC = PicWidthInMbs * MbWidthC;
-
   std::cout << "\tCodec width:" << picWidthInSamplesL
             << ", Codec height:" << PicHeightInMapUnits * 16 << std::endl;
 
-  CHROMA_FORMAT_IDC_T g_chroma_format_idcs[5] = {
-      {0, 0, MONOCHROME, NA, NA},
-      {1, 0, CHROMA_FORMAT_IDC_420, 2, 2},
-      {2, 0, CHROMA_FORMAT_IDC_422, 2, 1},
-      {3, 0, CHROMA_FORMAT_IDC_444, 1, 1},
-      {3, 1, CHROMA_FORMAT_IDC_444, NA, NA},
-  };
+  /* 6.2 Source, decoded, and output picture formats */
+  derived_SubWidthC_and_SubHeightC();
+  return 0;
+}
 
-  /* TODO YangJing 睡觉了 <24-09-13 02:05:22> */
-  /* 计算色度子采样参数 */
-  if (chroma_format_idc == 0 || separate_colour_plane_flag == 1) {
-    // 色度子采样宽度和高度均为 0。
-    MbWidthC = 0;
-    MbHeightC = 0;
-  } else {
-    int32_t index = chroma_format_idc;
-    if (chroma_format_idc == 3 && separate_colour_plane_flag == 1) {
-      index = 4;
-    }
-    Chroma_Format = g_chroma_format_idcs[index].Chroma_Format;
-    SubWidthC = g_chroma_format_idcs[index].SubWidthC;
-    SubHeightC = g_chroma_format_idcs[index].SubHeightC;
-    //  根据 chroma_format_idc
-    //  查找色度格式、色度子采样宽度和色度子采样高度。
-    MbWidthC = 16 / SubWidthC;
-    MbHeightC = 16 / SubHeightC;
+// 6.2 Source, decoded, and output picture formats
+int SPS::derived_SubWidthC_and_SubHeightC() {
+  int32_t _chroma_format_idc = chroma_format_idc;
+  //Table 6-1 – SubWidthC, and SubHeightC values derived from chroma_format_idc and separate_colour_plane_flag
+  SubWidthC = SubHeightC = 0;
+  /* 均无子宽高 */
+  if (chroma_format_idc == 0 || separate_colour_plane_flag)
+    MbWidthC = MbHeightC = 0;
+  /* YUV444 且每个分量都单独编码 */
+  else if (chroma_format_idc == 3 && separate_colour_plane_flag)
+    _chroma_format_idc = 4;
+  //不单独编码分量，YUV420,YUV422,YUV444的情况
+  else {
+    Chroma_Format = chroma_format_idcs[_chroma_format_idc].Chroma_Format;
+    SubWidthC = chroma_format_idcs[_chroma_format_idc].SubWidthC;
+    SubHeightC = chroma_format_idcs[_chroma_format_idc].SubHeightC;
+    MbWidthC = 16 / SubWidthC;   //(6-1)
+    MbHeightC = 16 / SubHeightC; //(6-2)
   }
-
   return 0;
 }
 

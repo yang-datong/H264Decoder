@@ -336,11 +336,6 @@ typedef enum _MB_RESIDUAL_LEVEL_ {
 #define MB_WIDTH 16
 #define MB_HEIGHT 16
 
-#define MONOCHROME 0 // 黑白图像
-#define CHROMA_FORMAT_IDC_420 1
-#define CHROMA_FORMAT_IDC_422 2
-#define CHROMA_FORMAT_IDC_444 3
-
 //--------------------------
 // Table 8-2 – Specification of Intra4x4PredMode[ luma4x4BlkIdx ] and associated
 // names

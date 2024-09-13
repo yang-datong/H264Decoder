@@ -2,36 +2,15 @@
 #define SPS_CPP_F6QSULFM
 
 #include "Common.hpp"
+#include "Type.hpp"
 #include <cstdint>
 
 #define Extended_SAR 255
-
-#define H264_MAX_SPS_COUNT                                                     \
-  32 // 7.4.2.1.1: seq_parameter_set_id shall be in the range of 0 to 31,     \
-      // inclusive.
-#define H264_MAX_OFFSET_REF_FRAME_COUNT                                        \
-  256 // 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle shall be in the range \
-      // of 0 to 255, inclusive.
-
-const int32_t LevelNumber_MaxDpbMbs[19][2] = {
-    {10, 396},    {11, 900},    {12, 2376},   {13, 2376},   {20, 2376},
-    {21, 4752},   {22, 8100},   {30, 8100},   {31, 18000},  {32, 20480},
-    {40, 32768},  {41, 32768},  {42, 34816},  {50, 110400}, {51, 184320},
-    {52, 184320}, {60, 696320}, {61, 696320}, {62, 696320},
-};
-
-struct CHROMA_FORMAT_IDC_T {
-  int32_t chroma_format_idc;
-  int32_t separate_colour_plane_flag;
-  int32_t Chroma_Format;
-  int32_t SubWidthC;
-  int32_t SubHeightC;
-};
+#define MAX_SPS_COUNT 32
+#define MAX_OFFSET_REF_FRAME_COUNT 256
 
 class SPS {
  public:
-  uint8_t *_buf = nullptr;
-  int _len = 0;
   int extractParameters(BitStream &bitStream);
 
  public:
@@ -43,7 +22,7 @@ class SPS {
   uint32_t seq_parameter_set_id = 0;
   /* 指示是否使用约束基线配置文件 */
 
-  /*色度格式[0-3]。指定了亮度和色度分量的采样方式,444,420,422*/
+  /*色度格式[0-3]。指定了亮度和色度分量的采样方式,0:none,1:420,2:422,3:444*/
   /* 当 chroma_format_idc 不存在时，应推断其等于 1（4:2:0 色度格式）。page 74 */
   uint32_t chroma_format_idc = 1;
 
@@ -75,7 +54,10 @@ class SPS {
   /* 指示在宏块的直接模式（主要是指B帧，如B_Direct) 下是否可以使用8x8变换 */
   bool direct_8x8_inference_flag = 0;
 
-  /* 等于 1 指定 4:4:4 色度格式的三个颜色分量分别编码。 separate_colour_plane_flag 等于 0 指定颜色分量不单独编码。当separate_colour_plane_flag不存在时，应推断其等于0。当separate_colour_plane_flag等于1时，主编码图像由三个单独的分量组成，每个分量由一个颜色平面（Y、Cb或Cr）的编码样本组成。 ），每个都使用单色编码语法。在这种情况下，每个颜色平面都与特定的 color_plane_id 值相关联。 */
+  /* 等于 1 指定 4:4:4 色度格式的三个颜色分量分别编码（如果为1,说明一定是YUV444);
+   * 等于 0 指定颜色分量不单独编码（如果为0,YUV400,YUV420,YUV422,YUB444均有可能）;
+   * 当separate_colour_plane_flag不存在时，应推断其等于0。
+   * 等于1时，主编码图像由三个单独的分量组成，每个分量由一个颜色平面（Y、Cb或Cr）的编码样本组成。 ），每个都使用单色编码语法。在这种情况下，每个颜色平面都与特定的 color_plane_id 值相关联。 */
   bool separate_colour_plane_flag = 0;
 
   /* 亮度分量的比特深度减去 8 */
@@ -112,7 +94,7 @@ class SPS {
   int32_t PicWidthInMbs = 0;
   int32_t PicHeightInMapUnits = 0;
   uint32_t PicSizeInMapUnits = 0;
-  uint32_t frameHeightInMbs = 0;
+  uint32_t FrameHeightInMbs = 0;
 
   /* 是否对亮度分量中的零系数块应用变换旁路 */
   bool qpprime_y_zero_transform_bypass_flag = 0;
@@ -142,7 +124,7 @@ class SPS {
   int32_t ExpectedDeltaPerPicOrderCntCycle;
 
   /* 用于计算参考帧帧顺序计数偏移量的值，调整参考帧的显示顺序，以确保解码后的视频帧以正确的顺序显示*/
-  int32_t offset_for_ref_frame[H264_MAX_OFFSET_REF_FRAME_COUNT];
+  int32_t offset_for_ref_frame[MAX_OFFSET_REF_FRAME_COUNT];
   /* 是否允许帧号值中的间隙 */
   bool gaps_in_frame_num_value_allowed_flag = 0;
   /* 是否应用帧裁剪 */
@@ -170,7 +152,7 @@ class SPS {
   uint32_t RawMbBits = 0;
 
   /* SPS::hrd_parameters() */
-  uint32_t cpb_cnt_minus1 = 0;
+ private:
   uint8_t bit_rate_scale = 0;
   uint8_t cpb_size_scale = 0;
   uint32_t *bit_rate_value_minus1 = nullptr;
@@ -179,9 +161,11 @@ class SPS {
   uint8_t initial_cpb_removal_delay_length_minus1 = 0;
   uint8_t cpb_removal_delay_length_minus1 = 0;
   uint8_t dpb_output_delay_length_minus1 = 0;
+  uint32_t cpb_cnt_minus1 = 0;
   uint8_t time_offset_length = 0;
 
   /* VUI */
+ public:
   /* 指示是否存在宽高比信息 */
   bool aspect_ratio_info_present_flag = 0;
   /* 宽高比标识符，指示视频的宽高比类型 */
@@ -224,12 +208,14 @@ class SPS {
   bool fixed_frame_rate_flag = 0;
   /* 指示是否存在NAL HRD（网络提取率控制）参数 */
   bool nal_hrd_parameters_present_flag = 0;
+  /* 最大重排序帧数 */
+  int32_t max_num_reorder_frames = -1;
   /* 指示是否存在VCL HRD参数 */
   bool vcl_hrd_parameters_present_flag = 0;
-  /* 指示是否使用低延迟HRD */
-  bool low_delay_hrd_flag = 0;
   /* 指示是否存在图像结构信息 */
   bool pic_struct_present_flag = 0;
+  /* 指示是否使用低延迟HRD */
+  bool low_delay_hrd_flag = 0;
   /* 指示是否存在比特流限制 */
   bool bitstream_restriction_flag = 0;
   /* 指示是否允许运动矢量跨越图像边界 */
@@ -242,15 +228,48 @@ class SPS {
   uint32_t log2_max_mv_length_horizontal = 0;
   /* 垂直运动矢量的最大长度的对数值 */
   uint32_t log2_max_mv_length_vertical = 0;
-  /* 最大重排序帧数 */
-  int32_t max_num_reorder_frames = -1;
   /* 最大解码帧缓冲区大小 */
   uint32_t max_dec_frame_buffering = 0;
 
- public:
+ private:
   void vui_parameters(BitStream &bitStream);
   void hrd_parameters(BitStream &bitStream);
   int seq_parameter_set_extension_rbsp();
+  int derived_SubWidthC_and_SubHeightC();
 };
+
+//----------------------------------------------------------------------
+//vui_parameters()
+const int32_t LevelNumber_MaxDpbMbs[19][2] = {
+    {10, 396},    {11, 900},    {12, 2376},   {13, 2376},   {20, 2376},
+    {21, 4752},   {22, 8100},   {30, 8100},   {31, 18000},  {32, 20480},
+    {40, 32768},  {41, 32768},  {42, 34816},  {50, 110400}, {51, 184320},
+    {52, 184320}, {60, 696320}, {61, 696320}, {62, 696320},
+};
+//----------------------------------------------------------------------
+
+//----------------------------------------------------------------------
+//Table 6-1 – SubWidthC, and SubHeightC values derived from chroma_format_idc and separate_colour_plane_flag
+struct Chroma_format_idc {
+  int32_t chroma_format_idc;
+  int32_t separate_colour_plane_flag;
+  int32_t Chroma_Format;
+  int32_t SubWidthC;
+  int32_t SubHeightC;
+};
+
+#define MONOCHROME 0 // 黑白图像
+#define CHROMA_FORMAT_IDC_420 1
+#define CHROMA_FORMAT_IDC_422 2
+#define CHROMA_FORMAT_IDC_444 3
+
+const Chroma_format_idc chroma_format_idcs[5] = {
+    {0, 0, MONOCHROME, NA, NA},
+    {1, 0, CHROMA_FORMAT_IDC_420, 2, 2},
+    {2, 0, CHROMA_FORMAT_IDC_422, 2, 1},
+    {3, 0, CHROMA_FORMAT_IDC_444, 1, 1},
+    {3, 1, CHROMA_FORMAT_IDC_444, NA, NA},
+};
+//----------------------------------------------------------------------
 
 #endif /* end of include guard: SPS_CPP_F6QSULFM */
