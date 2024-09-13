@@ -147,9 +147,9 @@ int Nalu::extractSliceparameters(BitStream &bitStream, GOP &gop, Frame &frame) {
   /* TODO 此时Slcie应该还不知道用哪个SPS,PPS <24-09-14 00:49:21, YangJing>  */
   //slice->setSPS(gop.m_spss[gop.last_sps_id]);
   //slice->setPPS(gop.m_ppss[gop.last_pps_id]);
-  slice->slice_header.nal_unit_type = nal_unit_type;
-  slice->slice_header.nal_ref_idc = nal_ref_idc;
-  slice->slice_header.parseSliceHeader(bitStream, gop);
+  slice->slice_header->nal_unit_type = nal_unit_type;
+  slice->slice_header->nal_ref_idc = nal_ref_idc;
+  slice->slice_header->parseSliceHeader(bitStream, gop);
   //frame.addSlice(slice);
   frame.slice = slice;
   return 0;

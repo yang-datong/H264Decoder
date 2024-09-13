@@ -17,13 +17,13 @@ int PictureBase::decoding_picture_order_count() {
 
   /* 比特流不应包含导致解码过程中使用的 TopFieldOrderCnt、BottomFieldOrderCnt、PicOrderCntMsb 或 FrameNumOffset 值（如第 8.2.1.1 至 8.2.1.3 条规定）超出从 -231 到 231 - 1（含）的值范围的数据。 */
   int ret = 0;
-  if (m_slice.slice_header.m_sps.pic_order_cnt_type == 0)
+  if (m_slice.slice_header->m_sps->pic_order_cnt_type == 0)
     //8.2.1.1
     ret = decoding_picture_order_count_type_0(m_parent->m_picture_previous_ref);
-  else if (m_slice.slice_header.m_sps.pic_order_cnt_type == 1)
+  else if (m_slice.slice_header->m_sps->pic_order_cnt_type == 1)
     //8.2.1.2
     ret = decoding_picture_order_count_type_1(m_parent->m_picture_previous);
-  else if (m_slice.slice_header.m_sps.pic_order_cnt_type == 2)
+  else if (m_slice.slice_header->m_sps->pic_order_cnt_type == 2)
     //8.2.1.3
     ret = decoding_picture_order_count_type_2(m_parent->m_picture_previous);
 
@@ -60,7 +60,7 @@ int PictureBase::PicOrderCntFunc(PictureBase *picX) {
 int PictureBase::decoding_picture_order_count_type_0(
     const PictureBase *picture_previous_ref) {
 
-  const SliceHeader &header = m_slice.slice_header;
+  const SliceHeader *header = m_slice.slice_header;
 
   uint32_t prevPicOrderCntMsb, prevPicOrderCntLsb;
   /* 变量 prevPicOrderCntMsb 和 prevPicOrderCntLsb 的推导如下： 
@@ -70,7 +70,7 @@ int PictureBase::decoding_picture_order_count_type_0(
   /* – 如果解码顺序中的前一个参考图片不是底场， prevPicOrderCntMsb 被设置为等于 0，并且 prevPicOrderCntLsb 被设置为等于按照解码顺序的前一个参考图片的 TopFieldOrderCnt 的值。  */
   /* – 否则（解码顺序中的前一个参考图像是底场），prevPicOrderCntMsb 设置为等于 0，并且 prevPicOrderCntLsb 设置为等于 0。 */
   /* – 否则（解码顺序中的前一个参考图片不包括等于5的memory_management_control_operation），prevPicOrderCntMsb设置为等于解码顺序中的前一个参考图片的PicOrderCntMsb，并且设置prevPicOrderCntLsb等于解码顺序中前一个参考图片的 pic_order_cnt_lsb 的值。 */
-  if (header.IdrPicFlag == 1)
+  if (header->IdrPicFlag == 1)
     prevPicOrderCntMsb = prevPicOrderCntLsb = 0;
   else if (picture_previous_ref) {
     if (picture_previous_ref->memory_management_control_operation_5_flag) {
@@ -83,7 +83,7 @@ int PictureBase::decoding_picture_order_count_type_0(
     } else {
       prevPicOrderCntMsb = picture_previous_ref->PicOrderCntMsb;
       prevPicOrderCntLsb =
-          picture_previous_ref->m_slice.slice_header.pic_order_cnt_lsb;
+          picture_previous_ref->m_slice.slice_header->pic_order_cnt_lsb;
     }
   } else {
     /* 没有参考帧 */
@@ -93,32 +93,32 @@ int PictureBase::decoding_picture_order_count_type_0(
   }
 
   /* 当前图片的 PicOrderCntMsb 是由以下伪代码指定的： */
-  if ((header.pic_order_cnt_lsb < prevPicOrderCntLsb) &&
-      ((prevPicOrderCntLsb - header.pic_order_cnt_lsb) >=
-       (m_slice.slice_header.m_sps.MaxPicOrderCntLsb / 2)))
+  if ((header->pic_order_cnt_lsb < prevPicOrderCntLsb) &&
+      ((prevPicOrderCntLsb - header->pic_order_cnt_lsb) >=
+       (m_slice.slice_header->m_sps->MaxPicOrderCntLsb / 2)))
     PicOrderCntMsb =
-        prevPicOrderCntMsb + m_slice.slice_header.m_sps.MaxPicOrderCntLsb;
+        prevPicOrderCntMsb + m_slice.slice_header->m_sps->MaxPicOrderCntLsb;
 
-  else if ((header.pic_order_cnt_lsb > prevPicOrderCntLsb) &&
-           ((header.pic_order_cnt_lsb - prevPicOrderCntLsb) >
-            (m_slice.slice_header.m_sps.MaxPicOrderCntLsb / 2)))
+  else if ((header->pic_order_cnt_lsb > prevPicOrderCntLsb) &&
+           ((header->pic_order_cnt_lsb - prevPicOrderCntLsb) >
+            (m_slice.slice_header->m_sps->MaxPicOrderCntLsb / 2)))
     PicOrderCntMsb =
-        prevPicOrderCntMsb - m_slice.slice_header.m_sps.MaxPicOrderCntLsb;
+        prevPicOrderCntMsb - m_slice.slice_header->m_sps->MaxPicOrderCntLsb;
 
   else
     PicOrderCntMsb = prevPicOrderCntMsb;
 
   /* 当前图片不是底场时，TopFieldOrderCnt 导出为 */
   if (m_picture_coded_type != H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
-    TopFieldOrderCnt = PicOrderCntMsb + header.pic_order_cnt_lsb;
+    TopFieldOrderCnt = PicOrderCntMsb + header->pic_order_cnt_lsb;
 
   /* 当前图片不是顶场时，按以下伪代码指定BottomFieldOrderCnt导出为 */
   //TODO 注释了
   //if (m_picture_coded_type != H264_PICTURE_CODED_TYPE_TOP_FIELD) {
-  if (!m_slice.slice_header.field_pic_flag)
-    BottomFieldOrderCnt = TopFieldOrderCnt + header.delta_pic_order_cnt_bottom;
+  if (!m_slice.slice_header->field_pic_flag)
+    BottomFieldOrderCnt = TopFieldOrderCnt + header->delta_pic_order_cnt_bottom;
   else
-    BottomFieldOrderCnt = PicOrderCntMsb + header.pic_order_cnt_lsb;
+    BottomFieldOrderCnt = PicOrderCntMsb + header->pic_order_cnt_lsb;
   //}
 
   return 0;
@@ -135,11 +135,11 @@ int PictureBase::decoding_picture_order_count_type_1(
   /* 当当前图片不是 IDR 图片时，变量 prevFrameNumOffset 的推导如下： 
    * – 如果解码顺序中的前一个图片包含等于 5 的memory_management_control_operation_5_flag，则 prevFrameNumOffset 设置为等于 0。 
    * – 否则（解码顺序中的前一个图片没有不包括等于5的memory_management_control_operation)，prevFrameNumOffset被设置为等于解码顺序中的前一个图片的FrameNumOffset的值。 */
-  SliceHeader &header = m_slice.slice_header;
+  SliceHeader *header = m_slice.slice_header;
 
   int32_t prevFrameNumOffset = 0;
   /* 当前帧不是 IDR */
-  if (!header.IdrPicFlag) {
+  if (!header->IdrPicFlag) {
     if (picture_previous->memory_management_control_operation_5_flag)
       prevFrameNumOffset = 0;
     else
@@ -147,62 +147,64 @@ int PictureBase::decoding_picture_order_count_type_1(
   }
 
   /* 当前帧是IDR */
-  if (header.IdrPicFlag)
+  if (header->IdrPicFlag)
     FrameNumOffset = 0;
-  else if (picture_previous->m_slice.slice_header.frame_num > header.frame_num)
+  else if (picture_previous->m_slice.slice_header->frame_num >
+           header->frame_num)
     // 前一图像的帧号比当前图像大
     FrameNumOffset =
-        prevFrameNumOffset + m_slice.slice_header.m_sps.MaxFrameNum;
+        prevFrameNumOffset + m_slice.slice_header->m_sps->MaxFrameNum;
   else
     FrameNumOffset = prevFrameNumOffset;
 
   /* 变量 absFrameNum 是由以下伪代码指定导出的： */
-  if (m_slice.slice_header.m_sps.num_ref_frames_in_pic_order_cnt_cycle != 0)
-    absFrameNum = FrameNumOffset + header.frame_num;
+  if (m_slice.slice_header->m_sps->num_ref_frames_in_pic_order_cnt_cycle != 0)
+    absFrameNum = FrameNumOffset + header->frame_num;
   else
     absFrameNum = 0;
 
-  if (header.nal_ref_idc == 0 && absFrameNum > 0) absFrameNum--;
+  if (header->nal_ref_idc == 0 && absFrameNum > 0) absFrameNum--;
 
   /* 当absFrameNum > 0时，picOrderCntCycleCnt和frameNumInPicOrderCntCycle导出为 */
   if (absFrameNum > 0) {
     picOrderCntCycleCnt =
         (absFrameNum - 1) /
-        m_slice.slice_header.m_sps.num_ref_frames_in_pic_order_cnt_cycle;
+        m_slice.slice_header->m_sps->num_ref_frames_in_pic_order_cnt_cycle;
     frameNumInPicOrderCntCycle =
         (absFrameNum - 1) %
-        m_slice.slice_header.m_sps.num_ref_frames_in_pic_order_cnt_cycle;
+        m_slice.slice_header->m_sps->num_ref_frames_in_pic_order_cnt_cycle;
   }
 
   /* 变量预期PicOrderCnt是由以下伪代码指定导出的： */
   if (absFrameNum > 0) {
     expectedPicOrderCnt =
         picOrderCntCycleCnt *
-        m_slice.slice_header.m_sps.ExpectedDeltaPerPicOrderCntCycle;
+        m_slice.slice_header->m_sps->ExpectedDeltaPerPicOrderCntCycle;
     for (int i = 0; i <= frameNumInPicOrderCntCycle; i++)
-      expectedPicOrderCnt += m_slice.slice_header.m_sps.offset_for_ref_frame[i];
+      expectedPicOrderCnt +=
+          m_slice.slice_header->m_sps->offset_for_ref_frame[i];
   } else
     expectedPicOrderCnt = 0;
 
-  if (header.nal_ref_idc == 0)
-    expectedPicOrderCnt += m_slice.slice_header.m_sps.offset_for_non_ref_pic;
+  if (header->nal_ref_idc == 0)
+    expectedPicOrderCnt += m_slice.slice_header->m_sps->offset_for_non_ref_pic;
 
   /* 变量 TopFieldOrderCnt 或 BottomFieldOrderCnt 是按以下伪代码指定导出的： */
-  if (!header.field_pic_flag) {
+  if (!header->field_pic_flag) {
     // 当前图像为帧
-    TopFieldOrderCnt = expectedPicOrderCnt + header.delta_pic_order_cnt[0];
+    TopFieldOrderCnt = expectedPicOrderCnt + header->delta_pic_order_cnt[0];
     BottomFieldOrderCnt =
         TopFieldOrderCnt +
-        m_slice.slice_header.m_sps.offset_for_top_to_bottom_field +
-        header.delta_pic_order_cnt[1];
-  } else if (!header.bottom_field_flag)
+        m_slice.slice_header->m_sps->offset_for_top_to_bottom_field +
+        header->delta_pic_order_cnt[1];
+  } else if (!header->bottom_field_flag)
     // 当前图像为顶场
-    TopFieldOrderCnt = expectedPicOrderCnt + header.delta_pic_order_cnt[0];
+    TopFieldOrderCnt = expectedPicOrderCnt + header->delta_pic_order_cnt[0];
   else // 当前图像为底场
     BottomFieldOrderCnt =
         expectedPicOrderCnt +
-        m_slice.slice_header.m_sps.offset_for_top_to_bottom_field +
-        header.delta_pic_order_cnt[0];
+        m_slice.slice_header->m_sps->offset_for_top_to_bottom_field +
+        header->delta_pic_order_cnt[0];
 
   return 0;
 }
@@ -218,7 +220,7 @@ int PictureBase::decoding_picture_order_count_type_2(
    * – 如果解码顺序中的前一个图片包含等于 5 的内存_管理_控制_操作，则 prevFrameNumOffset 设置为等于 0。 
    * – 否则（解码顺序中的前一个图片没有不包括等于5的memory_management_control_operation)，prevFrameNumOffset被设置为等于解码顺序中的前一个图片的FrameNumOffset的值。 */
   int32_t prevFrameNumOffset = 0;
-  if (m_slice.slice_header.IdrPicFlag == 0) {
+  if (m_slice.slice_header->IdrPicFlag == 0) {
     if (picture_previous->memory_management_control_operation_5_flag)
       prevFrameNumOffset = 0;
     else
@@ -228,29 +230,30 @@ int PictureBase::decoding_picture_order_count_type_2(
   /* 当gaps_in_frame_num_value_allowed_flag等于1时，解码顺序中的前一个图片可能是由第8.2.5.2节中指定的frame_num中的间隙的解码过程推断的“不存在”帧。 */
 
   /* 变量 FrameNumOffset 是由以下伪代码指定导出的： */
-  if (m_slice.slice_header.IdrPicFlag == 1)
+  if (m_slice.slice_header->IdrPicFlag == 1)
     FrameNumOffset = 0;
-  else if (picture_previous->m_slice.slice_header.frame_num >
-           m_slice.slice_header.frame_num)
+  else if (picture_previous->m_slice.slice_header->frame_num >
+           m_slice.slice_header->frame_num)
     FrameNumOffset =
-        prevFrameNumOffset + m_slice.slice_header.m_sps.MaxFrameNum;
+        prevFrameNumOffset + m_slice.slice_header->m_sps->MaxFrameNum;
   else
     FrameNumOffset = prevFrameNumOffset;
 
   /* 变量 tempPicOrderCnt 是按以下伪代码指定导出的：*/
   int32_t tempPicOrderCnt = 0;
-  if (m_slice.slice_header.IdrPicFlag == 1)
+  if (m_slice.slice_header->IdrPicFlag == 1)
     tempPicOrderCnt = 0;
-  else if (m_slice.slice_header.nal_ref_idc == 0) // 当前图像为非参考图像
-    tempPicOrderCnt = 2 * (FrameNumOffset + m_slice.slice_header.frame_num) - 1;
+  else if (m_slice.slice_header->nal_ref_idc == 0) // 当前图像为非参考图像
+    tempPicOrderCnt =
+        2 * (FrameNumOffset + m_slice.slice_header->frame_num) - 1;
   else
-    tempPicOrderCnt = 2 * (FrameNumOffset + m_slice.slice_header.frame_num);
+    tempPicOrderCnt = 2 * (FrameNumOffset + m_slice.slice_header->frame_num);
 
   /* 变量 TopFieldOrderCnt 或 BottomFieldOrderCnt 是按以下伪代码指定导出的：*/
-  if (!m_slice.slice_header.field_pic_flag)
+  if (!m_slice.slice_header->field_pic_flag)
     // 当前图像为帧
     TopFieldOrderCnt = BottomFieldOrderCnt = tempPicOrderCnt;
-  else if (m_slice.slice_header.bottom_field_flag)
+  else if (m_slice.slice_header->bottom_field_flag)
     // 当前图像为底场
     BottomFieldOrderCnt = tempPicOrderCnt;
   else
@@ -264,7 +267,7 @@ int PictureBase::decoding_picture_order_count_type_2(
 int PictureBase::decoding_reference_picture_lists_construction(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16]) {
 
-  const SliceHeader &slice_header = m_slice.slice_header;
+  const SliceHeader *slice_header = m_slice.slice_header;
   /* 解码的参考图片被标记为“用于短期参考”或“用于长期参考”，如比特流所指定的和第8.2.5节中所指定的。短期参考图片由frame_num 的值标识。长期参考图片被分配一个长期帧索引，该索引由比特流指定并在第 8.2.5 节中指定。 */
 
   // 8.2.5 Decoded reference picture marking process
@@ -302,8 +305,8 @@ int PictureBase::decoding_reference_picture_lists_construction(
   /* 修改后的参考图片列表RefPicList0中的条目数量是num_ref_idx_l0_active_minus1+1，并且对于B片，
    * 修改后的参考图片列表RefPicList1中的条目数量是num_ref_idx_l1_active_minus1+1。
    * 参考图片可以出现在修改后的参考中的多个索引处图片列表RefPicList0或RefPicList1。 */
-  m_RefPicList0Length = slice_header.num_ref_idx_l0_active_minus1 + 1;
-  m_RefPicList1Length = slice_header.num_ref_idx_l1_active_minus1 + 1;
+  m_RefPicList0Length = slice_header->num_ref_idx_l0_active_minus1 + 1;
+  m_RefPicList1Length = slice_header->num_ref_idx_l1_active_minus1 + 1;
 
   return 0;
 }
@@ -312,20 +315,20 @@ int PictureBase::decoding_reference_picture_lists_construction(
 /* 当调用第8.2.4节中指定的参考图片列表构建的解码过程、第8.2.5节中指定的解码参考图片标记过程或第8.2.5.2节中指定的frame_num中的间隙的解码过程时，调用该过程。*/
 /* 参考图片通过第 8.4.2.1 节中指定的参考索引来寻址。*/
 int PictureBase::decoding_picture_numbers(Frame *(&dpb)[16]) {
-  SliceHeader &slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice.slice_header;
   const int size_dpb = 16;
 
   /* 变量 FrameNum、FrameNumWrap、PicNum、LongTermFrameIdx 和 LongTermPicNum 用于第 8.2.4.2 节中参考图片列表的初始化过程、第 8.2.4.3 节中参考图片列表的修改过程、第 8.2.5 节中的解码参考图片标记过程。以及第8.2.5.2节中frame_num中间隙的解码过程。 */
 
   /* 对于每个短期参考图片，变量 FrameNum 和 FrameNumWrap 被分配如下。首先，将FrameNum设置为等于对应短期参考图片的Slice Header中已解码的语法元素frame_num。然后变量 FrameNumWrap 导出为:*/
-  FrameNum = slice_header.frame_num;
+  FrameNum = slice_header->frame_num;
 
   for (int i = 0; i < size_dpb; i++) {
     /* 帧 */
     auto &pict_f = dpb[i]->m_picture_frame;
     auto &pict_f_frameNum = pict_f.FrameNum;
     auto &pict_f_frameNumWrap = pict_f.FrameNumWrap;
-    int MaxFrameNum = pict_f.m_slice.slice_header.m_sps.MaxFrameNum;
+    int MaxFrameNum = pict_f.m_slice.slice_header->m_sps->MaxFrameNum;
 
     if (pict_f.reference_marked_type ==
         H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
@@ -370,7 +373,7 @@ int PictureBase::decoding_picture_numbers(Frame *(&dpb)[16]) {
   // NOTE:
 
   /* 向每个短期参考图片分配变量PicNum，并且向每个长期参考图片分配变量LongTermPicNum。这些变量的值取决于当前图片的field_pic_flag和bottom_field_flag的值，它们的设置如下： */
-  if (!slice_header.field_pic_flag) {
+  if (!slice_header->field_pic_flag) {
     /* 帧编码 */
     for (int i = 0; i < size_dpb; i++) {
       auto &reference_marked_type_f =
@@ -428,7 +431,7 @@ int PictureBase::decoding_picture_numbers(Frame *(&dpb)[16]) {
         }
       }
     }
-  } else if (slice_header.field_pic_flag) {
+  } else if (slice_header->field_pic_flag) {
     /* 场编码 */
 
     for (int i = 0; i < size_dpb; i++) {
@@ -494,12 +497,12 @@ int PictureBase::decoding_picture_numbers(Frame *(&dpb)[16]) {
 int PictureBase::init_reference_picture_lists(Frame *(&dpb)[16],
                                               Frame *(&RefPicList0)[16],
                                               Frame *(&RefPicList1)[16]) {
-  SliceHeader &slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice.slice_header;
 
   /* RefPicList0 和 RefPicList1 具有第 8.2.4.2.1 至 8.2.4.2.5 节中指定的初始条目。*/
   int ret = 0;
-  if (slice_header.slice_type == SLICE_P ||
-      slice_header.slice_type == SLICE_SP) {
+  if (slice_header->slice_type == SLICE_P ||
+      slice_header->slice_type == SLICE_SP) {
 
     /* RefPicList0为排序后的dpb*/
 
@@ -514,7 +517,7 @@ int PictureBase::init_reference_picture_lists(Frame *(&dpb)[16],
       ret = init_reference_picture_list_P_SP_slices_in_fields(
           dpb, RefPicList0, m_RefPicList0Length);
 
-  } else if (slice_header.slice_type == SLICE_B) {
+  } else if (slice_header->slice_type == SLICE_B) {
 
     /* 初始化B Slice的参考列表，'列表'是因为参考帧不一定只有一个(对于帧编码） */
     if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME)
@@ -538,7 +541,7 @@ int PictureBase::init_reference_picture_lists(Frame *(&dpb)[16],
   /* 当第 8.2.4.2.1 至 8.2.4.2.5 节中，指定的初始 RefPicList0 或 RefPicList1 中的条目数：
    * - 分别大于 num_ref_idx_l0_active_minus1 + 1 或 num_ref_idx_l1_active_minus1 + 1 时，超过位置 num_ref_idx_l0_active_minus1 或 num_ref_idx_l1_active_minus1 的额外条目应被丢弃从初始参考图片列表中。 
   * - 分别小于 num_ref_idx_l0_active_minus1 + 1 或 num_ref_idx_l1_active_minus1 + 1 时，初始参考图片列表中的剩余条目为设置等于“无参考图片”。 */
-  int l0_num_ref = slice_header.num_ref_idx_l0_active_minus1 + 1;
+  int l0_num_ref = slice_header->num_ref_idx_l0_active_minus1 + 1;
   if (m_RefPicList0Length > l0_num_ref) {
     for (int i = l0_num_ref; i < m_RefPicList0Length; i++)
       RefPicList0[i] = NULL;
@@ -547,7 +550,7 @@ int PictureBase::init_reference_picture_lists(Frame *(&dpb)[16],
     for (int i = m_RefPicList0Length; i < l0_num_ref; i++)
       RefPicList0[i] = NULL;
 
-  int l1_num_ref = slice_header.num_ref_idx_l1_active_minus1 + 1;
+  int l1_num_ref = slice_header->num_ref_idx_l1_active_minus1 + 1;
   if (m_RefPicList1Length > l1_num_ref) {
     for (int i = l1_num_ref; i < m_RefPicList1Length; i++)
       RefPicList1[i] = NULL;
@@ -565,7 +568,7 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], int32_t &RefPicList0Length) {
   const int32_t size_dpb = 16;
 
-  const SliceHeader &slice_header = m_slice.slice_header;
+  const SliceHeader *slice_header = m_slice.slice_header;
   /* 1. 参考图片列表RefPicList0被排序，使得短期参考帧和短期互补参考场对具有比长期参考帧和长期互补参考场对更低的索引。 */
   vector<int32_t> indexTemp_short, indexTemp_long;
   for (int index = 0; index < (int)size_dpb; index++) {
@@ -613,7 +616,7 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
   //RefPicList0[ 4 ] is set equal to the long-term reference picture with LongTermPicNum = 3.
 
   /* TODO YangJing 这里是在做什么？ <24-08-31 00:06:06> */
-  if (slice_header.MbaffFrameFlag) {
+  if (slice_header->MbaffFrameFlag) {
     for (int index = 0; index < RefPicList0Length; ++index) {
       Frame *&ref_list_frame = RefPicList0[index];
       Frame *&ref_list_top_filed = RefPicList0[16 + 2 * index];
@@ -1107,27 +1110,27 @@ int PictureBase::init_reference_picture_lists_in_fields(
 int PictureBase::modif_reference_picture_lists(Frame *(&RefPicList0)[16],
                                                Frame *(&RefPicList1)[16]) {
   int ret;
-  SliceHeader &slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice.slice_header;
   /* 当ref_pic_list_modification_flag_l0等于1时，以下适用： */
-  if (slice_header.ref_pic_list_modification_flag_l0 == 1) {
+  if (slice_header->ref_pic_list_modification_flag_l0 == 1) {
     // 1.令refIdxL0为参考图片列表RefPicList0中的索引。它最初设置为等于0。
-    slice_header.refIdxL0 = 0;
+    slice_header->refIdxL0 = 0;
 
     /* 2. 对应的语法元素modification_of_pic_nums_idc 按照它们在比特流中出现的顺序进行处理。对于这些语法元素中的每一个，以下适用： */
-    for (int i = 0; i < slice_header.ref_pic_list_modification_count_l0; i++) {
-      int32_t modif_idc = slice_header.modification_of_pic_nums_idc[0][i];
+    for (int i = 0; i < slice_header->ref_pic_list_modification_count_l0; i++) {
+      int32_t modif_idc = slice_header->modification_of_pic_nums_idc[0][i];
 
       if (modif_idc == 0 || modif_idc == 1) {
         //* — 如果modification_of_pic_nums_idc等于0或等于1，则使用refIdxL0作为输入调用第8.2.4.3.1节中指定的过程，并将输出分配给refIdxL0。
         ret = modif_reference_picture_lists_for_short_ref_pictures(
-            slice_header.refIdxL0, slice_header.picNumL0Pred, modif_idc,
-            slice_header.abs_diff_pic_num_minus1[0][i],
-            slice_header.num_ref_idx_l0_active_minus1, RefPicList0);
+            slice_header->refIdxL0, slice_header->picNumL0Pred, modif_idc,
+            slice_header->abs_diff_pic_num_minus1[0][i],
+            slice_header->num_ref_idx_l0_active_minus1, RefPicList0);
       } else if (modif_idc == 2) {
         //* — 否则，如果modification_of_pic_nums_idc等于2，则使用refIdxL0作为输入调用第8.2.4.3.2节中指定的过程，并将输出分配给refIdxL0。
         ret = modif_reference_picture_lists_for_long_ref_pictures(
-            slice_header.refIdxL0, slice_header.num_ref_idx_l0_active_minus1,
-            slice_header.long_term_pic_num[0][i], RefPicList0);
+            slice_header->refIdxL0, slice_header->num_ref_idx_l0_active_minus1,
+            slice_header->long_term_pic_num[0][i], RefPicList0);
       } else
         //* – 否则（modification_of_pic_nums_idc等于3），参考图片列表RefPicList0的修改过程完成。
         break;
@@ -1141,27 +1144,27 @@ int PictureBase::modif_reference_picture_lists(Frame *(&RefPicList0)[16],
   }
 
   /* 当当前切片是B切片并且ref_pic_list_modification_flag_l1等于1时，以下适用： */
-  if (slice_header.slice_type == SLICE_B &&
-      slice_header.ref_pic_list_modification_flag_l1) {
+  if (slice_header->slice_type == SLICE_B &&
+      slice_header->ref_pic_list_modification_flag_l1) {
 
     /* 1.令refIdxL1为参考图片列表RefPicList1的索引。它最初设置为 0。 */
-    slice_header.refIdxL1 = 0;
+    slice_header->refIdxL1 = 0;
 
     /* 2.对应的语法元素modification_of_pic_nums_idc按照它们在比特流中出现的顺序进行处理。对于每个语法元素，以下内容适用： */
-    for (int i = 0; i < slice_header.ref_pic_list_modification_count_l1; i++) {
+    for (int i = 0; i < slice_header->ref_pic_list_modification_count_l1; i++) {
 
-      int32_t modif_idc = slice_header.modification_of_pic_nums_idc[1][i];
+      int32_t modif_idc = slice_header->modification_of_pic_nums_idc[1][i];
       if (modif_idc == 0 || modif_idc == 1) {
         // – 如果modification_of_pic_nums_idc等于0或等于1，则使用refIdxL1作为输入调用第8.2.4.3.1节中指定的过程，并将输出分配给refIdxL1。
         ret = modif_reference_picture_lists_for_short_ref_pictures(
-            slice_header.refIdxL1, slice_header.picNumL1Pred, modif_idc,
-            slice_header.abs_diff_pic_num_minus1[1][i],
-            slice_header.num_ref_idx_l1_active_minus1, RefPicList1);
+            slice_header->refIdxL1, slice_header->picNumL1Pred, modif_idc,
+            slice_header->abs_diff_pic_num_minus1[1][i],
+            slice_header->num_ref_idx_l1_active_minus1, RefPicList1);
       } else if (modif_idc == 2) {
         // — 否则，如果modification_of_pic_nums_idc等于2，则使用refIdxL1作为输入调用第8.2.4.3.2节中指定的过程，并将输出分配给refIdxL1。
         ret = modif_reference_picture_lists_for_long_ref_pictures(
-            slice_header.refIdxL1, slice_header.num_ref_idx_l1_active_minus1,
-            slice_header.long_term_pic_num[1][i], RefPicList1);
+            slice_header->refIdxL1, slice_header->num_ref_idx_l1_active_minus1,
+            slice_header->long_term_pic_num[1][i], RefPicList1);
       } else
         // – 否则（modification_of_pic_nums_idc等于3），参考图片列表RefPicList1的修改过程完成。 */
         break;
@@ -1185,21 +1188,21 @@ int PictureBase::modif_reference_picture_lists_for_short_ref_pictures(
     const int32_t abs_diff_pic_num_minus1,
     const int32_t num_ref_idx_lX_active_minus1, Frame *(&RefPicListX)[16]) {
 
-  SliceHeader &slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice.slice_header;
 
   /* 变量 picNumLXNoWrap 的推导如下：*/
   int32_t picNumLXNoWrap = 0;
   if (modif_idc == 0) {
     if (picNumLXPred - (abs_diff_pic_num_minus1 + 1) < 0)
-      picNumLXNoWrap =
-          picNumLXPred - (abs_diff_pic_num_minus1 + 1) + slice_header.MaxPicNum;
+      picNumLXNoWrap = picNumLXPred - (abs_diff_pic_num_minus1 + 1) +
+                       slice_header->MaxPicNum;
     else
       picNumLXNoWrap = picNumLXPred - (abs_diff_pic_num_minus1 + 1);
 
   } else {
-    if (picNumLXPred + (abs_diff_pic_num_minus1 + 1) >= slice_header.MaxPicNum)
-      picNumLXNoWrap =
-          picNumLXPred + (abs_diff_pic_num_minus1 + 1) - slice_header.MaxPicNum;
+    if (picNumLXPred + (abs_diff_pic_num_minus1 + 1) >= slice_header->MaxPicNum)
+      picNumLXNoWrap = picNumLXPred + (abs_diff_pic_num_minus1 + 1) -
+                       slice_header->MaxPicNum;
     else
       picNumLXNoWrap = picNumLXPred + (abs_diff_pic_num_minus1 + 1);
   }
@@ -1209,8 +1212,8 @@ int PictureBase::modif_reference_picture_lists_for_short_ref_pictures(
 
   /* 变量 picNumLX 是由以下伪代码指定导出的： */
   int32_t picNumLX = 0;
-  if (picNumLXNoWrap > (int32_t)slice_header.CurrPicNum)
-    picNumLX = picNumLXNoWrap - slice_header.MaxPicNum;
+  if (picNumLXNoWrap > (int32_t)slice_header->CurrPicNum)
+    picNumLX = picNumLXNoWrap - slice_header->MaxPicNum;
   else
     picNumLX = picNumLXNoWrap;
   /* picNumLX应等于标记为“用于短期参考”的参考图片的PicNum，并且不应等于标记为“不存在”的短期参考图片的PicNum。 */
@@ -1238,7 +1241,7 @@ int PictureBase::modif_reference_picture_lists_for_short_ref_pictures(
           H264_PICTURE_MARKED_AS_used_for_short_term_reference)
         PicNumF = RefPicListX[cIdx]->PicNum;
       else
-        PicNumF = slice_header.MaxPicNum;
+        PicNumF = slice_header->MaxPicNum;
 
       if (PicNumF != picNumLX) RefPicListX[nIdx++] = RefPicListX[cIdx];
     }
@@ -1302,7 +1305,7 @@ int PictureBase::
     Sequence_of_operations_for_decoded_reference_picture_marking_process(
         Frame *(&dpb)[16]) {
   int ret = 0;
-  SliceHeader &slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice.slice_header;
   int32_t size_dpb = 16;
 
   // 1. All slices of the current picture are decoded.
@@ -1310,7 +1313,7 @@ int PictureBase::
 
   // 2. Depending on whether the current picture is an IDR picture, the
   // following applies:
-  if (slice_header.IdrPicFlag == 1) // IDR picture
+  if (slice_header->IdrPicFlag == 1) // IDR picture
   {
     // All reference pictures are marked as "unused for reference"
     for (int i = 0; i < size_dpb; i++) {
@@ -1325,7 +1328,7 @@ int PictureBase::
       }
     }
 
-    if (slice_header.long_term_reference_flag == 0) // 标记自己为哪一种参考帧
+    if (slice_header->long_term_reference_flag == 0) // 标记自己为哪一种参考帧
     {
       reference_marked_type =
           H264_PICTURE_MARKED_AS_used_for_short_term_reference;
@@ -1340,7 +1343,7 @@ int PictureBase::
         m_parent->m_picture_coded_type_marked_as_refrence =
             H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
       }
-    } else // if (slice_header.long_term_reference_flag == 1)
+    } else // if (slice_header->long_term_reference_flag == 1)
     {
       reference_marked_type =
           H264_PICTURE_MARKED_AS_used_for_long_term_reference;
@@ -1359,12 +1362,12 @@ int PictureBase::
     }
   } else // the current picture is not an IDR picture
   {
-    if (slice_header.adaptive_ref_pic_marking_mode_flag == 0) {
+    if (slice_header->adaptive_ref_pic_marking_mode_flag == 0) {
       // 8.2.5.3 Sliding window decoded reference picture marking process
       // 滑动窗口解码参考图像的标识过程
       ret = Sliding_window_decoded_reference_picture_marking_process(dpb);
       RETURN_IF_FAILED(ret != 0, ret);
-    } else // if (slice_header.adaptive_ref_pic_marking_mode_flag == 1)
+    } else // if (slice_header->adaptive_ref_pic_marking_mode_flag == 1)
     {
       // 8.2.5.4 Adaptive memory control decoded reference picture marking
       // process
@@ -1377,7 +1380,7 @@ int PictureBase::
   // 3. When the current picture is not an IDR picture and it was not marked as
   // "used for long-term reference" by memory_management_control_operation equal
   // to 6, it is marked as "used for short-term reference".
-  if (slice_header.IdrPicFlag != 1 // the current picture is not an IDR picture
+  if (slice_header->IdrPicFlag != 1 // the current picture is not an IDR picture
       && memory_management_control_operation_6_flag != 6) {
     reference_marked_type =
         H264_PICTURE_MARKED_AS_used_for_short_term_reference;
@@ -1467,7 +1470,7 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
     }
 
     if (numShortTerm + numLongTerm ==
-            MAX(m_slice.slice_header.m_sps.max_num_ref_frames, 1) &&
+            MAX(m_slice.slice_header->m_sps->max_num_ref_frames, 1) &&
         numShortTerm > 0) {
       PictureBase *refPic = NULL;
       int32_t FrameNumWrap_smallest_index = -1;
@@ -1569,29 +1572,29 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
 int PictureBase::
     Adaptive_memory_control_decoded_reference_picture_marking_process(
         Frame *(&dpb)[16]) {
-  SliceHeader &slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice.slice_header;
 
   int32_t size_dpb = 16;
   int32_t i = 0;
   int32_t j = 0;
 
-  for (j = 0; j < slice_header.dec_ref_pic_marking_count; j++) {
+  for (j = 0; j < slice_header->dec_ref_pic_marking_count; j++) {
     // The memory_management_control_operation command with value of 0 specifies
     // the end of memory_management_control_operation commands.
-    if (slice_header.m_dec_ref_pic_marking[j]
+    if (slice_header->m_dec_ref_pic_marking[j]
             .memory_management_control_operation == 0) {
       break;
     }
 
     // 8.2.5.4.1 Marking process of a short-term reference picture as "unused
     // for reference" 将短期图像标记为“不用于参考”
-    if (slice_header.m_dec_ref_pic_marking[j]
+    if (slice_header->m_dec_ref_pic_marking[j]
             .memory_management_control_operation == 1) {
       int32_t picNumX =
-          slice_header.CurrPicNum -
-          (slice_header.m_dec_ref_pic_marking[j].difference_of_pic_nums_minus1 +
-           1);
-      if (slice_header.field_pic_flag == 0) {
+          slice_header->CurrPicNum - (slice_header->m_dec_ref_pic_marking[j]
+                                          .difference_of_pic_nums_minus1 +
+                                      1);
+      if (slice_header->field_pic_flag == 0) {
         for (i = 0; i < size_dpb; i++) {
           if ((dpb[i]->m_picture_frame.reference_marked_type ==
                    H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
@@ -1644,14 +1647,14 @@ int PictureBase::
 
     // 8.2.5.4.2 Marking process of a long-term reference picture as "unused for
     // reference" 将长期图像标记为“不用于参考”
-    else if (slice_header.m_dec_ref_pic_marking[j]
+    else if (slice_header->m_dec_ref_pic_marking[j]
                  .memory_management_control_operation == 2) {
-      if (slice_header.field_pic_flag == 0) {
+      if (slice_header->field_pic_flag == 0) {
         for (i = 0; i < size_dpb; i++) {
           if (dpb[i]->m_picture_frame.reference_marked_type ==
                   H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
               dpb[i]->m_picture_frame.LongTermPicNum ==
-                  slice_header.m_dec_ref_pic_marking[j].long_term_pic_num_2) {
+                  slice_header->m_dec_ref_pic_marking[j].long_term_pic_num_2) {
             dpb[i]->reference_marked_type =
                 H264_PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_coded_type_marked_as_refrence =
@@ -1672,7 +1675,7 @@ int PictureBase::
           if (dpb[i]->m_picture_top_filed.reference_marked_type ==
                   H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
               dpb[i]->m_picture_top_filed.LongTermPicNum ==
-                  slice_header.m_dec_ref_pic_marking[j].long_term_pic_num_2) {
+                  slice_header->m_dec_ref_pic_marking[j].long_term_pic_num_2) {
             dpb[i]->reference_marked_type =
                 dpb[i]->m_picture_bottom_filed.reference_marked_type;
             dpb[i]->m_picture_coded_type_marked_as_refrence =
@@ -1684,7 +1687,7 @@ int PictureBase::
           } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
                          H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
                      dpb[i]->m_picture_bottom_filed.LongTermPicNum ==
-                         slice_header.m_dec_ref_pic_marking[j]
+                         slice_header->m_dec_ref_pic_marking[j]
                              .long_term_pic_num_2) {
             dpb[i]->reference_marked_type =
                 dpb[i]->m_picture_top_filed.reference_marked_type;
@@ -1701,12 +1704,12 @@ int PictureBase::
 
     // 8.2.5.4.3 Assignment process of a LongTermFrameIdx to a short-term
     // reference picture 分配LongTermFrameIdx给一个短期参考图像
-    else if (slice_header.m_dec_ref_pic_marking[j]
+    else if (slice_header->m_dec_ref_pic_marking[j]
                  .memory_management_control_operation == 3) {
       int32_t picNumX =
-          slice_header.CurrPicNum -
-          (slice_header.m_dec_ref_pic_marking[j].difference_of_pic_nums_minus1 +
-           1);
+          slice_header->CurrPicNum - (slice_header->m_dec_ref_pic_marking[j]
+                                          .difference_of_pic_nums_minus1 +
+                                      1);
 
       // When LongTermFrameIdx equal to long_term_frame_idx is already assigned
       // to a long-term reference frame or a long-term complementary reference
@@ -1716,7 +1719,7 @@ int PictureBase::
         if (dpb[i]->m_picture_frame.reference_marked_type ==
                 H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
             dpb[i]->m_picture_frame.LongTermFrameIdx ==
-                slice_header.m_dec_ref_pic_marking[j].long_term_frame_idx) {
+                slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx) {
           dpb[i]->reference_marked_type =
               H264_PICTURE_MARKED_AS_unused_for_reference;
           dpb[i]->m_picture_coded_type_marked_as_refrence =
@@ -1753,7 +1756,7 @@ int PictureBase::
         if (dpb[i]->m_picture_top_filed.reference_marked_type ==
                 H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
             dpb[i]->m_picture_top_filed.LongTermFrameIdx ==
-                slice_header.m_dec_ref_pic_marking[j].long_term_frame_idx) {
+                slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx) {
           if (i != picNumXIndex) {
             dpb[i]->reference_marked_type =
                 H264_PICTURE_MARKED_AS_unused_for_reference;
@@ -1767,7 +1770,7 @@ int PictureBase::
         } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
                        H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
                    dpb[i]->m_picture_bottom_filed.LongTermFrameIdx ==
-                       slice_header.m_dec_ref_pic_marking[j]
+                       slice_header->m_dec_ref_pic_marking[j]
                            .long_term_frame_idx) {
           if (i != picNumXIndex) {
             dpb[i]->reference_marked_type =
@@ -1783,7 +1786,7 @@ int PictureBase::
       }
 
       //-----------------------------------------
-      if (slice_header.field_pic_flag == 0) {
+      if (slice_header->field_pic_flag == 0) {
         for (i = 0; i < size_dpb; i++) {
           if (dpb[i]->m_picture_frame.reference_marked_type ==
                   H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
@@ -1804,7 +1807,7 @@ int PictureBase::
             }
 
             LongTermFrameIdx =
-                slice_header.m_dec_ref_pic_marking[j].long_term_frame_idx;
+                slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
           }
         }
       } else // if (field_pic_flag == 1) //FIXME: What meaning 'When the field
@@ -1836,11 +1839,11 @@ int PictureBase::
               dpb[i]->m_picture_frame.reference_marked_type =
                   H264_PICTURE_MARKED_AS_used_for_long_term_reference;
               dpb[i]->m_picture_bottom_filed.LongTermFrameIdx =
-                  slice_header.m_dec_ref_pic_marking[j].long_term_frame_idx;
+                  slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
             }
 
             dpb[i]->m_picture_top_filed.LongTermFrameIdx =
-                slice_header.m_dec_ref_pic_marking[j].long_term_frame_idx;
+                slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
           } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
                          H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
                      dpb[i]->m_picture_bottom_filed.PicNum == picNumX) {
@@ -1865,11 +1868,11 @@ int PictureBase::
               dpb[i]->m_picture_frame.reference_marked_type =
                   H264_PICTURE_MARKED_AS_used_for_long_term_reference;
               dpb[i]->m_picture_top_filed.LongTermFrameIdx =
-                  slice_header.m_dec_ref_pic_marking[j].long_term_frame_idx;
+                  slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
             }
 
             dpb[i]->m_picture_bottom_filed.LongTermFrameIdx =
-                slice_header.m_dec_ref_pic_marking[j].long_term_frame_idx;
+                slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
           }
         }
       }
@@ -1877,14 +1880,14 @@ int PictureBase::
 
     // 8.2.5.4.4 Decoding process for MaxLongTermFrameIdx
     // 基于MaxLongTermFrameIdx的标记过程
-    else if (slice_header.m_dec_ref_pic_marking[j]
+    else if (slice_header->m_dec_ref_pic_marking[j]
                  .memory_management_control_operation == 4) {
       // All pictures for which LongTermFrameIdx is greater than
       // max_long_term_frame_idx_plus1 − 1 and that are marked as "used for
       // long-term reference" are marked as "unused for reference".
       for (i = 0; i < size_dpb; i++) {
         if (dpb[i]->m_picture_frame.LongTermFrameIdx >
-                (int)slice_header.m_dec_ref_pic_marking[j]
+                (int)slice_header->m_dec_ref_pic_marking[j]
                         .max_long_term_frame_idx_plus1 -
                     1 &&
             dpb[i]->m_picture_frame.reference_marked_type ==
@@ -1894,7 +1897,7 @@ int PictureBase::
         }
 
         if (dpb[i]->m_picture_top_filed.LongTermFrameIdx >
-                (int)slice_header.m_dec_ref_pic_marking[j]
+                (int)slice_header->m_dec_ref_pic_marking[j]
                         .max_long_term_frame_idx_plus1 -
                     1 &&
             dpb[i]->m_picture_top_filed.reference_marked_type ==
@@ -1904,7 +1907,7 @@ int PictureBase::
         }
 
         if (dpb[i]->m_picture_bottom_filed.LongTermFrameIdx >
-                (int)slice_header.m_dec_ref_pic_marking[j]
+                (int)slice_header->m_dec_ref_pic_marking[j]
                         .max_long_term_frame_idx_plus1 -
                     1 &&
             dpb[i]->m_picture_bottom_filed.reference_marked_type ==
@@ -1923,12 +1926,12 @@ int PictureBase::
         }
       }
 
-      if (slice_header.m_dec_ref_pic_marking[j].max_long_term_frame_idx_plus1 ==
-          0) {
+      if (slice_header->m_dec_ref_pic_marking[j]
+              .max_long_term_frame_idx_plus1 == 0) {
         MaxLongTermFrameIdx = -1; //"no long-term frame indices"
       } else                      // if (max_long_term_frame_idx_plus1 > 0)
       {
-        MaxLongTermFrameIdx = slice_header.m_dec_ref_pic_marking[j]
+        MaxLongTermFrameIdx = slice_header->m_dec_ref_pic_marking[j]
                                   .max_long_term_frame_idx_plus1 -
                               1;
       }
@@ -1937,7 +1940,7 @@ int PictureBase::
     // 8.2.5.4.5 Marking process of all reference pictures as "unused for
     // reference" and setting MaxLongTermFrameIdx to "no long-term frame
     // indices" 所有参考图像标记为“不用于参考”
-    else if (slice_header.m_dec_ref_pic_marking[j]
+    else if (slice_header->m_dec_ref_pic_marking[j]
                  .memory_management_control_operation == 5) {
       for (i = 0; i < size_dpb; i++) {
         dpb[i]->m_picture_coded_type_marked_as_refrence =
@@ -1958,7 +1961,7 @@ int PictureBase::
 
     // 8.2.5.4.6 Process for assigning a long-term frame index to the current
     // picture 分配一个长期帧索引给当前图像
-    else if (slice_header.m_dec_ref_pic_marking[j]
+    else if (slice_header->m_dec_ref_pic_marking[j]
                  .memory_management_control_operation == 6) {
       //int32_t top_field_index = -1;
 
@@ -1968,7 +1971,7 @@ int PictureBase::
         // complementary reference field pair, that frame or complementary field
         // pair and both of its fields are marked as "unused for reference".
         if (dpb[i]->m_picture_frame.LongTermFrameIdx ==
-                (int)slice_header.m_dec_ref_pic_marking[j]
+                (int)slice_header->m_dec_ref_pic_marking[j]
                         .max_long_term_frame_idx_plus1 -
                     1 &&
             dpb[i]->m_picture_frame.reference_marked_type ==
@@ -2020,24 +2023,24 @@ int PictureBase::
       reference_marked_type =
           H264_PICTURE_MARKED_AS_used_for_long_term_reference;
       LongTermFrameIdx =
-          slice_header.m_dec_ref_pic_marking[j].long_term_frame_idx;
+          slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
       memory_management_control_operation_6_flag = 6;
 
       // When field_pic_flag is equal to 0, both its fields are also marked as
       // "used for long-term reference" and assigned LongTermFrameIdx equal to
       // long_term_frame_idx.
-      if (slice_header.field_pic_flag == 0) {
+      if (slice_header->field_pic_flag == 0) {
         // FIXME: what meaning 'both its fields'?
         if (m_parent->m_picture_coded_type ==
             H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
           m_parent->m_picture_top_filed.reference_marked_type =
               H264_PICTURE_MARKED_AS_used_for_long_term_reference;
           m_parent->m_picture_top_filed.LongTermFrameIdx =
-              slice_header.m_dec_ref_pic_marking[j].long_term_frame_idx;
+              slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
           m_parent->m_picture_bottom_filed.reference_marked_type =
               H264_PICTURE_MARKED_AS_used_for_long_term_reference;
           m_parent->m_picture_bottom_filed.LongTermFrameIdx =
-              slice_header.m_dec_ref_pic_marking[j].long_term_frame_idx;
+              slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
         }
       }
 
@@ -2047,14 +2050,14 @@ int PictureBase::
       // currently marked as "used for long-term reference", the complementary
       // reference field pair is also marked as "used for long-term reference"
       // and assigned LongTermFrameIdx equal to long_term_frame_idx.
-      if (slice_header.field_pic_flag == 1 &&
+      if (slice_header->field_pic_flag == 1 &&
           m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD &&
           m_parent->m_picture_top_filed.reference_marked_type ==
               H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
         m_parent->reference_marked_type =
             H264_PICTURE_MARKED_AS_used_for_long_term_reference;
         LongTermFrameIdx =
-            slice_header.m_dec_ref_pic_marking[j].long_term_frame_idx;
+            slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
       }
 
       // After marking the current decoded reference picture, the total number

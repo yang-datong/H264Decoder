@@ -1,7 +1,12 @@
 #include "Slice.hpp"
 #include "Frame.hpp"
+#include "SliceData.hpp"
+#include "SliceHeader.hpp"
 
-Slice::Slice() : slice_header(), slice_data() {};
+Slice::Slice(){
+  slice_header = new SliceHeader();
+  slice_data = new SliceData();
+};
 
 void Slice::addMacroblock(std::shared_ptr<MacroBlock> macroblock) {
   _macroblocks.push_back(macroblock);
@@ -39,13 +44,13 @@ int Slice::decode(BitStream &bitStream, Frame *(&dpb)[16], SPS &sps, PPS &pps,
 
   /* 当前解码的Slice为场编码（可能下一帧又是帧编码了）即隔行扫描方式 */
   /* TODO YangJing slice_header.field_pic_flag <24-09-11 17:34:02> */
-  if (slice_header.field_pic_flag) // 场编码->顶场，底场
+  if (slice_header->field_pic_flag) // 场编码->顶场，底场
     std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
               << std::endl;
   //std::cout << "\t场编码(暂不处理)" << std::endl;
   //else  // 帧
   //std::cout << "\t帧编码" << std::endl;
 
-  slice_data.parseSliceData(bitStream, frame->m_picture_frame, sps, pps);
+  slice_data->parseSliceData(bitStream, frame->m_picture_frame, sps, pps);
   return 0;
 }

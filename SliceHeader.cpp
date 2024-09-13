@@ -43,10 +43,10 @@ int SliceHeader::set_scaling_lists_values() {
 
   //--------------------------------
   int32_t i = 0;
-  int32_t scaling_list_size = (m_sps.chroma_format_idc != 3) ? 8 : 12;
+  int32_t scaling_list_size = (m_sps->chroma_format_idc != 3) ? 8 : 12;
 
-  if (m_sps.seq_scaling_matrix_present_flag == 0 &&
-      m_pps.pic_scaling_matrix_present_flag == 0) {
+  if (m_sps->seq_scaling_matrix_present_flag == 0 &&
+      m_pps->pic_scaling_matrix_present_flag == 0) {
     // 如果编码器未给出缩放矩阵值，则缩放矩阵值全部默认为16
     for (i = 0; i < scaling_list_size; i++) {
       if (i < 6) {
@@ -57,10 +57,10 @@ int SliceHeader::set_scaling_lists_values() {
       }
     }
   } else {
-    if (m_sps.seq_scaling_matrix_present_flag == 1) {
+    if (m_sps->seq_scaling_matrix_present_flag == 1) {
       for (i = 0; i < scaling_list_size; i++) {
         if (i < 6) {
-          if (m_sps.seq_scaling_list_present_flag[i] ==
+          if (m_sps->seq_scaling_list_present_flag[i] ==
               0) // 参照 Table 7-2 Scaling list fall-back rule A
           {
             if (i == 0) {
@@ -74,7 +74,7 @@ int SliceHeader::set_scaling_lists_values() {
                      sizeof(int32_t) * 16);
             }
           } else {
-            if (m_pps.UseDefaultScalingMatrix4x4Flag[i] == 1) {
+            if (m_pps->UseDefaultScalingMatrix4x4Flag[i] == 1) {
               if (i < 3) {
                 memcpy(ScalingList4x4[i], Default_4x4_Intra,
                        sizeof(int32_t) * 16);
@@ -91,7 +91,7 @@ int SliceHeader::set_scaling_lists_values() {
           }
         } else // if (i >= 6)
         {
-          if (m_sps.seq_scaling_list_present_flag[i] ==
+          if (m_sps->seq_scaling_list_present_flag[i] ==
               0) // 参照 Table 7-2 Scaling list fall-back rule A
           {
             if (i == 6) {
@@ -105,7 +105,7 @@ int SliceHeader::set_scaling_lists_values() {
                      sizeof(int32_t) * 64);
             }
           } else {
-            if (m_pps.UseDefaultScalingMatrix8x8Flag[i - 6] == 1) {
+            if (m_pps->UseDefaultScalingMatrix8x8Flag[i - 6] == 1) {
               if (i == 6 || i == 8 || i == 10) {
                 memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
                        sizeof(int32_t) * 64);
@@ -124,19 +124,19 @@ int SliceHeader::set_scaling_lists_values() {
     }
 
     // 注意：此处不是"else if"，意即面的值，可能会覆盖之前到的值
-    if (m_pps.pic_scaling_matrix_present_flag == 1) {
+    if (m_pps->pic_scaling_matrix_present_flag == 1) {
       for (i = 0; i < scaling_list_size; i++) {
         if (i < 6) {
-          if (m_pps.pic_scaling_list_present_flag[i] ==
+          if (m_pps->pic_scaling_list_present_flag[i] ==
               0) // 参照 Table 7-2 Scaling list fall-back rule B
           {
             if (i == 0) {
-              if (m_sps.seq_scaling_matrix_present_flag == 0) {
+              if (m_sps->seq_scaling_matrix_present_flag == 0) {
                 memcpy(ScalingList4x4[i], Default_4x4_Intra,
                        sizeof(int32_t) * 16);
               }
             } else if (i == 3) {
-              if (m_sps.seq_scaling_matrix_present_flag == 0) {
+              if (m_sps->seq_scaling_matrix_present_flag == 0) {
                 memcpy(ScalingList4x4[i], Default_4x4_Inter,
                        sizeof(int32_t) * 16);
               }
@@ -145,7 +145,7 @@ int SliceHeader::set_scaling_lists_values() {
                      sizeof(int32_t) * 16);
             }
           } else {
-            if (m_pps.UseDefaultScalingMatrix4x4Flag[i] == 1) {
+            if (m_pps->UseDefaultScalingMatrix4x4Flag[i] == 1) {
               if (i < 3) {
                 memcpy(ScalingList4x4[i], Default_4x4_Intra,
                        sizeof(int32_t) * 16);
@@ -162,16 +162,16 @@ int SliceHeader::set_scaling_lists_values() {
           }
         } else // if (i >= 6)
         {
-          if (m_pps.pic_scaling_list_present_flag[i] ==
+          if (m_pps->pic_scaling_list_present_flag[i] ==
               0) // 参照 Table 7-2 Scaling list fall-back rule B
           {
             if (i == 6) {
-              if (m_sps.seq_scaling_matrix_present_flag == 0) {
+              if (m_sps->seq_scaling_matrix_present_flag == 0) {
                 memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
                        sizeof(int32_t) * 64);
               }
             } else if (i == 7) {
-              if (m_sps.seq_scaling_matrix_present_flag == 0) {
+              if (m_sps->seq_scaling_matrix_present_flag == 0) {
                 memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
                        sizeof(int32_t) * 64);
               }
@@ -180,7 +180,7 @@ int SliceHeader::set_scaling_lists_values() {
                      sizeof(int32_t) * 64);
             }
           } else {
-            if (m_pps.UseDefaultScalingMatrix8x8Flag[i - 6] == 1) {
+            if (m_pps->UseDefaultScalingMatrix8x8Flag[i - 6] == 1) {
               if (i == 6 || i == 8 || i == 10) {
                 memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
                        sizeof(int32_t) * 64);
@@ -229,19 +229,19 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   /* 更新GOP中当前Slice使用的SPS、PPS ID */
   gop.curr_pps_id = pic_parameter_set_id = bitStream.readUE();
   gop.curr_sps_id = gop.m_ppss[gop.curr_pps_id].seq_parameter_set_id;
-  m_sps = gop.m_spss[gop.curr_sps_id];
-  m_pps = gop.m_ppss[gop.curr_pps_id];
+  m_sps = &gop.m_spss[gop.curr_sps_id];
+  m_pps = &gop.m_ppss[gop.curr_pps_id];
   std::cout << "\tPPS ID:" << pic_parameter_set_id << std::endl;
 
-  if (m_sps.separate_colour_plane_flag) {
+  if (m_sps->separate_colour_plane_flag) {
     colour_plane_id = bitStream.readUn(2);
     std::cout << "\t颜色平面ID:" << colour_plane_id << std::endl;
   }
 
   /* 如果当前图片是IDR图片，frame_num应等于0。 */
-  frame_num = bitStream.readUn(log2(m_sps.MaxFrameNum));
+  frame_num = bitStream.readUn(log2(m_sps->MaxFrameNum));
   std::cout << "\t当前帧的编号:" << frame_num << std::endl;
-  if (!m_sps.frame_mbs_only_flag) {
+  if (!m_sps->frame_mbs_only_flag) {
     field_pic_flag = bitStream.readU1();
     std::cout << "\t场图像标志:" << field_pic_flag << std::endl;
     if (field_pic_flag) {
@@ -256,32 +256,33 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
     std::cout << "\tIDR图像ID:" << idr_pic_id << std::endl;
   }
 
-  if (m_sps.pic_order_cnt_type == 0) {
+  if (m_sps->pic_order_cnt_type == 0) {
     pic_order_cnt_lsb =
-        bitStream.readUn(m_sps.log2_max_pic_order_cnt_lsb_minus4 + 4);
+        bitStream.readUn(m_sps->log2_max_pic_order_cnt_lsb_minus4 + 4);
     std::cout << "\t图像顺序计数LSB:" << pic_order_cnt_lsb << std::endl;
-    if (m_pps.bottom_field_pic_order_in_frame_present_flag && !field_pic_flag) {
+    if (m_pps->bottom_field_pic_order_in_frame_present_flag &&
+        !field_pic_flag) {
       delta_pic_order_cnt_bottom = bitStream.readSE();
       std::cout << "\t底场的图像顺序计数增量:" << delta_pic_order_cnt_bottom
                 << std::endl;
     }
   }
 
-  if (m_sps.pic_order_cnt_type == 1 &&
-      !m_sps.delta_pic_order_always_zero_flag) {
-    std::cout << "\t存在B帧和P帧混合的情况:" << m_sps.pic_order_cnt_type
+  if (m_sps->pic_order_cnt_type == 1 &&
+      !m_sps->delta_pic_order_always_zero_flag) {
+    std::cout << "\t存在B帧和P帧混合的情况:" << m_sps->pic_order_cnt_type
               << std::endl;
     delta_pic_order_cnt[0] = bitStream.readSE();
     std::cout << "\t图像顺序计数增量1:" << delta_pic_order_cnt[0] << std::endl;
-    if (m_pps.bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
+    if (m_pps->bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
       delta_pic_order_cnt[1] = bitStream.readSE();
     std::cout << "\t图像顺序计数增量2:" << delta_pic_order_cnt[1] << std::endl;
   }
 
-  if (m_sps.pic_order_cnt_type == 2)
+  if (m_sps->pic_order_cnt_type == 2)
     std::cout << "\t是否存在B帧:0" << std::endl;
 
-  if (m_pps.redundant_pic_cnt_present_flag) {
+  if (m_pps->redundant_pic_cnt_present_flag) {
     redundant_pic_cnt = bitStream.readUE();
     std::cout << "\t冗余图像计数:" << redundant_pic_cnt << std::endl;
   }
@@ -295,7 +296,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
     num_ref_idx_active_override_flag = bitStream.readU1();
     std::cout << "\t覆盖活动参考帧数标志:" << num_ref_idx_active_override_flag
               << std::endl;
-    num_ref_idx_l0_active_minus1 = m_pps.num_ref_idx_l0_default_active_minus1;
+    num_ref_idx_l0_active_minus1 = m_pps->num_ref_idx_l0_default_active_minus1;
     if (num_ref_idx_active_override_flag) {
       num_ref_idx_l0_active_minus1 = bitStream.readUE();
       if (slice_type % 5 == SLICE_B) {
@@ -311,12 +312,12 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
     ref_pic_list_mvc_modification(bitStream); /* specified in Annex H */
   else
     ref_pic_list_modification(bitStream);
-  if ((m_pps.weighted_pred_flag &&
+  if ((m_pps->weighted_pred_flag &&
        (slice_type % 5 == SLICE_P || slice_type % 5 == SLICE_SP)) ||
-      (m_pps.weighted_bipred_idc == 1 && slice_type % 5 == SLICE_B))
+      (m_pps->weighted_bipred_idc == 1 && slice_type % 5 == SLICE_B))
     pred_weight_table(bitStream);
   if (nal_ref_idc != 0) dec_ref_pic_marking(bitStream);
-  if (m_pps.entropy_coding_mode_flag && slice_type % 5 != SLICE_I &&
+  if (m_pps->entropy_coding_mode_flag && slice_type % 5 != SLICE_I &&
       slice_type % 5 != SLICE_SI) {
     cabac_init_idc = bitStream.readUE();
     std::cout << "\tCABAC初始化索引:" << cabac_init_idc << std::endl;
@@ -332,7 +333,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
     std::cout << "\tSlice的量化参数调整值:" << slice_qp_delta
               << ",Slice的量化步长调整值:" << slice_qs_delta << std::endl;
   }
-  if (m_pps.deblocking_filter_control_present_flag) {
+  if (m_pps->deblocking_filter_control_present_flag) {
     disable_deblocking_filter_idc = bitStream.readUE();
     std::cout << "\t禁用去块效应滤波器标志:" << disable_deblocking_filter_idc
               << std::endl;
@@ -345,15 +346,15 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
                 << std::endl;
     }
   }
-  if (m_pps.num_slice_groups_minus1 > 0 && m_pps.slice_group_map_type >= 3 &&
-      m_pps.slice_group_map_type <= 5)
+  if (m_pps->num_slice_groups_minus1 > 0 && m_pps->slice_group_map_type >= 3 &&
+      m_pps->slice_group_map_type <= 5)
     slice_group_change_cycle = bitStream.readUE();
 
   //----------- 下面都是一些额外信息，比如还原偏移，或者事先计算一些值，后面方便用 ------------
-  int SliceGroupChangeRate = m_pps.slice_group_change_rate_minus1 + 1;
-  if (m_pps.num_slice_groups_minus1 > 0 && m_pps.slice_group_map_type >= 3 &&
-      m_pps.slice_group_map_type <= 5) {
-    int32_t temp = m_sps.PicSizeInMapUnits / SliceGroupChangeRate + 1;
+  int SliceGroupChangeRate = m_pps->slice_group_change_rate_minus1 + 1;
+  if (m_pps->num_slice_groups_minus1 > 0 && m_pps->slice_group_map_type >= 3 &&
+      m_pps->slice_group_map_type <= 5) {
+    int32_t temp = m_sps->PicSizeInMapUnits / SliceGroupChangeRate + 1;
     int32_t v = h264_log2(temp);
     // Ceil( Log2( PicSizeInMapUnits ÷ SliceGroupChangeRate + 1 ) );
     slice_group_change_cycle = bitStream.readUn(v); // 2 u(v)
@@ -361,31 +362,31 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   if (slice_group_change_cycle != 0)
     std::cout << "\tSlice组改变周期:" << slice_group_change_cycle << std::endl;
 
-  SliceQPY = 26 + m_pps.pic_init_qp_minus26 + slice_qp_delta;
+  SliceQPY = 26 + m_pps->pic_init_qp_minus26 + slice_qp_delta;
   std::cout << "\tSlice的量化参数:" << SliceQPY << std::endl;
   /* 对于首个Slice而言前一个Slice的量化参数应该初始化为当前量化参数，而不是0 */
   QPY_prev = SliceQPY;
 
-  MbaffFrameFlag = (m_sps.mb_adaptive_frame_field_flag && !field_pic_flag);
+  MbaffFrameFlag = (m_sps->mb_adaptive_frame_field_flag && !field_pic_flag);
   std::cout << "\t宏块自适应帧场标志:" << MbaffFrameFlag << std::endl;
-  PicHeightInMbs = m_sps.FrameHeightInMbs / (1 + field_pic_flag);
+  PicHeightInMbs = m_sps->FrameHeightInMbs / (1 + field_pic_flag);
   PicHeightInSamplesL = PicHeightInMbs * 16;
-  PicHeightInSamplesC = PicHeightInMbs * m_sps.MbHeightC;
+  PicHeightInSamplesC = PicHeightInMbs * m_sps->MbHeightC;
   std::cout << "\t图像高度（宏块数）:" << PicHeightInMbs
             << ",图像高度（亮度样本）:" << PicHeightInSamplesL
             << ",图像高度（色度样本）:" << PicHeightInSamplesC << std::endl;
-  PicSizeInMbs = m_sps.PicWidthInMbs * PicHeightInMbs;
+  PicSizeInMbs = m_sps->PicWidthInMbs * PicHeightInMbs;
   std::cout << "\t图像大小（宏块数）:" << PicSizeInMbs << std::endl;
   MaxPicNum =
-      (field_pic_flag == 0) ? m_sps.MaxFrameNum : (2 * m_sps.MaxFrameNum);
+      (field_pic_flag == 0) ? m_sps->MaxFrameNum : (2 * m_sps->MaxFrameNum);
   CurrPicNum = (field_pic_flag == 0) ? frame_num : (2 * frame_num + 1);
   std::cout << "\t最大图像编号:" << MaxPicNum << ",当前图像编号:" << CurrPicNum
             << std::endl;
   MapUnitsInSliceGroup0 = MIN(slice_group_change_cycle * SliceGroupChangeRate,
-                              m_sps.PicSizeInMapUnits);
+                              m_sps->PicSizeInMapUnits);
   std::cout << "\tSlice组0中的映射单元数:" << MapUnitsInSliceGroup0
             << std::endl;
-  QSY = 26 + m_pps.pic_init_qs_minus26 + slice_qs_delta;
+  QSY = 26 + m_pps->pic_init_qs_minus26 + slice_qs_delta;
   std::cout << "\tSlice的量化参数（色度）:" << QSY << std::endl;
   FilterOffsetA = slice_alpha_c0_offset_div2 << 1;
   FilterOffsetB = slice_beta_offset_div2 << 1;
@@ -393,9 +394,9 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
             << ",去块效应滤波器的B偏移值:" << FilterOffsetB << std::endl;
 
   if (!mapUnitToSliceGroupMap) {
-    mapUnitToSliceGroupMap = new int32_t[m_sps.PicSizeInMapUnits]{0};
-    std::cout << "\t映射单元到Slice组的映射表(size):" << m_sps.PicSizeInMapUnits
-              << std::endl;
+    mapUnitToSliceGroupMap = new int32_t[m_sps->PicSizeInMapUnits]{0};
+    std::cout << "\t映射单元到Slice组的映射表(size):"
+              << m_sps->PicSizeInMapUnits << std::endl;
   }
 
   if (!MbToSliceGroupMap) {
@@ -450,7 +451,7 @@ void SliceHeader::ref_pic_list_modification(BitStream &bitStream) {
 
 void SliceHeader::pred_weight_table(BitStream &bitStream) {
   luma_log2_weight_denom = bitStream.readUE();
-  if (m_sps.ChromaArrayType != 0) {
+  if (m_sps->ChromaArrayType != 0) {
     chroma_log2_weight_denom = bitStream.readUE();
     std::cout << "\t亮度权重的对数基数:" << luma_log2_weight_denom
               << ",色度权重的对数基数:" << chroma_log2_weight_denom
@@ -465,7 +466,7 @@ void SliceHeader::pred_weight_table(BitStream &bitStream) {
       luma_weight_l0[i] = bitStream.readSE();
       luma_offset_l0[i] = bitStream.readSE();
     }
-    if (m_sps.ChromaArrayType != 0) {
+    if (m_sps->ChromaArrayType != 0) {
       chroma_weight_l0[i][0] = 1 << chroma_log2_weight_denom;
       chroma_weight_l0[i][1] = 1 << chroma_log2_weight_denom;
       chroma_offset_l0[i][0] = 0;
@@ -502,7 +503,7 @@ void SliceHeader::pred_weight_table(BitStream &bitStream) {
         luma_offset_l1[i] = bitStream.readSE();
       }
 
-      if (m_sps.ChromaArrayType != 0) {
+      if (m_sps->ChromaArrayType != 0) {
         chroma_weight_l1[i][0] = 1 << chroma_log2_weight_denom;
         chroma_weight_l1[i][1] = 1 << chroma_log2_weight_denom;
         chroma_offset_l1[i][0] = 0;

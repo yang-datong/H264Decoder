@@ -19,8 +19,8 @@ typedef struct _DEC_REF_PIC_MARKING_ {
 class SliceHeader {
  public:
   /* 需要对外提供，因为SliceHeader是最先知道当前所使用的SPS ID，PPS ID的 */
-  SPS m_sps;
-  PPS m_pps;
+  SPS *m_sps;
+  PPS *m_pps;
 
  private:
   /* 私有化SliceBody，不提供给外界，只能通过Slice来访问本类 */

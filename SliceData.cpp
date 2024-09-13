@@ -11,7 +11,7 @@
 int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
                               SPS &sps, PPS &pps) {
   /* 初始化类中的指针 */
-  header = &picture.m_slice.slice_header;
+  header = picture.m_slice.slice_header;
   bs = &bitStream;
   /* CABAC编码 */
   cabac = new CH264Cabac(*bs, picture);
@@ -581,7 +581,7 @@ int SliceData::decoding_process(PictureBase &picture) {
   /* ------------------ 设置别名 ------------------ */
   const int32_t &picWidthInSamplesL = picture.PicWidthInSamplesL;
   const int32_t &picWidthInSamplesC = picture.PicWidthInSamplesC;
-  const int32_t &BitDepth = picture.m_slice.slice_header.m_sps.BitDepthY;
+  const int32_t &BitDepth = picture.m_slice.slice_header->m_sps->BitDepthY;
 
   uint8_t *&pic_buff_luma = picture.m_pic_buff_luma;
   uint8_t *&pic_buff_cb = picture.m_pic_buff_cb;
@@ -660,10 +660,10 @@ void SliceData::printFrameReorderPriorityInfo(PictureBase &picture) {
       auto &frame = refPic->m_picture_frame;
       auto &sliceHeader = frame.m_slice.slice_header;
 
-      if (sliceHeader.slice_type != SLICE_I && frame.PicOrderCnt == 0 &&
+      if (sliceHeader->slice_type != SLICE_I && frame.PicOrderCnt == 0 &&
           frame.PicNum == 0 && frame.m_PicNumCnt == 0)
         continue;
-      sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader.slice_type);
+      sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader->slice_type);
       std::cout << "\t\t DPB[" << i << "]: " << sliceType
                 << "; PicOrderCnt(显示顺序)=" << frame.PicOrderCnt
                 << "; PicNum(帧编号)=" << frame.PicNum
@@ -679,7 +679,7 @@ void SliceData::printFrameReorderPriorityInfo(PictureBase &picture) {
       auto &frame = refPic->m_picture_frame;
       auto &sliceHeader = frame.m_slice.slice_header;
 
-      sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader.slice_type);
+      sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader->slice_type);
       std::cout << "\t\t(前参考)m_RefPicList0[" << i << "]: " << sliceType
                 << "; PicOrderCnt(参考帧显示顺序)=" << frame.PicOrderCnt
                 << "; PicNum(参考帧编号)=" << frame.PicNum
@@ -694,7 +694,7 @@ void SliceData::printFrameReorderPriorityInfo(PictureBase &picture) {
       auto &frame = refPic->m_picture_frame;
       auto &sliceHeader = frame.m_slice.slice_header;
 
-      sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader.slice_type);
+      sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader->slice_type);
       std::cout << "\t\t(后参考)m_RefPicList1[" << i << "]: " << sliceType
                 << "; PicOrderCnt(参考帧显示顺序)=" << frame.PicOrderCnt
                 << "; PicNum(参考帧编号)=" << frame.PicNum
