@@ -152,7 +152,7 @@ class SPS {
   uint32_t RawMbBits = 0;
 
   /* SPS::hrd_parameters() */
- private:
+ public:
   uint8_t bit_rate_scale = 0;
   uint8_t cpb_size_scale = 0;
   uint32_t *bit_rate_value_minus1 = nullptr;
