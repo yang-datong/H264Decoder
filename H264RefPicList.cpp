@@ -17,13 +17,13 @@ int PictureBase::decoding_picture_order_count() {
 
   /* 比特流不应包含导致解码过程中使用的 TopFieldOrderCnt、BottomFieldOrderCnt、PicOrderCntMsb 或 FrameNumOffset 值（如第 8.2.1.1 至 8.2.1.3 条规定）超出从 -231 到 231 - 1（含）的值范围的数据。 */
   int ret = 0;
-  if (m_slice.m_sps.pic_order_cnt_type == 0)
+  if (m_slice.slice_header.m_sps.pic_order_cnt_type == 0)
     //8.2.1.1
     ret = decoding_picture_order_count_type_0(m_parent->m_picture_previous_ref);
-  else if (m_slice.m_sps.pic_order_cnt_type == 1)
+  else if (m_slice.slice_header.m_sps.pic_order_cnt_type == 1)
     //8.2.1.2
     ret = decoding_picture_order_count_type_1(m_parent->m_picture_previous);
-  else if (m_slice.m_sps.pic_order_cnt_type == 2)
+  else if (m_slice.slice_header.m_sps.pic_order_cnt_type == 2)
     //8.2.1.3
     ret = decoding_picture_order_count_type_2(m_parent->m_picture_previous);
 
@@ -95,13 +95,15 @@ int PictureBase::decoding_picture_order_count_type_0(
   /* 当前图片的 PicOrderCntMsb 是由以下伪代码指定的： */
   if ((header.pic_order_cnt_lsb < prevPicOrderCntLsb) &&
       ((prevPicOrderCntLsb - header.pic_order_cnt_lsb) >=
-       (m_slice.m_sps.MaxPicOrderCntLsb / 2)))
-    PicOrderCntMsb = prevPicOrderCntMsb + m_slice.m_sps.MaxPicOrderCntLsb;
+       (m_slice.slice_header.m_sps.MaxPicOrderCntLsb / 2)))
+    PicOrderCntMsb =
+        prevPicOrderCntMsb + m_slice.slice_header.m_sps.MaxPicOrderCntLsb;
 
   else if ((header.pic_order_cnt_lsb > prevPicOrderCntLsb) &&
            ((header.pic_order_cnt_lsb - prevPicOrderCntLsb) >
-            (m_slice.m_sps.MaxPicOrderCntLsb / 2)))
-    PicOrderCntMsb = prevPicOrderCntMsb - m_slice.m_sps.MaxPicOrderCntLsb;
+            (m_slice.slice_header.m_sps.MaxPicOrderCntLsb / 2)))
+    PicOrderCntMsb =
+        prevPicOrderCntMsb - m_slice.slice_header.m_sps.MaxPicOrderCntLsb;
 
   else
     PicOrderCntMsb = prevPicOrderCntMsb;
@@ -149,12 +151,13 @@ int PictureBase::decoding_picture_order_count_type_1(
     FrameNumOffset = 0;
   else if (picture_previous->m_slice.slice_header.frame_num > header.frame_num)
     // 前一图像的帧号比当前图像大
-    FrameNumOffset = prevFrameNumOffset + m_slice.m_sps.MaxFrameNum;
+    FrameNumOffset =
+        prevFrameNumOffset + m_slice.slice_header.m_sps.MaxFrameNum;
   else
     FrameNumOffset = prevFrameNumOffset;
 
   /* 变量 absFrameNum 是由以下伪代码指定导出的： */
-  if (m_slice.m_sps.num_ref_frames_in_pic_order_cnt_cycle != 0)
+  if (m_slice.slice_header.m_sps.num_ref_frames_in_pic_order_cnt_cycle != 0)
     absFrameNum = FrameNumOffset + header.frame_num;
   else
     absFrameNum = 0;
@@ -164,37 +167,42 @@ int PictureBase::decoding_picture_order_count_type_1(
   /* 当absFrameNum > 0时，picOrderCntCycleCnt和frameNumInPicOrderCntCycle导出为 */
   if (absFrameNum > 0) {
     picOrderCntCycleCnt =
-        (absFrameNum - 1) / m_slice.m_sps.num_ref_frames_in_pic_order_cnt_cycle;
+        (absFrameNum - 1) /
+        m_slice.slice_header.m_sps.num_ref_frames_in_pic_order_cnt_cycle;
     frameNumInPicOrderCntCycle =
-        (absFrameNum - 1) % m_slice.m_sps.num_ref_frames_in_pic_order_cnt_cycle;
+        (absFrameNum - 1) %
+        m_slice.slice_header.m_sps.num_ref_frames_in_pic_order_cnt_cycle;
   }
 
   /* 变量预期PicOrderCnt是由以下伪代码指定导出的： */
   if (absFrameNum > 0) {
     expectedPicOrderCnt =
-        picOrderCntCycleCnt * m_slice.m_sps.ExpectedDeltaPerPicOrderCntCycle;
+        picOrderCntCycleCnt *
+        m_slice.slice_header.m_sps.ExpectedDeltaPerPicOrderCntCycle;
     for (int i = 0; i <= frameNumInPicOrderCntCycle; i++)
-      expectedPicOrderCnt += m_slice.m_sps.offset_for_ref_frame[i];
+      expectedPicOrderCnt += m_slice.slice_header.m_sps.offset_for_ref_frame[i];
   } else
     expectedPicOrderCnt = 0;
 
   if (header.nal_ref_idc == 0)
-    expectedPicOrderCnt += m_slice.m_sps.offset_for_non_ref_pic;
+    expectedPicOrderCnt += m_slice.slice_header.m_sps.offset_for_non_ref_pic;
 
   /* 变量 TopFieldOrderCnt 或 BottomFieldOrderCnt 是按以下伪代码指定导出的： */
   if (!header.field_pic_flag) {
     // 当前图像为帧
     TopFieldOrderCnt = expectedPicOrderCnt + header.delta_pic_order_cnt[0];
-    BottomFieldOrderCnt = TopFieldOrderCnt +
-                          m_slice.m_sps.offset_for_top_to_bottom_field +
-                          header.delta_pic_order_cnt[1];
+    BottomFieldOrderCnt =
+        TopFieldOrderCnt +
+        m_slice.slice_header.m_sps.offset_for_top_to_bottom_field +
+        header.delta_pic_order_cnt[1];
   } else if (!header.bottom_field_flag)
     // 当前图像为顶场
     TopFieldOrderCnt = expectedPicOrderCnt + header.delta_pic_order_cnt[0];
   else // 当前图像为底场
-    BottomFieldOrderCnt = expectedPicOrderCnt +
-                          m_slice.m_sps.offset_for_top_to_bottom_field +
-                          header.delta_pic_order_cnt[0];
+    BottomFieldOrderCnt =
+        expectedPicOrderCnt +
+        m_slice.slice_header.m_sps.offset_for_top_to_bottom_field +
+        header.delta_pic_order_cnt[0];
 
   return 0;
 }
@@ -224,7 +232,8 @@ int PictureBase::decoding_picture_order_count_type_2(
     FrameNumOffset = 0;
   else if (picture_previous->m_slice.slice_header.frame_num >
            m_slice.slice_header.frame_num)
-    FrameNumOffset = prevFrameNumOffset + m_slice.m_sps.MaxFrameNum;
+    FrameNumOffset =
+        prevFrameNumOffset + m_slice.slice_header.m_sps.MaxFrameNum;
   else
     FrameNumOffset = prevFrameNumOffset;
 
@@ -316,7 +325,7 @@ int PictureBase::decoding_picture_numbers(Frame *(&dpb)[16]) {
     auto &pict_f = dpb[i]->m_picture_frame;
     auto &pict_f_frameNum = pict_f.FrameNum;
     auto &pict_f_frameNumWrap = pict_f.FrameNumWrap;
-    int MaxFrameNum = pict_f.m_slice.m_sps.MaxFrameNum;
+    int MaxFrameNum = pict_f.m_slice.slice_header.m_sps.MaxFrameNum;
 
     if (pict_f.reference_marked_type ==
         H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
@@ -1458,7 +1467,7 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
     }
 
     if (numShortTerm + numLongTerm ==
-            MAX(m_slice.m_sps.max_num_ref_frames, 1) &&
+            MAX(m_slice.slice_header.m_sps.max_num_ref_frames, 1) &&
         numShortTerm > 0) {
       PictureBase *refPic = NULL;
       int32_t FrameNumWrap_smallest_index = -1;

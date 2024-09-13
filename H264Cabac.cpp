@@ -3327,7 +3327,7 @@ int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
 int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
   int ret = 0;
 
-  int32_t ChromaArrayType = picture.m_slice.m_sps.ChromaArrayType;
+  int32_t ChromaArrayType = picture.m_slice.slice_header.m_sps.ChromaArrayType;
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
@@ -3474,7 +3474,7 @@ int CH264Cabac::decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
                                         int32_t &synElVal) {
   int ret = 0;
 
-  //int32_t NumC8x8 = 4 / (picture.m_slice.m_sps.SubWidthC * picture.m_slice.m_sps.SubHeightC);
+  //int32_t NumC8x8 = 4 / (picture.m_slice.slice_header.m_sps.SubWidthC * picture.m_slice.slice_header.m_sps.SubHeightC);
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
@@ -3562,8 +3562,8 @@ int CH264Cabac::decode_significant_coeff_flag(MB_RESIDUAL_LEVEL mb_block_level,
                                               int32_t &synElVal) {
   int ret = 0;
 
-  int32_t NumC8x8 =
-      4 / (picture.m_slice.m_sps.SubWidthC * picture.m_slice.m_sps.SubHeightC);
+  int32_t NumC8x8 = 4 / (picture.m_slice.slice_header.m_sps.SubWidthC *
+                         picture.m_slice.slice_header.m_sps.SubHeightC);
   int32_t mb_field_decoding_flag =
       picture.m_mbs[picture.CurrMbAddr].mb_field_decoding_flag;
   // int32_t maxBinIdxCtx = 0;
@@ -3720,7 +3720,7 @@ int CH264Cabac::decode_coeff_abs_level_minus1(MB_RESIDUAL_LEVEL mb_block_level,
                                               int32_t &synElVal) {
   int ret = 0;
 
-  //int32_t NumC8x8 = 4 / (picture.m_slice.m_sps.SubWidthC * picture.m_slice.m_sps.SubHeightC);
+  //int32_t NumC8x8 = 4 / (picture.m_slice.slice_header.m_sps.SubWidthC * picture.m_slice.slice_header.m_sps.SubHeightC);
   // int32_t maxBinIdxCtx = 0;
   int32_t ctxIdxOffset = 0;
   int32_t ctxIdxInc = 0;
@@ -3967,7 +3967,7 @@ int CH264Cabac::residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
                                      int32_t &TotalCoeff) {
   int ret = 0;
 
-  int32_t ChromaArrayType = picture.m_slice.m_sps.ChromaArrayType;
+  int32_t ChromaArrayType = picture.m_slice.slice_header.m_sps.ChromaArrayType;
   int32_t i = 0;
   int32_t coded_block_flag = 1; // When coded_block_flag is not present, it
                                 // shall be inferred to be equal to 1.

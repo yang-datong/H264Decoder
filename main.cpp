@@ -126,23 +126,23 @@ int main(int argc, char *argv[]) {
         /* 10. 解码SEI补充增强信息：
          * 场编码的图像在每个Slice前出现SEI以提供必要的解码辅助信息 */
         cout << "SEI -> {" << endl;
-        nalu.extractSEIparameters(rbsp, sei, gop->m_spss[gop->curr_pps_id]);
+        nalu.extractSEIparameters(rbsp, sei, gop->m_spss[gop->last_pps_id]);
         cout << " }" << endl;
         break;
       case 7: /* SPS(VCL) */
         /* 8. 解码SPS中信息 */
         cout << "SPS -> {" << endl;
-        nalu.extractSPSparameters(rbsp, gop->m_spss, gop->curr_sps_id);
+        nalu.extractSPSparameters(rbsp, gop->m_spss, gop->last_sps_id);
         gop->max_num_reorder_frames =
-            gop->m_spss[gop->curr_sps_id].max_num_reorder_frames;
+            gop->m_spss[gop->last_sps_id].max_num_reorder_frames;
         cout << " }" << endl;
         break;
       case 8: /* PPS(VCL) */
         /* 9. 解码PPS中信息 */
         cout << "PPS -> {" << endl;
         nalu.extractPPSparameters(
-            rbsp, gop->m_ppss, gop->curr_pps_id,
-            gop->m_spss[gop->curr_sps_id].chroma_format_idc);
+            rbsp, gop->m_ppss, gop->last_pps_id,
+            gop->m_spss[gop->last_sps_id].chroma_format_idc);
         cout << " }" << endl;
         break;
       case 9: /* 7.3.2.4 Access unit delimiter RBSP syntax */

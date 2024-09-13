@@ -8,12 +8,16 @@
 #include <cstring>
 
 /* 7.3.4 Slice data syntax */
-int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture) {
+int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
+                              SPS &sps, PPS &pps) {
   /* 初始化类中的指针 */
   header = &picture.m_slice.slice_header;
   bs = &bitStream;
   /* CABAC编码 */
   cabac = new CH264Cabac(*bs, picture);
+
+  m_sps = sps;
+  m_pps = pps;
 
   /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
   initCABAC();
@@ -577,7 +581,7 @@ int SliceData::decoding_process(PictureBase &picture) {
   /* ------------------ 设置别名 ------------------ */
   const int32_t &picWidthInSamplesL = picture.PicWidthInSamplesL;
   const int32_t &picWidthInSamplesC = picture.PicWidthInSamplesC;
-  const int32_t &BitDepth = picture.m_slice.m_sps.BitDepthY;
+  const int32_t &BitDepth = picture.m_slice.slice_header.m_sps.BitDepthY;
 
   uint8_t *&pic_buff_luma = picture.m_pic_buff_luma;
   uint8_t *&pic_buff_cb = picture.m_pic_buff_cb;

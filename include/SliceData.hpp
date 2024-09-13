@@ -8,18 +8,16 @@
 class PictureBase;
 class SliceData {
  private:
+  /* SliceData的SPS、PPS不能对外提供 */
   SPS m_sps;
   PPS m_pps;
 
  private:
   /* 私有化SliceBody，不提供给外界，只能通过Slice来访问本类 */
-  SliceData(SPS &sps, PPS &pps) : m_sps(sps), m_pps(pps) {}
-
- public:
-  /* 允许Slice类访问 */
+  //SliceData(SPS &sps, PPS &pps) : m_sps(sps), m_pps(pps) {}
+  //允许Slice类访问
   friend class Slice;
-  void setSPS(SPS &sps) { this->m_sps = sps; }
-  void setPPS(PPS &pps) { this->m_pps = pps; }
+  SliceData() {};
 
  public:
   /* 这个id是解码器自己维护的，每次解码一帧则+1 */
@@ -39,7 +37,8 @@ class SliceData {
   int32_t mb_skip_flag_next_mb = 0;
 
  private:
-  int parseSliceData(BitStream &bitStream, PictureBase &picture);
+  int parseSliceData(BitStream &bitStream, PictureBase &picture, SPS &sps,
+                     PPS &pps);
   /* 由外部(parseSliceData)传进来的指针，不是Slice Data的一部分，随着parseSliceData后一起消灭 */
   SliceHeader *header = nullptr;
   /* 由外部(parseSliceData)初始化，不是Slice Data的一部分，随着parseSliceData后一起消灭 */

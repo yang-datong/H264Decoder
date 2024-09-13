@@ -47,20 +47,21 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
   /* ------------------ 初始化常用变量 ------------------ */
   this->_picture = &picture;
   this->_cabac = &cabac;
-  _is_cabac = _picture->m_slice.m_pps.entropy_coding_mode_flag; // 是否CABAC编码
+  _is_cabac = _picture->m_slice.slice_header.m_pps
+                  .entropy_coding_mode_flag; // 是否CABAC编码
   if (_gb == nullptr) this->_gb = new CH264Golomb();
   this->_bs = &bs;
   /* ------------------  End ------------------ */
 
   /* ------------------ 设置别名 ------------------ */
   SliceHeader &header = _picture->m_slice.slice_header;
-  SPS &sps = _picture->m_slice.m_sps;
-  PPS &pps = _picture->m_slice.m_pps;
+  SPS &sps = _picture->m_slice.slice_header.m_sps;
+  PPS &pps = _picture->m_slice.slice_header.m_pps;
   /* ------------------  End ------------------ */
 
   /* 受限帧内预测标志，这个标志决定了是否可以在帧内预测中使用非帧内编码的宏块 */
   constrained_intra_pred_flag =
-      _picture->m_slice.m_pps.constrained_intra_pred_flag;
+      _picture->m_slice.slice_header.m_pps.constrained_intra_pred_flag;
   initFromSlice(header, slice_data);
   /* ------------------  End ------------------ */
   process_mb_type(header, header.slice_type);
@@ -178,11 +179,11 @@ int MacroBlock::macroblock_mb_skip(PictureBase &picture,
   /* TODO YangJing 这里的header应该是输入，不应该存在输出 <24-09-03 21:12:33> */
   SliceHeader &header = _picture->m_slice.slice_header;
   int32_t &QPY_prev = header.QPY_prev;
-  const uint32_t QpBdOffsetY = _picture->m_slice.m_sps.QpBdOffsetY;
+  const uint32_t QpBdOffsetY = _picture->m_slice.slice_header.m_sps.QpBdOffsetY;
 
   /* 受限帧内预测标志，这个标志决定了是否可以在帧内预测中使用非帧内编码的宏块 */
   constrained_intra_pred_flag =
-      _picture->m_slice.m_pps.constrained_intra_pred_flag;
+      _picture->m_slice.slice_header.m_pps.constrained_intra_pred_flag;
   initFromSlice(header, slice_data);
 
   /* 执行逆宏块扫描过程，确定当前宏块在帧中的位置。这一步通常是为了处理宏块的地址映射，特别是在使用宏块自适应帧场编码（MBAFF）时 */
@@ -253,7 +254,7 @@ int MacroBlock::macroblock_mb_skip(PictureBase &picture,
 int MacroBlock::mb_pred(const SliceData &slice_data) {
   /* ------------------ 设置别名 ------------------ */
   const SliceHeader &header = _picture->m_slice.slice_header;
-  SPS &sps = _picture->m_slice.m_sps;
+  SPS &sps = _picture->m_slice.slice_header.m_sps;
   /* ------------------  End ------------------ */
 
   /* --------------------------这一部分属于帧间预测-------------------------- */
@@ -848,9 +849,10 @@ int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
   int ret = 0;
 
   if (!_cavlc) _cavlc = new CH264ResidualBlockCavlc(_picture, _bs);
-  const uint32_t ChromaArrayType = _picture->m_slice.m_sps.ChromaArrayType;
-  const int32_t SubWidthC = _picture->m_slice.m_sps.SubWidthC;
-  const int32_t SubHeightC = _picture->m_slice.m_sps.SubHeightC;
+  const uint32_t ChromaArrayType =
+      _picture->m_slice.slice_header.m_sps.ChromaArrayType;
+  const int32_t SubWidthC = _picture->m_slice.slice_header.m_sps.SubWidthC;
+  const int32_t SubHeightC = _picture->m_slice.slice_header.m_sps.SubHeightC;
 
   //----------------------------- 处理 Luma 信息 --------------------------------------
   /*帧内残差：对于整个 16x16 宏块使用一个预测模式,残差数据分为 DC 和 AC 两部分

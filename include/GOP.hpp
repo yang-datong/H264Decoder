@@ -13,11 +13,21 @@ class Frame;
 
 class GOP {
  public:
+  //7.4.1.2.1 Order of sequence and picture parameter set RBSPs and their activation
+  /* 注 2 – 解码器必须能够同时存储所有 pic_parameter_set_id 值的图像参数集的内容。当接收到具有相同pic_parameter_set_id值的新图像参数集NAL单元时，具有特定pic_parameter_set_id值的图像参数集的内容被覆盖。*/
   SPS m_spss[MAX_SPS_COUNT]; // sps[32]
+  /* 最新得到的SPS ID */
+  uint32_t last_sps_id = 0;
+  /* 当前Slcie使用的SPS ID */
   uint32_t curr_sps_id = 0;
   // SPSExt m_sps_ext;
+
   PPS m_ppss[MAX_PPS_COUNT]; // pps[256]
+  /* 最新得到的PPS ID */
+  uint32_t last_pps_id = 0;
+  /* 当前Slcie使用的PPS ID */
   uint32_t curr_pps_id = 0;
+
   SEI m_sei;
 
   Frame *m_DecodedPictureBuffer

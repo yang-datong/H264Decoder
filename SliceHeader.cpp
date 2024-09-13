@@ -203,7 +203,7 @@ int SliceHeader::set_scaling_lists_values() {
 }
 
 /* Slice header syntax -> 51 page */
-int SliceHeader::parseSliceHeader(BitStream &bitStream) {
+int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   first_mb_in_slice = bitStream.readUE();
   /* TODO YangJing 好像现在还不用%5，如果真的有变分辨率的Slice 呢？ <24-09-08 23:30:50> */
   slice_type = bitStream.readUE() % 5;
@@ -226,10 +226,14 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream) {
   }
   std::cout << "\tSlice中第一个宏块的索引:" << first_mb_in_slice << std::endl;
 
-  pic_parameter_set_id = bitStream.readUE();
+  /* 更新GOP中当前Slice使用的SPS、PPS ID */
+  gop.curr_pps_id = pic_parameter_set_id = bitStream.readUE();
+  gop.curr_sps_id = gop.m_ppss[gop.curr_pps_id].seq_parameter_set_id;
+  m_sps = gop.m_spss[gop.curr_sps_id];
+  m_pps = gop.m_ppss[gop.curr_pps_id];
   std::cout << "\tPPS ID:" << pic_parameter_set_id << std::endl;
-  /* TODO YangJing 这里可能存在多个sps和pps的情况，这里并没有使用到id，后续注意一下 <24-08-16 10:13:03> */
-  if (m_sps.separate_colour_plane_flag == 1) {
+
+  if (m_sps.separate_colour_plane_flag) {
     colour_plane_id = bitStream.readUn(2);
     std::cout << "\t颜色平面ID:" << colour_plane_id << std::endl;
   }

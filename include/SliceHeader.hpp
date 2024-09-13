@@ -1,6 +1,7 @@
 #ifndef SLICEHEADER_HPP_JYXLKOEI
 #define SLICEHEADER_HPP_JYXLKOEI
 
+#include "GOP.hpp"
 #include "PPS.hpp"
 #include "SPS.hpp"
 #include <cstdint>
@@ -16,21 +17,17 @@ typedef struct _DEC_REF_PIC_MARKING_ {
 } DEC_REF_PIC_MARKING;
 
 class SliceHeader {
- private:
-  /* NOTE: 默认值应该设置为0,因为有时候就是需要使用到默认值为0的情况，
-   * 如果将变量放在for中那么默认值为其他就会发生不可预知的错误 */
+ public:
+  /* 需要对外提供，因为SliceHeader是最先知道当前所使用的SPS ID，PPS ID的 */
   SPS m_sps;
   PPS m_pps;
 
  private:
   /* 私有化SliceBody，不提供给外界，只能通过Slice来访问本类 */
-  SliceHeader(SPS &sps, PPS &pps) : m_sps(sps), m_pps(pps){};
-
- public:
   /* 允许Slice类访问 */
   friend class Slice;
-  void setSPS(SPS &sps) { this->m_sps = sps; }
-  void setPPS(PPS &pps) { this->m_pps = pps; }
+  //SliceHeader(SPS &sps, PPS &pps) : m_sps(sps), m_pps(pps) {};
+  SliceHeader() {};
 
  public:
   /* 引用自Nalu */
@@ -190,6 +187,6 @@ class SliceHeader {
 
   void pred_weight_table(BitStream &bitStream);
   void dec_ref_pic_marking(BitStream &bitStream);
-  int parseSliceHeader(BitStream &bitStream);
+  int parseSliceHeader(BitStream &bitStream, GOP &gop);
 };
 #endif /* end of include guard: SLICEHEADER_HPP_JYXLKOEI */
