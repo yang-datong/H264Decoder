@@ -212,25 +212,8 @@ int SPS::extractParameters(BitStream &bs) {
       break;
     }
 
-    /* 确定色度数组类型,YUV400,YUV420,YUV422,YUV444... 74 page */
-    ChromaArrayType = (separate_colour_plane_flag) ? 0 : chroma_format_idc;
-
     bit_depth_luma_minus8 = bs.readUE();
     bit_depth_chroma_minus8 = bs.readUE();
-
-    /* 7.4.2.1.1 Sequence parameter set data semantics -> (7-3) */
-    BitDepthY = bit_depth_luma_minus8 + 8;
-    QpBdOffsetY = bit_depth_luma_minus8 * 6;
-    BitDepthC = bit_depth_chroma_minus8 + 8;
-    QpBdOffsetC = bit_depth_chroma_minus8 * 6;
-
-    std::cout << "\t亮度分量位深:" << BitDepthY << ",色度分量位深:" << BitDepthC
-              << std::endl;
-    std::cout << "\t亮度分量Qp:" << QpBdOffsetY << ",色度分量Qp:" << QpBdOffsetC
-              << std::endl;
-
-    // 色度分量的采样宽度  (7-7)
-    RawMbBits = 256 * BitDepthY + 2 * MbWidthC * MbHeightC * BitDepthC;
 
     qpprime_y_zero_transform_bypass_flag = bs.readU1();
     seq_scaling_matrix_present_flag = bs.readU1();
@@ -253,14 +236,25 @@ int SPS::extractParameters(BitStream &bs) {
     }
   }
 
+  /* 确定色度数组类型,YUV400,YUV420,YUV422,YUV444... 74 page */
+  ChromaArrayType = (separate_colour_plane_flag) ? 0 : chroma_format_idc;
+  /* 7.4.2.1.1 Sequence parameter set data semantics -> (7-3) */
+  BitDepthY = bit_depth_luma_minus8 + 8;
+  QpBdOffsetY = bit_depth_luma_minus8 * 6;
+  BitDepthC = bit_depth_chroma_minus8 + 8;
+  QpBdOffsetC = bit_depth_chroma_minus8 * 6;
+  std::cout << "\t亮度分量位深:" << BitDepthY << ",色度分量位深:" << BitDepthC
+            << std::endl;
+  std::cout << "\t亮度分量Qp:" << QpBdOffsetY << ",色度分量Qp:" << QpBdOffsetC
+            << std::endl;
+
+  // 色度分量的采样宽度  (7-7)
+  RawMbBits = 256 * BitDepthY + 2 * MbWidthC * MbHeightC * BitDepthC;
+
   log2_max_frame_num_minus4 = bs.readUE();
   pic_order_cnt_type = bs.readUE();
-  /* 计算最大帧号和最大图像顺序计数 LSB (7-10,7-11)*/
-  MaxFrameNum = pow(log2_max_frame_num_minus4 + 4, 2);
-  MaxPicOrderCntLsb = pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
 
   int32_t *offset_for_ref_frame = nullptr;
-
   if (pic_order_cnt_type == 0)
     log2_max_pic_order_cnt_lsb_minus4 = bs.readUE();
   else if (pic_order_cnt_type == 1) {
@@ -274,6 +268,10 @@ int SPS::extractParameters(BitStream &bs) {
     for (int i = 0; i < (int)num_ref_frames_in_pic_order_cnt_cycle; i++)
       offset_for_ref_frame[i] = bs.readSE();
   }
+
+  /* 计算最大帧号和最大图像顺序计数 LSB (7-10,7-11)*/
+  MaxFrameNum = pow(log2_max_frame_num_minus4 + 4, 2);
+  MaxPicOrderCntLsb = pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
 
   max_num_ref_frames = bs.readUE();
   std::cout << "\t解码器需要支持的最大参考帧数:" << max_num_ref_frames
