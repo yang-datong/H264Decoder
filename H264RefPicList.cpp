@@ -1403,7 +1403,7 @@ int PictureBase::
 //          frame_num is not equal to PrevRefFrameNum and is not equal to (
 //          PrevRefFrameNum + 1 ) % MaxFrameNum, the decoding process should
 //          infer an unintentional loss of pictures.
-int PictureBase::Decoding_process_for_gaps_in_frame_num() { return 0; }
+//int PictureBase::Decoding_process_for_gaps_in_frame_num() { return 0; }
 
 // 8.2.5.3 Sliding window decoded reference picture marking process
 // 滑动窗口解码参考图像的标识过程 This process is invoked when

@@ -1,7 +1,7 @@
 #include "Slice.hpp"
 #include "Frame.hpp"
 
-Slice::Slice() : slice_header(m_sps, m_pps), slice_data(m_sps, m_pps){};
+Slice::Slice() : slice_header(m_sps, m_pps), slice_data(m_sps, m_pps) {};
 
 void Slice::addMacroblock(std::shared_ptr<MacroBlock> macroblock) {
   _macroblocks.push_back(macroblock);

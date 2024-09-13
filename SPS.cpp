@@ -273,6 +273,7 @@ int SPS::extractParameters(BitStream &bs) {
   MaxFrameNum = pow(log2_max_frame_num_minus4 + 4, 2);
   MaxPicOrderCntLsb = pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
 
+  /* 当 max_num_ref_frames 等于 0 时，slice_type 应等于 I或SI Slice -> page 87 */
   max_num_ref_frames = bs.readUE();
   std::cout << "\t解码器需要支持的最大参考帧数:" << max_num_ref_frames
             << std::endl;

@@ -62,7 +62,8 @@ class PictureBase {
   int32_t
       memory_management_control_operation_5_flag; // 所有参考图像标记为“不用于参考”
   int32_t memory_management_control_operation_6_flag;
-  H264_PICTURE_MARKED_AS reference_marked_type = H264_PICTURE_MARKED_AS_unkown; // I,P作为参考帧的mark状态
+  H264_PICTURE_MARKED_AS reference_marked_type =
+      H264_PICTURE_MARKED_AS_unkown; // I,P作为参考帧的mark状态
 
   Slice m_slice;
   //SliceHeader m_h264_slice_header;
@@ -170,8 +171,8 @@ class PictureBase {
   int Decoded_reference_picture_marking_process(Frame *(
       &dpb)[16]); // 8.2.5 每一张图片解码完成后，都需要标记一次图像参考列表
   int Sequence_of_operations_for_decoded_reference_picture_marking_process(
-      Frame *(&dpb)[16]);                       // 8.2.5.1
-  int Decoding_process_for_gaps_in_frame_num(); // 8.2.5.2
+      Frame *(&dpb)[16]); // 8.2.5.1
+  //int Decoding_process_for_gaps_in_frame_num(); // 8.2.5.2
   int Sliding_window_decoded_reference_picture_marking_process(
       Frame *(&dpb)[16]); // 8.2.5.3
   int Adaptive_memory_control_decoded_reference_picture_marking_process(

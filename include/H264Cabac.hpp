@@ -22,8 +22,8 @@ class CH264Cabac {
 
  public:
   CH264Cabac(BitStream &bitStream, PictureBase &p)
-      : bs(bitStream), picture(p){};
-  ~CH264Cabac(){};
+      : bs(bitStream), picture(p) {};
+  ~CH264Cabac() {};
 
   /* ============== 9.3.1 Initialization process ============== */
  public:
@@ -45,7 +45,7 @@ class CH264Cabac {
   int Derivation_process_of_ctxIdxInc_for_the_syntax_element_coded_block_pattern(
       int32_t binIdx, int32_t binValues, int32_t ctxIdxOffset,
       int32_t &ctxIdxInc); // 9.3.3.1.1.4
-  int Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_qp_delta(
+  int derivation_ctxIdxInc_for_the_syntax_element_mb_qp_delta(
       int32_t &ctxIdxInc); // 9.3.3.1.1.5
   int Derivation_process_of_ctxIdxInc_for_the_syntax_elements_ref_idx_l0_and_ref_idx_l1(
       int32_t is_ref_idx_10, int32_t mbPartIdx,
@@ -89,8 +89,7 @@ class CH264Cabac {
   int decode_mb_qp_delta(int32_t &synElVal);
   int decode_intra_chroma_pred_mode(int32_t &synElVal);
   int decode_prev_intra4x4_or_intra8x8_pred_mode_flag(int32_t &synElVal);
-  int decode_rem_intra4x4_or_intra8x8_pred_mode(
-      int32_t &synElVal);
+  int decode_rem_intra4x4_or_intra8x8_pred_mode(int32_t &synElVal);
   int decode_coded_block_pattern(int32_t &synElVal);
 
  private:

@@ -234,7 +234,8 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream) {
     std::cout << "\t颜色平面ID:" << colour_plane_id << std::endl;
   }
 
-  frame_num = bitStream.readUn(log2(m_sps.MaxFrameNum)); // u(v)
+  /* 如果当前图片是IDR图片，frame_num应等于0。 */
+  frame_num = bitStream.readUn(log2(m_sps.MaxFrameNum));
   std::cout << "\t当前帧的编号:" << frame_num << std::endl;
   if (!m_sps.frame_mbs_only_flag) {
     field_pic_flag = bitStream.readU1();

@@ -2,6 +2,7 @@
 #include "Constants.hpp"
 #include "MacroBlock.hpp"
 #include "PictureBase.hpp"
+#include "SliceHeader.hpp"
 #include "Type.hpp"
 
 /* 对于P、SP和B Slice 类型，初始化还取决于cabac_init_idc语法元素的值 */
@@ -493,17 +494,21 @@ int CH264Cabac::
 }
 
 // 9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element
-int CH264Cabac::
-    Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_qp_delta(
-        int32_t &ctxIdxInc) {
+int CH264Cabac::derivation_ctxIdxInc_for_the_syntax_element_mb_qp_delta(
+    int32_t &ctxIdxInc) {
+
+  const SliceHeader &header = picture.m_slice.slice_header;
 
   /* 令 prevMbAddr 为按解码顺序位于当前宏块之前的宏块的宏块地址。当当前宏块是切片的第一个宏块时，prevMbAddr被标记为不可用。 */
   int32_t prevMbAddr = picture.CurrMbAddr - 1;
   const MacroBlock &pre_mb = picture.m_mbs[prevMbAddr];
 
+  /* Slice的第一个宏块地址推导如下：
+– 如果MbaffFrameFlag等于0，则first_mb_in_slice是切片中第一个宏块的宏块地址，并且first_mb_in_slice应在0到PicSizeInMbs - 1的范围内（包括0和PicSizeInMbs - 1）。
+– 否则（MbaffFrameFlag等于1），first_mb_in_slice * 2是第一个宏块的宏块地址*/
   int32_t FirstMbAddrOfSlice =
-      picture.m_slice.slice_header.first_mb_in_slice *
-      (1 + picture.m_slice.slice_header.MbaffFrameFlag);
+      header.first_mb_in_slice * (1 + header.MbaffFrameFlag);
+
   if (picture.CurrMbAddr == FirstMbAddrOfSlice) prevMbAddr = -1;
 
   /* 变量 ctxIdxInc 的推导如下： 
@@ -3102,8 +3107,7 @@ int CH264Cabac::decode_mb_qp_delta(int32_t &synElVal) {
   // coeff_abs_level_minus1
 
   // 9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element
-  ret = Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_qp_delta(
-      ctxIdxInc);
+  ret = derivation_ctxIdxInc_for_the_syntax_element_mb_qp_delta(ctxIdxInc);
   RETURN_IF_FAILED(ret != 0, ret);
 
   //---------------注意是：U binarization------------------------
