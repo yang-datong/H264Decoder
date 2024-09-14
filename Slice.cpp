@@ -1,10 +1,12 @@
 #include "Slice.hpp"
 #include "Frame.hpp"
 #include "SliceData.hpp"
+#include "Nalu.hpp"
+
 #include "SliceHeader.hpp"
 
-Slice::Slice() {
-  slice_header = new SliceHeader();
+Slice::Slice(Nalu *nalu) : mNalu(nalu) {
+  slice_header = new SliceHeader(mNalu->nal_unit_type,mNalu->nal_ref_idc);
   slice_data = new SliceData();
 };
 
@@ -39,19 +41,20 @@ int Slice::decode(BitStream &bitStream, Frame *(&dpb)[16], SPS &sps, PPS &pps,
   frame->m_picture_frame.m_parent = frame;
   memcpy(frame->m_picture_frame.m_dpb, dpb, sizeof(Nalu *) * GOP_SIZE);
   frame->m_current_picture_ptr = &(frame->m_picture_frame);
-  frame->m_picture_frame.init(*this);
+  frame->m_picture_frame.init(this);
 
+  /* TODO YangJing 移动到Filed类中去 <24-09-14 20:53:06> */
   //----------------顶场-------------------------------
   frame->m_picture_top_filed.m_picture_coded_type =
       H264_PICTURE_CODED_TYPE_TOP_FIELD;
   frame->m_picture_top_filed.m_parent = frame;
-  frame->m_picture_top_filed.init(*this);
+  frame->m_picture_top_filed.init(this);
 
   //----------------底场-------------------------------
   frame->m_picture_bottom_filed.m_picture_coded_type =
       H264_PICTURE_CODED_TYPE_BOTTOM_FIELD;
   frame->m_picture_bottom_filed.m_parent = frame;
-  frame->m_picture_bottom_filed.init(*this);
+  frame->m_picture_bottom_filed.init(this);
 
   /* 当前解码的Slice为场编码（可能下一帧又是帧编码了）即隔行扫描方式 */
   /* TODO YangJing slice_header.field_pic_flag <24-09-11 17:34:02> */

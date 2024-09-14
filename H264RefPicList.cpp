@@ -17,13 +17,13 @@ int PictureBase::decoding_picture_order_count() {
 
   /* 比特流不应包含导致解码过程中使用的 TopFieldOrderCnt、BottomFieldOrderCnt、PicOrderCntMsb 或 FrameNumOffset 值（如第 8.2.1.1 至 8.2.1.3 条规定）超出从 -231 到 231 - 1（含）的值范围的数据。 */
   int ret = 0;
-  if (m_slice.slice_header->m_sps->pic_order_cnt_type == 0)
+  if (m_slice->slice_header->m_sps->pic_order_cnt_type == 0)
     //8.2.1.1
     ret = decoding_picture_order_count_type_0(m_parent->m_picture_previous_ref);
-  else if (m_slice.slice_header->m_sps->pic_order_cnt_type == 1)
+  else if (m_slice->slice_header->m_sps->pic_order_cnt_type == 1)
     //8.2.1.2
     ret = decoding_picture_order_count_type_1(m_parent->m_picture_previous);
-  else if (m_slice.slice_header->m_sps->pic_order_cnt_type == 2)
+  else if (m_slice->slice_header->m_sps->pic_order_cnt_type == 2)
     //8.2.1.3
     ret = decoding_picture_order_count_type_2(m_parent->m_picture_previous);
 
@@ -60,7 +60,7 @@ int PictureBase::PicOrderCntFunc(PictureBase *picX) {
 int PictureBase::decoding_picture_order_count_type_0(
     const PictureBase *picture_previous_ref) {
 
-  const SliceHeader *header = m_slice.slice_header;
+  const SliceHeader *header = m_slice->slice_header;
 
   uint32_t prevPicOrderCntMsb, prevPicOrderCntLsb;
   /* 变量 prevPicOrderCntMsb 和 prevPicOrderCntLsb 的推导如下： 
@@ -83,7 +83,7 @@ int PictureBase::decoding_picture_order_count_type_0(
     } else {
       prevPicOrderCntMsb = picture_previous_ref->PicOrderCntMsb;
       prevPicOrderCntLsb =
-          picture_previous_ref->m_slice.slice_header->pic_order_cnt_lsb;
+          picture_previous_ref->m_slice->slice_header->pic_order_cnt_lsb;
     }
   } else {
     /* 没有参考帧 */
@@ -95,15 +95,15 @@ int PictureBase::decoding_picture_order_count_type_0(
   /* 当前图片的 PicOrderCntMsb 是由以下伪代码指定的： */
   if ((header->pic_order_cnt_lsb < prevPicOrderCntLsb) &&
       ((prevPicOrderCntLsb - header->pic_order_cnt_lsb) >=
-       (m_slice.slice_header->m_sps->MaxPicOrderCntLsb / 2)))
+       (m_slice->slice_header->m_sps->MaxPicOrderCntLsb / 2)))
     PicOrderCntMsb =
-        prevPicOrderCntMsb + m_slice.slice_header->m_sps->MaxPicOrderCntLsb;
+        prevPicOrderCntMsb + m_slice->slice_header->m_sps->MaxPicOrderCntLsb;
 
   else if ((header->pic_order_cnt_lsb > prevPicOrderCntLsb) &&
            ((header->pic_order_cnt_lsb - prevPicOrderCntLsb) >
-            (m_slice.slice_header->m_sps->MaxPicOrderCntLsb / 2)))
+            (m_slice->slice_header->m_sps->MaxPicOrderCntLsb / 2)))
     PicOrderCntMsb =
-        prevPicOrderCntMsb - m_slice.slice_header->m_sps->MaxPicOrderCntLsb;
+        prevPicOrderCntMsb - m_slice->slice_header->m_sps->MaxPicOrderCntLsb;
 
   else
     PicOrderCntMsb = prevPicOrderCntMsb;
@@ -115,7 +115,7 @@ int PictureBase::decoding_picture_order_count_type_0(
   /* 当前图片不是顶场时，按以下伪代码指定BottomFieldOrderCnt导出为 */
   //TODO 注释了
   //if (m_picture_coded_type != H264_PICTURE_CODED_TYPE_TOP_FIELD) {
-  if (!m_slice.slice_header->field_pic_flag)
+  if (!m_slice->slice_header->field_pic_flag)
     BottomFieldOrderCnt = TopFieldOrderCnt + header->delta_pic_order_cnt_bottom;
   else
     BottomFieldOrderCnt = PicOrderCntMsb + header->pic_order_cnt_lsb;
@@ -135,7 +135,7 @@ int PictureBase::decoding_picture_order_count_type_1(
   /* 当当前图片不是 IDR 图片时，变量 prevFrameNumOffset 的推导如下： 
    * – 如果解码顺序中的前一个图片包含等于 5 的memory_management_control_operation_5_flag，则 prevFrameNumOffset 设置为等于 0。 
    * – 否则（解码顺序中的前一个图片没有不包括等于5的memory_management_control_operation)，prevFrameNumOffset被设置为等于解码顺序中的前一个图片的FrameNumOffset的值。 */
-  SliceHeader *header = m_slice.slice_header;
+  SliceHeader *header = m_slice->slice_header;
 
   int32_t prevFrameNumOffset = 0;
   /* 当前帧不是 IDR */
@@ -149,16 +149,16 @@ int PictureBase::decoding_picture_order_count_type_1(
   /* 当前帧是IDR */
   if (header->IdrPicFlag)
     FrameNumOffset = 0;
-  else if (picture_previous->m_slice.slice_header->frame_num >
+  else if (picture_previous->m_slice->slice_header->frame_num >
            header->frame_num)
     // 前一图像的帧号比当前图像大
     FrameNumOffset =
-        prevFrameNumOffset + m_slice.slice_header->m_sps->MaxFrameNum;
+        prevFrameNumOffset + m_slice->slice_header->m_sps->MaxFrameNum;
   else
     FrameNumOffset = prevFrameNumOffset;
 
   /* 变量 absFrameNum 是由以下伪代码指定导出的： */
-  if (m_slice.slice_header->m_sps->num_ref_frames_in_pic_order_cnt_cycle != 0)
+  if (m_slice->slice_header->m_sps->num_ref_frames_in_pic_order_cnt_cycle != 0)
     absFrameNum = FrameNumOffset + header->frame_num;
   else
     absFrameNum = 0;
@@ -169,25 +169,25 @@ int PictureBase::decoding_picture_order_count_type_1(
   if (absFrameNum > 0) {
     picOrderCntCycleCnt =
         (absFrameNum - 1) /
-        m_slice.slice_header->m_sps->num_ref_frames_in_pic_order_cnt_cycle;
+        m_slice->slice_header->m_sps->num_ref_frames_in_pic_order_cnt_cycle;
     frameNumInPicOrderCntCycle =
         (absFrameNum - 1) %
-        m_slice.slice_header->m_sps->num_ref_frames_in_pic_order_cnt_cycle;
+        m_slice->slice_header->m_sps->num_ref_frames_in_pic_order_cnt_cycle;
   }
 
   /* 变量预期PicOrderCnt是由以下伪代码指定导出的： */
   if (absFrameNum > 0) {
     expectedPicOrderCnt =
         picOrderCntCycleCnt *
-        m_slice.slice_header->m_sps->ExpectedDeltaPerPicOrderCntCycle;
+        m_slice->slice_header->m_sps->ExpectedDeltaPerPicOrderCntCycle;
     for (int i = 0; i <= frameNumInPicOrderCntCycle; i++)
       expectedPicOrderCnt +=
-          m_slice.slice_header->m_sps->offset_for_ref_frame[i];
+          m_slice->slice_header->m_sps->offset_for_ref_frame[i];
   } else
     expectedPicOrderCnt = 0;
 
   if (header->nal_ref_idc == 0)
-    expectedPicOrderCnt += m_slice.slice_header->m_sps->offset_for_non_ref_pic;
+    expectedPicOrderCnt += m_slice->slice_header->m_sps->offset_for_non_ref_pic;
 
   /* 变量 TopFieldOrderCnt 或 BottomFieldOrderCnt 是按以下伪代码指定导出的： */
   if (!header->field_pic_flag) {
@@ -195,7 +195,7 @@ int PictureBase::decoding_picture_order_count_type_1(
     TopFieldOrderCnt = expectedPicOrderCnt + header->delta_pic_order_cnt[0];
     BottomFieldOrderCnt =
         TopFieldOrderCnt +
-        m_slice.slice_header->m_sps->offset_for_top_to_bottom_field +
+        m_slice->slice_header->m_sps->offset_for_top_to_bottom_field +
         header->delta_pic_order_cnt[1];
   } else if (!header->bottom_field_flag)
     // 当前图像为顶场
@@ -203,7 +203,7 @@ int PictureBase::decoding_picture_order_count_type_1(
   else // 当前图像为底场
     BottomFieldOrderCnt =
         expectedPicOrderCnt +
-        m_slice.slice_header->m_sps->offset_for_top_to_bottom_field +
+        m_slice->slice_header->m_sps->offset_for_top_to_bottom_field +
         header->delta_pic_order_cnt[0];
 
   return 0;
@@ -220,7 +220,7 @@ int PictureBase::decoding_picture_order_count_type_2(
    * – 如果解码顺序中的前一个图片包含等于 5 的内存_管理_控制_操作，则 prevFrameNumOffset 设置为等于 0。 
    * – 否则（解码顺序中的前一个图片没有不包括等于5的memory_management_control_operation)，prevFrameNumOffset被设置为等于解码顺序中的前一个图片的FrameNumOffset的值。 */
   int32_t prevFrameNumOffset = 0;
-  if (m_slice.slice_header->IdrPicFlag == 0) {
+  if (m_slice->slice_header->IdrPicFlag == 0) {
     if (picture_previous->memory_management_control_operation_5_flag)
       prevFrameNumOffset = 0;
     else
@@ -230,30 +230,30 @@ int PictureBase::decoding_picture_order_count_type_2(
   /* 当gaps_in_frame_num_value_allowed_flag等于1时，解码顺序中的前一个图片可能是由第8.2.5.2节中指定的frame_num中的间隙的解码过程推断的“不存在”帧。 */
 
   /* 变量 FrameNumOffset 是由以下伪代码指定导出的： */
-  if (m_slice.slice_header->IdrPicFlag == 1)
+  if (m_slice->slice_header->IdrPicFlag == 1)
     FrameNumOffset = 0;
-  else if (picture_previous->m_slice.slice_header->frame_num >
-           m_slice.slice_header->frame_num)
+  else if (picture_previous->m_slice->slice_header->frame_num >
+           m_slice->slice_header->frame_num)
     FrameNumOffset =
-        prevFrameNumOffset + m_slice.slice_header->m_sps->MaxFrameNum;
+        prevFrameNumOffset + m_slice->slice_header->m_sps->MaxFrameNum;
   else
     FrameNumOffset = prevFrameNumOffset;
 
   /* 变量 tempPicOrderCnt 是按以下伪代码指定导出的：*/
   int32_t tempPicOrderCnt = 0;
-  if (m_slice.slice_header->IdrPicFlag == 1)
+  if (m_slice->slice_header->IdrPicFlag == 1)
     tempPicOrderCnt = 0;
-  else if (m_slice.slice_header->nal_ref_idc == 0) // 当前图像为非参考图像
+  else if (m_slice->slice_header->nal_ref_idc == 0) // 当前图像为非参考图像
     tempPicOrderCnt =
-        2 * (FrameNumOffset + m_slice.slice_header->frame_num) - 1;
+        2 * (FrameNumOffset + m_slice->slice_header->frame_num) - 1;
   else
-    tempPicOrderCnt = 2 * (FrameNumOffset + m_slice.slice_header->frame_num);
+    tempPicOrderCnt = 2 * (FrameNumOffset + m_slice->slice_header->frame_num);
 
   /* 变量 TopFieldOrderCnt 或 BottomFieldOrderCnt 是按以下伪代码指定导出的：*/
-  if (!m_slice.slice_header->field_pic_flag)
+  if (!m_slice->slice_header->field_pic_flag)
     // 当前图像为帧
     TopFieldOrderCnt = BottomFieldOrderCnt = tempPicOrderCnt;
-  else if (m_slice.slice_header->bottom_field_flag)
+  else if (m_slice->slice_header->bottom_field_flag)
     // 当前图像为底场
     BottomFieldOrderCnt = tempPicOrderCnt;
   else
@@ -267,7 +267,7 @@ int PictureBase::decoding_picture_order_count_type_2(
 int PictureBase::decoding_reference_picture_lists_construction(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16]) {
 
-  const SliceHeader *slice_header = m_slice.slice_header;
+  const SliceHeader *slice_header = m_slice->slice_header;
   /* 解码的参考图片被标记为“用于短期参考”或“用于长期参考”，如比特流所指定的和第8.2.5节中所指定的。短期参考图片由frame_num 的值标识。长期参考图片被分配一个长期帧索引，该索引由比特流指定并在第 8.2.5 节中指定。 */
 
   // 8.2.5 Decoded reference picture marking process
@@ -315,7 +315,7 @@ int PictureBase::decoding_reference_picture_lists_construction(
 /* 当调用第8.2.4节中指定的参考图片列表构建的解码过程、第8.2.5节中指定的解码参考图片标记过程或第8.2.5.2节中指定的frame_num中的间隙的解码过程时，调用该过程。*/
 /* 参考图片通过第 8.4.2.1 节中指定的参考索引来寻址。*/
 int PictureBase::decoding_picture_numbers(Frame *(&dpb)[16]) {
-  SliceHeader *slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice->slice_header;
   const int size_dpb = 16;
 
   /* 变量 FrameNum、FrameNumWrap、PicNum、LongTermFrameIdx 和 LongTermPicNum 用于第 8.2.4.2 节中参考图片列表的初始化过程、第 8.2.4.3 节中参考图片列表的修改过程、第 8.2.5 节中的解码参考图片标记过程。以及第8.2.5.2节中frame_num中间隙的解码过程。 */
@@ -328,9 +328,8 @@ int PictureBase::decoding_picture_numbers(Frame *(&dpb)[16]) {
     auto &pict_f = dpb[i]->m_picture_frame;
     auto &pict_f_frameNum = pict_f.FrameNum;
     auto &pict_f_frameNumWrap = pict_f.FrameNumWrap;
-    if (!pict_f.m_slice.slice_header->m_sps)
-      continue;
-    int MaxFrameNum = pict_f.m_slice.slice_header->m_sps->MaxFrameNum;
+    if (!pict_f.m_slice || !pict_f.m_slice->slice_header->m_sps) continue;
+    int MaxFrameNum = pict_f.m_slice->slice_header->m_sps->MaxFrameNum;
 
     if (pict_f.reference_marked_type ==
         H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
@@ -499,7 +498,7 @@ int PictureBase::decoding_picture_numbers(Frame *(&dpb)[16]) {
 int PictureBase::init_reference_picture_lists(Frame *(&dpb)[16],
                                               Frame *(&RefPicList0)[16],
                                               Frame *(&RefPicList1)[16]) {
-  SliceHeader *slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice->slice_header;
 
   /* RefPicList0 和 RefPicList1 具有第 8.2.4.2.1 至 8.2.4.2.5 节中指定的初始条目。*/
   int ret = 0;
@@ -570,7 +569,7 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], int32_t &RefPicList0Length) {
   const int32_t size_dpb = 16;
 
-  const SliceHeader *slice_header = m_slice.slice_header;
+  const SliceHeader *slice_header = m_slice->slice_header;
   /* 1. 参考图片列表RefPicList0被排序，使得短期参考帧和短期互补参考场对具有比长期参考帧和长期互补参考场对更低的索引。 */
   vector<int32_t> indexTemp_short, indexTemp_long;
   for (int index = 0; index < (int)size_dpb; index++) {
@@ -1112,7 +1111,7 @@ int PictureBase::init_reference_picture_lists_in_fields(
 int PictureBase::modif_reference_picture_lists(Frame *(&RefPicList0)[16],
                                                Frame *(&RefPicList1)[16]) {
   int ret;
-  SliceHeader *slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice->slice_header;
   /* 当ref_pic_list_modification_flag_l0等于1时，以下适用： */
   if (slice_header->ref_pic_list_modification_flag_l0 == 1) {
     // 1.令refIdxL0为参考图片列表RefPicList0中的索引。它最初设置为等于0。
@@ -1190,7 +1189,7 @@ int PictureBase::modif_reference_picture_lists_for_short_ref_pictures(
     const int32_t abs_diff_pic_num_minus1,
     const int32_t num_ref_idx_lX_active_minus1, Frame *(&RefPicListX)[16]) {
 
-  SliceHeader *slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice->slice_header;
 
   /* 变量 picNumLXNoWrap 的推导如下：*/
   int32_t picNumLXNoWrap = 0;
@@ -1307,7 +1306,7 @@ int PictureBase::
     Sequence_of_operations_for_decoded_reference_picture_marking_process(
         Frame *(&dpb)[16]) {
   int ret = 0;
-  SliceHeader *slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice->slice_header;
   int32_t size_dpb = 16;
 
   // 1. All slices of the current picture are decoded.
@@ -1472,7 +1471,7 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
     }
 
     if (numShortTerm + numLongTerm ==
-            MAX(m_slice.slice_header->m_sps->max_num_ref_frames, 1) &&
+            MAX(m_slice->slice_header->m_sps->max_num_ref_frames, 1) &&
         numShortTerm > 0) {
       PictureBase *refPic = NULL;
       int32_t FrameNumWrap_smallest_index = -1;
@@ -1574,7 +1573,7 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
 int PictureBase::
     Adaptive_memory_control_decoded_reference_picture_marking_process(
         Frame *(&dpb)[16]) {
-  SliceHeader *slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice->slice_header;
 
   int32_t size_dpb = 16;
   int32_t i = 0;

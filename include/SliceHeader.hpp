@@ -6,8 +6,6 @@
 #include "SPS.hpp"
 #include <cstdint>
 
-class Nalu;
-
 typedef struct _DEC_REF_PIC_MARKING_ {
   int32_t memory_management_control_operation; // 2 | 5 ue(v)
   int32_t difference_of_pic_nums_minus1;       // 2 | 5 ue(v)
@@ -22,18 +20,18 @@ class SliceHeader {
   SPS *m_sps;
   PPS *m_pps;
 
+  /* 引用自Nalu */
+  const uint8_t nal_unit_type = 0;
+  const uint8_t nal_ref_idc = 0;
+
  private:
   /* 私有化SliceBody，不提供给外界，只能通过Slice来访问本类 */
   /* 允许Slice类访问 */
   friend class Slice;
-  //SliceHeader(SPS &sps, PPS &pps) : m_sps(sps), m_pps(pps) {};
-  SliceHeader(){};
+  SliceHeader(uint8_t nal_type, uint8_t nal_ref_idc)
+      : nal_unit_type(nal_type), nal_ref_idc(nal_ref_idc) {};
 
  public:
-  /* 引用自Nalu */
-  char nal_unit_type = 0;
-  char nal_ref_idc = 0;
-
   /* 由slice_type计算出来 */
   bool IdrPicFlag = 0;
 

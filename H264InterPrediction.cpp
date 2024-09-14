@@ -19,7 +19,7 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks_inter(
     ret = scaling_functions(isChroma, isChromaCb);
     RETURN_IF_FAILED(ret != 0, ret);
 
-    int32_t isMbAff = (m_slice.slice_header->MbaffFrameFlag == 1 &&
+    int32_t isMbAff = (m_slice->slice_header->MbaffFrameFlag == 1 &&
                        m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
                           ? 1
                           : 0;
@@ -130,7 +130,7 @@ int PictureBase::transform_decoding_for_8x8_luma_residual_blocks_inter(
 
   ret = scaling_functions(isChroma, isChromaCb);
 
-  int32_t isMbAff = (m_slice.slice_header->MbaffFrameFlag == 1 &&
+  int32_t isMbAff = (m_slice->slice_header->MbaffFrameFlag == 1 &&
                      m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
                         ? 1
                         : 0;
@@ -233,26 +233,26 @@ int PictureBase::transform_decoding_for_chroma_samples_inter(
     int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
   int ret = 0;
 
-  if (m_slice.slice_header->m_sps->ChromaArrayType == 0) {
+  if (m_slice->slice_header->m_sps->ChromaArrayType == 0) {
     std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
               << std::endl;
     return -1;
   }
 
-  if (m_slice.slice_header->m_sps->ChromaArrayType == 3) {
+  if (m_slice->slice_header->m_sps->ChromaArrayType == 3) {
     // 8.5.5 Specification of transform decoding process for chroma samples with
     // ChromaArrayType equal to 3
     ret = transform_decoding_for_chroma_samples_with_YUV444(
         isChromaCb, PicWidthInSamples, pic_buff);
     RETURN_IF_FAILED(ret != 0, ret);
-  } else // if (m_slice.slice_header->m_sps->ChromaArrayType != 3)
+  } else // if (m_slice->slice_header->m_sps->ChromaArrayType != 3)
   {
     int32_t iCbCr = (isChromaCb == 1) ? 0 : 1;
     int32_t dcC[4][2] = {{0}};
 
     int32_t numChroma4x4Blks = (MbWidthC / 4) * (MbHeightC / 4);
 
-    if (m_slice.slice_header->m_sps->ChromaArrayType == 1) // YUV420
+    if (m_slice->slice_header->m_sps->ChromaArrayType == 1) // YUV420
     {
       int32_t c[2][2] = {{0}};
       c[0][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][0];
@@ -263,7 +263,7 @@ int PictureBase::transform_decoding_for_chroma_samples_inter(
       ret = scaling_and_transformation_for_chroma_DC_transform_coefficients(
           isChromaCb, c, 2, 2, dcC);
       RETURN_IF_FAILED(ret != 0, ret);
-    } else if (m_slice.slice_header->m_sps->ChromaArrayType == 2) // YUV422
+    } else if (m_slice->slice_header->m_sps->ChromaArrayType == 2) // YUV422
     {
       int32_t c[4][2] = {{0}};
       c[0][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][0];
@@ -290,7 +290,7 @@ int PictureBase::transform_decoding_for_chroma_samples_inter(
     int32_t rMb[16][16] = {{0}}; // 本应该是rMb[MbHeightC][MbWidthC],
                                  // 此处按最大的16x16尺寸来申请数组
 
-    int32_t isMbAff = (m_slice.slice_header->MbaffFrameFlag == 1 &&
+    int32_t isMbAff = (m_slice->slice_header->MbaffFrameFlag == 1 &&
                        m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
                           ? 1
                           : 0;
@@ -385,10 +385,10 @@ int PictureBase::transform_decoding_for_chroma_samples_inter(
       for (int32_t j = 0; j <= MbWidthC - 1; j++) {
         // uij = Clip1C( predC[ j, i ] + rMb[ j, i ] );
         // u[i * MbHeightC + j] = CLIP3(0, (1 <<
-        // m_h264_m_slice.slice_header->m_sps->BitDepthC) - 1, pic_buff[(mb_y * MbHeightC
+        // m_h264_m_slice->slice_header->m_sps->BitDepthC) - 1, pic_buff[(mb_y * MbHeightC
         // + i) * PicWidthInSamples + (mb_x * MbWidthC + j)] + rMb[i][j]);
         u[i * MbHeightC + j] = CLIP3(
-            0, (1 << m_slice.slice_header->m_sps->BitDepthC) - 1,
+            0, (1 << m_slice->slice_header->m_sps->BitDepthC) - 1,
             pic_buff[(((m_mbs[CurrMbAddr].m_mb_position_y >> 4) * MbHeightC) +
                       (m_mbs[CurrMbAddr].m_mb_position_y % 2) +
                       (i) * (1 + isMbAff)) *
@@ -413,10 +413,11 @@ int PictureBase::transform_decoding_for_chroma_samples_inter(
 // This process is invoked when decoding P and B macroblock types.
 /* 该过程的输出是当前宏块的帧间预测样本，它们是亮度样本的 16x16 数组 predL，并且当 ChromaArrayType 不等于 0 时，是色度样本的两个 (MbWidthC)x(MbHeightC) 数组 predCb 和 predCr，每个数组对应一个色度分量 Cb 和 Cr。*/
 int PictureBase::inter_prediction_process() {
-  const SliceHeader *header = m_slice.slice_header;
-  const uint32_t ChromaArrayType = m_slice.slice_header->m_sps->ChromaArrayType;
-  const int32_t SubHeightC = m_slice.slice_header->m_sps->SubHeightC;
-  const int32_t SubWidthC = m_slice.slice_header->m_sps->SubWidthC;
+  const SliceHeader *header = m_slice->slice_header;
+  const uint32_t ChromaArrayType =
+      m_slice->slice_header->m_sps->ChromaArrayType;
+  const int32_t SubHeightC = m_slice->slice_header->m_sps->SubHeightC;
+  const int32_t SubWidthC = m_slice->slice_header->m_sps->SubWidthC;
   MacroBlock &mb = m_mbs[CurrMbAddr];
 
   /* 宏块部分数量，指示当前宏块被划分成的部分数量 */
@@ -539,9 +540,9 @@ int PictureBase::inter_prediction_process() {
       int32_t logWDCb = 0, w0Cb = 1, w1Cb = 1, o0Cb = 0, o1Cb = 0;
       int32_t logWDCr = 0, w0Cr = 1, w1Cr = 1, o0Cr = 0, o1Cr = 0;
       // 3. 当(weighted_pred_flag等于1且(slice_type % 5)等于0或3)或(weighted_bipred_idc大于0且(slice_type % 5)等于1)时，预测权重的推导过程如第8.4.3节中指定被调用。
-      if ((m_slice.slice_header->m_pps->weighted_pred_flag &&
+      if ((m_slice->slice_header->m_pps->weighted_pred_flag &&
            (slice_type == SLICE_P || slice_type == SLICE_SP)) ||
-          (m_slice.slice_header->m_pps->weighted_bipred_idc > 0 &&
+          (m_slice->slice_header->m_pps->weighted_bipred_idc > 0 &&
            slice_type == SLICE_B)) {
         /* 加权预测 */
         // 8.4.3 Derivation process for prediction weights
@@ -761,7 +762,7 @@ int PictureBase::derivation_motion_vector_components_and_reference_indices(
         m_mbs[CurrMbAddr].transform_size_8x8_flag, mb_pred_mode);
     RETURN_IF_FAILED(ret != 0, ret);
 
-    ret = MacroBlock::SubMbPredMode(m_slice.slice_header->slice_type,
+    ret = MacroBlock::SubMbPredMode(m_slice->slice_header->slice_type,
                                     m_mbs[CurrMbAddr].sub_mb_type[mbPartIdx],
                                     NumSubMbPart, SubMbPredMode, SubMbPartWidth,
                                     SubMbPartHeight);
@@ -867,18 +868,18 @@ int PictureBase::derivation_motion_vector_components_and_reference_indices(
   }
 
   //-----------------------------
-  if (m_slice.slice_header->m_sps->ChromaArrayType != 0) {
+  if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
     if (predFlagL0 == 1) {
       // 8.4.1.4 Derivation process for chroma motion vectors
       ret = Derivation_process_for_chroma_motion_vectors(
-          m_slice.slice_header->m_sps->ChromaArrayType, mvL0, refPicL0, mvCL0);
+          m_slice->slice_header->m_sps->ChromaArrayType, mvL0, refPicL0, mvCL0);
       RETURN_IF_FAILED(ret != 0, ret);
     }
 
     if (predFlagL1 == 1) {
       // 8.4.1.4 Derivation process for chroma motion vectors
       ret = Derivation_process_for_chroma_motion_vectors(
-          m_slice.slice_header->m_sps->ChromaArrayType, mvL1, refPicL1, mvCL1);
+          m_slice->slice_header->m_sps->ChromaArrayType, mvL1, refPicL1, mvCL1);
       RETURN_IF_FAILED(ret != 0, ret);
     }
   }
@@ -895,7 +896,7 @@ int PictureBase::
         int32_t &subMvCnt, int32_t &predFlagL0, int32_t &predFlagL1) {
   int ret = 0;
 
-  SliceHeader *header = m_slice.slice_header;
+  SliceHeader *header = m_slice->slice_header;
 
   //-----------------------------------
   if (header->direct_spatial_mv_pred_flag ==
@@ -939,7 +940,7 @@ int PictureBase::
         int32_t &vertMvScale) {
   int ret = 0;
 
-  SliceHeader *slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice->slice_header;
 
   PictureBase *firstRefPicL1Top = NULL;
   PictureBase *firstRefPicL1Bottom = NULL;
@@ -996,14 +997,14 @@ int PictureBase::
       colPic = &m_RefPicList1[0]->m_picture_frame;
     } else if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
                H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
-      if (m_slice.slice_data->mb_field_decoding_flag == 0) {
+      if (m_slice->slice_data->mb_field_decoding_flag == 0) {
         if (topAbsDiffPOC < bottomAbsDiffPOC) {
           colPic = firstRefPicL1Top;
         } else // if (topAbsDiffPOC >= bottomAbsDiffPOC)
         {
           colPic = firstRefPicL1Bottom;
         }
-      } else // if (m_slice.slice_body.mb_field_decoding_flag == 1)
+      } else // if (m_slice->slice_body.mb_field_decoding_flag == 1)
       {
         if ((CurrMbAddr & 1) == 0) {
           colPic = firstRefPicL1Top;
@@ -1025,9 +1026,9 @@ int PictureBase::
     PicCodingStruct_CurrPic = FLD;
   } else // if (slice_header.field_pic_flag == 0)
   {
-    if (m_slice.slice_header->m_sps->mb_adaptive_frame_field_flag == 0) {
+    if (m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag == 0) {
       PicCodingStruct_CurrPic = FRM;
-    } else // if (m_slice.slice_header->m_sps->mb_adaptive_frame_field_flag == 1)
+    } else // if (m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag == 1)
     {
       PicCodingStruct_CurrPic = AFRM;
     }
@@ -1037,13 +1038,14 @@ int PictureBase::
   // Table 8-7 – Specification of PicCodingStruct( X )
   int32_t PicCodingStruct_colPic = FLD;
 
-  if (colPic->m_slice.slice_header->field_pic_flag == 1) {
+  if (colPic->m_slice->slice_header->field_pic_flag == 1) {
     PicCodingStruct_colPic = FLD;
   } else // if (colPic->m_slice_header.field_pic_flag == 0)
   {
-    if (colPic->m_slice.slice_header->m_sps->mb_adaptive_frame_field_flag == 0) {
+    if (colPic->m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag ==
+        0) {
       PicCodingStruct_colPic = FRM;
-    } else // if (colPic->m_h264_m_slice.slice_header->m_sps->mb_adaptive_frame_field_flag
+    } else // if (colPic->m_h264_m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag
     // == 1)
     {
       PicCodingStruct_colPic = AFRM;
@@ -1061,9 +1063,9 @@ int PictureBase::
   //--------------------------------
   int32_t luma4x4BlkIdx = 0;
 
-  if (m_slice.slice_header->m_sps->direct_8x8_inference_flag == 0) {
+  if (m_slice->slice_header->m_sps->direct_8x8_inference_flag == 0) {
     luma4x4BlkIdx = (4 * mbPartIdx + subMbPartIdx);
-  } else // if (m_slice.slice_header->m_sps->direct_8x8_inference_flag == 1)
+  } else // if (m_slice->slice_header->m_sps->direct_8x8_inference_flag == 1)
   {
     luma4x4BlkIdx = 5 * mbPartIdx;
   }
@@ -1134,11 +1136,11 @@ int PictureBase::
   } else if (PicCodingStruct_CurrPic == AFRM) {
     if (PicCodingStruct_colPic == FLD) {
       int32_t mbAddrCol5 = CurrMbAddr / 2;
-      if (m_slice.slice_data->mb_field_decoding_flag == 0) {
+      if (m_slice->slice_data->mb_field_decoding_flag == 0) {
         mbAddrCol = mbAddrCol5;
         yM = 8 * (CurrMbAddr % 2) + 4 * (yCol / 8);
         vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
-      } else // if (m_slice.slice_body.mb_field_decoding_flag == 1)
+      } else // if (m_slice->slice_body.mb_field_decoding_flag == 1)
       {
         mbAddrCol = mbAddrCol5;
         yM = yCol;
@@ -1146,7 +1148,7 @@ int PictureBase::
       }
     } else if (PicCodingStruct_colPic == AFRM) {
       int32_t mbAddrX = CurrMbAddr;
-      if (m_slice.slice_data->mb_field_decoding_flag == 0) {
+      if (m_slice->slice_data->mb_field_decoding_flag == 0) {
         if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag ==
             0) // Otherwise (the macroblock mbAddrX in the picture colPic is a
                // frame macroblock), fieldDecodingFlagX is set equal to 0.
@@ -1166,7 +1168,7 @@ int PictureBase::
           yM = 8 * (CurrMbAddr % 2) + 4 * (yCol / 8);
           vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
         }
-      } else // if (m_slice.slice_body.mb_field_decoding_flag == 1)
+      } else // if (m_slice->slice_body.mb_field_decoding_flag == 1)
       {
         if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag ==
             0) // Otherwise (the macroblock mbAddrX in the picture colPic is a
@@ -1440,7 +1442,7 @@ int PictureBase::
       vertMvScale);
   RETURN_IF_FAILED(ret != 0, ret);
 
-  SliceHeader *slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice->slice_header;
 
   //---------------------------------
   int32_t refIdxL0_temp = 0;
@@ -2129,7 +2131,7 @@ int PictureBase::Reference_picture_selection_process(int32_t refIdxLX,
                                                      Frame *RefPicListX[16],
                                                      int32_t RefPicListXLength,
                                                      PictureBase *&refPic) {
-  SliceHeader *slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice->slice_header;
 
   RETURN_IF_FAILED(refIdxLX < 0 || refIdxLX >= 32, -1);
 
@@ -2195,9 +2197,9 @@ int PictureBase::Reference_picture_selection_process(int32_t refIdxLX,
   }
 
   //-----------------------------
-  if (m_slice.slice_header->m_sps->separate_colour_plane_flag == 0) {
+  if (m_slice->slice_header->m_sps->separate_colour_plane_flag == 0) {
     // FIXME: 8.7 Deblocking filter process
-  } else // if (m_slice.slice_header->m_sps->separate_colour_plane_flag == 1)
+  } else // if (m_slice->slice_header->m_sps->separate_colour_plane_flag == 1)
   {
     if (slice_header->colour_plane_id == 0) {
 
@@ -2255,7 +2257,7 @@ int PictureBase::fractional_sample_interpolation(
    * 令 ( xIntC, yIntC ) 为以全样本单位给出的色度位置，( xFracC, yFracC ) 为以一 (4*SubWidthC) 个色度样本单位水平给出的偏移量和一 (4*SubHeightC)- 给出的偏移量垂直第 th 色度样本单位。这些变量仅在本子句中使用，用于指定参考样本数组 refPicLXCb 和 refPicLXCr 内的一般分数样本位置。  */
 
   /* 对于预测色度样本数组 predPartLXCb 和 predPartLXCr 内的每个色度样本位置 (0 <= xC < partWidthC, 0 <= yC < partHeightC)，相应的预测色度样本值 predPartLXCb[ xC, yC ] 和 predPartLXCr[ xC, yC ] 为按照以下顺序步骤指定导出： */
-  if (m_slice.slice_header->m_sps->ChromaArrayType != 0) {
+  if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
     int32_t xIntC = 0, yIntC = 0;
     int32_t xFracC = 0, yFracC = 0;
     int32_t isChromaCb = 1;
@@ -2264,17 +2266,17 @@ int PictureBase::fractional_sample_interpolation(
       for (int32_t xC = 0; xC < partWidthC; xC++) {
 
         /* 根据 ChromaArrayType，变量 xIntC、yIntC、xFracC 和 yFracC 的推导如下： */
-        if (m_slice.slice_header->m_sps->ChromaArrayType == 1) {
-          xIntC = (xAL / m_slice.slice_header->m_sps->SubWidthC) +
+        if (m_slice->slice_header->m_sps->ChromaArrayType == 1) {
+          xIntC = (xAL / m_slice->slice_header->m_sps->SubWidthC) +
                   (mvCLX[0] >> 3) + xC;
-          yIntC = (yAL / m_slice.slice_header->m_sps->SubHeightC) +
+          yIntC = (yAL / m_slice->slice_header->m_sps->SubHeightC) +
                   (mvCLX[1] >> 3) + yC;
           xFracC = mvCLX[0] & 7;
           yFracC = mvCLX[1] & 7;
-        } else if (m_slice.slice_header->m_sps->ChromaArrayType == 2) {
-          xIntC = (xAL / m_slice.slice_header->m_sps->SubWidthC) +
+        } else if (m_slice->slice_header->m_sps->ChromaArrayType == 2) {
+          xIntC = (xAL / m_slice->slice_header->m_sps->SubWidthC) +
                   (mvCLX[0] >> 3) + xC;
-          yIntC = (yAL / m_slice.slice_header->m_sps->SubHeightC) +
+          yIntC = (yAL / m_slice->slice_header->m_sps->SubHeightC) +
                   (mvCLX[1] >> 2) + yC;
           xFracC = mvCLX[0] & 7;
           yFracC = (mvCLX[1] & 3) << 1;
@@ -2286,7 +2288,7 @@ int PictureBase::fractional_sample_interpolation(
         }
 
         /* 根据 ChromaArrayType，以下规则适用： */
-        if (m_slice.slice_header->m_sps->ChromaArrayType != 3) {
+        if (m_slice->slice_header->m_sps->ChromaArrayType != 3) {
           /* 预测样本值 predPartLXCb[ xC, yC ] 通过调用第 8.4.2.2.2 节中指定的过程（以 ( xIntC, yIntC )、( xFracC, yFracC ) 和 refPicLXCb 作为输入给出）来导出。 */
           uint8_t predPartLXCb_xC_yC = 0;
           isChromaCb = 1;
@@ -2342,9 +2344,9 @@ int PictureBase::luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
                                                    PictureBase *refPic,
                                                    uint8_t &predPartLXL_xL_yL) {
 
-  const SliceHeader *slice_header = m_slice.slice_header;
+  const SliceHeader *slice_header = m_slice->slice_header;
   const int32_t mb_field_decoding_flag =
-      m_slice.slice_data->mb_field_decoding_flag;
+      m_slice->slice_data->mb_field_decoding_flag;
 
   /* 变量 refPicHeightEffectiveL（有效参考图像亮度数组的高度）的推导如下： 
    * – 如果 MbaffFrameFlag 等于 0 或 mb_field_decoding_flag 等于 0，则 refPicHeightEffectiveL 设置为等于 PicHeightInSamplesL。  
@@ -2416,14 +2418,14 @@ int PictureBase::luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
   int32_t m1 = a_6_tap_filter(B, D, H, N, S, U);
 
   /* 最终预测值 b 和 h 是使用以下公式得出的 */
-  int32_t b =
-      CLIP3(0, (1 << m_slice.slice_header->m_sps->BitDepthY) - 1, (b1 + 16) >> 5);
-  int32_t s =
-      CLIP3(0, (1 << m_slice.slice_header->m_sps->BitDepthY) - 1, (s1 + 16) >> 5);
-  int32_t h =
-      CLIP3(0, (1 << m_slice.slice_header->m_sps->BitDepthY) - 1, (h1 + 16) >> 5);
-  int32_t m =
-      CLIP3(0, (1 << m_slice.slice_header->m_sps->BitDepthY) - 1, (m1 + 16) >> 5);
+  int32_t b = CLIP3(0, (1 << m_slice->slice_header->m_sps->BitDepthY) - 1,
+                    (b1 + 16) >> 5);
+  int32_t s = CLIP3(0, (1 << m_slice->slice_header->m_sps->BitDepthY) - 1,
+                    (s1 + 16) >> 5);
+  int32_t h = CLIP3(0, (1 << m_slice->slice_header->m_sps->BitDepthY) - 1,
+                    (h1 + 16) >> 5);
+  int32_t m = CLIP3(0, (1 << m_slice->slice_header->m_sps->BitDepthY) - 1,
+                    (m1 + 16) >> 5);
 
   int32_t cc = a_6_tap_filter(X11, X21, E, K, X31, X41);
   int32_t dd = a_6_tap_filter(X12, X22, F, L, X32, X42);
@@ -2435,7 +2437,7 @@ int PictureBase::luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
   //    int32_t j2 = a_6_tap_filter(aa, bb, b1, s1, gg, hh);
 
   /*  其中，表示为 aa、bb、gg、s1 和 hh 的中间值是通过以与 b1 的推导相同的方式水平应用 6 抽头滤波器而导出的，表示为 cc、dd、ee、m1 和 ff 的中间值是通过以下方式导出的：以与 h1 的推导相同的方式垂直应用 6 抽头滤波器。最终预测值 j 是使用以下公式得出的*/
-  int32_t j = CLIP3(0, (1 << m_slice.slice_header->m_sps->BitDepthY) - 1,
+  int32_t j = CLIP3(0, (1 << m_slice->slice_header->m_sps->BitDepthY) - 1,
                     (j1 + 512) >> 10);
 
   /* – 标记为 a、c、d、n、f、i、k 和 q 的四分之一样本位置的样本是通过对整数和半样本位置处的两个最近样本进行向上舍入平均而得出的*/
@@ -2479,12 +2481,12 @@ int PictureBase::chroma_sample_interpolation_process(
     int32_t xIntC, int32_t yIntC, int32_t xFracC, int32_t yFracC,
     PictureBase *refPic, int32_t isChromaCb, uint8_t &predPartLXC_xC_yC) {
 
-  const SliceHeader *slice_header = m_slice.slice_header;
+  const SliceHeader *slice_header = m_slice->slice_header;
 
   /* 变量 refPicHeightEffectiveC 是有效参考图像色度数组的高度，其推导如下： */
   int32_t refPicHeightEffectiveC = 0;
   if (slice_header->MbaffFrameFlag == 0 ||
-      m_slice.slice_data->mb_field_decoding_flag == 0)
+      m_slice->slice_data->mb_field_decoding_flag == 0)
     refPicHeightEffectiveC = PicHeightInSamplesC;
   else
     refPicHeightEffectiveC = PicHeightInSamplesC / 2;
@@ -2533,14 +2535,14 @@ int PictureBase::weighted_sample_prediction(
     uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
 
   int ret = 0;
-  const SliceHeader *slice_header = m_slice.slice_header;
+  const SliceHeader *slice_header = m_slice->slice_header;
   uint32_t slice_type = slice_header->slice_type % 5;
 
   /* 对于 P 和 SP 切片中 predFlagL0 等于 1 的宏块或分区，以下情况适用： 
    * – 如果weighted_pred_flag 等于 0，则使用相同的输入和输出调用第 8.4.2.3.1 节中描述的默认加权样本预测过程如本条中描述的过程。  
    * — 否则（weighted_pred_flag等于1），使用与本节中描述的过程相同的输入和输出来调用第8.4.2.3.2节中描述的显式加权样本预测过程。 */
   if (predFlagL0 && (slice_type == SLICE_P || slice_type == SLICE_SP)) {
-    if (m_slice.slice_header->m_pps->weighted_pred_flag == 0)
+    if (m_slice->slice_header->m_pps->weighted_pred_flag == 0)
       // 8.4.2.3.1 Default weighted sample prediction process
       ret = default_weighted_sample_prediction(
           predFlagL0, predFlagL1, partWidth, partHeight, partWidthC,
@@ -2563,13 +2565,13 @@ int PictureBase::weighted_sample_prediction(
         * – 如果 predFlagL0 等于 1 并且 predFlagL1 等于 1，则使用相同的输入调用第 8.4.2.3.2 节中描述的隐式加权样本预测过程，并且输出如本节中描述的过程。  
         * – 否则（predFlagL0 或 predFlagL1 等于 1，但不是两者），则使用与本节中描述的过程相同的输入和输出来调用第 8.4.2.3.1 节中描述的默认加权样本预测过程。*/
   } else if ((predFlagL0 == 1 || predFlagL1 == 1) && slice_type == SLICE_B) {
-    if (m_slice.slice_header->m_pps->weighted_bipred_idc == 0) {
+    if (m_slice->slice_header->m_pps->weighted_bipred_idc == 0) {
       // 8.4.2.3.1 Default weighted sample prediction process
       ret = default_weighted_sample_prediction(
           predFlagL0, predFlagL1, partWidth, partHeight, partWidthC,
           partHeightC, predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L,
           predPartL1Cb, predPartL1Cr, predPartL, predPartCb, predPartCr);
-    } else if (m_slice.slice_header->m_pps->weighted_bipred_idc == 1) {
+    } else if (m_slice->slice_header->m_pps->weighted_bipred_idc == 1) {
       // 8.4.2.3.2 Weighted sample prediction process
       ret = weighted_sample_prediction_process_2(
           mbPartIdx, subMbPartIdx, predFlagL0, predFlagL1, partWidth,
@@ -2620,7 +2622,7 @@ int PictureBase::default_weighted_sample_prediction(
       for (int x = 0; x <= partWidth - 1; x++)
         predPartL[y * partWidth + x] = predPartL0L[y * partWidth + x];
 
-    if (m_slice.slice_header->m_sps->ChromaArrayType != 0) {
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           predPartCb[y * partWidthC + x] = predPartL0Cb[y * partWidthC + x];
@@ -2633,7 +2635,7 @@ int PictureBase::default_weighted_sample_prediction(
       for (int x = 0; x <= partWidth - 1; x++)
         predPartL[y * partWidth + x] = predPartL1L[y * partWidth + x];
 
-    if (m_slice.slice_header->m_sps->ChromaArrayType != 0) {
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           predPartCb[y * partWidthC + x] = predPartL1Cb[y * partWidthC + x];
@@ -2648,7 +2650,7 @@ int PictureBase::default_weighted_sample_prediction(
                                         predPartL1L[y * partWidth + x] + 1) >>
                                        1;
 
-    if (m_slice.slice_header->m_sps->ChromaArrayType != 0) {
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           predPartCb[y * partWidthC + x] =
@@ -2681,8 +2683,8 @@ int PictureBase::weighted_sample_prediction_process_2(
     /* Output: */
     uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
 
-  const uint32_t BitDepthY = m_slice.slice_header->m_sps->BitDepthY;
-  const uint32_t BitDepthC = m_slice.slice_header->m_sps->BitDepthC;
+  const uint32_t BitDepthY = m_slice->slice_header->m_sps->BitDepthY;
+  const uint32_t BitDepthC = m_slice->slice_header->m_sps->BitDepthC;
 
   /* 根据导出预测块的可用组件，以下适用： 
    * – 如果导出亮度样本预测值 predPartL[ x, y ]，则以下适用，其中 C 设置等于 L，x 设置等于 0。 partWidth - 1，y 设置为等于 0..partHeight - 1，并且 Clip1( ) 被替换为 Clip1Y( )。  
@@ -2707,7 +2709,7 @@ int PictureBase::weighted_sample_prediction_process_2(
       }
     }
 
-    if (m_slice.slice_header->m_sps->ChromaArrayType != 0) {
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           if (logWDCb >= 1)
@@ -2749,7 +2751,7 @@ int PictureBase::weighted_sample_prediction_process_2(
           predPartL[y * partWidth + x] =
               Clip1C(predPartL1L[y * partWidth + x] * w0L + o0L, BitDepthY);
 
-    if (m_slice.slice_header->m_sps->ChromaArrayType != 0) {
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           if (logWDCb >= 1)
@@ -2789,7 +2791,7 @@ int PictureBase::weighted_sample_prediction_process_2(
                 ((o0L + o1L + 1) >> 1),
             BitDepthY);
 
-    if (m_slice.slice_header->m_sps->ChromaArrayType != 0) {
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
       for (int y = 0; y <= partHeightC - 1; y++) {
         for (int x = 0; x <= partWidthC - 1; x++) {
           predPartCb[y * partWidthC + x] =
@@ -2825,8 +2827,9 @@ int PictureBase::derivation_prediction_weights(
     int32_t &o1Cb, int32_t &logWDCr, int32_t &w0Cr, int32_t &w1Cr,
     int32_t &o0Cr, int32_t &o1Cr) {
 
-  const SliceHeader *slice_header = m_slice.slice_header;
-  uint32_t weighted_bipred_idc = m_slice.slice_header->m_pps->weighted_bipred_idc;
+  const SliceHeader *slice_header = m_slice->slice_header;
+  uint32_t weighted_bipred_idc =
+      m_slice->slice_header->m_pps->weighted_bipred_idc;
   uint32_t slice_type = slice_header->slice_type % 5;
 
   /* 变量implicitModeFlag和explicitModeFlag的推导如下：
@@ -2843,7 +2846,7 @@ int PictureBase::derivation_prediction_weights(
              (predFlagL0 + predFlagL1)) {
     implicitModeFlag = 0;
     explicitModeFlag = 1;
-  } else if (m_slice.slice_header->m_pps->weighted_pred_flag == 1 &&
+  } else if (m_slice->slice_header->m_pps->weighted_pred_flag == 1 &&
              (slice_type == SLICE_P || slice_type == SLICE_SP) && predFlagL0) {
     implicitModeFlag = 0;
     explicitModeFlag = 1;
@@ -2855,7 +2858,7 @@ int PictureBase::derivation_prediction_weights(
   if (implicitModeFlag) {
     logWDL = 5;
     o0L = o1L = 0;
-    if (m_slice.slice_header->m_sps->ChromaArrayType != 0) {
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
       logWDCb = logWDCr = 5;
       o0Cb = o1Cb = o0Cr = o1Cr = 0;
     }
@@ -2928,7 +2931,7 @@ int PictureBase::derivation_prediction_weights(
         (DistScaleFactor >> 2) < -64 || (DistScaleFactor >> 2) > 128) {
       w0L = w1L = 32;
 
-      if (m_slice.slice_header->m_sps->ChromaArrayType != 0)
+      if (m_slice->slice_header->m_sps->ChromaArrayType != 0)
         w0Cb = w1Cb = w0Cr = w1Cr = 32;
 
       /* 否则，变量 tb、td、tx 和 DistScaleFactor 分别使用方程 8-201、8-202、8-197 和 8-198 从 currPicOrField、pic0 和 pic1 的值导出，权重 w0C 和w1C 导出为 */
@@ -2936,7 +2939,7 @@ int PictureBase::derivation_prediction_weights(
       w0L = 64 - (DistScaleFactor >> 2);
       w1L = DistScaleFactor >> 2;
 
-      if (m_slice.slice_header->m_sps->ChromaArrayType != 0) {
+      if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
         w0Cb = w0Cr = 64 - (DistScaleFactor >> 2);
         w1Cb = w1Cr = DistScaleFactor >> 2;
       }
@@ -2963,12 +2966,12 @@ int PictureBase::derivation_prediction_weights(
     w0L = slice_header->luma_weight_l0[refIdxL0WP];
     w1L = slice_header->luma_weight_l1[refIdxL1WP];
     o0L = slice_header->luma_offset_l0[refIdxL0WP] *
-          (1 << (m_slice.slice_header->m_sps->BitDepthY - 8));
+          (1 << (m_slice->slice_header->m_sps->BitDepthY - 8));
     o1L = slice_header->luma_offset_l1[refIdxL1WP] *
-          (1 << (m_slice.slice_header->m_sps->BitDepthY - 8));
+          (1 << (m_slice->slice_header->m_sps->BitDepthY - 8));
 
     // – 否则（对于色度样本，C 等于 Cb 或 Cr，对于 Cb，iCbCr = 0，对于 Cr，iCbCr = 1）
-    if (m_slice.slice_header->m_sps->ChromaArrayType != 0) {
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
       logWDCb = logWDCr = slice_header->chroma_log2_weight_denom;
 
       w0Cb = slice_header->chroma_weight_l0[refIdxL0WP][0];
@@ -2978,14 +2981,14 @@ int PictureBase::derivation_prediction_weights(
       w1Cr = slice_header->chroma_weight_l1[refIdxL1WP][1];
 
       o0Cb = slice_header->chroma_offset_l0[refIdxL0WP][0] *
-             (1 << (m_slice.slice_header->m_sps->BitDepthC - 8));
+             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
       o0Cr = slice_header->chroma_offset_l0[refIdxL0WP][1] *
-             (1 << (m_slice.slice_header->m_sps->BitDepthC - 8));
+             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
 
       o1Cb = slice_header->chroma_offset_l1[refIdxL1WP][0] *
-             (1 << (m_slice.slice_header->m_sps->BitDepthC - 8));
+             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
       o1Cr = slice_header->chroma_offset_l1[refIdxL1WP][1] *
-             (1 << (m_slice.slice_header->m_sps->BitDepthC - 8));
+             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
     }
   } else {
     /* 否则(implicitModeFlag等于0且explicitModeFlag等于0)，变量logWDC、w0C、w1C、o0C、o1C不用于当前宏块的重建过程。*/
@@ -3000,7 +3003,7 @@ int PictureBase::derivation_prediction_weights(
       return -1;
     }
 
-    if (m_slice.slice_header->m_sps->ChromaArrayType != 0) {
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
       int32_t max = (logWDCb == 7) ? 127 : 128;
       if (-128 > (w0Cb + w1Cb) || (w0Cb + w1Cb) > max) {
         std::cerr << "An error occurred on " << __FUNCTION__
@@ -3047,7 +3050,7 @@ int PictureBase::Derivation_process_for_neighbouring_partitions(
     int32_t subMbPartIdx, int32_t isChroma, int32_t &mbAddrN,
     int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
   int ret = 0;
-  SliceHeader *slice_header = m_slice.slice_header;
+  SliceHeader *slice_header = m_slice->slice_header;
 
   //---------------------------------------
   // 1. The inverse macroblock partition scanning process as described in

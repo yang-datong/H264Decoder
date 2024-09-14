@@ -65,7 +65,7 @@ class PictureBase {
   H264_PICTURE_MARKED_AS reference_marked_type =
       H264_PICTURE_MARKED_AS_unkown; // I,P作为参考帧的mark状态
 
-  Slice m_slice;
+  Slice *m_slice;
   //SliceHeader m_h264_slice_header;
   //SliceBody m_h264_slice_data; // 注意：一个picture中可能有多个slice data
   MacroBlock *m_mbs; // 存储当前图像的所有宏块 m_mbs[PicSizeInMbs] =
@@ -92,7 +92,7 @@ class PictureBase {
   ~PictureBase();
   int printInfo();
   int reset();
-  int init(Slice &slice);
+  int init(Slice *slice);
   int unInit();
   PictureBase &operator=(const PictureBase &src); // 重载等号运算符
   int copyData(const PictureBase &src, bool isMallocAndCopyData);

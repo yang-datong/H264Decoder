@@ -209,7 +209,8 @@ int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
 
     //当上一帧完成解码后，且解码帧为IDR帧，则进行GOP -> flush
     if (isFromIDR == false)
-      if (frame->m_picture_frame.m_slice.slice_header->IdrPicFlag) gop->flush();
+      if (frame->m_picture_frame.m_slice->slice_header->IdrPicFlag)
+        gop->flush();
 
     Frame *outPicture = nullptr;
     gop->getOneOutPicture(frame, outPicture);
@@ -220,7 +221,7 @@ int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
 
       } else if (output_file_type == YUV) {
         outPicture->m_picture_frame.writeYUV("output.yuv");
-        if (frame->m_picture_frame.m_slice.slice_header->IdrPicFlag)
+        if (frame->m_picture_frame.m_slice->slice_header->IdrPicFlag)
           std::cout << "\tffplay -video_size "
                     << outPicture->m_picture_frame.PicWidthInSamplesL << "x"
                     << outPicture->m_picture_frame.PicHeightInSamplesL
