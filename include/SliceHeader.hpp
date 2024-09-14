@@ -27,7 +27,7 @@ class SliceHeader {
   /* 允许Slice类访问 */
   friend class Slice;
   //SliceHeader(SPS &sps, PPS &pps) : m_sps(sps), m_pps(pps) {};
-  SliceHeader() {};
+  SliceHeader(){};
 
  public:
   /* 引用自Nalu */

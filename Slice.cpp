@@ -3,10 +3,21 @@
 #include "SliceData.hpp"
 #include "SliceHeader.hpp"
 
-Slice::Slice(){
+Slice::Slice() {
   slice_header = new SliceHeader();
   slice_data = new SliceData();
 };
+
+Slice::~Slice() {
+  if (slice_header) {
+    delete slice_header;
+    slice_header = nullptr;
+  }
+  if (slice_data) {
+    delete slice_data;
+    slice_data = nullptr;
+  }
+}
 
 void Slice::addMacroblock(std::shared_ptr<MacroBlock> macroblock) {
   _macroblocks.push_back(macroblock);

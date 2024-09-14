@@ -9,15 +9,15 @@ class PictureBase;
 class SliceData {
  private:
   /* SliceData的SPS、PPS不能对外提供 */
-  SPS m_sps;
-  PPS m_pps;
+  SPS *m_sps;
+  PPS *m_pps;
 
  private:
   /* 私有化SliceBody，不提供给外界，只能通过Slice来访问本类 */
   //SliceData(SPS &sps, PPS &pps) : m_sps(sps), m_pps(pps) {}
   //允许Slice类访问
   friend class Slice;
-  SliceData() {};
+  SliceData(){};
 
  public:
   /* 这个id是解码器自己维护的，每次解码一帧则+1 */
