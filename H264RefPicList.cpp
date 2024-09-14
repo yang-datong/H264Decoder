@@ -328,6 +328,8 @@ int PictureBase::decoding_picture_numbers(Frame *(&dpb)[16]) {
     auto &pict_f = dpb[i]->m_picture_frame;
     auto &pict_f_frameNum = pict_f.FrameNum;
     auto &pict_f_frameNumWrap = pict_f.FrameNumWrap;
+    if (!pict_f.m_slice.slice_header->m_sps)
+      continue;
     int MaxFrameNum = pict_f.m_slice.slice_header->m_sps->MaxFrameNum;
 
     if (pict_f.reference_marked_type ==

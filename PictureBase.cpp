@@ -260,7 +260,7 @@ int PictureBase::copyData(const PictureBase &src, bool isMallocAndCopyData) {
     memcpy(m_pic_buff_cr, src.m_pic_buff_cr,
            sizeof(uint8_t) * PicWidthInSamplesC * PicHeightInSamplesC);
   } else {
-    SliceHeader &slice_header = (SliceHeader &)src.m_slice.slice_header;
+    SliceHeader *slice_header = src.m_slice.slice_header;
 
     MbWidthL = MB_WIDTH;   // 16
     MbHeightL = MB_HEIGHT; // 16
@@ -269,7 +269,7 @@ int PictureBase::copyData(const PictureBase &src, bool isMallocAndCopyData) {
     Chroma_Format = m_slice.slice_header->m_sps->Chroma_Format;
 
     PicWidthInMbs = m_slice.slice_header->m_sps->PicWidthInMbs;
-    PicHeightInMbs = slice_header.PicHeightInMbs;
+    PicHeightInMbs = slice_header->PicHeightInMbs;
     PicSizeInMbs = PicWidthInMbs * PicHeightInMbs;
 
     PicWidthInSamplesL = PicWidthInMbs * 16;
