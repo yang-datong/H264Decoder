@@ -1,6 +1,7 @@
 #ifndef SLICEHEADER_HPP_JYXLKOEI
 #define SLICEHEADER_HPP_JYXLKOEI
 
+#include "BitStream.hpp"
 #include "GOP.hpp"
 #include "PPS.hpp"
 #include "SPS.hpp"
@@ -184,10 +185,13 @@ class SliceHeader {
   // ref_pic_list_modification
  public:
   int32_t ref_pic_list_modification_flag_l0 = 0;
+  int32_t ref_pic_list_modification_flag_l1 = 0;
+
   int32_t modification_of_pic_nums_idc[2][32] = {{0}};
+
   int32_t abs_diff_pic_num_minus1[2][32] = {{0}};
   int32_t long_term_pic_num[2][32] = {{0}};
-  int32_t ref_pic_list_modification_flag_l1 = 0;
+
   int32_t ref_pic_list_modification_count_l0 = 0;
   int32_t ref_pic_list_modification_count_l1 = 0;
 
@@ -202,11 +206,12 @@ class SliceHeader {
   uint32_t ScalingList8x8[6][64] = {{0}};
 
  private:
+  BitStream *bs = nullptr;
   int set_scaling_lists_values();
-  void ref_pic_list_mvc_modification(BitStream &bitStream);
-  void ref_pic_list_modification(BitStream &bitStream);
-  void pred_weight_table(BitStream &bitStream);
-  void dec_ref_pic_marking(BitStream &bitStream);
+  void ref_pic_list_mvc_modification();
+  void ref_pic_list_modification();
+  void pred_weight_table();
+  void dec_ref_pic_marking();
 
  public:
   int parseSliceHeader(BitStream &bitStream, GOP &gop);
