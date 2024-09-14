@@ -1,12 +1,12 @@
 #include "Slice.hpp"
 #include "Frame.hpp"
-#include "SliceData.hpp"
 #include "Nalu.hpp"
+#include "SliceData.hpp"
 
 #include "SliceHeader.hpp"
 
 Slice::Slice(Nalu *nalu) : mNalu(nalu) {
-  slice_header = new SliceHeader(mNalu->nal_unit_type,mNalu->nal_ref_idc);
+  slice_header = new SliceHeader(mNalu->nal_unit_type, mNalu->nal_ref_idc);
   slice_data = new SliceData();
 };
 
@@ -33,7 +33,7 @@ int Slice::encode() {
   return 0;
 }
 
-int Slice::decode(BitStream &bitStream, Frame *(&dpb)[16], SPS &sps, PPS &pps,
+int Slice::decode(BitStream &bs, Frame *(&dpb)[16], SPS &sps, PPS &pps,
                   Frame *frame) {
   //----------------帧----------------------------------
   frame->m_picture_coded_type = H264_PICTURE_CODED_TYPE_FRAME;
@@ -65,6 +65,6 @@ int Slice::decode(BitStream &bitStream, Frame *(&dpb)[16], SPS &sps, PPS &pps,
   //else  // 帧
   //std::cout << "\t帧编码" << std::endl;
 
-  slice_data->parseSliceData(bitStream, frame->m_picture_frame, sps, pps);
+  slice_data->parseSliceData(bs, frame->m_picture_frame, sps, pps);
   return 0;
 }

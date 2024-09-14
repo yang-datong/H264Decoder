@@ -34,7 +34,8 @@ class PPS {
   uint32_t maxPICScalingList = 0;
   /* 指定第二个色度量化参数索引偏移 */
   int32_t second_chroma_qp_index_offset = 0;
-  /* 指示是否存在冗余图像计数 */
+
+  /* 指示是否存在冗余图像计数：主要用于错误恢复，I帧的备份 */
   bool redundant_pic_cnt_present_flag = 0;
   /* 指示是否存在加权预测 */
   bool weighted_pred_flag = 0;

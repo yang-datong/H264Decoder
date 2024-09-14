@@ -144,8 +144,6 @@ int Nalu::extractSEIparameters(RBSP &rbsp, SEI &sei, SPS &sps) {
 
 int Nalu::extractSliceparameters(BitStream &bitStream, GOP &gop, Frame &frame) {
   Slice *slice = new Slice(this);
-  //slice->slice_header->nal_unit_type = nal_unit_type;
-  //slice->slice_header->nal_ref_idc = nal_ref_idc;
   slice->slice_header->parseSliceHeader(bitStream, gop);
   //frame.addSlice(slice);
   frame.slice = slice;

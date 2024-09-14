@@ -70,7 +70,7 @@ int PictureBase::decoding_picture_order_count_type_0(
   /* – 如果解码顺序中的前一个参考图片不是底场， prevPicOrderCntMsb 被设置为等于 0，并且 prevPicOrderCntLsb 被设置为等于按照解码顺序的前一个参考图片的 TopFieldOrderCnt 的值。  */
   /* – 否则（解码顺序中的前一个参考图像是底场），prevPicOrderCntMsb 设置为等于 0，并且 prevPicOrderCntLsb 设置为等于 0。 */
   /* – 否则（解码顺序中的前一个参考图片不包括等于5的memory_management_control_operation），prevPicOrderCntMsb设置为等于解码顺序中的前一个参考图片的PicOrderCntMsb，并且设置prevPicOrderCntLsb等于解码顺序中前一个参考图片的 pic_order_cnt_lsb 的值。 */
-  if (header->IdrPicFlag == 1)
+  if (header->IdrPicFlag)
     prevPicOrderCntMsb = prevPicOrderCntLsb = 0;
   else if (picture_previous_ref) {
     if (picture_previous_ref->memory_management_control_operation_5_flag) {

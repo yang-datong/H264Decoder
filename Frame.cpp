@@ -16,7 +16,7 @@ void Frame::decode() {}
 int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop) {
   static int index = 0;
   string output_file;
-  const uint32_t slice_type = slice->slice_header->slice_type;
+  const uint32_t slice_type = slice->slice_header->slice_type % 5;
   //for (auto &slice : slices) {
   if (slice_type == SLICE_I)
     output_file = "output_I_" + to_string(index++) + ".bmp";

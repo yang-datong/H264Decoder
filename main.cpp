@@ -40,6 +40,8 @@ int main(int argc, char *argv[]) {
     //用于测试GOP, IDR的处理（ok，其中NAL[3527], GOP[3204], 161个IDR帧
     //filePath = "./test/854x480_60_fps_20_gop.h264";
     //filePath = "./test/854x480_60_fps_20_gop_and_I_Slice.h264";
+    /* 全I帧 */
+    //filePath = "./test/demo_10_frames_All_I_Slice.h264";
   }
 
   /* 1. 打开文件、读取NUL、存储NUL的操作 */

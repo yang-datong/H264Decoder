@@ -2829,7 +2829,7 @@ int CH264Cabac::decode_sub_mb_type_in_B_slices(int32_t &synElVal) {
 int CH264Cabac::decode_mb_skip_flag(const int32_t currMbAddr,
                                     int32_t &synElVal) {
 
-  const int slice_type = picture.m_slice->slice_header->slice_type;
+  const int slice_type = picture.m_slice->slice_header->slice_type % 5;
 
   /* 9.3.2 Binarization process */
   // Table 9-34 – Syntax elements and associated types of binarization,maxBinIdxCtx, and ctxIdxOffset
