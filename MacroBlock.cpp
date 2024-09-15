@@ -26,7 +26,7 @@ void MacroBlock::initFromSlice(const SliceHeader &header,
   MbaffFrameFlag = header.MbaffFrameFlag;
   disable_deblocking_filter_idc = header.disable_deblocking_filter_idc;
   CurrMbAddr = slice_data.CurrMbAddr;
-  slice_id = slice_data.slice_id;
+  //slice_id = slice_data.slice_id;
   slice_number = slice_data.slice_number;
   m_slice_type = header.slice_type;
   FilterOffsetA = header.FilterOffsetA;

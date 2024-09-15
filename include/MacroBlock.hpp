@@ -13,7 +13,7 @@ class SliceData;
 
 class MacroBlock {
  public:
-  MacroBlock(){};
+  MacroBlock() {};
   ~MacroBlock();
   /* 宏块类型，指示宏块的编码模式（如帧内、帧间、PCM等），取决于切片类型 */
   /* 对于I Slice: mb_type取值区间为：[0-25]

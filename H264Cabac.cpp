@@ -217,8 +217,7 @@ int CH264Cabac::init_of_context_variables(H264_SLICE_TYPE slice_type,
     if (ret == 0) {
       /* 初始化两个变量pStateIdx和valMPS：
        * pStateIdx: 对应于一个概率状态索引
-       * valMPS: 对应于第9.3.3.2条中进一步描述的最可能符号的值(或1或0）
-       * */
+       * valMPS: 对应于第9.3.3.2条中进一步描述的最可能符号的值(或1或0）*/
       int preCtxState = CLIP3(1, 126, ((m * CLIP3(0, 51, SliceQPY)) >> 4) + n);
       if (preCtxState <= 63) {
         _pStateIdxs[ctxIdx] = 63 - preCtxState;

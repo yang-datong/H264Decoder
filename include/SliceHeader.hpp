@@ -180,6 +180,7 @@ class SliceHeader {
   /* 参考帧列表1的色度偏移 */
   int32_t chroma_offset_l1[32][2] = {{0}};
 
+ public:
   /* 参考帧列表0的预测图像编号 */
   int32_t picNumL0Pred = 0;
   /* 参考帧列表1的预测图像编号 */
@@ -207,13 +208,13 @@ class SliceHeader {
   int32_t no_output_of_prior_pics_flag = 0;
   int32_t long_term_reference_flag = 0;
   int32_t adaptive_ref_pic_marking_mode_flag = 0;
-  DEC_REF_PIC_MARKING m_dec_ref_pic_marking[32];
   int32_t dec_ref_pic_marking_count = 0;
   uint32_t ScalingList4x4[6][16] = {{0}};
   uint32_t ScalingList8x8[6][64] = {{0}};
+  DEC_REF_PIC_MARKING m_dec_ref_pic_marking[32];
 
  private:
-  BitStream *bs = nullptr;
+  BitStream *_bs = nullptr;
   int set_scaling_lists_values();
   int seq_scaling_matrix(int32_t scaling_list_size);
   int pic_scaling_matrix(int32_t scaling_list_size);

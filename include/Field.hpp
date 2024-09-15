@@ -10,7 +10,7 @@ class Field : public Frame {
   enum Type { TOP, BOTTOM };
 
  private:
-  Type type;
+  //Type type;
   std::vector<Slice> slices;
 
  public:

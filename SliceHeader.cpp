@@ -12,12 +12,12 @@ SliceHeader::~SliceHeader() {
 
 /* Slice header syntax -> 51 page */
 int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
-  bs = &bitStream;
+  _bs = &bitStream;
 
-  first_mb_in_slice = bs->readUE();
+  first_mb_in_slice = _bs->readUE();
   cout << "\tSlice中第一个宏块的索引:" << first_mb_in_slice << endl;
 
-  slice_type = bs->readUE();
+  slice_type = _bs->readUE();
   switch (slice_type) {
   case SLICE_P:
     cout << "\tP Slice" << endl;
@@ -57,45 +57,45 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   slice_type %= 5;
 
   /* 更新GOP中当前Slice使用的SPS、PPS ID */
-  gop.curr_pps_id = pic_parameter_set_id = bs->readUE();
+  gop.curr_pps_id = pic_parameter_set_id = _bs->readUE();
   gop.curr_sps_id = gop.m_ppss[gop.curr_pps_id].seq_parameter_set_id;
   m_sps = &gop.m_spss[gop.curr_sps_id];
   m_pps = &gop.m_ppss[gop.curr_pps_id];
   cout << "\tPPS ID:" << pic_parameter_set_id << endl;
 
   if (m_sps->separate_colour_plane_flag) {
-    colour_plane_id = bs->readUn(2);
+    colour_plane_id = _bs->readUn(2);
     cout << "\t颜色平面ID:" << colour_plane_id << endl;
   }
 
   /* 如果当前图片是IDR图片，frame_num应等于0。 */
-  frame_num = bs->readUn(log2(m_sps->MaxFrameNum));
+  frame_num = _bs->readUn(log2(m_sps->MaxFrameNum));
 
   cout << "\t当前帧的编号:" << frame_num << endl;
   if (!m_sps->frame_mbs_only_flag) {
-    field_pic_flag = bs->readU1();
+    field_pic_flag = _bs->readU1();
     /* NOTE: 对于场编码而言，应进一步判断Table D-1 – Interpretation of pic_struct*/
     cout << "\t场图像标志:" << field_pic_flag << endl;
     if (field_pic_flag) {
-      bottom_field_flag = bs->readU1();
+      bottom_field_flag = _bs->readU1();
       cout << "\t底场标志:" << bottom_field_flag << endl;
     }
   }
   //7.4.1 NAL unit semantics (7-1)
   IdrPicFlag = ((nal_unit_type == 5) ? 1 : 0);
   if (IdrPicFlag) {
-    idr_pic_id = bs->readUE();
+    idr_pic_id = _bs->readUE();
     cout << "\tIDR图像ID:" << idr_pic_id << endl;
   }
 
   if (m_sps->pic_order_cnt_type == 0) {
     cout << "\t图像顺序计数(POC)方法:使用帧号和帧场号计算" << endl;
     pic_order_cnt_lsb =
-        bs->readUn(m_sps->log2_max_pic_order_cnt_lsb_minus4 + 4);
+        _bs->readUn(m_sps->log2_max_pic_order_cnt_lsb_minus4 + 4);
     cout << "\t图像顺序计数LSB:" << pic_order_cnt_lsb << endl;
     if (m_pps->bottom_field_pic_order_in_frame_present_flag &&
         !field_pic_flag) {
-      delta_pic_order_cnt_bottom = bs->readSE();
+      delta_pic_order_cnt_bottom = _bs->readSE();
       cout << "\t底场的图像顺序计数增量:" << delta_pic_order_cnt_bottom << endl;
     }
   }
@@ -103,10 +103,10 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   if (m_sps->pic_order_cnt_type == 1 &&
       !m_sps->delta_pic_order_always_zero_flag) {
     cout << "\t图像顺序计数(POC)方法:使用增量计数来计算" << endl;
-    delta_pic_order_cnt[0] = bs->readSE();
+    delta_pic_order_cnt[0] = _bs->readSE();
     cout << "\t图像顺序计数增量1:" << delta_pic_order_cnt[0] << endl;
     if (m_pps->bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
-      delta_pic_order_cnt[1] = bs->readSE();
+      delta_pic_order_cnt[1] = _bs->readSE();
     cout << "\t图像顺序计数增量2:" << delta_pic_order_cnt[1] << endl;
   }
 
@@ -116,13 +116,13 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   }
 
   if (m_pps->redundant_pic_cnt_present_flag) {
-    redundant_pic_cnt = bs->readUE();
+    redundant_pic_cnt = _bs->readUE();
     cout << "\t冗余图像计数:" << redundant_pic_cnt << endl;
   }
 
   /* 对于B Slice的直接预测模式 */
   if (slice_type == SLICE_B) {
-    direct_spatial_mv_pred_flag = bs->readU1();
+    direct_spatial_mv_pred_flag = _bs->readU1();
     cout << "\t直接空间运动矢量预测标志(直接运动预测模式):"
          << direct_spatial_mv_pred_flag << endl;
   }
@@ -130,15 +130,15 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   /* 动态管理和更新解码器参考帧列表的过程 */
   if (slice_type == SLICE_P || slice_type == SLICE_SP ||
       slice_type == SLICE_B) {
-    num_ref_idx_active_override_flag = bs->readU1();
+    num_ref_idx_active_override_flag = _bs->readU1();
     cout << "\t覆盖活动参考帧数标志:" << num_ref_idx_active_override_flag
          << endl;
 
     /* 单个Slice（局部）存在覆盖活动参考帧数标志则使用编码器提供的 参考帧列表活动 参考帧数 */
     if (num_ref_idx_active_override_flag) {
-      num_ref_idx_l0_active_minus1 = bs->readUE();
+      num_ref_idx_l0_active_minus1 = _bs->readUE();
       if (slice_type == SLICE_B) {
-        num_ref_idx_l1_active_minus1 = bs->readUE();
+        num_ref_idx_l1_active_minus1 = _bs->readUE();
         cout << "\t参考帧列表0的活动参考帧数减1:"
              << num_ref_idx_l0_active_minus1
              << ",参考帧列表1的活动参考帧数减1:" << num_ref_idx_l1_active_minus1
@@ -170,30 +170,30 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
 
   if (m_pps->entropy_coding_mode_flag && slice_type != SLICE_I &&
       slice_type != SLICE_SI) {
-    cabac_init_idc = bs->readUE();
+    cabac_init_idc = _bs->readUE();
     cout << "\tCABAC初始化索引:" << cabac_init_idc << endl;
   }
 
-  slice_qp_delta = bs->readSE();
+  slice_qp_delta = _bs->readSE();
   if (slice_type == SLICE_SP || slice_type == SLICE_SI) {
     if (slice_type == SLICE_SP) {
-      sp_for_switch_flag = bs->readU1();
+      sp_for_switch_flag = _bs->readU1();
       cout << "\tSP切换标志:" << sp_for_switch_flag << endl;
       /* TODO YangJing 未实现 <24-09-15 13:24:02> */
       std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
                 << std::endl;
     }
     /* qs 是专门用于 SP Slice 和 SI Slice 的量化参数。它类似于 qp */
-    slice_qs_delta = bs->readSE();
+    slice_qs_delta = _bs->readSE();
   }
 
   if (m_pps->deblocking_filter_control_present_flag) {
-    disable_deblocking_filter_idc = bs->readUE();
+    disable_deblocking_filter_idc = _bs->readUE();
     cout << "\t禁用去块效应滤波器标志:" << disable_deblocking_filter_idc
          << endl;
     if (disable_deblocking_filter_idc != 1) {
-      slice_alpha_c0_offset_div2 = bs->readSE();
-      slice_beta_offset_div2 = bs->readSE();
+      slice_alpha_c0_offset_div2 = _bs->readSE();
+      slice_beta_offset_div2 = _bs->readSE();
       cout << "\t去块效应滤波器的Alpha偏移值:" << slice_alpha_c0_offset_div2
            << ",去块效应滤波器的Beta偏移值:" << slice_beta_offset_div2 << endl;
     }
@@ -207,7 +207,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
       m_pps->slice_group_map_type <= 5) {
     /* Ceil( Log2( PicSizeInMapUnits ÷ SliceGroupChangeRate + 1 ) ) -> (7-35) -> page 92 */
     int32_t v = log2(m_sps->PicSizeInMapUnits / SliceGroupChangeRate + 1);
-    slice_group_change_cycle = bs->readUn(v);
+    slice_group_change_cycle = _bs->readUn(v);
   }
 
   //----------- 下面都是一些额外信息，比如还原偏移，或者事先计算一些值，后面方便用 ------------
@@ -278,19 +278,19 @@ void SliceHeader::ref_pic_list_modification() {
   /* P帧或B帧，这些帧类型需要参考其他帧来进行编码 */
   if (slice_type != SLICE_I && slice_type != SLICE_SI) {
 
-    ref_pic_list_modification_flag_l0 = bs->readU1();
+    ref_pic_list_modification_flag_l0 = _bs->readU1();
     if (ref_pic_list_modification_flag_l0) {
       /* 前参考需要修改 */
       int i = 0;
       do {
         /* 读取操作码，它决定了如何修改参考图片列表 */
-        modification_of_pic_nums_idc[0][i] = bs->readUE();
+        modification_of_pic_nums_idc[0][i] = _bs->readUE();
         if ((modification_of_pic_nums_idc[0][i] & ~1) == 0)
           /* 修改当前列表中的图片编号，abs_diff_pic_num_minus1用来计算实际的图片编号差异 */
-          abs_diff_pic_num_minus1[0][i] = bs->readUE();
+          abs_diff_pic_num_minus1[0][i] = _bs->readUE();
         else if (modification_of_pic_nums_idc[0][i] == 2)
           /* 使用长期参考帧，其编号由long_term_pic_num给出 */
-          long_term_pic_num[0][i] = bs->readUE();
+          long_term_pic_num[0][i] = _bs->readUE();
         i++;
       } while (modification_of_pic_nums_idc[0][i - 1] != 3);
       /* 遇到操作码3，表示修改结束 */
@@ -302,17 +302,17 @@ void SliceHeader::ref_pic_list_modification() {
 
   /* 同上，对于B帧双向参考而言，需要对后参考进行同样修改 */
   if (slice_type == SLICE_B) {
-    ref_pic_list_modification_flag_l1 = bs->readU1();
+    ref_pic_list_modification_flag_l1 = _bs->readU1();
     if (ref_pic_list_modification_flag_l1) {
       /* 后参考需要修改 */
       int i = 0;
       do {
-        modification_of_pic_nums_idc[1][i] = bs->readUE();
+        modification_of_pic_nums_idc[1][i] = _bs->readUE();
         if (modification_of_pic_nums_idc[1][i] == 0 ||
             modification_of_pic_nums_idc[1][i] == 1)
-          abs_diff_pic_num_minus1[1][i] = bs->readUE();
+          abs_diff_pic_num_minus1[1][i] = _bs->readUE();
         else if (modification_of_pic_nums_idc[1][i] == 2)
-          long_term_pic_num[1][i] = bs->readUE();
+          long_term_pic_num[1][i] = _bs->readUE();
         i++;
       } while (modification_of_pic_nums_idc[1][i - 1] != 3);
 
@@ -326,9 +326,9 @@ void SliceHeader::ref_pic_list_modification() {
 void SliceHeader::pred_weight_table() {
   cout << "\t加权预测权重因子 -> {" << endl;
   /* Luma */
-  luma_log2_weight_denom = bs->readUE();
+  luma_log2_weight_denom = _bs->readUE();
   /* Chrome */
-  if (m_sps->ChromaArrayType != 0) chroma_log2_weight_denom = bs->readUE();
+  if (m_sps->ChromaArrayType != 0) chroma_log2_weight_denom = _bs->readUE();
   cout << "\t\t亮度权重的对数基数:" << luma_log2_weight_denom
        << ",色度权重的对数基数:" << chroma_log2_weight_denom << endl;
 
@@ -337,10 +337,10 @@ void SliceHeader::pred_weight_table() {
     luma_weight_l0[i] = 1 << luma_log2_weight_denom;
 
     /* Luma */
-    bool luma_weight_l0_flag = bs->readU1();
+    bool luma_weight_l0_flag = _bs->readU1();
     if (luma_weight_l0_flag) {
-      luma_weight_l0[i] = bs->readSE();
-      luma_offset_l0[i] = bs->readSE();
+      luma_weight_l0[i] = _bs->readSE();
+      luma_offset_l0[i] = _bs->readSE();
     }
 
     if (m_sps->ChromaArrayType != 0) {
@@ -349,11 +349,11 @@ void SliceHeader::pred_weight_table() {
       chroma_weight_l0[i][1] = 1 << chroma_log2_weight_denom;
 
       /* Cb,Cr*/
-      bool chroma_weight_l0_flag = bs->readU1();
+      bool chroma_weight_l0_flag = _bs->readU1();
       if (chroma_weight_l0_flag) {
         for (int j = 0; j < 2; j++) {
-          chroma_weight_l0[i][j] = bs->readSE();
-          chroma_offset_l0[i][j] = bs->readSE();
+          chroma_weight_l0[i][j] = _bs->readSE();
+          chroma_offset_l0[i][j] = _bs->readSE();
         }
       }
     }
@@ -374,10 +374,10 @@ void SliceHeader::pred_weight_table() {
       luma_weight_l1[i] = 1 << luma_log2_weight_denom;
 
       /* Luma */
-      bool luma_weight_l1_flag = bs->readU1();
+      bool luma_weight_l1_flag = _bs->readU1();
       if (luma_weight_l1_flag) {
-        luma_weight_l1[i] = bs->readSE();
-        luma_offset_l1[i] = bs->readSE();
+        luma_weight_l1[i] = _bs->readSE();
+        luma_offset_l1[i] = _bs->readSE();
       }
 
       if (m_sps->ChromaArrayType != 0) {
@@ -386,11 +386,11 @@ void SliceHeader::pred_weight_table() {
         chroma_weight_l1[i][1] = 1 << chroma_log2_weight_denom;
 
         /* Cb,Cr*/
-        bool chroma_weight_l1_flag = bs->readU1();
+        bool chroma_weight_l1_flag = _bs->readU1();
         if (chroma_weight_l1_flag) {
           for (int j = 0; j < 2; j++) {
-            chroma_weight_l1[i][j] = bs->readSE();
-            chroma_offset_l1[i][j] = bs->readSE();
+            chroma_weight_l1[i][j] = _bs->readSE();
+            chroma_offset_l1[i][j] = _bs->readSE();
           }
         }
       }
@@ -413,11 +413,11 @@ void SliceHeader::dec_ref_pic_marking() {
     /* IDR图片，需要重新读取如下字段：
      * 1. 解码器是否应该输出之前的图片
      * 2. 当前图片是否被标记为长期参考图片*/
-    no_output_of_prior_pics_flag = bs->readU1();
-    long_term_reference_flag = bs->readU1();
+    no_output_of_prior_pics_flag = _bs->readU1();
+    long_term_reference_flag = _bs->readU1();
   } else {
     /* 非IDR帧 */
-    adaptive_ref_pic_marking_mode_flag = bs->readU1();
+    adaptive_ref_pic_marking_mode_flag = _bs->readU1();
     if (adaptive_ref_pic_marking_mode_flag) {
       /* 自适应参考图片标记模式 */
       uint32_t index = 0;
@@ -430,22 +430,22 @@ void SliceHeader::dec_ref_pic_marking() {
         /* 处理多种内存管理控制操作（MMCO），指示如何更新解码器的参考图片列表 */
         int32_t &mmco =
             m_dec_ref_pic_marking[index].memory_management_control_operation;
-        mmco = bs->readUE();
+        mmco = _bs->readUE();
 
         /* 调整参考图片编号的差异 */
         if (mmco == 1 || mmco == 3)
           m_dec_ref_pic_marking[index].difference_of_pic_nums_minus1 =
-              bs->readUE();
+              _bs->readUE();
         /* 标记某个图片为长期参考 */
         if (mmco == 2)
-          m_dec_ref_pic_marking[index].long_term_pic_num_2 = bs->readUE();
+          m_dec_ref_pic_marking[index].long_term_pic_num_2 = _bs->readUE();
         /* 设定或更新长期帧索引 */
         if (mmco == 3 || mmco == 6)
-          m_dec_ref_pic_marking[index].long_term_frame_idx = bs->readUE();
+          m_dec_ref_pic_marking[index].long_term_frame_idx = _bs->readUE();
         /* 设置最大长期帧索引 */
         if (mmco == 4)
           m_dec_ref_pic_marking[index].max_long_term_frame_idx_plus1 =
-              bs->readUE();
+              _bs->readUE();
 
         index++;
       } while (
