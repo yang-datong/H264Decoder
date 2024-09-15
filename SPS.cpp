@@ -323,13 +323,6 @@ int SPS::extractParameters(BitStream &bs) {
 
   /* 6.2 Source, decoded, and output picture formats */
   derived_SubWidthC_and_SubHeightC();
-
-  /* 计算采样宽度和比特深度 */
-  picWidthInSamplesL = PicWidthInMbs * 16;
-  // 亮度分量的采样宽度，等于宏块宽度乘以 16
-  picWidthInSamplesC = PicWidthInMbs * MbWidthC;
-  std::cout << "\tCodec width:" << picWidthInSamplesL
-            << ", Codec height:" << PicHeightInMapUnits * 16 << std::endl;
   return 0;
 }
 

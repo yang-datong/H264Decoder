@@ -91,8 +91,11 @@ class SPS {
   /* 是否使用基于宏块的自适应帧/场编码 */
   bool mb_adaptive_frame_field_flag = 0;
 
+  // 宏块单位的图像宽度 = pic_width_in_mbs_minus1 + 1 (7-13)
   int32_t PicWidthInMbs = 0;
+  // 宏块单位的图像高度 = pic_height_in_map_units_minus1 + 1
   int32_t PicHeightInMapUnits = 0;
+  // 宏块单位的图像大小 = 宽 * 高
   uint32_t PicSizeInMapUnits = 0;
   uint32_t FrameHeightInMbs = 0;
 
@@ -271,5 +274,27 @@ const Chroma_format_idc chroma_format_idcs[5] = {
     {3, 1, CHROMA_FORMAT_IDC_444, NA, NA},
 };
 //----------------------------------------------------------------------
+
+// -------------------------------- H264中规定的默认量化表 --------------------------------
+// Table 7-3 – Specification of default scaling lists Default_4x4_Intra and Default_4x4_Inter
+/* For 4x4帧内预测 */
+const uint8_t Default_4x4_Intra[16] = {6,  13, 13, 20, 20, 20, 28, 28,
+                                       28, 28, 32, 32, 32, 37, 37, 42};
+/* For 4x4帧间预测 */
+const uint8_t Default_4x4_Inter[16] = {10, 14, 14, 20, 20, 20, 24, 24,
+                                       24, 24, 27, 27, 27, 30, 30, 34};
+
+/* For 8x8帧内预测 */
+const uint8_t Default_8x8_Intra[64] = {
+    6,  10, 10, 13, 11, 13, 16, 16, 16, 16, 18, 18, 18, 18, 18, 23,
+    23, 23, 23, 23, 23, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27,
+    27, 27, 27, 27, 29, 29, 29, 29, 29, 29, 29, 31, 31, 31, 31, 31,
+    31, 33, 33, 33, 33, 33, 36, 36, 36, 36, 38, 38, 38, 40, 40, 42};
+/* For 8x8帧间预测 */
+const uint8_t Default_8x8_Inter[64] = {
+    9,  13, 13, 15, 13, 15, 17, 17, 17, 17, 19, 19, 19, 19, 19, 21,
+    21, 21, 21, 21, 21, 22, 22, 22, 22, 22, 22, 22, 24, 24, 24, 24,
+    24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27, 27,
+    27, 28, 28, 28, 28, 28, 30, 30, 30, 30, 32, 32, 32, 33, 33, 35};
 
 #endif /* end of include guard: SPS_CPP_F6QSULFM */

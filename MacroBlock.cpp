@@ -9,12 +9,6 @@
 #include "Type.hpp"
 #include <cstdint>
 
-#define FREE(ptr)                                                              \
-  if (ptr) {                                                                   \
-    delete ptr;                                                                \
-    ptr = nullptr;                                                             \
-  }
-
 MacroBlock::~MacroBlock() {
   _is_cabac = 0;
   FREE(_gb);

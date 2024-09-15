@@ -1,8 +1,12 @@
 #include "SliceHeader.hpp"
-#include "Nalu.hpp"
 #include "Type.hpp"
 #include <cstdint>
 #include <cstring>
+
+SliceHeader::~SliceHeader() {
+  FREE(mapUnitToSliceGroupMap);
+  FREE(MbToSliceGroupMap);
+}
 
 /* Slice header syntax -> 51 page */
 int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
@@ -160,7 +164,6 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
     pred_weight_table();
 
   /* 该Slice不会被作为参考帧，被其他帧参考预测 */
-  /* TODO YangJing 真睡了 <24-09-15 03:06:13> */
   if (nal_ref_idc != 0) dec_ref_pic_marking();
 
   if (m_pps->entropy_coding_mode_flag && slice_type != SLICE_I &&
@@ -174,11 +177,14 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
     if (slice_type == SLICE_SP) {
       sp_for_switch_flag = bs->readU1();
       cout << "\tSP切换标志:" << sp_for_switch_flag << endl;
+      /* TODO YangJing 未实现 <24-09-15 13:24:02> */
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
     }
+    /* qs 是专门用于 SP Slice 和 SI Slice 的量化参数。它类似于 qp */
     slice_qs_delta = bs->readSE();
-    cout << "\tSlice的量化参数调整值:" << slice_qp_delta
-         << ",Slice的量化步长调整值:" << slice_qs_delta << endl;
   }
+
   if (m_pps->deblocking_filter_control_present_flag) {
     disable_deblocking_filter_idc = bs->readUE();
     cout << "\t禁用去块效应滤波器标志:" << disable_deblocking_filter_idc
@@ -190,65 +196,75 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
            << ",去块效应滤波器的Beta偏移值:" << slice_beta_offset_div2 << endl;
     }
   }
-  if (m_pps->num_slice_groups_minus1 > 0 && m_pps->slice_group_map_type >= 3 &&
-      m_pps->slice_group_map_type <= 5)
-    slice_group_change_cycle = bs->readUE();
 
-  //----------- 下面都是一些额外信息，比如还原偏移，或者事先计算一些值，后面方便用 ------------
-  int SliceGroupChangeRate = m_pps->slice_group_change_rate_minus1 + 1;
+  /* 当启用了 多切片组，且 Slice Group 的映射类型是 3、4 或 5 时，读取宏块在不同切片组之间的切换周期（slice_group_map_type 3 到 5：这些模式允许更灵活的分割） */
+  //NOTE: 具体的FOM机制是在SliceData中实现的
+  const int32_t SliceGroupChangeRate =
+      m_pps->slice_group_change_rate_minus1 + 1;
   if (m_pps->num_slice_groups_minus1 > 0 && m_pps->slice_group_map_type >= 3 &&
       m_pps->slice_group_map_type <= 5) {
-    int32_t temp = m_sps->PicSizeInMapUnits / SliceGroupChangeRate + 1;
-    int32_t v = h264_log2(temp);
-    // Ceil( Log2( PicSizeInMapUnits ÷ SliceGroupChangeRate + 1 ) );
-    slice_group_change_cycle = bs->readUn(v); // 2 u(v)
+    /* Ceil( Log2( PicSizeInMapUnits ÷ SliceGroupChangeRate + 1 ) ) -> (7-35) -> page 92 */
+    int32_t v = log2(m_sps->PicSizeInMapUnits / SliceGroupChangeRate + 1);
+    slice_group_change_cycle = bs->readUn(v);
   }
-  if (slice_group_change_cycle != 0)
-    cout << "\tSlice组改变周期:" << slice_group_change_cycle << endl;
 
+  //----------- 下面都是一些额外信息，比如还原偏移，或者事先计算一些值，后面方便用 ------------
   SliceQPY = 26 + m_pps->pic_init_qp_minus26 + slice_qp_delta;
   cout << "\tSlice的量化参数:" << SliceQPY << endl;
+
   /* 对于首个Slice而言前一个Slice的量化参数应该初始化为当前量化参数，而不是0 */
   QPY_prev = SliceQPY;
 
   MbaffFrameFlag = (m_sps->mb_adaptive_frame_field_flag && !field_pic_flag);
-  cout << "\t宏块自适应帧场标志:" << MbaffFrameFlag << endl;
+  cout << "\t宏块自适应帧场模式(MBAFF):" << MbaffFrameFlag << endl;
+
+  PicWidthInMbs = m_sps->PicWidthInMbs;
   PicHeightInMbs = m_sps->FrameHeightInMbs / (1 + field_pic_flag);
-  PicHeightInSamplesL = PicHeightInMbs * 16;
-  PicHeightInSamplesC = PicHeightInMbs * m_sps->MbHeightC;
-  cout << "\t图像高度（宏块数）:" << PicHeightInMbs
-       << ",图像高度（亮度样本）:" << PicHeightInSamplesL
-       << ",图像高度（色度样本）:" << PicHeightInSamplesC << endl;
+  cout << "\t图像宽度（宏块数）:" << PicWidthInMbs
+       << ",图像高度（宏块数）:" << PicHeightInMbs << endl;
+
   PicSizeInMbs = m_sps->PicWidthInMbs * PicHeightInMbs;
   cout << "\t图像大小（宏块数）:" << PicSizeInMbs << endl;
-  MaxPicNum =
-      (field_pic_flag == 0) ? m_sps->MaxFrameNum : (2 * m_sps->MaxFrameNum);
-  CurrPicNum = (field_pic_flag == 0) ? frame_num : (2 * frame_num + 1);
+
+  /* 计算采样宽度和比特深度 */
+  PicWidthInSamplesL = PicWidthInMbs * 16;
+  PicWidthInSamplesC = PicWidthInMbs * m_sps->MbWidthC;
+
+  /* 计算采样高度和比特深度 */
+  PicHeightInSamplesL = PicHeightInMbs * 16;
+  PicHeightInSamplesC = PicHeightInMbs * m_sps->MbHeightC;
+  cout << "\tCodec width:" << PicWidthInSamplesL
+       << ", Codec height:" << PicHeightInSamplesL << endl;
+
+  MaxPicNum = (!field_pic_flag) ? m_sps->MaxFrameNum : (2 * m_sps->MaxFrameNum);
+
+  CurrPicNum = (!field_pic_flag) ? frame_num : (2 * frame_num + 1);
   cout << "\t最大图像编号:" << MaxPicNum << ",当前图像编号:" << CurrPicNum
        << endl;
+
+  /* SliceGroupChangeRate 切片组变化的速率，slice_group_change_cycle 切片组的切换周期，在某个特定时间内，Slice Group 0（通常是第一个切片组）包含的宏块数量 */
   MapUnitsInSliceGroup0 = MIN(slice_group_change_cycle * SliceGroupChangeRate,
                               m_sps->PicSizeInMapUnits);
-  cout << "\tSlice组0中的映射单元数:" << MapUnitsInSliceGroup0 << endl;
+  cout << "\t首个Slice Group中的宏块数:" << MapUnitsInSliceGroup0 << endl;
+
   QSY = 26 + m_pps->pic_init_qs_minus26 + slice_qs_delta;
-  cout << "\tSlice的量化参数（色度）:" << QSY << endl;
+  cout << "\tSP Slice的量化参数:" << QSY << endl;
+
   FilterOffsetA = slice_alpha_c0_offset_div2 << 1;
   FilterOffsetB = slice_beta_offset_div2 << 1;
   cout << "\t去块效应滤波器的A偏移值:" << FilterOffsetA
        << ",去块效应滤波器的B偏移值:" << FilterOffsetB << endl;
 
-  if (!mapUnitToSliceGroupMap) {
+  if (!mapUnitToSliceGroupMap)
     mapUnitToSliceGroupMap = new int32_t[m_sps->PicSizeInMapUnits]{0};
-    cout << "\t映射单元到Slice组的映射表(size):" << m_sps->PicSizeInMapUnits
-         << endl;
-  }
 
-  if (!MbToSliceGroupMap) {
-    MbToSliceGroupMap = new int32_t[PicSizeInMbs]{0};
-    cout << "\t宏块到Slice组的映射表:" << PicSizeInMbs << endl;
-  }
+  cout << "\t映射单元到Slice Group的映射表(size):" << m_sps->PicSizeInMapUnits
+       << endl;
+
+  if (!MbToSliceGroupMap) MbToSliceGroupMap = new int32_t[PicSizeInMbs]{0};
 
   set_scaling_lists_values();
-  m_is_malloc_mem_self = 1;
+  //m_is_malloc_mem_self = 1;
   return 0;
 }
 
@@ -303,14 +319,14 @@ void SliceHeader::ref_pic_list_modification() {
   }
 }
 
-/* 读取编码器传递的加权预测中使用的权重表。权重表包括了每个参考帧的权重因子，这些权重因子会被应用到运动补偿的预测过程中。
- */
+/* 读取编码器传递的加权预测中使用的权重表。权重表包括了每个参考帧的权重因子，这些权重因子会被应用到运动补偿的预测过程中。*/
 void SliceHeader::pred_weight_table() {
+  cout << "\t加权预测权重因子 -> {" << endl;
   /* Luma */
   luma_log2_weight_denom = bs->readUE();
   /* Chrome */
   if (m_sps->ChromaArrayType != 0) chroma_log2_weight_denom = bs->readUE();
-  cout << "\t亮度权重的对数基数:" << luma_log2_weight_denom
+  cout << "\t\t亮度权重的对数基数:" << luma_log2_weight_denom
        << ",色度权重的对数基数:" << chroma_log2_weight_denom << endl;
 
   for (int i = 0; i <= (int)num_ref_idx_l0_active_minus1; i++) {
@@ -341,12 +357,12 @@ void SliceHeader::pred_weight_table() {
   }
 
   for (int i = 0; i <= num_ref_idx_l0_active_minus1; ++i) {
-    cout << "\t前参考帧列表亮度权重:" << luma_weight_l0[i] << endl;
-    cout << "\t前参考帧列表亮度权重:" << luma_offset_l0[i] << endl;
-    cout << "\t前参考帧列表色度权重:" << chroma_weight_l0[i][0] << endl;
-    cout << "\t前参考帧列表色度权重:" << chroma_weight_l0[i][1] << endl;
-    cout << "\t前参考帧列表色度偏移:" << chroma_offset_l0[i][0] << endl;
-    cout << "\t前参考帧列表色度偏移:" << chroma_offset_l0[i][1] << endl;
+    cout << "\t\t前参考帧列表亮度权重:" << luma_weight_l0[i] << endl;
+    cout << "\t\t前参考帧列表亮度权重:" << luma_offset_l0[i] << endl;
+    cout << "\t\t前参考帧列表色度权重:" << chroma_weight_l0[i][0] << endl;
+    cout << "\t\t前参考帧列表色度权重:" << chroma_weight_l0[i][1] << endl;
+    cout << "\t\t前参考帧列表色度偏移:" << chroma_offset_l0[i][0] << endl;
+    cout << "\t\t前参考帧列表色度偏移:" << chroma_offset_l0[i][1] << endl;
   }
 
   if (slice_type == SLICE_B) {
@@ -378,50 +394,60 @@ void SliceHeader::pred_weight_table() {
     }
 
     for (int i = 0; i <= (int)num_ref_idx_l1_active_minus1; ++i) {
-      cout << "\t后参考帧列表亮度权重:" << luma_weight_l1[i] << endl;
-      cout << "\t后参考帧列表亮度偏移:" << luma_offset_l1[i] << endl;
-      cout << "\t后参考帧列表色度权重:" << chroma_weight_l1[i][0] << endl;
-      cout << "\t后参考帧列表色度权重:" << chroma_weight_l1[i][1] << endl;
-      cout << "\t后参考帧列表色度偏移:" << chroma_offset_l1[i][0] << endl;
-      cout << "\t后参考帧列表色度偏移:" << chroma_offset_l1[i][1] << endl;
+      cout << "\t\t后参考帧列表亮度权重:" << luma_weight_l1[i] << endl;
+      cout << "\t\t后参考帧列表亮度偏移:" << luma_offset_l1[i] << endl;
+      cout << "\t\t后参考帧列表色度权重:" << chroma_weight_l1[i][0] << endl;
+      cout << "\t\t后参考帧列表色度权重:" << chroma_weight_l1[i][1] << endl;
+      cout << "\t\t后参考帧列表色度偏移:" << chroma_offset_l1[i][0] << endl;
+      cout << "\t\t后参考帧列表色度偏移:" << chroma_offset_l1[i][1] << endl;
     }
   }
+  cout << "\t}" << endl;
 }
 
 void SliceHeader::dec_ref_pic_marking() {
   if (IdrPicFlag) {
+    /* IDR图片，需要重新读取如下字段：
+     * 1. 解码器是否应该输出之前的图片
+     * 2. 当前图片是否被标记为长期参考图片*/
     no_output_of_prior_pics_flag = bs->readU1();
     long_term_reference_flag = bs->readU1();
   } else {
+    /* 非IDR帧 */
     adaptive_ref_pic_marking_mode_flag = bs->readU1();
     if (adaptive_ref_pic_marking_mode_flag) {
-      uint32_t i = 0;
+      /* 自适应参考图片标记模式 */
+      uint32_t index = 0;
       do {
-        if (i > 31) {
+        if (index > 31) {
           cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
                << endl;
           break;
         }
-        m_dec_ref_pic_marking[i].memory_management_control_operation =
-            bs->readUE();
-        if (m_dec_ref_pic_marking[i].memory_management_control_operation == 1 ||
-            m_dec_ref_pic_marking[i].memory_management_control_operation == 3) {
-          m_dec_ref_pic_marking[i].difference_of_pic_nums_minus1 = bs->readUE();
-        }
-        if (m_dec_ref_pic_marking[i].memory_management_control_operation == 2) {
-          m_dec_ref_pic_marking[i].long_term_pic_num_2 = bs->readUE();
-        }
-        if (m_dec_ref_pic_marking[i].memory_management_control_operation == 3 ||
-            m_dec_ref_pic_marking[i].memory_management_control_operation == 6) {
-          m_dec_ref_pic_marking[i].long_term_frame_idx = bs->readUE();
-        }
-        if (m_dec_ref_pic_marking[i].memory_management_control_operation == 4) {
-          m_dec_ref_pic_marking[i].max_long_term_frame_idx_plus1 = bs->readUE();
-        }
-        i++;
+        /* 处理多种内存管理控制操作（MMCO），指示如何更新解码器的参考图片列表 */
+        int32_t &mmco =
+            m_dec_ref_pic_marking[index].memory_management_control_operation;
+        mmco = bs->readUE();
+
+        /* 调整参考图片编号的差异 */
+        if (mmco == 1 || mmco == 3)
+          m_dec_ref_pic_marking[index].difference_of_pic_nums_minus1 =
+              bs->readUE();
+        /* 标记某个图片为长期参考 */
+        if (mmco == 2)
+          m_dec_ref_pic_marking[index].long_term_pic_num_2 = bs->readUE();
+        /* 设定或更新长期帧索引 */
+        if (mmco == 3 || mmco == 6)
+          m_dec_ref_pic_marking[index].long_term_frame_idx = bs->readUE();
+        /* 设置最大长期帧索引 */
+        if (mmco == 4)
+          m_dec_ref_pic_marking[index].max_long_term_frame_idx_plus1 =
+              bs->readUE();
+
+        index++;
       } while (
-          m_dec_ref_pic_marking[i - 1].memory_management_control_operation);
-      dec_ref_pic_marking_count = i;
+          m_dec_ref_pic_marking[index - 1].memory_management_control_operation);
+      dec_ref_pic_marking_count = index;
     }
   }
 }
@@ -437,30 +463,6 @@ int SliceHeader::set_scaling_lists_values() {
       16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
       16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
       16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
-  };
-
-  //--------------------------------
-  // Table 7-3 – Specification of default scaling lists Default_4x4_Intra and
-  // Default_4x4_Inter
-  static int32_t Default_4x4_Intra[16] = {6,  13, 13, 20, 20, 20, 28, 28,
-                                          28, 28, 32, 32, 32, 37, 37, 42};
-  static int32_t Default_4x4_Inter[16] = {10, 14, 14, 20, 20, 20, 24, 24,
-                                          24, 24, 27, 27, 27, 30, 30, 34};
-
-  // Table 7-4 – Specification of default scaling lists Default_8x8_Intra and
-  // Default_8x8_Inter
-  static int32_t Default_8x8_Intra[64] = {
-      6,  10, 10, 13, 11, 13, 16, 16, 16, 16, 18, 18, 18, 18, 18, 23,
-      23, 23, 23, 23, 23, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27,
-      27, 27, 27, 27, 29, 29, 29, 29, 29, 29, 29, 31, 31, 31, 31, 31,
-      31, 33, 33, 33, 33, 33, 36, 36, 36, 36, 38, 38, 38, 40, 40, 42,
-  };
-
-  static int32_t Default_8x8_Inter[64] = {
-      9,  13, 13, 15, 13, 15, 17, 17, 17, 17, 19, 19, 19, 19, 19, 21,
-      21, 21, 21, 21, 21, 22, 22, 22, 22, 22, 22, 22, 24, 24, 24, 24,
-      24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27, 27,
-      27, 28, 28, 28, 28, 28, 30, 30, 30, 30, 32, 32, 32, 33, 33, 35,
   };
 
   //--------------------------------

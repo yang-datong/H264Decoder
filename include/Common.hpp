@@ -15,6 +15,12 @@ int32_t h264_power2(int32_t value);
     return ret;                                                                \
   }
 
+#define FREE(ptr)                                                              \
+  if (ptr) {                                                                   \
+    delete ptr;                                                                \
+    ptr = nullptr;                                                             \
+  }
+
 #define SAFE_FREE(x)                                                           \
   do {                                                                         \
     if (x) {                                                                   \

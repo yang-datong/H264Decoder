@@ -45,7 +45,9 @@ class PPS {
   bool deblocking_filter_control_present_flag = 0;
   /* 表示切片组的数量 */
   uint32_t num_slice_groups_minus1 = 0;
-  /* 指定切片组映射类型 */
+  /* 指定切片组映射类型：
+   * type=[0-2]：定义了固定的划分模式，比如交错或者基于矩形区域划分。
+   * type=[3-5]：这些模式允许更灵活的分割，并且通常依赖于动态参数来定义宏块的分配。*/
   uint32_t slice_group_map_type = 0;
   /* 指定每个切片组的运行长度 */
   uint32_t *run_length_minus1 = 0;
@@ -70,9 +72,9 @@ class PPS {
 
   /* 图像缩放列表 */
   uint32_t *pic_scaling_list_present_flag = 0;
-  /* 指定图像的初始量化参数减26 */
+  /* 帧内和帧间宏块的量化参数 */
   int32_t pic_init_qp_minus26 = 0;
-  /* 指定图像的初始 QP 步长减26 */
+  /* 场景切换(SI,SP Slice)或 B Slice 中帧间预测的量化参数 */
   int32_t pic_init_qs_minus26 = 0;
 };
 

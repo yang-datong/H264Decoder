@@ -31,6 +31,7 @@ class SliceHeader {
   friend class Slice;
   SliceHeader(uint8_t nal_type, uint8_t nal_ref_idc)
       : nal_unit_type(nal_type), nal_ref_idc(nal_ref_idc) {};
+  ~SliceHeader();
 
  public:
   /* Slice中第一个宏块的索引。 （可判断一帧图像是否由多个Slice组成）
@@ -83,9 +84,6 @@ class SliceHeader {
   /* 内存分配标志 */
   int m_is_malloc_mem_self = 0;
 
-  /* Slice的量化步长调整值 */
-  int32_t slice_qs_delta = 0;
-
   /* 去块效应滤波器的Alpha偏移值 */
   int32_t slice_alpha_c0_offset_div2 = 0;
   /* 去块效应滤波器的Beta偏移值 */
@@ -101,18 +99,15 @@ class SliceHeader {
   /* 覆盖活动参考帧数标志 */
   bool num_ref_idx_active_override_flag = 0;
 
-  /* Slice的量化参数调整值 */
-  int32_t slice_qp_delta = 0;
   /* SP切换标志 */
   bool sp_for_switch_flag = 0;
+  /* Slice 的量化参数的差值，参考PPS中的全局量化值 */
+  int32_t slice_qp_delta = 0;
+  /* SP Slice 的量化参数的差值，参考PPS中的全局量化值，但仅帧对于SP Slice */
+  int32_t slice_qs_delta = 0;
 
   /* Slice组改变周期 */
   uint32_t slice_group_change_cycle = 0;
-
-  /* 图像高度（亮度样本） */
-  int PicHeightInSamplesL = 0;
-  /* 图像高度（色度样本） */
-  int PicHeightInSamplesC = 0;
 
  public:
   /* 禁用去块效应滤波器标志 */
@@ -120,7 +115,7 @@ class SliceHeader {
   /* 前一个Slice的量化参数（这里的Y表示亮度块，一般来说QP也以QPY为准） */
   int32_t QPY_prev = 0;
   /* Slice的量化参数（色度） */
-  int QSY = 0;
+  int32_t QSY = 0;
 
   /* Slice组0中的映射单元数 */
   int MapUnitsInSliceGroup0 = 0;
@@ -146,10 +141,22 @@ class SliceHeader {
   /* 去块效应滤波器的B偏移值 */
   int FilterOffsetB = 0;
 
-  /* 图像高度（宏块数） */
-  int32_t PicHeightInMbs = 0;
   /* 图像大小（宏块数） */
   int32_t PicSizeInMbs = 0;
+
+  /* 图像宽度（宏块数） */
+  int32_t PicWidthInMbs = 0;
+  /* 图像宽度（亮度样本） */
+  int32_t PicWidthInSamplesL = 0;
+  /* 图像宽度（色度样本） */
+  int32_t PicWidthInSamplesC = 0;
+
+  /* 图像高度（宏块数） */
+  int32_t PicHeightInMbs = 0;
+  /* 图像高度（亮度样本） */
+  int32_t PicHeightInSamplesL = 0;
+  /* 图像高度（色度样本） */
+  int32_t PicHeightInSamplesC = 0;
 
   /* 亮度权重的对数基数 */
   uint32_t luma_log2_weight_denom = 0;
