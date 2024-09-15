@@ -1,5 +1,6 @@
 #include "SliceHeader.hpp"
 #include "Type.hpp"
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 
@@ -454,94 +455,67 @@ void SliceHeader::dec_ref_pic_marking() {
 
 int SliceHeader::set_scaling_lists_values() {
   int ret = 0;
-
-  //--------------------------------
-  static int32_t Flat_4x4_16[16] = {16, 16, 16, 16, 16, 16, 16, 16,
-                                    16, 16, 16, 16, 16, 16, 16, 16};
-  static int32_t Flat_8x8_16[64] = {
-      16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
-      16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
-      16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
-      16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
-  };
-
-  //--------------------------------
-  int32_t i = 0;
   int32_t scaling_list_size = (m_sps->chroma_format_idc != 3) ? 8 : 12;
 
   if (m_sps->seq_scaling_matrix_present_flag == 0 &&
       m_pps->pic_scaling_matrix_present_flag == 0) {
     // 如果编码器未给出缩放矩阵值，则缩放矩阵值全部默认为16
-    for (i = 0; i < scaling_list_size; i++) {
-      if (i < 6) {
-        memcpy(ScalingList4x4[i], Flat_4x4_16, sizeof(int32_t) * 16);
-      } else // if (i >= 6)
-      {
-        memcpy(ScalingList8x8[i - 6], Flat_8x8_16, sizeof(int32_t) * 64);
-      }
-    }
+    fill_n(&ScalingList4x4[0][0], 6 * 16, 16u);
+    fill_n(&ScalingList8x8[0][0], 6 * 64, 16u);
   } else {
-    if (m_sps->seq_scaling_matrix_present_flag == 1) {
-      for (i = 0; i < scaling_list_size; i++) {
+    if (m_sps->seq_scaling_matrix_present_flag) {
+      for (int32_t i = 0; i < scaling_list_size; i++) {
         if (i < 6) {
-          if (m_sps->seq_scaling_list_present_flag[i] ==
-              0) // 参照 Table 7-2 Scaling list fall-back rule A
-          {
-            if (i == 0) {
+          if (m_sps->seq_scaling_list_present_flag[i] == 0) {
+            // 参照 Table 7-2 Scaling list fall-back rule A
+            if (i == 0)
               memcpy(ScalingList4x4[i], Default_4x4_Intra,
                      sizeof(int32_t) * 16);
-            } else if (i == 3) {
+            else if (i == 3)
               memcpy(ScalingList4x4[i], Default_4x4_Inter,
                      sizeof(int32_t) * 16);
-            } else {
+            else
               memcpy(ScalingList4x4[i], ScalingList4x4[i - 1],
                      sizeof(int32_t) * 16);
-            }
           } else {
             if (m_pps->UseDefaultScalingMatrix4x4Flag[i] == 1) {
-              if (i < 3) {
+              if (i < 3)
                 memcpy(ScalingList4x4[i], Default_4x4_Intra,
                        sizeof(int32_t) * 16);
-              } else // if (i >= 3)
-              {
+              else
                 memcpy(ScalingList4x4[i], Default_4x4_Inter,
                        sizeof(int32_t) * 16);
-              }
-            } else {
+
+            } else
+              // 采用编码器传送过来的量化系数的缩放值
               memcpy(ScalingList4x4[i], ScalingList4x4[i],
-                     sizeof(int32_t) *
-                         16); // 采用编码器传送过来的量化系数的缩放值
-            }
+                     sizeof(int32_t) * 16);
           }
-        } else // if (i >= 6)
-        {
-          if (m_sps->seq_scaling_list_present_flag[i] ==
-              0) // 参照 Table 7-2 Scaling list fall-back rule A
-          {
-            if (i == 6) {
+        } else {
+          if (m_sps->seq_scaling_list_present_flag[i] == 0) {
+            // 参照 Table 7-2 Scaling list fall-back rule A
+            if (i == 6)
               memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
                      sizeof(int32_t) * 64);
-            } else if (i == 7) {
+            else if (i == 7)
               memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
                      sizeof(int32_t) * 64);
-            } else {
+            else
               memcpy(ScalingList8x8[i - 6], ScalingList8x8[i - 8],
                      sizeof(int32_t) * 64);
-            }
+
           } else {
             if (m_pps->UseDefaultScalingMatrix8x8Flag[i - 6] == 1) {
-              if (i == 6 || i == 8 || i == 10) {
+              if (i == 6 || i == 8 || i == 10)
                 memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
                        sizeof(int32_t) * 64);
-              } else {
+              else
                 memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
                        sizeof(int32_t) * 64);
-              }
-            } else {
+            } else
               memcpy(ScalingList8x8[i - 6], ScalingList8x8[i - 6],
-                     sizeof(int32_t) *
-                         64); // 采用编码器传送过来的量化系数的缩放值
-            }
+                     sizeof(int32_t) * 64);
+            // 采用编码器传送过来的量化系数的缩放值
           }
         }
       }
@@ -549,7 +523,7 @@ int SliceHeader::set_scaling_lists_values() {
 
     // 注意：此处不是"else if"，意即面的值，可能会覆盖之前到的值
     if (m_pps->pic_scaling_matrix_present_flag == 1) {
-      for (i = 0; i < scaling_list_size; i++) {
+      for (int32_t i = 0; i < scaling_list_size; i++) {
         if (i < 6) {
           if (m_pps->pic_scaling_list_present_flag[i] ==
               0) // 参照 Table 7-2 Scaling list fall-back rule B
