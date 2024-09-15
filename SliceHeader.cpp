@@ -1,4 +1,5 @@
 #include "SliceHeader.hpp"
+#include "SPS.hpp"
 #include "Type.hpp"
 #include <algorithm>
 #include <cstdint>
@@ -265,6 +266,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   if (!MbToSliceGroupMap) MbToSliceGroupMap = new int32_t[PicSizeInMbs]{0};
 
   set_scaling_lists_values();
+  printf_scaling_lists_values();
   //m_is_malloc_mem_self = 1;
   return 0;
 }
@@ -454,148 +456,190 @@ void SliceHeader::dec_ref_pic_marking() {
 }
 
 int SliceHeader::set_scaling_lists_values() {
-  int ret = 0;
-  int32_t scaling_list_size = (m_sps->chroma_format_idc != 3) ? 8 : 12;
+  const int32_t scaling_list_size = (m_sps->chroma_format_idc != 3) ? 8 : 12;
 
   if (m_sps->seq_scaling_matrix_present_flag == 0 &&
       m_pps->pic_scaling_matrix_present_flag == 0) {
     // 如果编码器未给出缩放矩阵值，则缩放矩阵值全部默认为16
     fill_n(&ScalingList4x4[0][0], 6 * 16, 16u);
     fill_n(&ScalingList8x8[0][0], 6 * 64, 16u);
+    /* TODO YangJing 使用H264的默认矩阵？ <24-09-15 20:02:42> */
   } else {
-    if (m_sps->seq_scaling_matrix_present_flag) {
-      for (int32_t i = 0; i < scaling_list_size; i++) {
-        if (i < 6) {
-          if (m_sps->seq_scaling_list_present_flag[i] == 0) {
-            // 参照 Table 7-2 Scaling list fall-back rule A
-            if (i == 0)
-              memcpy(ScalingList4x4[i], Default_4x4_Intra,
-                     sizeof(uint8_t) * 16);
-            else if (i == 3)
-              memcpy(ScalingList4x4[i], Default_4x4_Inter,
-                     sizeof(uint8_t) * 16);
-            else
-              memcpy(ScalingList4x4[i], ScalingList4x4[i - 1],
-                     sizeof(uint8_t) * 16);
-          } else {
-            if (m_pps->UseDefaultScalingMatrix4x4Flag[i] == 1) {
-              if (i < 3)
-                memcpy(ScalingList4x4[i], Default_4x4_Intra,
-                       sizeof(uint8_t) * 16);
-              else
-                memcpy(ScalingList4x4[i], Default_4x4_Inter,
-                       sizeof(uint8_t) * 16);
+    /* PPS中存在缩放矩阵则使用（PPS缩放矩阵优先级更高） */
+    if (m_pps->pic_scaling_matrix_present_flag)
+      pic_scaling_matrix(scaling_list_size);
+    else if (m_sps->seq_scaling_matrix_present_flag)
+      /* 反之，使用SPS中默认的存在缩放矩阵 */
+      seq_scaling_matrix(scaling_list_size);
+  }
 
-            } else
-              // 采用编码器传送过来的量化系数的缩放值
-              memcpy(ScalingList4x4[i], ScalingList4x4[i],
-                     sizeof(uint8_t) * 16);
-          }
-        } else {
-          if (m_sps->seq_scaling_list_present_flag[i] == 0) {
-            // 参照 Table 7-2 Scaling list fall-back rule A
-            if (i == 6)
-              memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
-                     sizeof(uint8_t) * 64);
-            else if (i == 7)
-              memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
-                     sizeof(uint8_t) * 64);
-            else
-              memcpy(ScalingList8x8[i - 6], ScalingList8x8[i - 8],
-                     sizeof(uint8_t) * 64);
+  return 0;
+}
 
-          } else {
-            if (m_pps->UseDefaultScalingMatrix8x8Flag[i - 6] == 1) {
-              if (i == 6 || i == 8 || i == 10)
-                memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
-                       sizeof(uint8_t) * 64);
-              else
-                memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
-                       sizeof(uint8_t) * 64);
-            } else
-              memcpy(ScalingList8x8[i - 6], ScalingList8x8[i - 6],
-                     sizeof(uint8_t) * 64);
-            // 采用编码器传送过来的量化系数的缩放值
-          }
-        }
+//Table 7-2 Scaling list fall-back rule A
+int SliceHeader::seq_scaling_matrix(int32_t scaling_list_size) {
+  for (int32_t i = 0; i < scaling_list_size; i++) {
+    /* 4x4 的缩放矩阵 */
+    if (i < 6) {
+      /* 当前SPS未显式提供，需要使用默认或之前的矩阵 */
+      if (m_sps->seq_scaling_list_present_flag[i] == 0) {
+        if (i == 0)
+          memcpy(ScalingList4x4[i], Default_4x4_Intra,
+                 sizeof(Default_4x4_Intra));
+        else if (i == 3)
+          memcpy(ScalingList4x4[i], Default_4x4_Inter,
+                 sizeof(Default_4x4_Inter));
+        else
+          /* 如果不使用默认矩阵，则复制前一个矩阵的值 */
+          memcpy(ScalingList4x4[i], ScalingList4x4[i - 1],
+                 sizeof(ScalingList4x4[i]));
+
+        /* 表示当前矩阵已提供，但是否应使用默认的缩放矩阵 */
+      } else if (m_pps->UseDefaultScalingMatrix4x4Flag[i]) {
+        if (i < 3)
+          memcpy(ScalingList4x4[i], Default_4x4_Intra,
+                 sizeof(Default_4x4_Intra));
+        else
+          memcpy(ScalingList4x4[i], Default_4x4_Inter,
+                 sizeof(Default_4x4_Inter));
       }
-    }
 
-    // 注意：此处不是"else if"，意即面的值，可能会覆盖之前到的值
-    if (m_pps->pic_scaling_matrix_present_flag == 1) {
-      for (int32_t i = 0; i < scaling_list_size; i++) {
-        if (i < 6) {
-          if (m_pps->pic_scaling_list_present_flag[i] ==
-              0) // 参照 Table 7-2 Scaling list fall-back rule B
-          {
-            if (i == 0) {
-              if (m_sps->seq_scaling_matrix_present_flag == 0) {
-                memcpy(ScalingList4x4[i], Default_4x4_Intra,
-                       sizeof(uint8_t) * 16);
-              }
-            } else if (i == 3) {
-              if (m_sps->seq_scaling_matrix_present_flag == 0) {
-                memcpy(ScalingList4x4[i], Default_4x4_Inter,
-                       sizeof(uint8_t) * 16);
-              }
-            } else {
-              memcpy(ScalingList4x4[i], ScalingList4x4[i - 1],
-                     sizeof(uint8_t) * 16);
-            }
-          } else {
-            if (m_pps->UseDefaultScalingMatrix4x4Flag[i] == 1) {
-              if (i < 3) {
-                memcpy(ScalingList4x4[i], Default_4x4_Intra,
-                       sizeof(uint8_t) * 16);
-              } else // if (i >= 3)
-              {
-                memcpy(ScalingList4x4[i], Default_4x4_Inter,
-                       sizeof(uint8_t) * 16);
-              }
-            } else {
-              memcpy(ScalingList4x4[i], ScalingList4x4[i],
-                     sizeof(uint8_t) *
-                         16); // 采用编码器传送过来的量化系数的缩放值
-            }
-          }
-        } else // if (i >= 6)
-        {
-          if (m_pps->pic_scaling_list_present_flag[i] ==
-              0) // 参照 Table 7-2 Scaling list fall-back rule B
-          {
-            if (i == 6) {
-              if (m_sps->seq_scaling_matrix_present_flag == 0) {
-                memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
-                       sizeof(uint8_t) * 64);
-              }
-            } else if (i == 7) {
-              if (m_sps->seq_scaling_matrix_present_flag == 0) {
-                memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
-                       sizeof(uint8_t) * 64);
-              }
-            } else {
-              memcpy(ScalingList8x8[i - 6], ScalingList8x8[i - 8],
-                     sizeof(uint8_t) * 64);
-            }
-          } else {
-            if (m_pps->UseDefaultScalingMatrix8x8Flag[i - 6] == 1) {
-              if (i == 6 || i == 8 || i == 10) {
-                memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
-                       sizeof(uint8_t) * 64);
-              } else {
-                memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
-                       sizeof(uint8_t) * 64);
-              }
-            } else {
-              memcpy(ScalingList8x8[i - 6], ScalingList8x8[i - 6],
-                     sizeof(uint8_t) * 64);
-              // 采用编码器传送过来的量化系数的缩放值
-            }
-          }
-        }
+      // 采用SPS中传送过来的量化系数的缩放值
+      else
+        memcpy(ScalingList4x4[i], m_sps->ScalingList4x4[i],
+               sizeof(ScalingList4x4[i]));
+
+      /* 对于8x8矩阵 */
+    } else {
+
+      /* 当前SPS未显式提供，需要使用默认或之前的矩阵 */
+      if (m_sps->seq_scaling_list_present_flag[i] == 0) {
+        if (i == 6)
+          memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
+                 sizeof(Default_8x8_Intra));
+        else if (i == 7)
+          memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
+                 sizeof(Default_8x8_Inter));
+        else
+          /* 如果不使用默认矩阵，则复制前两个矩阵的值 */
+          memcpy(ScalingList8x8[i - 6], ScalingList8x8[i - 8],
+                 sizeof(ScalingList8x8[i - 6]));
+
+        /* 表示当前矩阵已提供，但是否应使用默认的缩放矩阵 */
+      } else if (m_pps->UseDefaultScalingMatrix8x8Flag[i - 6]) {
+        if (i == 6 || i == 8 || i == 10)
+          memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
+                 sizeof(Default_8x8_Intra));
+        else
+          memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
+                 sizeof(Default_8x8_Inter));
       }
+
+      // 采用SPS中传送过来的量化系数的缩放值
+      else
+        memcpy(ScalingList8x8[i - 6], m_sps->ScalingList8x8[i - 6],
+               sizeof(ScalingList8x8[i - 6]));
     }
   }
 
-  return ret;
+  return 0;
+}
+
+//Table 7-2 Scaling list fall-back rule A
+int SliceHeader::pic_scaling_matrix(int32_t scaling_list_size) {
+  for (int32_t i = 0; i < scaling_list_size; i++) {
+    /* 4x4 的缩放矩阵 */
+    if (i < 6) {
+      /* 当前PPS未显式提供，需要使用默认或之前的矩阵 */
+      if (m_pps->pic_scaling_list_present_flag[i] == 0) {
+        if (i == 0) {
+          if (m_sps->seq_scaling_matrix_present_flag == 0)
+            memcpy(ScalingList4x4[i], Default_4x4_Intra,
+                   sizeof(Default_4x4_Intra));
+        } else if (i == 3) {
+          if (m_sps->seq_scaling_matrix_present_flag == 0)
+            memcpy(ScalingList4x4[i], Default_4x4_Inter,
+                   sizeof(Default_4x4_Inter));
+        } else
+          /* 如果不使用默认矩阵，则复制前一个矩阵的值 */
+          memcpy(ScalingList4x4[i], ScalingList4x4[i - 1],
+                 sizeof(ScalingList4x4[i]));
+
+        /* 表示当前矩阵已提供，但是否应使用默认的缩放矩阵 */
+      } else if (m_pps->UseDefaultScalingMatrix4x4Flag[i]) {
+        if (i < 3)
+          memcpy(ScalingList4x4[i], Default_4x4_Intra,
+                 sizeof(Default_4x4_Intra));
+        else
+          memcpy(ScalingList4x4[i], Default_4x4_Inter,
+                 sizeof(Default_4x4_Inter));
+
+        // 采用PPS中传送过来的量化系数的缩放值
+      } else
+        memcpy(ScalingList4x4[i], m_pps->ScalingList4x4[i],
+               sizeof(ScalingList4x4[i]));
+
+      /* 8x8 的缩放矩阵 */
+    } else {
+
+      /* 当前PPS未显式提供，需要使用默认或之前的矩阵 */
+      if (m_pps->pic_scaling_list_present_flag[i] == 0) {
+        if (i == 6) {
+          if (m_sps->seq_scaling_matrix_present_flag == 0)
+            memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
+                   sizeof(Default_8x8_Intra));
+        } else if (i == 7) {
+          if (m_sps->seq_scaling_matrix_present_flag == 0)
+            memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
+                   sizeof(Default_8x8_Inter));
+        } else
+          /* 如果不使用默认矩阵，则复制前两个矩阵的值 */
+          memcpy(ScalingList8x8[i - 6], ScalingList8x8[i - 8],
+                 sizeof(ScalingList8x8[i - 6]));
+
+        /* 表示当前矩阵已提供，但是否应使用默认的缩放矩阵 */
+      } else if (m_pps->UseDefaultScalingMatrix8x8Flag[i - 6]) {
+        if (i == 6 || i == 8 || i == 10)
+          memcpy(ScalingList8x8[i - 6], Default_8x8_Intra,
+                 sizeof(Default_8x8_Intra));
+        else
+          memcpy(ScalingList8x8[i - 6], Default_8x8_Inter,
+                 sizeof(Default_8x8_Inter));
+
+        // 采用PPS中传送过来的量化系数的缩放值
+      } else
+        memcpy(ScalingList8x8[i - 6], m_pps->ScalingList8x8[i - 6],
+               sizeof(ScalingList8x8[i - 6]));
+    }
+  }
+  return 0;
+}
+
+#include <iomanip> //用于格式化输出
+void SliceHeader::printf_scaling_lists_values() {
+  //ScalingList4x4[6][16]
+  uint8_t row = 4, clo = 4;
+  std::cout << "\tScalingList4x4 -> {" << std::endl;
+  for (int index = 0; index < 1; ++index) {
+    for (int i = 0; i < row; ++i) {
+      std::cout << "\t\t|";
+      for (int j = 0; j < clo; ++j)
+        std::cout << setw(4) << ScalingList4x4[index][row * i + j];
+      std::cout << "|" << std::endl;
+    }
+  }
+  std::cout << "\t}" << std::endl;
+
+  //ScalingList8x8[6][64]
+  row = 8, clo = 8;
+  std::cout << "\tScalingList8x8 -> {" << std::endl;
+  for (int index = 0; index < 1; ++index) {
+    for (int i = 0; i < row; ++i) {
+      std::cout << "\t\t|";
+      for (int j = 0; j < clo; ++j)
+        std::cout << setw(4) << ScalingList8x8[index][row * i + j];
+      std::cout << "|" << std::endl;
+    }
+  }
+  std::cout << "\t}" << std::endl;
 }

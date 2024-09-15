@@ -215,6 +215,10 @@ class SliceHeader {
  private:
   BitStream *bs = nullptr;
   int set_scaling_lists_values();
+  int seq_scaling_matrix(int32_t scaling_list_size);
+  int pic_scaling_matrix(int32_t scaling_list_size);
+  void printf_scaling_lists_values();
+
   void ref_pic_list_mvc_modification();
   void ref_pic_list_modification();
   void pred_weight_table();
