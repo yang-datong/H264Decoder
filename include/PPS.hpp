@@ -43,7 +43,7 @@ class PPS {
   uint32_t weighted_bipred_idc = 0;
   /* 指示是否存在去块滤波器控制信息 */
   bool deblocking_filter_control_present_flag = 0;
-  /* 表示切片组的数量 */
+  /* 表示Slice group的数量 */
   uint32_t num_slice_groups_minus1 = 0;
   /* 指定切片组映射类型：
    * type=[0-2]：定义了固定的划分模式，比如交错或者基于矩形区域划分。

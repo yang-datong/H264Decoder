@@ -60,3 +60,6 @@ int SliceData::decoding_process(PictureBase &picture) {
 }
 ```
 这里具体是在做什么？
+
+
+ ffmpeg -i ./test/demo_10_frames.h264 -c:v libx264 -flags +ilme+ildct tmp.h264 能编码出一个解码绿屏的文件

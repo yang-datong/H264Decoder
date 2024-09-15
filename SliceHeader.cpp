@@ -92,7 +92,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
     cout << "\t图像顺序计数(POC)方法:使用帧号和帧场号计算" << endl;
     pic_order_cnt_lsb =
         _bs->readUn(m_sps->log2_max_pic_order_cnt_lsb_minus4 + 4);
-    cout << "\t图像顺序计数LSB:" << pic_order_cnt_lsb << endl;
+    cout << "\t图像顺序计数(POC低位):" << pic_order_cnt_lsb << endl;
     if (m_pps->bottom_field_pic_order_in_frame_present_flag &&
         !field_pic_flag) {
       delta_pic_order_cnt_bottom = _bs->readSE();

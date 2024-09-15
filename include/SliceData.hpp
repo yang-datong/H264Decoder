@@ -55,8 +55,8 @@ class SliceData {
 
   int decoding_macroblock_to_slice_group_map();
 
-  int setMapUnitToSliceGroupMap();
-  int setMbToSliceGroupMap();
+  int mapUnitToSliceGroupMap();
+  int mbToSliceGroupMap();
 
   /* process表示处理字段，具体处理手段有推流或解码操作 */
   int process_mb_skip_run(int32_t &prevMbSkipped);

@@ -30,7 +30,7 @@ class SliceHeader {
   /* 允许Slice类访问 */
   friend class Slice;
   SliceHeader(uint8_t nal_type, uint8_t nal_ref_idc)
-      : nal_unit_type(nal_type), nal_ref_idc(nal_ref_idc) {};
+      : nal_unit_type(nal_type), nal_ref_idc(nal_ref_idc){};
   ~SliceHeader();
 
  public:
@@ -60,7 +60,7 @@ class SliceHeader {
   /* IDR图像ID */
   uint32_t idr_pic_id = 0;
 
-  /* 图像顺序计数LSB */
+  /* 图像顺序计数(POC低位，对应的还有高位，高位需要在解码POC时进行计算) */
   uint32_t pic_order_cnt_lsb = 0;
   /* 底场的图像顺序计数增量 */
   int32_t delta_pic_order_cnt_bottom = 0;
@@ -70,9 +70,9 @@ class SliceHeader {
   uint32_t num_ref_idx_l0_active_minus1 = 0;
   /* 参考帧列表1的活动参考帧数减1 */
   uint32_t num_ref_idx_l1_active_minus1 = 0;
-  /* 映射单元到Slice组的映射表 */
+  /* 映射单元（或一个宏块或一对宏块）到Slice组的映射表 */
   int32_t *mapUnitToSliceGroupMap = nullptr;
-  /* 宏块到Slice组的映射表 */
+  /* 最终的宏块到切片组的映射 */
   int32_t *MbToSliceGroupMap = nullptr;
 
   /* 图像顺序计数增量 */

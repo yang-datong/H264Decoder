@@ -116,7 +116,7 @@ class PictureBase {
       Frame *&newEmptyPicture);
 
   //--------------参考帧列表重排序------------------------
-  int decoding_picture_order_count();
+  int decoding_picture_order_count(const uint32_t &pic_order_cnt_type);
   int decoding_picture_order_count_type_0(
       const PictureBase *picture_previous_ref); // 8.2.1.1
   int decoding_picture_order_count_type_1(

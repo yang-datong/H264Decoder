@@ -3,6 +3,7 @@
 #include "GOP.hpp"
 #include "PictureBase.hpp"
 #include "Type.hpp"
+#include <cstdlib>
 
 /* 7.3.4 Slice data syntax */
 int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
@@ -17,12 +18,17 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
   /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
   initCABAC();
 
+  /* 如果当前帧不使用MBAFF编码模式。所有宏块都作为帧/场宏块进行编码，而不需要进行动态切换帧、场编码 */
   if (header->MbaffFrameFlag == 0)
-    /* 如果当前帧不使用MBAFF编码模式。所有宏块都作为帧宏块进行编码 */
     mb_field_decoding_flag = header->field_pic_flag;
 
+  /* 宏块的初始地址（或宏块索引），在A Frame = A Slice的情况下，初始地址应该为0 */
   pic->CurrMbAddr = CurrMbAddr =
       header->first_mb_in_slice * (1 + header->MbaffFrameFlag);
+  if (CurrMbAddr == 0)
+    pic->m_slice_cnt = 0;
+  else
+    pic->m_slice_cnt++;
 
   /* 更新参考帧列表0,1的预测图像编号 */
   header->picNumL0Pred = header->picNumL1Pred = header->CurrPicNum;
@@ -30,7 +36,7 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
   /* 8.2 Slice decoding process */
   slice_decoding_process();
 
-  //----------------------- 这里开始对Slice分割为MacroBlock进行处理 ----------------------------
+  //----------------------- 开始对Slice分割为MacroBlock进行处理（如果是单帧=单Slice的情况，那么这里就是遍历Slice的每个宏块） ----------------------------
   bool moreDataFlag = 1;
   int32_t prevMbSkipped = 0;
   do {
@@ -77,6 +83,11 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
       }
     }
     CurrMbAddr = NextMbAddress(CurrMbAddr, header);
+
+    //std::cout << "CurrMbAddr:" << CurrMbAddr << std::endl;
+    //std::cout << "m_sps->PicSizeInMapUnits:" << m_sps->PicSizeInMapUnits
+    //<< std::endl;
+    //std::cout << "header->PicSizeInMbs:" << header->PicSizeInMbs << std::endl;
   } while (moreDataFlag);
 
   /* TODO YangJing 这里暂时用不上 <24-09-03 00:46:48> */
@@ -110,13 +121,13 @@ int SliceData::initCABAC() {
 }
 
 int SliceData::slice_decoding_process() {
-  /* 设为0是防止在场编码时可能存在多个slice data，那么就只需要对首个slice data进行定位，防止对附属的slice data进行再次解码工作 */
+  /* 判断0是在场编码时可能存在多个slice data，那么就只需要对首个slice data进行定位，防止对附属的slice data进行再次解码工作 */
   if (pic->m_slice_cnt == 0) {
     /* 解码参考帧重排序(POC) */
     // 8.2.1 Decoding process for picture order count
-    pic->decoding_picture_order_count();
+    pic->decoding_picture_order_count(m_sps->pic_order_cnt_type);
     if (m_sps->frame_mbs_only_flag == 0) {
-      /* 场宏块 */
+      /* 存在场宏块 */
       pic->m_parent->m_picture_top_filed.copyDataPicOrderCnt(*pic);
       //顶（底）场帧有可能被选为参考帧，在解码P/B帧时，会用到PicOrderCnt字段，所以需要在此处复制一份
       pic->m_parent->m_picture_bottom_filed.copyDataPicOrderCnt(*pic);
@@ -140,29 +151,37 @@ int SliceData::slice_decoding_process() {
 }
 
 // 8.2.2 Decoding process for macroblock to slice group map
-/* 输入:活动图像参数集和要解码的切片的切片头。  
- * 输出:宏块到切片组映射MbToSliceGroupMap。 */
-//该过程在每个切片开始时调用。
+/* 输入:活动图像参数集和要解码的Slice header。  
+ * 输出:宏块到Slice Group映射MbToSliceGroupMap。 */
+//该过程在每个切片开始时调用（如果是单帧由单个Slice组成的情况，那么这里几乎没有逻辑）
 int SliceData::decoding_macroblock_to_slice_group_map() {
-  setMapUnitToSliceGroupMap();
-  setMbToSliceGroupMap();
+  //输出为：mapUnitToSliceGroupMap
+  mapUnitToSliceGroupMap();
+  //输入为：mapUnitToSliceGroupMap
+  mbToSliceGroupMap();
   return 0;
 }
 
 //8.2.2.1 - 8.2.2.7  Specification for interleaved slice group map type
-int SliceData::setMapUnitToSliceGroupMap() {
+int SliceData::mapUnitToSliceGroupMap() {
   /* 输入 */
   const int &MapUnitsInSliceGroup0 = header->MapUnitsInSliceGroup0;
   /* 输出 */
   int32_t *&mapUnitToSliceGroupMap = header->mapUnitToSliceGroupMap;
 
   /* mapUnitToSliceGroupMap 数组的推导如下：
-   * – 如果 num_slice_groups_minus1 等于 0，则为范围从 0 到 PicSizeInMapUnits − 1（含）的所有 i 生成切片组映射的映射单元，如 mapUnitToSliceGroupMap[ i ] = 0 */
+   * – 如果 num_slice_groups_minus1 等于 0，则为范围从 0 到 PicSizeInMapUnits − 1（含）的所有 i 生成Slice Group映射的映射单元，如 mapUnitToSliceGroupMap[ i ] = 0 */
+  /* 整个图像只被分为一个 slice group */
   if (m_pps->num_slice_groups_minus1 == 0) {
+    /* 这里按照一个宏块或宏块对（当为场编码时，遍历大小减小一半）处理 */
     for (int i = 0; i < (int)m_sps->PicSizeInMapUnits; i++)
+      /* 确保在只有一个切片组的情况下，整个图像的所有宏块都被正确地映射到这个唯一的切片组上，简化处理逻辑这里赋值不一定非要为0,只要保持映射单元内都是同一个值就行了 */
       mapUnitToSliceGroupMap[i] = 0;
+    /* TODO YangJing 有问题，如果是场编码，那么这里实际上只处理了一半映射 <24-09-16 00:07:20> */
     return 0;
   }
+
+  /* TODO YangJing 这里还没测过，怎么造一个多Slice文件？ <24-09-15 23:25:12> */
 
   /* — 否则（num_slice_groups_minus1 不等于0），mapUnitToSliceGroupMap 的推导如下： 
        * — 如果slice_group_map_type 等于0，则应用第8.2.2.1 节中指定的mapUnitToSliceGroupMap 的推导。  
@@ -203,40 +222,37 @@ int SliceData::setMapUnitToSliceGroupMap() {
 
 // 8.2.2.8 Specification for conversion of map unit to slice group map to macroblock to slice group map
 /* 宏块（Macroblock）的位置映射到切片（Slice）的过程*/
-int SliceData::setMbToSliceGroupMap() {
-  /* 输入：存储每个宏块单元对应的切片组索引 */
+int SliceData::mbToSliceGroupMap() {
+  /* 输入：存储每个宏块单元对应的Slice Group索引，在A Frame = A Slice的情况下，这里均为0 */
   const int32_t *mapUnitToSliceGroupMap = header->mapUnitToSliceGroupMap;
 
-  /* 输出：存储映射后每个宏块对应的切片组索引 */
+  /* 输出：存储映射后每个宏块对应的Slice Group索引 */
   int32_t *&MbToSliceGroupMap = header->MbToSliceGroupMap;
 
-  /* 对于范围从 0 到 PicSizeInMbs - 1（含）的每个 i 值，宏块到切片组映射指定如下： */
+  /* 对于Slice中的每个宏块（若是场编码，顶、底宏块也需要单独遍历），宏块到Slice Group映射指定如下： */
   for (int mbIndex = 0; mbIndex < header->PicSizeInMbs; mbIndex++) {
     if (m_sps->frame_mbs_only_flag || header->field_pic_flag)
-      /* 一个完整的帧或场 */
+      /* 对于一个全帧或全场（即不存在混合帧、场），每个宏块独立对应一个映射单位 */
       MbToSliceGroupMap[mbIndex] = mapUnitToSliceGroupMap[mbIndex];
     else if (header->MbaffFrameFlag)
-      /* 在交错格式下，每两个宏块共享同一行信息 */
+      /* 映射基于宏块对，一个宏块对（2个宏块）共享一个映射单位 */
       MbToSliceGroupMap[mbIndex] = mapUnitToSliceGroupMap[mbIndex / 2];
     else {
-      /* 假设4x4的宏块，当前宏块索引10，则rowIndex = 10 / 8 = 1，cloIndex = 10 % 4 = 2, 1*4+2=6 */
-      /*          1                   2
-         ------------------|-------------------
-         |+---+---+---+---+|+---+---+---+---+
-         |+   +   +   +   +|+   +   +   +   +
-         |+---+---+---+---+|+---+---+---+---+
-         |+   +   +   +   +|+   +   +   +   +
-         |+---+---+---+---+|+---+---+---+---+
-         |+   +   +   +   +|+   +   +   +   +
-         |+---+---+---+---+|+---+---+---+---+
-         |+   +   +   +   +|+   +   +   +   +
-         |+---+---+---+---+|+---+---+---+---+
-         */
-      uint32_t x = mbIndex / (2 * m_sps->PicWidthInMbs);
-      uint32_t y = mbIndex % m_sps->PicWidthInMbs;
+      /* 场编码的交错模式，每个宏块对跨越两行，每一对宏块（通常包括顶部场和底部场的宏块）被当作一个单元处理 */
+      /*   +-----------+        +-----------+
+           |           |        | top filed |
+           |           |        | btm filed |
+           | A  Slice  |   -->  | top filed | 
+           |           |        | btm filed |
+           |           |        | top filed |
+           |           |        | btm filed |
+           +-----------+        +-----------+*/
+      /* 用宏块索引对图像宽度取模，得到该宏块在其行中的列位置 */
+      uint32_t x = mbIndex % m_sps->PicWidthInMbs;
+      /* 因为每个宏块对占据两行（每行一个宏块），所以用宽度的两倍来计算行号，得到顶宏块的行数 */
+      uint32_t y = mbIndex / (2 * m_sps->PicWidthInMbs);
       MbToSliceGroupMap[mbIndex] =
-          mapUnitToSliceGroupMap[x * m_sps->PicWidthInMbs + y];
-      /* 故，mapUnitToSliceGroupMap[6] 的值将被赋值给 MbToSliceGroupMap[10] */
+          mapUnitToSliceGroupMap[y * m_sps->PicWidthInMbs + x];
     }
   }
 
@@ -265,12 +281,6 @@ int SliceData::process_mb_skip_run(int32_t &prevMbSkipped) {
     pic->inter_prediction_process();
 
     CurrMbAddr = NextMbAddress(CurrMbAddr, header);
-    if (CurrMbAddr < 0) {
-      std::cerr << "An error occurred CurrMbAddr < 0 , CurrMbAddr:"
-                << CurrMbAddr << " on " << __FUNCTION__ << "():" << __LINE__
-                << std::endl;
-      break;
-    }
   }
   return 0;
 }
@@ -480,13 +490,22 @@ int SliceData::decoding_process() {
   return 0;
 }
 
-/* 在按照第 8.2.2.8 节的规定导出宏块到切片组映射之后，函数 NextMbAddress( n ) 被定义为由以下伪代码指定导出的变量 nextMbAddress 的值： */
+// 第 8.2.2.8 节的规定导出宏块到Slice Group映射后，该函数导出NextMbAddress的值
+/* 跳过不属于当前Slice Group的宏块，找到与当前宏块位于同一Slice Group中的下一个宏块 */
 int NextMbAddress(int currMbAddr, SliceHeader *header) {
   int nextMbAddr = currMbAddr + 1;
+
+  /* 宏块索引不应该为负数或大于该Slice的总宏块数 + 1 */
   while (nextMbAddr < header->PicSizeInMbs &&
          header->MbToSliceGroupMap[nextMbAddr] !=
-             header->MbToSliceGroupMap[currMbAddr])
+             header->MbToSliceGroupMap[currMbAddr]) {
+    /* 下一个宏块是否与当前宏块位于同一个Slice Group中。如果不在同一个Slice Group中，则继续增加 nextMbAddr 直到找到属于同一个Slice Group的宏块。*/
     nextMbAddr++;
+  }
+
+  if (nextMbAddr < 0)
+    std::cerr << "An error occurred CurrMbAddr:" << nextMbAddr << " on "
+              << __FUNCTION__ << "():" << __LINE__ << std::endl;
   return nextMbAddr;
 }
 

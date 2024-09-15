@@ -365,6 +365,7 @@ int PictureBase::copyData2(const PictureBase &src, int32_t copyMbsDataFlag) {
   return ret;
 }
 
+/* 重写高性能 Copy函数？ */
 int PictureBase::copyDataPicOrderCnt(const PictureBase &src) {
   int ret = 0;
 
