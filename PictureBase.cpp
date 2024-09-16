@@ -87,7 +87,7 @@ int PictureBase::reset() {
   MaxLongTermFrameIdx = NA;
   memory_management_control_operation_5_flag = 0;
   memory_management_control_operation_6_flag = 0;
-  reference_marked_type = H264_PICTURE_MARKED_AS_unkown;
+  reference_marked_type = PICTURE_MARKED_AS_unkown;
   m_picture_coded_type = H264_PICTURE_CODED_TYPE_UNKNOWN;
   m_picture_type = H264_PICTURE_TYPE_UNKNOWN;
   m_is_decode_finished = 0;
@@ -637,10 +637,8 @@ int PictureBase::getOneEmptyPicture(Frame *&pic) {
 
   for (int i = 0; i < size_dpb; i++) {
     if (m_dpb[i] != this->m_parent &&
-        m_dpb[i]->reference_marked_type !=
-            H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
-        m_dpb[i]->reference_marked_type !=
-            H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
+        m_dpb[i]->reference_marked_type != PICTURE_MARKED_AS_used_short_ref &&
+        m_dpb[i]->reference_marked_type != PICTURE_MARKED_AS_used_long_ref &&
         m_dpb[i]->m_is_in_use == 0 // 本帧数据未使用，即处于闲置状态
         )                          // 重复利用被释放了的参考帧
     {
@@ -711,10 +709,8 @@ int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
 
   emptyPic->m_picture_previous = this;
 
-  if (reference_marked_type ==
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference ||
-      reference_marked_type ==
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
+  if (reference_marked_type == PICTURE_MARKED_AS_used_short_ref ||
+      reference_marked_type == PICTURE_MARKED_AS_used_long_ref) {
     emptyPic->m_picture_previous_ref = this;
   } else {
     emptyPic->m_picture_previous_ref = this->m_parent->m_picture_previous_ref;

@@ -155,7 +155,7 @@ int SliceData::slice_decoding_process() {
 /* 输入:活动图像参数集和要解码的Slice header。  
  * 输出:宏块到Slice Group映射MbToSliceGroupMap。 */
 //该过程在每个切片开始时调用（如果是单帧由单个Slice组成的情况，那么这里几乎没有逻辑）
-int SliceData::decoding_macroblock_to_slice_group_map() {
+inline int SliceData::decoding_macroblock_to_slice_group_map() {
   //输出为：mapUnitToSliceGroupMap
   mapUnitToSliceGroupMap();
   //输入为：mapUnitToSliceGroupMap
@@ -164,7 +164,7 @@ int SliceData::decoding_macroblock_to_slice_group_map() {
 }
 
 //8.2.2.1 - 8.2.2.7  Specification for interleaved slice group map type
-int SliceData::mapUnitToSliceGroupMap() {
+inline int SliceData::mapUnitToSliceGroupMap() {
   /* 输入 */
   const int &MapUnitsInSliceGroup0 = header->MapUnitsInSliceGroup0;
   /* 输出 */
@@ -223,7 +223,7 @@ int SliceData::mapUnitToSliceGroupMap() {
 
 // 8.2.2.8 Specification for conversion of map unit to slice group map to macroblock to slice group map
 /* 宏块（Macroblock）的位置映射到切片（Slice）的过程*/
-int SliceData::mbToSliceGroupMap() {
+inline int SliceData::mbToSliceGroupMap() {
   /* 输入：存储每个宏块单元对应的Slice Group索引，在A Frame = A Slice的情况下，这里均为0 */
   const int32_t *mapUnitToSliceGroupMap = header->mapUnitToSliceGroupMap;
 

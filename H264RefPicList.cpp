@@ -2,6 +2,7 @@
 #include "PictureBase.hpp"
 #include "SliceHeader.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -271,41 +272,29 @@ int PictureBase::picOrderCntFunc(PictureBase *pic) {
 // 8.2.4 Decoding process for reference picture lists construction
 int PictureBase::decoding_reference_picture_lists_construction(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16]) {
-
   const SliceHeader *slice_header = m_slice->slice_header;
   /* 解码的参考图片被标记为“用于短期参考”或“用于长期参考”，如比特流所指定的和第8.2.5节中所指定的。短期参考图片由frame_num 的值标识。长期参考图片被分配一个长期帧索引，该索引由比特流指定并在第 8.2.5 节中指定。 */
 
   // 8.2.5 Decoded reference picture marking process
   // NOTE: 这里调用8.2.5会有问题
 
-  /* 调用条款 8.2.4.1 来指定 
+  /* 8.2.4.1 Decoding process for picture numbers
    * — 变量 FrameNum、FrameNumWrap 和 PicNum 到每个短期参考图片的分配，
    * — 变量 LongTermPicNum 到每个长期参考图片的分配。 */
+  /* 解码 DPB 中的每一帧的图片编号 */
   int ret = decoding_picture_numbers(dpb);
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return ret;
-  }
+  RET(ret);
 
-  /* 参考索引是参考图片列表的索引。当解码P或SP切片时，存在单个参考图片列表RefPicList0。在对B切片进行解码时，除了RefPicList0之外，还存在第二独立参考图片列表RefPicList1。*/
+  /* 参考索引是参考图片列表的索引。当解码P或SP切片时，存在单个参考图片列表RefPicList0（前参考）。在对B切片进行解码时，还存在第二独立参考图片列表RefPicList1(后参考)。*/
 
-  /* 在每个切片的解码过程开始时，按照以下有序步骤的指定导出参考图片列表 RefPicList0 以及 B 切片的 RefPicList1： 
-   * 1. 按照以下顺序导出初始参考图片列表 RefPicList0 以及 B 切片的 RefPicList1第 8.2.4.2 条*/
+  /* 1. 在每个切片的解码过程开始时，按照以下顺序导出初始参考图片列表 RefPicList0 以及 B 切片的 RefPicList1第 8.2.4.2 条*/
   ret = init_reference_picture_lists(dpb, RefPicList0, RefPicList1);
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return ret;
-  }
+  RET(ret);
 
   /* 2. 当ref_pic_list_modification_flag_l0等于1时或者当解码B切片时ref_pic_list_modification_flag_l1等于1时，初始参考图片列表RefPicList0以及对于B切片而言RefPicList1按照条款8.2.4.3中的指定进行修改。 */
+  //在某些场景中，slice header 中可能包含修改参考帧列表的指令。这一步执行了对参考帧列表的修改操作
   ret = modif_reference_picture_lists(RefPicList0, RefPicList1);
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return ret;
-  }
+  RET(ret);
 
   /* 修改后的参考图片列表RefPicList0中的条目数量是num_ref_idx_l0_active_minus1+1，并且对于B片，
    * 修改后的参考图片列表RefPicList1中的条目数量是num_ref_idx_l1_active_minus1+1。
@@ -316,181 +305,157 @@ int PictureBase::decoding_reference_picture_lists_construction(
   return 0;
 }
 
+/* 处理picture.FrameNumWrap回环 */
+inline void updateFrameNumWrap(PictureBase &picture, int32_t FrameNum,
+                               uint32_t MaxFrameNum) {
+  if (picture.reference_marked_type == PICTURE_MARKED_AS_used_short_ref) {
+    if (picture.FrameNum > FrameNum)
+      picture.FrameNumWrap = picture.FrameNum - MaxFrameNum;
+    else
+      picture.FrameNumWrap = picture.FrameNum;
+  }
+}
+
+// 处理短期参考帧或场对，更新 PicNum 和检测顶场和底场的 FrameNumWrap 是否一致
+inline int updateShortTermReference(PictureBase &picture_frame,
+                                    PictureBase &picture_top,
+                                    PictureBase &picture_bottom, int &PicNum) {
+  if (picture_frame.reference_marked_type == PICTURE_MARKED_AS_used_short_ref) {
+    picture_frame.PicNum = picture_frame.FrameNumWrap;
+    PicNum = picture_frame.PicNum;
+  }
+
+  if (picture_top.reference_marked_type == PICTURE_MARKED_AS_used_short_ref &&
+      picture_bottom.reference_marked_type ==
+          PICTURE_MARKED_AS_used_short_ref) {
+    picture_top.PicNum = picture_top.FrameNumWrap;
+    picture_bottom.PicNum = picture_bottom.FrameNumWrap;
+    PicNum = picture_top.PicNum;
+
+    if (picture_top.PicNum != picture_bottom.PicNum) {
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
+      return -1;
+    }
+  }
+  return 0;
+}
+
+// 处理长期参考帧或场对，更新 LongTermPicNum，并检查顶场和底场的 LongTermPicNum 是否一致。
+inline int updateLongTermReference(PictureBase &picture_frame,
+                                   PictureBase &picture_top,
+                                   PictureBase &picture_bottom,
+                                   int &LongTermPicNum) {
+  if (picture_frame.reference_marked_type == PICTURE_MARKED_AS_used_long_ref) {
+    picture_frame.LongTermPicNum = picture_frame.LongTermFrameIdx;
+    LongTermPicNum = picture_frame.LongTermPicNum;
+  }
+
+  if (picture_top.reference_marked_type == PICTURE_MARKED_AS_used_long_ref &&
+      picture_bottom.reference_marked_type == PICTURE_MARKED_AS_used_long_ref) {
+    picture_top.LongTermPicNum = picture_top.LongTermFrameIdx;
+    picture_bottom.LongTermPicNum = picture_bottom.LongTermFrameIdx;
+    LongTermPicNum = picture_top.LongTermPicNum;
+
+    if (picture_top.LongTermPicNum != picture_bottom.LongTermPicNum) {
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
+      return -1;
+    }
+  }
+  return 0;
+}
+
+// 更新PicNum或LongTermPicNum的函数
+int updatePicNum(PictureBase &field, int m_picture_coded_type,
+                 bool isLongTerm) {
+  int baseNum = isLongTerm ? field.LongTermFrameIdx : field.FrameNumWrap;
+  int offset =
+      (m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD) ? 1 : 0;
+
+  if (isLongTerm)
+    field.LongTermPicNum = 2 * baseNum + offset;
+  else
+    field.PicNum = 2 * baseNum + offset;
+
+  return isLongTerm ? field.LongTermPicNum : field.PicNum;
+}
+
 // 8.2.4.1 Decoding process for picture numbers
 /* 当调用第8.2.4节中指定的参考图片列表构建的解码过程、第8.2.5节中指定的解码参考图片标记过程或第8.2.5.2节中指定的frame_num中的间隙的解码过程时，调用该过程。*/
 /* 参考图片通过第 8.4.2.1 节中指定的参考索引来寻址。*/
 int PictureBase::decoding_picture_numbers(Frame *(&dpb)[16]) {
-  SliceHeader *slice_header = m_slice->slice_header;
+  /* TODO YangJing 修改为宏定义？ <24-09-16 17:56:44> */
   const int size_dpb = 16;
+  const SliceHeader *header = m_slice->slice_header;
+  FrameNum = header->frame_num;
 
   /* 变量 FrameNum、FrameNumWrap、PicNum、LongTermFrameIdx 和 LongTermPicNum 用于第 8.2.4.2 节中参考图片列表的初始化过程、第 8.2.4.3 节中参考图片列表的修改过程、第 8.2.5 节中的解码参考图片标记过程。以及第8.2.5.2节中frame_num中间隙的解码过程。 */
 
+  //-------------------------------------------- 处理FrameNumWrap --------------------------------------------
   /* 对于每个短期参考图片，变量 FrameNum 和 FrameNumWrap 被分配如下。首先，将FrameNum设置为等于对应短期参考图片的Slice Header中已解码的语法元素frame_num。然后变量 FrameNumWrap 导出为:*/
-  FrameNum = slice_header->frame_num;
+
+  //FrameNum 是解码顺序中的帧编号，而 MaxFrameNum 是允许的最大帧编号加一，定义了一个周期性边界，超过这个边界帧编号将回绕到 0。FrameNumWrap 是一个处理过的帧编号，用来适应帧编号的周期性回绕。
+  //NOTE: 前面在解码单个Slice的POC时候其实已经做个这个事情，这里是对缓存中的短、长参考帧进行一次整体和处理
 
   for (int i = 0; i < size_dpb; i++) {
-    /* 帧 */
+    /* 帧，顶场，底场 */
     auto &pict_f = dpb[i]->m_picture_frame;
-    auto &pict_f_frameNum = pict_f.FrameNum;
-    auto &pict_f_frameNumWrap = pict_f.FrameNumWrap;
-    if (!pict_f.m_slice || !pict_f.m_slice->slice_header->m_sps) continue;
-    int MaxFrameNum = pict_f.m_slice->slice_header->m_sps->MaxFrameNum;
-
-    if (pict_f.reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
-
-      if (pict_f_frameNum > FrameNum)
-        pict_f_frameNumWrap = pict_f_frameNum - MaxFrameNum;
-      else
-        pict_f.FrameNumWrap = pict_f_frameNum;
-    }
-
-    /* 顶场 */
     auto &pict_t = dpb[i]->m_picture_top_filed;
-    auto &pict_t_frameNum = pict_t.FrameNum;
-    auto &pict_t_frameNumWrap = pict_t.FrameNumWrap;
-
-    if (pict_t.reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
-
-      if (pict_t.FrameNum > FrameNum)
-        pict_t_frameNumWrap = pict_t_frameNum - MaxFrameNum;
-      else
-        pict_t_frameNumWrap = pict_t_frameNum;
-    }
-
-    /* 底场 */
     auto &pict_b = dpb[i]->m_picture_bottom_filed;
-    auto &pict_b_frameNum = pict_b.FrameNum;
-    auto &pict_b_frameNumWrap = pict_b.FrameNumWrap;
 
-    if (pict_b.reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
-
-      if (pict_b_frameNum > FrameNum)
-        pict_b_frameNumWrap = pict_b_frameNum - MaxFrameNum;
-      else
-        pict_b_frameNumWrap = pict_b_frameNum;
-    }
+    if (!pict_f.m_slice || !pict_f.m_slice->slice_header->m_sps) continue;
+    const uint32_t MaxFrameNum =
+        pict_f.m_slice->slice_header->m_sps->MaxFrameNum;
+    updateFrameNumWrap(pict_f, FrameNum, MaxFrameNum);
+    updateFrameNumWrap(pict_t, FrameNum, MaxFrameNum);
+    updateFrameNumWrap(pict_b, FrameNum, MaxFrameNum);
   }
 
   /* 每个长期参考图片都有一个关联的 LongTermFrameIdx 值（按照第 8.2.5 节的规定分配给它） */
   // 8.2.5 Decoded reference picture marking process
-  // NOTE:
+  // NOTE:向每个短期参考图片分配变量PicNum，并且向每个长期参考图片分配变量LongTermPicNum。这些变量的值取决于当前图片的field_pic_flag和bottom_field_flag的值，它们的设置如下： */
 
-  /* 向每个短期参考图片分配变量PicNum，并且向每个长期参考图片分配变量LongTermPicNum。这些变量的值取决于当前图片的field_pic_flag和bottom_field_flag的值，它们的设置如下： */
-  if (!slice_header->field_pic_flag) {
-    /* 帧编码 */
+  int ret = 0;
+  /* 帧编码 */
+  if (!header->field_pic_flag) {
     for (int i = 0; i < size_dpb; i++) {
-      auto &reference_marked_type_f =
-          dpb[i]->m_picture_frame.reference_marked_type;
-      auto &picNum1_f = dpb[i]->m_picture_frame.PicNum;
-      auto &picNum2 = dpb[i]->PicNum;
-
-      /* 对于每个短期参考帧或互补参考场对： */
-      if (reference_marked_type_f ==
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference)
-        picNum2 = picNum1_f = dpb[i]->m_picture_frame.FrameNumWrap;
-
-      auto &reference_marked_type_t =
-          dpb[i]->m_picture_top_filed.reference_marked_type;
-      auto &reference_marked_type_b =
-          dpb[i]->m_picture_bottom_filed.reference_marked_type;
-      auto &picNum1_t = dpb[i]->m_picture_top_filed.PicNum;
-      auto &picNum1_b = dpb[i]->m_picture_bottom_filed.PicNum;
-
-      if (reference_marked_type_t ==
-              H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
-          reference_marked_type_b ==
-              H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
-        picNum1_t = dpb[i]->m_picture_top_filed.FrameNumWrap;
-        picNum1_b = dpb[i]->m_picture_bottom_filed.FrameNumWrap;
-        picNum2 = picNum1_t;
-
-        if (picNum1_t != picNum1_b) {
-          std::cerr << "An error occurred on " << __FUNCTION__
-                    << "():" << __LINE__ << std::endl;
-          return -1;
-        }
-      }
-
-      /* 对于每个长期参考帧或长期互补参考场对： */
+      // 获取各自的frame、top field和bottom field
       auto &pict_f = dpb[i]->m_picture_frame;
-      if (pict_f.reference_marked_type ==
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference)
-        dpb[i]->LongTermPicNum = pict_f.LongTermPicNum =
-            pict_f.LongTermFrameIdx;
-
       auto &pict_t = dpb[i]->m_picture_top_filed;
       auto &pict_b = dpb[i]->m_picture_bottom_filed;
-      if (pict_t.reference_marked_type ==
-              H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
-          pict_b.reference_marked_type ==
-              H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
-        pict_t.LongTermPicNum = pict_t.LongTermFrameIdx;
-        pict_b.LongTermPicNum = pict_b.LongTermFrameIdx;
-        dpb[i]->LongTermPicNum = pict_t.LongTermPicNum;
-        if (pict_t.LongTermPicNum != pict_b.LongTermPicNum) {
-          std::cerr << "An error occurred on " << __FUNCTION__
-                    << "():" << __LINE__ << std::endl;
-          return -1;
-        }
-      }
+
+      /* 对于每个短期参考帧或互补参考场对 */
+      ret = updateShortTermReference(pict_f, pict_t, pict_b, dpb[i]->PicNum);
+      RET(ret);
+
+      /* 对于每个长期参考帧或长期互补参考场对 */
+      ret = updateLongTermReference(pict_f, pict_t, pict_b,
+                                    dpb[i]->LongTermPicNum);
+      RET(ret);
     }
-  } else if (slice_header->field_pic_flag) {
+
     /* 场编码 */
-
+  } else if (header->field_pic_flag) {
     for (int i = 0; i < size_dpb; i++) {
-      /* ------------------ 对于每个短期参考字段，以下内容适用 ------------------  */
-      /* 顶场 */
       auto &pict_t = dpb[i]->m_picture_top_filed;
-      if (pict_t.reference_marked_type ==
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
-
-        if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
-          /* 如果参考字段与当前字段具有相同的奇偶校验（对于顶场而言） */
-          pict_t.PicNum = 2 * pict_t.FrameNumWrap + 1;
-        else if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
-          /* 参考字段与当前字段具有相反的奇偶校验 （对于顶场而言）*/
-          pict_t.PicNum = 2 * pict_t.FrameNumWrap;
-
-        dpb[i]->PicNum = pict_t.PicNum;
-      }
-
-      /* 底场 */
       auto &pict_b = dpb[i]->m_picture_bottom_filed;
-      if (pict_b.reference_marked_type ==
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
+      bool isLongTerm;
 
-        if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
-          /* 如果参考字段与当前字段具有相同的奇偶校验（对于底场而言） */
-          pict_b.PicNum = 2 * pict_b.FrameNumWrap + 1;
-        else if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
-          /* 参考字段与当前字段具有相反的奇偶校验 （对于底场而言）*/
-          pict_b.PicNum = 2 * pict_b.FrameNumWrap;
-
-        dpb[i]->PicNum = pict_b.PicNum;
+      // 处理顶场
+      if (pict_t.reference_marked_type == PICTURE_MARKED_AS_used_short_ref ||
+          pict_t.reference_marked_type == PICTURE_MARKED_AS_used_long_ref) {
+        isLongTerm =
+            pict_t.reference_marked_type == PICTURE_MARKED_AS_used_long_ref;
+        dpb[i]->PicNum = updatePicNum(pict_t, m_picture_coded_type, isLongTerm);
       }
 
-      /* ------------------ 对于每个长期参考字段，以下内容适用 ------------------  */
-      if (pict_t.reference_marked_type ==
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
-        if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
-          pict_t.LongTermPicNum = 2 * pict_t.LongTermFrameIdx + 1;
-        else if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
-          pict_t.LongTermPicNum = 2 * pict_t.LongTermFrameIdx;
-
-        dpb[i]->LongTermPicNum = pict_t.LongTermPicNum;
-      }
-
-      if (pict_b.reference_marked_type ==
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
-        if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
-          pict_b.LongTermPicNum = 2 * pict_b.LongTermFrameIdx + 1;
-        else if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
-          pict_b.LongTermPicNum = 2 * pict_b.LongTermFrameIdx;
-
-        dpb[i]->LongTermPicNum = pict_b.LongTermPicNum;
+      // 处理底场
+      if (pict_b.reference_marked_type == PICTURE_MARKED_AS_used_short_ref ||
+          pict_b.reference_marked_type == PICTURE_MARKED_AS_used_long_ref) {
+        isLongTerm =
+            pict_b.reference_marked_type == PICTURE_MARKED_AS_used_long_ref;
+        dpb[i]->PicNum = updatePicNum(pict_b, m_picture_coded_type, isLongTerm);
       }
     }
   }
@@ -579,11 +544,9 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
   vector<int32_t> indexTemp_short, indexTemp_long;
   for (int index = 0; index < (int)size_dpb; index++) {
     auto &pict_f = dpb[index]->m_picture_frame;
-    if (pict_f.reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference)
+    if (pict_f.reference_marked_type == PICTURE_MARKED_AS_used_short_ref)
       indexTemp_short.push_back(index);
-    else if (pict_f.reference_marked_type ==
-             H264_PICTURE_MARKED_AS_used_for_long_term_reference)
+    else if (pict_f.reference_marked_type == PICTURE_MARKED_AS_used_long_ref)
       indexTemp_long.push_back(index);
   }
 
@@ -650,16 +613,14 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_fields(
     auto &pict_t = dpb[index]->m_picture_top_filed;
     auto &pict_b = dpb[index]->m_picture_bottom_filed;
 
-    if (pict_t.reference_marked_type ==
-            H264_PICTURE_MARKED_AS_used_for_short_term_reference ||
-        pict_b.reference_marked_type ==
-            H264_PICTURE_MARKED_AS_used_for_short_term_reference)
+    if (pict_t.reference_marked_type == PICTURE_MARKED_AS_used_short_ref ||
+        pict_b.reference_marked_type == PICTURE_MARKED_AS_used_short_ref)
       refFrameList0ShortTerm.push_back(dpb[index]);
 
     else if (dpb[index]->m_picture_top_filed.reference_marked_type ==
-                 H264_PICTURE_MARKED_AS_used_for_long_term_reference ||
+                 PICTURE_MARKED_AS_used_long_ref ||
              dpb[index]->m_picture_bottom_filed.reference_marked_type ==
-                 H264_PICTURE_MARKED_AS_used_for_long_term_reference)
+                 PICTURE_MARKED_AS_used_long_ref)
       refFrameList0LongTerm.push_back(dpb[index]);
   }
 
@@ -667,11 +628,11 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_fields(
   Frame *curPic = m_parent;
   if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) {
     if (curPic->m_picture_top_filed.reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference)
+        PICTURE_MARKED_AS_used_short_ref)
       refFrameList0ShortTerm.push_back(curPic);
 
     else if (curPic->m_picture_top_filed.reference_marked_type ==
-             H264_PICTURE_MARKED_AS_used_for_long_term_reference)
+             PICTURE_MARKED_AS_used_long_ref)
       refFrameList0LongTerm.push_back(curPic);
   }
 
@@ -728,16 +689,14 @@ int PictureBase::init_reference_picture_lists_B_slices_in_frames(
 
   for (int i = 0; i < size_dpb; i++) {
     auto &pict_f = dpb[i]->m_picture_frame;
-    if (pict_f.reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
+    if (pict_f.reference_marked_type == PICTURE_MARKED_AS_used_short_ref) {
 
       if (pict_f.PicOrderCnt < PicOrderCnt)
         indexTemp_short_left.push_back(i);
       else
         indexTemp_short_right.push_back(i);
 
-    } else if (pict_f.reference_marked_type ==
-               H264_PICTURE_MARKED_AS_used_for_long_term_reference)
+    } else if (pict_f.reference_marked_type == PICTURE_MARKED_AS_used_long_ref)
       indexTemp_long.push_back(i);
   }
 
@@ -785,16 +744,14 @@ int PictureBase::init_reference_picture_lists_B_slices_in_frames(
 
   for (int i = 0; i < size_dpb; i++) {
     auto &pict_f = dpb[i]->m_picture_frame;
-    if (pict_f.reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
+    if (pict_f.reference_marked_type == PICTURE_MARKED_AS_used_short_ref) {
 
       if (pict_f.PicOrderCnt > PicOrderCnt)
         indexTemp_short_left.push_back(i);
       else
         indexTemp_short_right.push_back(i);
 
-    } else if (pict_f.reference_marked_type ==
-               H264_PICTURE_MARKED_AS_used_for_long_term_reference)
+    } else if (pict_f.reference_marked_type == PICTURE_MARKED_AS_used_long_ref)
       indexTemp_long.push_back(i);
   }
 
@@ -868,16 +825,14 @@ int PictureBase::init_reference_picture_lists_B_slices_in_fields(
   /* 1. 令entryShortTerm 为一个变量，范围涵盖当前标记为“用于短期参考”的所有参考条目。当存在PicOrderCnt(entryShortTerm)小于或等于PicOrderCnt(CurrPic)的entryShortTerm的某些值时，entryShortTerm的这些值按照PicOrderCnt(entryShortTerm)的降序放置在refFrameList0ShortTerm的开头。然后，entryShortTerm 的所有剩余值（如果存在）将按 PicOrderCnt(entryShortTerm ) 的升序附加到 refFrameList0ShortTerm。 */
   for (int i = 0; i < size_dpb; i++) {
     auto &pict_f = dpb[i]->m_picture_frame;
-    if (pict_f.reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
+    if (pict_f.reference_marked_type == PICTURE_MARKED_AS_used_short_ref) {
 
       if (pict_f.PicOrderCnt < PicOrderCnt)
         indexTemp_short_left.push_back(i);
       else
         indexTemp_short_right.push_back(i);
 
-    } else if (pict_f.reference_marked_type ==
-               H264_PICTURE_MARKED_AS_used_for_long_term_reference)
+    } else if (pict_f.reference_marked_type == PICTURE_MARKED_AS_used_long_ref)
       indexTemp_long.push_back(i);
   }
 
@@ -989,7 +944,7 @@ int PictureBase::init_reference_picture_lists_in_fields(
       RefPicListX[index] = refFrameListXShortTerm[i];
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence = coded_type;
       RefPicListX[index]->reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+          PICTURE_MARKED_AS_used_short_ref;
       coded_type = (coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
                        ? H264_PICTURE_CODED_TYPE_BOTTOM_FIELD
                        : H264_PICTURE_CODED_TYPE_TOP_FIELD;
@@ -1005,7 +960,7 @@ int PictureBase::init_reference_picture_lists_in_fields(
       RefPicListX[index] = refFrameListXShortTerm[i];
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence = coded_type;
       RefPicListX[index]->reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+          PICTURE_MARKED_AS_used_short_ref;
       coded_type = (coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
                        ? H264_PICTURE_CODED_TYPE_BOTTOM_FIELD
                        : H264_PICTURE_CODED_TYPE_TOP_FIELD;
@@ -1027,7 +982,7 @@ int PictureBase::init_reference_picture_lists_in_fields(
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence =
           H264_PICTURE_CODED_TYPE_TOP_FIELD;
       RefPicListX[index]->reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+          PICTURE_MARKED_AS_used_short_ref;
       index++;
     }
 
@@ -1038,7 +993,7 @@ int PictureBase::init_reference_picture_lists_in_fields(
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence =
           H264_PICTURE_CODED_TYPE_BOTTOM_FIELD;
       RefPicListX[index]->reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+          PICTURE_MARKED_AS_used_short_ref;
       index++;
     }
   }
@@ -1055,7 +1010,7 @@ int PictureBase::init_reference_picture_lists_in_fields(
       RefPicListX[index] = refFrameListXLongTerm[i];
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence = coded_type;
       RefPicListX[index]->reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+          PICTURE_MARKED_AS_used_long_ref;
       coded_type = (coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
                        ? H264_PICTURE_CODED_TYPE_BOTTOM_FIELD
                        : H264_PICTURE_CODED_TYPE_TOP_FIELD;
@@ -1070,7 +1025,7 @@ int PictureBase::init_reference_picture_lists_in_fields(
       RefPicListX[index] = refFrameListXLongTerm[i];
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence = coded_type;
       RefPicListX[index]->reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+          PICTURE_MARKED_AS_used_long_ref;
       coded_type = (coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
                        ? H264_PICTURE_CODED_TYPE_BOTTOM_FIELD
                        : H264_PICTURE_CODED_TYPE_TOP_FIELD;
@@ -1092,7 +1047,7 @@ int PictureBase::init_reference_picture_lists_in_fields(
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence =
           H264_PICTURE_CODED_TYPE_TOP_FIELD;
       RefPicListX[index]->reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+          PICTURE_MARKED_AS_used_long_ref;
       index++;
     }
 
@@ -1102,7 +1057,7 @@ int PictureBase::init_reference_picture_lists_in_fields(
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence =
           H264_PICTURE_CODED_TYPE_BOTTOM_FIELD;
       RefPicListX[index]->reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+          PICTURE_MARKED_AS_used_long_ref;
       index++;
     }
   }
@@ -1232,7 +1187,7 @@ int PictureBase::modif_reference_picture_lists_for_short_ref_pictures(
   for (cIdx = 0; cIdx < num_ref_idx_lX_active_minus1 + 1; cIdx++) {
     if (RefPicListX[cIdx]->PicNum == picNumLX &&
         RefPicListX[cIdx]->reference_marked_type ==
-            H264_PICTURE_MARKED_AS_used_for_short_term_reference)
+            PICTURE_MARKED_AS_used_short_ref)
       break;
   }
 
@@ -1244,7 +1199,7 @@ int PictureBase::modif_reference_picture_lists_for_short_ref_pictures(
       /* 如果图片RefPicListX[cIdx]被标记为“用于短期参考”，则PicNumF(RefPicListX[cIdx])是图片RefPicListX[cIdx]的PicNum，否则(图片RefPicListX[cIdx]没有被标记为“用于短期参考”)，PicNumF(RefPicListX[cIdx])等于MaxPicNum。 */
       int32_t PicNumF;
       if (RefPicListX[cIdx]->reference_marked_type ==
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference)
+          PICTURE_MARKED_AS_used_short_ref)
         PicNumF = RefPicListX[cIdx]->PicNum;
       else
         PicNumF = slice_header->MaxPicNum;
@@ -1281,7 +1236,7 @@ int PictureBase::modif_reference_picture_lists_for_long_ref_pictures(
   int32_t LongTermPicNumF;
   for (cIdx = refIdxLX; cIdx <= num_ref_idx_lX_active_minus1 + 1; cIdx++) {
     if (RefPicListX[cIdx]->reference_marked_type ==
-        H264_PICTURE_MARKED_AS_used_for_long_term_reference)
+        PICTURE_MARKED_AS_used_long_ref)
       LongTermPicNumF = RefPicListX[cIdx]->LongTermPicNum;
     else
       LongTermPicNumF = 2 * (MaxLongTermFrameIdx + 1);
@@ -1323,8 +1278,7 @@ int PictureBase::
   {
     // All reference pictures are marked as "unused for reference"
     for (int i = 0; i < size_dpb; i++) {
-      dpb[i]->reference_marked_type =
-          H264_PICTURE_MARKED_AS_unused_for_reference;
+      dpb[i]->reference_marked_type = PICTURE_MARKED_AS_unused_for_reference;
       dpb[i]->m_picture_coded_type_marked_as_refrence =
           H264_PICTURE_CODED_TYPE_UNKNOWN;
       if (dpb[i] != this->m_parent) {
@@ -1336,11 +1290,9 @@ int PictureBase::
 
     if (slice_header->long_term_reference_flag == 0) // 标记自己为哪一种参考帧
     {
-      reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+      reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
       MaxLongTermFrameIdx = NA; //"no long-term frame indices".
-      m_parent->reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+      m_parent->reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
 
       if (m_parent->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
         m_parent->m_picture_coded_type_marked_as_refrence =
@@ -1351,12 +1303,10 @@ int PictureBase::
       }
     } else // if (slice_header->long_term_reference_flag == 1)
     {
-      reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+      reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
       LongTermFrameIdx = 0;
       MaxLongTermFrameIdx = 0;
-      m_parent->reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+      m_parent->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
 
       if (m_parent->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
         m_parent->m_picture_coded_type_marked_as_refrence =
@@ -1388,11 +1338,9 @@ int PictureBase::
   // to 6, it is marked as "used for short-term reference".
   if (slice_header->IdrPicFlag != 1 // the current picture is not an IDR picture
       && memory_management_control_operation_6_flag != 6) {
-    reference_marked_type =
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+    reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
     MaxLongTermFrameIdx = NA; //"no long-term frame indices".
-    m_parent->reference_marked_type =
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+    m_parent->reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
 
     if (m_parent->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
       m_parent->m_picture_coded_type_marked_as_refrence =
@@ -1434,9 +1382,8 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
       // field in decoding order of a
       // complementary reference field
       // pair
-      &&
-      (m_parent->m_picture_top_filed.reference_marked_type ==
-       H264_PICTURE_MARKED_AS_used_for_short_term_reference)) // the first field
+      && (m_parent->m_picture_top_filed.reference_marked_type ==
+          PICTURE_MARKED_AS_used_short_ref)) // the first field
   // has been marked
   // as "used for
   // short-term
@@ -1444,10 +1391,8 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
   {
     // the current picture and the complementary reference field pair are also
     // marked as "used for short-term reference".
-    reference_marked_type =
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference;
-    m_parent->reference_marked_type =
-        H264_PICTURE_MARKED_AS_used_for_short_term_reference;
+    reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
+    m_parent->reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
     m_parent->m_picture_coded_type_marked_as_refrence =
         H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
   } else {
@@ -1457,20 +1402,20 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
 
     for (int i = 0; i < size_dpb; i++) {
       if (dpb[i]->m_picture_frame.reference_marked_type ==
-              H264_PICTURE_MARKED_AS_used_for_short_term_reference ||
+              PICTURE_MARKED_AS_used_short_ref ||
           dpb[i]->m_picture_top_filed.reference_marked_type ==
-              H264_PICTURE_MARKED_AS_used_for_short_term_reference ||
+              PICTURE_MARKED_AS_used_short_ref ||
           dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-              H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
+              PICTURE_MARKED_AS_used_short_ref) {
         numShortTerm++;
       }
 
       if (dpb[i]->m_picture_frame.reference_marked_type ==
-              H264_PICTURE_MARKED_AS_used_for_long_term_reference ||
+              PICTURE_MARKED_AS_used_long_ref ||
           dpb[i]->m_picture_top_filed.reference_marked_type ==
-              H264_PICTURE_MARKED_AS_used_for_long_term_reference ||
+              PICTURE_MARKED_AS_used_long_ref ||
           dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-              H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
+              PICTURE_MARKED_AS_used_long_ref) {
         numLongTerm++;
       }
     }
@@ -1490,13 +1435,13 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
       // "unused for reference".
       for (int i = 0; i < size_dpb; i++) {
         if (dpb[i]->m_picture_frame.reference_marked_type ==
-                H264_PICTURE_MARKED_AS_used_for_short_term_reference ||
+                PICTURE_MARKED_AS_used_short_ref ||
             dpb[i]->m_picture_top_filed.reference_marked_type ==
-                H264_PICTURE_MARKED_AS_used_for_short_term_reference ||
+                PICTURE_MARKED_AS_used_short_ref ||
             dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
+                PICTURE_MARKED_AS_used_short_ref) {
           if (dpb[i]->m_picture_frame.reference_marked_type ==
-              H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
+              PICTURE_MARKED_AS_used_short_ref) {
             if (FrameNumWrap_smallest_index == -1) {
               FrameNumWrap_smallest_index = i;
               refPic = &dpb[i]->m_picture_frame;
@@ -1511,9 +1456,9 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
           }
 
           if (dpb[i]->m_picture_top_filed.reference_marked_type ==
-                  H264_PICTURE_MARKED_AS_used_for_short_term_reference ||
+                  PICTURE_MARKED_AS_used_short_ref ||
               dpb[i]->m_picture_top_filed.reference_marked_type ==
-                  H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
+                  PICTURE_MARKED_AS_used_short_ref) {
             if (FrameNumWrap_smallest_index == -1) {
               FrameNumWrap_smallest_index = i;
               refPic = &dpb[i]->m_picture_top_filed;
@@ -1528,7 +1473,7 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
           }
 
           if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-              H264_PICTURE_MARKED_AS_used_for_short_term_reference) {
+              PICTURE_MARKED_AS_used_short_ref) {
             if (FrameNumWrap_smallest_index == -1) {
               FrameNumWrap_smallest_index = i;
               refPic = &dpb[i]->m_picture_bottom_filed;
@@ -1545,25 +1490,24 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
       }
 
       if (FrameNumWrap_smallest_index >= 0 && refPic != NULL) {
-        refPic->reference_marked_type =
-            H264_PICTURE_MARKED_AS_unused_for_reference;
+        refPic->reference_marked_type = PICTURE_MARKED_AS_unused_for_reference;
 
         if (refPic->m_parent->m_picture_coded_type ==
             H264_PICTURE_CODED_TYPE_FRAME) {
           refPic->m_parent->reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
           refPic->m_parent->m_picture_coded_type_marked_as_refrence =
               H264_PICTURE_CODED_TYPE_UNKNOWN;
         } else if (refPic->m_parent->m_picture_coded_type ==
                    H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
           refPic->m_parent->reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
           refPic->m_parent->m_picture_coded_type_marked_as_refrence =
               H264_PICTURE_CODED_TYPE_UNKNOWN;
           refPic->m_parent->m_picture_top_filed.reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
           refPic->m_parent->m_picture_bottom_filed.reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
         }
       }
     }
@@ -1603,49 +1547,49 @@ int PictureBase::
       if (slice_header->field_pic_flag == 0) {
         for (i = 0; i < size_dpb; i++) {
           if ((dpb[i]->m_picture_frame.reference_marked_type ==
-                   H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
+                   PICTURE_MARKED_AS_used_short_ref &&
                dpb[i]->m_picture_frame.PicNum == picNumX) ||
               (dpb[i]->m_picture_top_filed.reference_marked_type ==
-                   H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
+                   PICTURE_MARKED_AS_used_short_ref &&
                dpb[i]->m_picture_top_filed.PicNum == picNumX) ||
               (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                   H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
+                   PICTURE_MARKED_AS_used_short_ref &&
                dpb[i]->m_picture_bottom_filed.PicNum == picNumX)) {
             dpb[i]->reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_frame.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_top_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_bottom_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
           }
         }
       } else // if (field_pic_flag == 1)
       {
         for (i = 0; i < size_dpb; i++) {
           if (dpb[i]->m_picture_top_filed.reference_marked_type ==
-                  H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
+                  PICTURE_MARKED_AS_used_short_ref &&
               dpb[i]->m_picture_top_filed.PicNum == picNumX) {
             dpb[i]->reference_marked_type =
                 dpb[i]->m_picture_bottom_filed.reference_marked_type;
             dpb[i]->m_picture_coded_type_marked_as_refrence =
                 dpb[i]->m_picture_bottom_filed.m_picture_coded_type;
             dpb[i]->m_picture_frame.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_top_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
           } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                         H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
+                         PICTURE_MARKED_AS_used_short_ref &&
                      dpb[i]->m_picture_bottom_filed.PicNum == picNumX) {
             dpb[i]->reference_marked_type =
                 dpb[i]->m_picture_top_filed.reference_marked_type;
             dpb[i]->m_picture_coded_type_marked_as_refrence =
                 dpb[i]->m_picture_top_filed.m_picture_coded_type;
             dpb[i]->m_picture_frame.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_bottom_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
           }
         }
       }
@@ -1658,19 +1602,19 @@ int PictureBase::
       if (slice_header->field_pic_flag == 0) {
         for (i = 0; i < size_dpb; i++) {
           if (dpb[i]->m_picture_frame.reference_marked_type ==
-                  H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
+                  PICTURE_MARKED_AS_used_long_ref &&
               dpb[i]->m_picture_frame.LongTermPicNum ==
                   slice_header->m_dec_ref_pic_marking[j].long_term_pic_num_2) {
             dpb[i]->reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_coded_type_marked_as_refrence =
                 H264_PICTURE_CODED_TYPE_UNKNOWN;
             dpb[i]->m_picture_frame.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_top_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_bottom_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
           }
         }
       } else // if (field_pic_flag == 1) //FIXME: but the marking of the other
@@ -1679,7 +1623,7 @@ int PictureBase::
       {
         for (i = 0; i < size_dpb; i++) {
           if (dpb[i]->m_picture_top_filed.reference_marked_type ==
-                  H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
+                  PICTURE_MARKED_AS_used_long_ref &&
               dpb[i]->m_picture_top_filed.LongTermPicNum ==
                   slice_header->m_dec_ref_pic_marking[j].long_term_pic_num_2) {
             dpb[i]->reference_marked_type =
@@ -1687,11 +1631,11 @@ int PictureBase::
             dpb[i]->m_picture_coded_type_marked_as_refrence =
                 dpb[i]->m_picture_bottom_filed.m_picture_coded_type;
             dpb[i]->m_picture_frame.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_top_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
           } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                         H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
+                         PICTURE_MARKED_AS_used_long_ref &&
                      dpb[i]->m_picture_bottom_filed.LongTermPicNum ==
                          slice_header->m_dec_ref_pic_marking[j]
                              .long_term_pic_num_2) {
@@ -1700,9 +1644,9 @@ int PictureBase::
             dpb[i]->m_picture_coded_type_marked_as_refrence =
                 dpb[i]->m_picture_top_filed.m_picture_coded_type;
             dpb[i]->m_picture_frame.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_bottom_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
           }
         }
       }
@@ -1723,19 +1667,19 @@ int PictureBase::
       // fields are marked as "unused for reference".
       for (i = 0; i < size_dpb; i++) {
         if (dpb[i]->m_picture_frame.reference_marked_type ==
-                H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
+                PICTURE_MARKED_AS_used_long_ref &&
             dpb[i]->m_picture_frame.LongTermFrameIdx ==
                 slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx) {
           dpb[i]->reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
           dpb[i]->m_picture_coded_type_marked_as_refrence =
               H264_PICTURE_CODED_TYPE_UNKNOWN;
           dpb[i]->m_picture_frame.reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
           dpb[i]->m_picture_top_filed.reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
           dpb[i]->m_picture_bottom_filed.reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
         }
       }
 
@@ -1746,12 +1690,12 @@ int PictureBase::
       int32_t picNumXIndex = -1;
       for (i = 0; i < size_dpb; i++) {
         if (dpb[i]->m_picture_top_filed.reference_marked_type ==
-                H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
+                PICTURE_MARKED_AS_used_short_ref &&
             dpb[i]->m_picture_top_filed.PicNum == picNumX) {
           picNumXIndex = i;
           break;
         } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                       H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
+                       PICTURE_MARKED_AS_used_short_ref &&
                    dpb[i]->m_picture_bottom_filed.PicNum == picNumX) {
           picNumXIndex = i;
           break;
@@ -1760,33 +1704,33 @@ int PictureBase::
 
       for (i = 0; i < size_dpb; i++) {
         if (dpb[i]->m_picture_top_filed.reference_marked_type ==
-                H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
+                PICTURE_MARKED_AS_used_long_ref &&
             dpb[i]->m_picture_top_filed.LongTermFrameIdx ==
                 slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx) {
           if (i != picNumXIndex) {
             dpb[i]->reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_coded_type_marked_as_refrence =
                 dpb[i]->m_picture_bottom_filed.m_picture_coded_type;
             dpb[i]->m_picture_frame.reference_marked_type =
                 dpb[i]->m_picture_bottom_filed.reference_marked_type;
             dpb[i]->m_picture_top_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
           }
         } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                       H264_PICTURE_MARKED_AS_used_for_long_term_reference &&
+                       PICTURE_MARKED_AS_used_long_ref &&
                    dpb[i]->m_picture_bottom_filed.LongTermFrameIdx ==
                        slice_header->m_dec_ref_pic_marking[j]
                            .long_term_frame_idx) {
           if (i != picNumXIndex) {
             dpb[i]->reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_coded_type_marked_as_refrence =
                 dpb[i]->m_picture_top_filed.m_picture_coded_type;
             dpb[i]->m_picture_frame.reference_marked_type =
                 dpb[i]->m_picture_top_filed.reference_marked_type;
             dpb[i]->m_picture_bottom_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
           }
         }
       }
@@ -1795,21 +1739,20 @@ int PictureBase::
       if (slice_header->field_pic_flag == 0) {
         for (i = 0; i < size_dpb; i++) {
           if (dpb[i]->m_picture_frame.reference_marked_type ==
-                  H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
+                  PICTURE_MARKED_AS_used_short_ref &&
               dpb[i]->m_picture_frame.PicNum == picNumX) {
-            dpb[i]->reference_marked_type =
-                H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+            dpb[i]->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
             dpb[i]->m_picture_coded_type_marked_as_refrence =
                 H264_PICTURE_CODED_TYPE_FRAME;
             dpb[i]->m_picture_frame.reference_marked_type =
-                H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+                PICTURE_MARKED_AS_used_long_ref;
 
             if (dpb[i]->m_picture_coded_type ==
                 H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
               dpb[i]->m_picture_top_filed.reference_marked_type =
-                  H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+                  PICTURE_MARKED_AS_used_long_ref;
               dpb[i]->m_picture_bottom_filed.reference_marked_type =
-                  H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+                  PICTURE_MARKED_AS_used_long_ref;
             }
 
             LongTermFrameIdx =
@@ -1822,15 +1765,14 @@ int PictureBase::
       {
         for (i = 0; i < size_dpb; i++) {
           if (dpb[i]->m_picture_top_filed.reference_marked_type ==
-                  H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
+                  PICTURE_MARKED_AS_used_short_ref &&
               dpb[i]->m_picture_top_filed.PicNum == picNumX) {
             dpb[i]->m_picture_top_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+                PICTURE_MARKED_AS_used_long_ref;
 
             if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
-              dpb[i]->reference_marked_type =
-                  H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+                PICTURE_MARKED_AS_used_long_ref) {
+              dpb[i]->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
 
               if (dpb[i]->m_picture_frame.m_picture_coded_type ==
                   H264_PICTURE_CODED_TYPE_FRAME) {
@@ -1843,7 +1785,7 @@ int PictureBase::
               }
 
               dpb[i]->m_picture_frame.reference_marked_type =
-                  H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+                  PICTURE_MARKED_AS_used_long_ref;
               dpb[i]->m_picture_bottom_filed.LongTermFrameIdx =
                   slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
             }
@@ -1851,15 +1793,14 @@ int PictureBase::
             dpb[i]->m_picture_top_filed.LongTermFrameIdx =
                 slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
           } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                         H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
+                         PICTURE_MARKED_AS_used_short_ref &&
                      dpb[i]->m_picture_bottom_filed.PicNum == picNumX) {
             dpb[i]->m_picture_bottom_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+                PICTURE_MARKED_AS_used_long_ref;
 
             if (dpb[i]->m_picture_top_filed.reference_marked_type ==
-                H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
-              dpb[i]->reference_marked_type =
-                  H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+                PICTURE_MARKED_AS_used_long_ref) {
+              dpb[i]->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
 
               if (dpb[i]->m_picture_frame.m_picture_coded_type ==
                   H264_PICTURE_CODED_TYPE_FRAME) {
@@ -1872,7 +1813,7 @@ int PictureBase::
               }
 
               dpb[i]->m_picture_frame.reference_marked_type =
-                  H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+                  PICTURE_MARKED_AS_used_long_ref;
               dpb[i]->m_picture_top_filed.LongTermFrameIdx =
                   slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
             }
@@ -1897,9 +1838,9 @@ int PictureBase::
                         .max_long_term_frame_idx_plus1 -
                     1 &&
             dpb[i]->m_picture_frame.reference_marked_type ==
-                H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
+                PICTURE_MARKED_AS_used_long_ref) {
           dpb[i]->m_picture_frame.reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
         }
 
         if (dpb[i]->m_picture_top_filed.LongTermFrameIdx >
@@ -1907,9 +1848,9 @@ int PictureBase::
                         .max_long_term_frame_idx_plus1 -
                     1 &&
             dpb[i]->m_picture_top_filed.reference_marked_type ==
-                H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
+                PICTURE_MARKED_AS_used_long_ref) {
           dpb[i]->m_picture_top_filed.reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
         }
 
         if (dpb[i]->m_picture_bottom_filed.LongTermFrameIdx >
@@ -1917,9 +1858,9 @@ int PictureBase::
                         .max_long_term_frame_idx_plus1 -
                     1 &&
             dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
+                PICTURE_MARKED_AS_used_long_ref) {
           dpb[i]->m_picture_bottom_filed.reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
         }
 
         if (dpb[i]->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME ||
@@ -1928,7 +1869,7 @@ int PictureBase::
           dpb[i]->m_picture_coded_type_marked_as_refrence =
               H264_PICTURE_CODED_TYPE_UNKNOWN;
           dpb[i]->reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
         }
       }
 
@@ -1951,14 +1892,13 @@ int PictureBase::
       for (i = 0; i < size_dpb; i++) {
         dpb[i]->m_picture_coded_type_marked_as_refrence =
             H264_PICTURE_CODED_TYPE_UNKNOWN;
-        dpb[i]->reference_marked_type =
-            H264_PICTURE_MARKED_AS_unused_for_reference;
+        dpb[i]->reference_marked_type = PICTURE_MARKED_AS_unused_for_reference;
         dpb[i]->m_picture_frame.reference_marked_type =
-            H264_PICTURE_MARKED_AS_unused_for_reference;
+            PICTURE_MARKED_AS_unused_for_reference;
         dpb[i]->m_picture_top_filed.reference_marked_type =
-            H264_PICTURE_MARKED_AS_unused_for_reference;
+            PICTURE_MARKED_AS_unused_for_reference;
         dpb[i]->m_picture_bottom_filed.reference_marked_type =
-            H264_PICTURE_MARKED_AS_unused_for_reference;
+            PICTURE_MARKED_AS_unused_for_reference;
       }
 
       MaxLongTermFrameIdx = NA;
@@ -1981,20 +1921,20 @@ int PictureBase::
                         .max_long_term_frame_idx_plus1 -
                     1 &&
             dpb[i]->m_picture_frame.reference_marked_type ==
-                H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
+                PICTURE_MARKED_AS_used_long_ref) {
           dpb[i]->m_picture_frame.reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
           dpb[i]->reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
           dpb[i]->m_picture_coded_type_marked_as_refrence =
               H264_PICTURE_CODED_TYPE_UNKNOWN;
 
           if (dpb[i]->m_picture_coded_type ==
               H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
             dpb[i]->m_picture_top_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_bottom_filed.reference_marked_type =
-                H264_PICTURE_MARKED_AS_unused_for_reference;
+                PICTURE_MARKED_AS_unused_for_reference;
           }
         }
 
@@ -2011,7 +1951,7 @@ int PictureBase::
           dpb[i]->m_picture_coded_type_marked_as_refrence =
               dpb[i]->m_picture_bottom_filed.m_picture_coded_type;
           dpb[i]->m_picture_top_filed.reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
         } else if (dpb[i]->m_picture_bottom_filed.LongTermFrameIdx ==
                        LongTermFrameIdx &&
                    m_parent->m_picture_coded_type ==
@@ -2022,12 +1962,11 @@ int PictureBase::
           dpb[i]->m_picture_coded_type_marked_as_refrence =
               dpb[i]->m_picture_top_filed.m_picture_coded_type;
           dpb[i]->m_picture_bottom_filed.reference_marked_type =
-              H264_PICTURE_MARKED_AS_unused_for_reference;
+              PICTURE_MARKED_AS_unused_for_reference;
         }
       }
 
-      reference_marked_type =
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+      reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
       LongTermFrameIdx =
           slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
       memory_management_control_operation_6_flag = 6;
@@ -2040,11 +1979,11 @@ int PictureBase::
         if (m_parent->m_picture_coded_type ==
             H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
           m_parent->m_picture_top_filed.reference_marked_type =
-              H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+              PICTURE_MARKED_AS_used_long_ref;
           m_parent->m_picture_top_filed.LongTermFrameIdx =
               slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
           m_parent->m_picture_bottom_filed.reference_marked_type =
-              H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+              PICTURE_MARKED_AS_used_long_ref;
           m_parent->m_picture_bottom_filed.LongTermFrameIdx =
               slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
         }
@@ -2059,9 +1998,8 @@ int PictureBase::
       if (slice_header->field_pic_flag == 1 &&
           m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD &&
           m_parent->m_picture_top_filed.reference_marked_type ==
-              H264_PICTURE_MARKED_AS_used_for_long_term_reference) {
-        m_parent->reference_marked_type =
-            H264_PICTURE_MARKED_AS_used_for_long_term_reference;
+              PICTURE_MARKED_AS_used_long_ref) {
+        m_parent->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
         LongTermFrameIdx =
             slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
       }

@@ -63,7 +63,7 @@ class PictureBase {
       memory_management_control_operation_5_flag; // 所有参考图像标记为“不用于参考”
   int32_t memory_management_control_operation_6_flag;
   H264_PICTURE_MARKED_AS reference_marked_type =
-      H264_PICTURE_MARKED_AS_unkown; // I,P作为参考帧的mark状态
+      PICTURE_MARKED_AS_unkown; // I,P作为参考帧的mark状态
 
   Slice *m_slice;
   //SliceHeader m_h264_slice_header;

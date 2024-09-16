@@ -52,7 +52,7 @@ int Frame::reset() {
   PicOrderCnt = 0;
   PicNum = 0;
   LongTermPicNum = 0;
-  reference_marked_type = H264_PICTURE_MARKED_AS_unkown;
+  reference_marked_type = PICTURE_MARKED_AS_unkown;
   m_is_decode_finished = 0;
   m_is_in_use = 1; // 正在使用状态
 

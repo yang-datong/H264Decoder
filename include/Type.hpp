@@ -66,13 +66,13 @@ enum H264_SLICE_TYPE {
 
 // Table 7-9 – Memory management control operation (memory_management_control_operation) values
 typedef enum _H264_PICTURE_MARKED_AS_ {
-  H264_PICTURE_MARKED_AS_unkown = 0,
-  H264_PICTURE_MARKED_AS_used_for_reference = 1,
-  H264_PICTURE_MARKED_AS_used_for_short_term_reference = 2,
-  H264_PICTURE_MARKED_AS_used_for_long_term_reference = 3,
-  H264_PICTURE_MARKED_AS_non_existing = 4,
-  H264_PICTURE_MARKED_AS_unused_for_reference = 5,
-  H264_PICTURE_MARKED_AS_output_display = 6,
+  PICTURE_MARKED_AS_unkown = 0,
+  PICTURE_MARKED_AS_used_for_reference = 1,
+  PICTURE_MARKED_AS_used_short_ref = 2,
+  PICTURE_MARKED_AS_used_long_ref = 3,
+  PICTURE_MARKED_AS_non_existing = 4,
+  PICTURE_MARKED_AS_unused_for_reference = 5,
+  PICTURE_MARKED_AS_output_display = 6,
 } H264_PICTURE_MARKED_AS;
 
 typedef enum _H264_PICTURE_CODED_TYPE_ {

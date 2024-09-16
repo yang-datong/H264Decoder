@@ -1337,7 +1337,7 @@ int PictureBase::
 
   //------------------------
   if (m_RefPicList1[0]->reference_marked_type ==
-          H264_PICTURE_MARKED_AS_used_for_short_term_reference &&
+          PICTURE_MARKED_AS_used_short_ref &&
       refIdxCol == 0 &&
       ((m_mbs[mbAddrCol].mb_field_decoding_flag == 0 &&
         (mvCol[0] >= -1 && mvCol[0] <= 1) &&
@@ -1629,7 +1629,7 @@ int PictureBase::
 
   //---------------------------
   if (m_RefPicList0[refIdxL0]->reference_marked_type ==
-          H264_PICTURE_MARKED_AS_used_for_long_term_reference ||
+          PICTURE_MARKED_AS_used_long_ref ||
       DiffPicOrderCnt(pic1, pic0)) {
     mvL0[0] = mvCol[0];
     mvL0[1] = mvCol[1];
@@ -2924,10 +2924,8 @@ int PictureBase::derivation_prediction_weights(
     /* 2-2. 变量w0C和w1C的推导如下： */
     //– 如果 DiffPicOrderCnt( pic1, pic0 ) 等于 0 或 pic1 和 pic0 之一或两者被标记为“用于长期参考”或 ( DistScaleFactor >> 2 ) < −64 或 ( DistScaleFactor >> 2 ) > 128 、w0C 和 w1C 推导为：
     if (DiffPicOrderCnt(pic1, pic0) == 0 ||
-        pic0->reference_marked_type ==
-            H264_PICTURE_MARKED_AS_used_for_long_term_reference ||
-        pic1->reference_marked_type ==
-            H264_PICTURE_MARKED_AS_used_for_long_term_reference ||
+        pic0->reference_marked_type == PICTURE_MARKED_AS_used_long_ref ||
+        pic1->reference_marked_type == PICTURE_MARKED_AS_used_long_ref ||
         (DistScaleFactor >> 2) < -64 || (DistScaleFactor >> 2) > 128) {
       w0L = w1L = 32;
 

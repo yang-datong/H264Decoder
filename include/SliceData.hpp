@@ -51,18 +51,16 @@ class SliceData {
 
   int parseSliceData(BitStream &bs, PictureBase &pic, SPS &sps, PPS &pps);
 
-  int slice_decoding_process();
-
-  int decoding_macroblock_to_slice_group_map();
-
-  int mapUnitToSliceGroupMap();
-  int mbToSliceGroupMap();
-
   /* process表示处理字段，具体处理手段有推流或解码操作 */
   int process_mb_skip_run(int32_t &prevMbSkipped);
   int process_mb_skip_flag(int32_t prevMbSkipped);
   int process_mb_field_decoding_flag(bool entropy_coding_mode_flag);
   int process_end_of_slice_flag(int32_t &end_of_slice_flag);
+
+  int slice_decoding_process();
+  inline int decoding_macroblock_to_slice_group_map();
+  inline int mapUnitToSliceGroupMap();
+  inline int mbToSliceGroupMap();
 
   /* derivation表示推断字段（根据其他内容进行猜测） */
   int derivation_for_mb_field_decoding_flag();
