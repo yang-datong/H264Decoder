@@ -231,8 +231,6 @@ int PictureBase::decoding_picture_order_count_type_2(
   const bool IdrPicFlag = m_slice->slice_header->IdrPicFlag;
 
   const uint32_t frame_num = m_slice->slice_header->frame_num;
-  const uint32_t pre_frame_num =
-      picture_previous->m_slice->slice_header->frame_num;
   const uint32_t MaxFrameNum = m_slice->slice_header->m_sps->MaxFrameNum;
   /* TODO YangJing 受不了了，眼睛痛死了 <24-09-16 03:41:33> */
 
@@ -249,7 +247,7 @@ int PictureBase::decoding_picture_order_count_type_2(
   /* 变量 FrameNumOffset 是由以下伪代码指定导出的： */
   if (IdrPicFlag)
     FrameNumOffset = 0;
-  else if (pre_frame_num > frame_num)
+  else if (picture_previous->m_slice->slice_header->frame_num > frame_num)
     FrameNumOffset = prevFrameNumOffset + MaxFrameNum;
   else
     FrameNumOffset = prevFrameNumOffset;
