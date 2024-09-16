@@ -23,7 +23,7 @@ class SliceHeader {
 
   /* 引用自Nalu */
   const uint8_t nal_unit_type;
-  const uint8_t nal_ref_idc;
+  uint8_t nal_ref_idc;
 
  private:
   /* 私有化SliceBody，不提供给外界，只能通过Slice来访问本类 */

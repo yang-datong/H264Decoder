@@ -81,11 +81,11 @@ class PictureBase {
 
   Frame *m_dpb[16]; //[16] decoded picture buffer
   Frame *m_parent;
-  Frame *m_RefPicList0[16];    //[16] decoding a P or SP slice;
-  Frame *m_RefPicList1[16];    //[16] decoding a B slice;
-  int32_t m_RefPicList0Length; // RefPicList0排序后的参考图像数目
-  int32_t m_RefPicList1Length; // RefPicList1排序后的参考图像数目
-  int32_t m_PicNumCnt;         // 图片递增计数
+  Frame *m_RefPicList0[16];     //[16] decoding a P or SP slice;
+  Frame *m_RefPicList1[16];     //[16] decoding a B slice;
+  uint32_t m_RefPicList0Length; // RefPicList0排序后的参考图像数目
+  uint32_t m_RefPicList1Length; // RefPicList1排序后的参考图像数目
+  int32_t m_PicNumCnt;          // 图片递增计数
 
  public:
   PictureBase();
@@ -124,47 +124,47 @@ class PictureBase {
   int decoding_picture_order_count_type_2(
       const PictureBase *picture_previous); // 8.2.1.3
 
-  int decoding_reference_picture_lists_construction(
+  int decoding_ref_picture_lists_construction(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
       Frame *(&RefPicList1)[16]); // 8.2.4 参考图像列表的重排序过程
   int decoding_picture_numbers(Frame *(&dpb)[16]); // 8.2.4.1
 
-  int init_reference_picture_lists(Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
+  int init_ref_picture_lists(Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
                                    Frame *(&RefPicList1)[16]); // 8.2.4.2
   int init_ref_picture_list_P_SP_in_frames(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
-      int32_t &RefPicList0Length); // 8.2.4.2.1
+      uint32_t &RefPicList0Length); // 8.2.4.2.1
   int init_ref_picture_list_P_SP_in_fields(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
-      int32_t &RefPicList0Length); // 8.2.4.2.2
+      uint32_t &RefPicList0Length); // 8.2.4.2.2
   int init_ref_picture_lists_B_in_frames(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16],
-      int32_t &RefPicList0Length,
-      int32_t &RefPicList1Length); // 8.2.4.2.3
+      uint32_t &RefPicList0Length,
+      uint32_t &RefPicList1Length); // 8.2.4.2.3
   int init_ref_picture_lists_B_in_fields(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16],
-      int32_t &RefPicList0Length,
-      int32_t &RefPicList1Length); // 8.2.4.2.4
+      uint32_t &RefPicList0Length,
+      uint32_t &RefPicList1Length); // 8.2.4.2.4
   //int init_reference_picture_lists_in_fields(
   //Frame *(&refFrameListXShortTerm)[16], Frame *(&refFrameListXLongTerm)[16],
   //Frame *(&RefPicListX)[16], int32_t &RefPicListXLength,
   //int32_t listX); // 8.2.4.2.5
-  int init_reference_picture_lists_in_fields(
-      vector<Frame *>(&refFrameListXShortTerm),
-      vector<Frame *>(&refFrameListXLongTerm), Frame *(&RefPicListX)[16],
-      int32_t &RefPicListXLength,
-      int32_t listX); // 8.2.4.2.5
+  int init_ref_picture_lists_in_fields(vector<Frame *>(&refFrameListXShortTerm),
+                                       vector<Frame *>(&refFrameListXLongTerm),
+                                       Frame *(&RefPicListX)[16],
+                                       uint32_t &RefPicListXLength,
+                                       int32_t listX); // 8.2.4.2.5
 
-  int modif_reference_picture_lists(
+  int modif_ref_picture_lists(
       Frame *(&RefPicList0)[16],
       Frame *(&RefPicList1)[16]); // 8.2.4.3 参考图像列表的重排序过程
 
-  int modif_reference_picture_lists_for_short_ref_pictures(
+  int modif_ref_picture_lists_for_short_ref_pictures(
       int32_t &refIdxLX, int32_t &picNumLXPred, const int32_t modif_idc,
       const int32_t abs_diff_pic_num_minus1,
       const int32_t num_ref_idx_lX_active_minus1, Frame *(&RefPicListX)[16]);
 
-  int modif_reference_picture_lists_for_long_ref_pictures(
+  int modif_ref_picture_lists_for_long_ref_pictures(
       int32_t &refIdxLX, const int32_t num_ref_idx_lX_active_minus1,
       const int32_t long_term_pic_num, Frame *(&RefPicListX)[16]);
 
