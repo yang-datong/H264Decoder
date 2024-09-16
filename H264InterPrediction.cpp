@@ -952,9 +952,9 @@ int PictureBase::
   //}
 
   if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-          H264_PICTURE_CODED_TYPE_FRAME ||
+          PICTURE_CODED_TYPE_FRAME ||
       m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-          H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+          PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
     firstRefPicL1Top = &m_RefPicList1[0]->m_picture_top_filed;
     firstRefPicL1Bottom = &m_RefPicList1[0]->m_picture_bottom_filed;
 
@@ -972,17 +972,17 @@ int PictureBase::
     if (m_RefPicList1[0]->m_is_decode_finished ==
             1 // RefPicList1[0] is a field of a decoded frame
         && (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-                H264_PICTURE_CODED_TYPE_TOP_FIELD ||
+                PICTURE_CODED_TYPE_TOP_FIELD ||
             m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-                H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)) {
+                PICTURE_CODED_TYPE_BOTTOM_FIELD)) {
       colPic = &m_RefPicList1[0]->m_picture_frame;
     } else // RefPicList1[0] is a decoded field
     {
       if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-          H264_PICTURE_CODED_TYPE_TOP_FIELD) {
+          PICTURE_CODED_TYPE_TOP_FIELD) {
         colPic = &m_RefPicList1[0]->m_picture_top_filed;
       } else if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-                 H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) {
+                 PICTURE_CODED_TYPE_BOTTOM_FIELD) {
         colPic = &m_RefPicList1[0]->m_picture_bottom_filed;
       } else {
         //
@@ -993,10 +993,10 @@ int PictureBase::
     if (m_RefPicList1[0]->m_is_decode_finished ==
             1 // RefPicList1[0] is a decoded frame
         && m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-               H264_PICTURE_CODED_TYPE_FRAME) {
+               PICTURE_CODED_TYPE_FRAME) {
       colPic = &m_RefPicList1[0]->m_picture_frame;
     } else if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-               H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+               PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
       if (m_slice->slice_data->mb_field_decoding_flag == 0) {
         if (topAbsDiffPOC < bottomAbsDiffPOC) {
           colPic = firstRefPicL1Top;
@@ -1454,11 +1454,10 @@ int PictureBase::
     int32_t refIdxL0Frm = NA;
 
     for (int i = 0; i < H264_MAX_REF_PIC_LIST_COUNT; i++) {
-      if ((m_RefPicList0[i]->m_picture_coded_type ==
-               H264_PICTURE_CODED_TYPE_FRAME &&
+      if ((m_RefPicList0[i]->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME &&
            (&m_RefPicList0[i]->m_picture_frame == colPic)) ||
           (m_RefPicList0[i]->m_picture_coded_type ==
-               H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR &&
+               PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR &&
            (&m_RefPicList0[i]->m_picture_top_filed == colPic ||
             &m_RefPicList0[i]->m_picture_bottom_filed == colPic))) {
         refIdxL0Frm = i;
@@ -1486,11 +1485,9 @@ int PictureBase::
         has the opposite parity of the current macroblock), MapColToList0(
         refIdxCol ) returns the reference index ( ( refIdxL0Frm << 1 ) + 1 ).
         */
-        if ((colPic->m_picture_coded_type ==
-                 H264_PICTURE_CODED_TYPE_TOP_FIELD &&
+        if ((colPic->m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD &&
              CurrMbAddr % 2 == 0) ||
-            (colPic->m_picture_coded_type ==
-                 H264_PICTURE_CODED_TYPE_BOTTOM_FIELD &&
+            (colPic->m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD &&
              CurrMbAddr % 2 == 1)) {
           refIdxL0_temp = refIdxL0Frm << 1;
         } else {
@@ -2026,18 +2023,18 @@ int PictureBase::Derivation_process_for_chroma_motion_vectors(
     // Table 8-10 – Derivation of the vertical component of the chroma vector in
     // field coding mode
     if (refPic &&
-        refPic->m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD &&
+        refPic->m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD &&
         (this->m_picture_coded_type ==
-             H264_PICTURE_CODED_TYPE_BOTTOM_FIELD // bottom field
-         || mb_y % 2 == 1                         // bottom field macroblock
+             PICTURE_CODED_TYPE_BOTTOM_FIELD // bottom field
+         || mb_y % 2 == 1                    // bottom field macroblock
          )) {
       mvCLX[1] = mvLX[1] + 2;
     } else if (refPic &&
                refPic->m_picture_coded_type ==
-                   H264_PICTURE_CODED_TYPE_BOTTOM_FIELD &&
+                   PICTURE_CODED_TYPE_BOTTOM_FIELD &&
                (this->m_picture_coded_type ==
-                    H264_PICTURE_CODED_TYPE_TOP_FIELD // top field
-                || mb_y % 2 == 0                      // top field macroblock
+                    PICTURE_CODED_TYPE_TOP_FIELD // top field
+                || mb_y % 2 == 0                 // top field macroblock
                 )) {
       mvCLX[1] = mvLX[1] - 2;
     } else {
@@ -2140,9 +2137,9 @@ int PictureBase::Reference_picture_selection_process(int32_t refIdxLX,
     // frame.
     for (int i = 0; i < RefPicListXLength; i++) {
       if (!(RefPicListX[i]->m_picture_coded_type_marked_as_refrence ==
-                H264_PICTURE_CODED_TYPE_TOP_FIELD ||
+                PICTURE_CODED_TYPE_TOP_FIELD ||
             RefPicListX[i]->m_picture_coded_type_marked_as_refrence ==
-                H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)) {
+                PICTURE_CODED_TYPE_BOTTOM_FIELD)) {
         RETURN_IF_FAILED(-1, -1);
       }
     }
@@ -2152,9 +2149,9 @@ int PictureBase::Reference_picture_selection_process(int32_t refIdxLX,
     // reference field pair.
     for (int i = 0; i < RefPicListXLength; i++) {
       if (!(RefPicListX[i]->m_picture_coded_type_marked_as_refrence ==
-                H264_PICTURE_CODED_TYPE_FRAME ||
+                PICTURE_CODED_TYPE_FRAME ||
             RefPicListX[i]->m_picture_coded_type_marked_as_refrence ==
-                H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR)) {
+                PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR)) {
         RETURN_IF_FAILED(-1, -1);
       }
     }
@@ -2163,10 +2160,10 @@ int PictureBase::Reference_picture_selection_process(int32_t refIdxLX,
   //---------------------
   if (slice_header->field_pic_flag == 1) {
     if (RefPicListX[refIdxLX]->m_picture_coded_type_marked_as_refrence ==
-        H264_PICTURE_CODED_TYPE_TOP_FIELD) {
+        PICTURE_CODED_TYPE_TOP_FIELD) {
       refPic = &(RefPicListX[refIdxLX]->m_picture_top_filed);
     } else if (RefPicListX[refIdxLX]->m_picture_coded_type_marked_as_refrence ==
-               H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) {
+               PICTURE_CODED_TYPE_BOTTOM_FIELD) {
       refPic = &(RefPicListX[refIdxLX]->m_picture_bottom_filed);
     } else {
       RETURN_IF_FAILED(-1, -1);

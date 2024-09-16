@@ -32,7 +32,7 @@ int PictureBase::reset() {
     memset(m_mbs, 0, sizeof(MacroBlock) * PicSizeInMbs);
   }
 
-  if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
+  if (m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
     if (m_pic_buff_luma) {
       memset(m_pic_buff_luma, 0,
              sizeof(uint8_t) * PicWidthInSamplesL * PicHeightInSamplesL);
@@ -88,7 +88,7 @@ int PictureBase::reset() {
   memory_management_control_operation_5_flag = 0;
   memory_management_control_operation_6_flag = 0;
   reference_marked_type = PICTURE_MARKED_AS_unkown;
-  m_picture_coded_type = H264_PICTURE_CODED_TYPE_UNKNOWN;
+  m_picture_coded_type = PICTURE_CODED_TYPE_UNKNOWN;
   m_picture_type = H264_PICTURE_TYPE_UNKNOWN;
   m_is_decode_finished = 0;
   m_parent = NULL;
@@ -131,7 +131,7 @@ int PictureBase::init(Slice *slice) {
   }
 
   //----------------------------
-  if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
+  if (m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
     m_mbs = (MacroBlock *)my_malloc(
         sizeof(MacroBlock) *
         PicSizeInMbs); // 因为MacroBlock构造函数中，有对变量初始化，可以考虑使用C++/new申请内存，此处使用C/my_malloc
@@ -196,7 +196,7 @@ int PictureBase::init(Slice *slice) {
     m_pic_coded_width_pixels = PicWidthInMbs * MbWidthL;
     m_pic_coded_height_pixels = PicHeightInMbs * MbHeightL;
 
-    if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD) {
+    if (m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD) {
       //
     } else // if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
     {
@@ -656,8 +656,8 @@ int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
   int ret = 0;
 
   this->m_is_decode_finished = 1;
-  if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME ||
-      m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) {
+  if (m_picture_coded_type == PICTURE_CODED_TYPE_FRAME ||
+      m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD) {
     this->m_parent->m_is_decode_finished = 1;
   }
 

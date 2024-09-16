@@ -1194,8 +1194,8 @@ int PictureBase::
   // NOTE 3 – A vertical difference of 4 in units of quarter luma frame samples
   // is a difference of 2 in units of quarter luma field samples.
   int32_t mv_y_diff =
-      ((m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD ||
-        m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) ||
+      ((m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD ||
+        m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD) ||
        (MbaffFrameFlag == 1 && m_mbs[mbAddr_q0].mb_field_decoding_flag == 1))
           ? 2
           : 4;

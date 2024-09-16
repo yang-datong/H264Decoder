@@ -56,7 +56,7 @@ int32_t PictureBase::decoding_picture_order_count_type_0(
 
       /* 参考帧不是底场帧（即它是顶场帧或者帧级别的图像） */
       if (picture_previous_ref->m_picture_coded_type !=
-          H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) {
+          PICTURE_CODED_TYPE_BOTTOM_FIELD) {
         prevPicOrderCntMsb = 0;
         prevPicOrderCntLsb = picture_previous_ref->TopFieldOrderCnt;
 
@@ -95,7 +95,7 @@ int32_t PictureBase::decoding_picture_order_count_type_0(
 
   //--------------------------- 根据POC 高位、低位还原POC ------------------------------------
   /* 当前图片为Slice或Top field */
-  if (m_picture_coded_type != H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
+  if (m_picture_coded_type != PICTURE_CODED_TYPE_BOTTOM_FIELD)
     TopFieldOrderCnt = PicOrderCntMsb + pic_order_cnt_lsb;
 
   /* 当前图片不是顶场时，按以下伪代码指定BottomFieldOrderCnt导出为 */
@@ -254,16 +254,16 @@ int PictureBase::decoding_picture_order_count_type_2(
 int PictureBase::picOrderCntFunc(PictureBase *pic) {
   const H264_PICTURE_CODED_TYPE &coded_type = pic->m_picture_coded_type;
   /* 当前图像是帧或互补场对，取顶场 POC  和 底场 POC 中的最小值（在互补场对中，两个场应作为一个整体显示）*/
-  if (coded_type == H264_PICTURE_CODED_TYPE_FRAME ||
-      coded_type == H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR)
+  if (coded_type == PICTURE_CODED_TYPE_FRAME ||
+      coded_type == PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR)
     pic->PicOrderCnt = MIN(pic->TopFieldOrderCnt, pic->BottomFieldOrderCnt);
 
   // 当前图像为顶场
-  else if (coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
+  else if (coded_type == PICTURE_CODED_TYPE_TOP_FIELD)
     pic->PicOrderCnt = pic->TopFieldOrderCnt;
 
   // 当前图像为底场
-  else if (coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
+  else if (coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD)
     pic->PicOrderCnt = pic->BottomFieldOrderCnt;
 
   return pic->PicOrderCnt;
@@ -272,21 +272,15 @@ int PictureBase::picOrderCntFunc(PictureBase *pic) {
 // 8.2.4 Decoding process for reference picture lists construction
 int PictureBase::decoding_reference_picture_lists_construction(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16]) {
-  const SliceHeader *slice_header = m_slice->slice_header;
   /* 解码的参考图片被标记为“用于短期参考”或“用于长期参考”，如比特流所指定的和第8.2.5节中所指定的。短期参考图片由frame_num 的值标识。长期参考图片被分配一个长期帧索引，该索引由比特流指定并在第 8.2.5 节中指定。 */
 
-  // 8.2.5 Decoded reference picture marking process
-  // NOTE: 这里调用8.2.5会有问题
-
-  /* 8.2.4.1 Decoding process for picture numbers
+  /* 8.2.4.1 Decoding process for picture numbers，主要完全以下两件事：
    * — 变量 FrameNum、FrameNumWrap 和 PicNum 到每个短期参考图片的分配，
    * — 变量 LongTermPicNum 到每个长期参考图片的分配。 */
-  /* 解码 DPB 中的每一帧的图片编号 */
   int ret = decoding_picture_numbers(dpb);
   RET(ret);
 
   /* 参考索引是参考图片列表的索引。当解码P或SP切片时，存在单个参考图片列表RefPicList0（前参考）。在对B切片进行解码时，还存在第二独立参考图片列表RefPicList1(后参考)。*/
-
   /* 1. 在每个切片的解码过程开始时，按照以下顺序导出初始参考图片列表 RefPicList0 以及 B 切片的 RefPicList1第 8.2.4.2 条*/
   ret = init_reference_picture_lists(dpb, RefPicList0, RefPicList1);
   RET(ret);
@@ -299,40 +293,36 @@ int PictureBase::decoding_reference_picture_lists_construction(
   /* 修改后的参考图片列表RefPicList0中的条目数量是num_ref_idx_l0_active_minus1+1，并且对于B片，
    * 修改后的参考图片列表RefPicList1中的条目数量是num_ref_idx_l1_active_minus1+1。
    * 参考图片可以出现在修改后的参考中的多个索引处图片列表RefPicList0或RefPicList1。 */
-  m_RefPicList0Length = slice_header->num_ref_idx_l0_active_minus1 + 1;
-  m_RefPicList1Length = slice_header->num_ref_idx_l1_active_minus1 + 1;
-
+  m_RefPicList0Length = m_slice->slice_header->num_ref_idx_l0_active_minus1 + 1;
+  m_RefPicList1Length = m_slice->slice_header->num_ref_idx_l1_active_minus1 + 1;
   return 0;
 }
 
 /* 处理picture.FrameNumWrap回环 */
-inline void updateFrameNumWrap(PictureBase &picture, int32_t FrameNum,
+inline void updateFrameNumWrap(PictureBase &pic, int32_t FrameNum,
                                uint32_t MaxFrameNum) {
-  if (picture.reference_marked_type == PICTURE_MARKED_AS_used_short_ref) {
-    if (picture.FrameNum > FrameNum)
-      picture.FrameNumWrap = picture.FrameNum - MaxFrameNum;
+  if (pic.reference_marked_type == PICTURE_MARKED_AS_used_short_ref) {
+    /* DPB中的FrameNum比当前Slice的要大说明出现了回环 */
+    if (pic.FrameNum > FrameNum)
+      pic.FrameNumWrap = pic.FrameNum - MaxFrameNum;
     else
-      picture.FrameNumWrap = picture.FrameNum;
+      pic.FrameNumWrap = pic.FrameNum;
   }
 }
 
 // 处理短期参考帧或场对，更新 PicNum 和检测顶场和底场的 FrameNumWrap 是否一致
-inline int updateShortTermReference(PictureBase &picture_frame,
-                                    PictureBase &picture_top,
-                                    PictureBase &picture_bottom, int &PicNum) {
-  if (picture_frame.reference_marked_type == PICTURE_MARKED_AS_used_short_ref) {
-    picture_frame.PicNum = picture_frame.FrameNumWrap;
-    PicNum = picture_frame.PicNum;
-  }
+inline int updateShortTermReference(PictureBase &pic_frame,
+                                    PictureBase &pic_top,
+                                    PictureBase &pic_bottom, int &PicNum) {
+  if (pic_frame.reference_marked_type == PICTURE_MARKED_AS_used_short_ref)
+    PicNum = pic_frame.PicNum = pic_frame.FrameNumWrap;
 
-  if (picture_top.reference_marked_type == PICTURE_MARKED_AS_used_short_ref &&
-      picture_bottom.reference_marked_type ==
-          PICTURE_MARKED_AS_used_short_ref) {
-    picture_top.PicNum = picture_top.FrameNumWrap;
-    picture_bottom.PicNum = picture_bottom.FrameNumWrap;
-    PicNum = picture_top.PicNum;
+  if (pic_top.reference_marked_type == PICTURE_MARKED_AS_used_short_ref &&
+      pic_bottom.reference_marked_type == PICTURE_MARKED_AS_used_short_ref) {
+    pic_bottom.PicNum = pic_bottom.FrameNumWrap;
+    PicNum = pic_top.PicNum = pic_top.FrameNumWrap;
 
-    if (picture_top.PicNum != picture_bottom.PicNum) {
+    if (pic_top.PicNum != pic_bottom.PicNum) {
       std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
                 << std::endl;
       return -1;
@@ -342,22 +332,18 @@ inline int updateShortTermReference(PictureBase &picture_frame,
 }
 
 // 处理长期参考帧或场对，更新 LongTermPicNum，并检查顶场和底场的 LongTermPicNum 是否一致。
-inline int updateLongTermReference(PictureBase &picture_frame,
-                                   PictureBase &picture_top,
-                                   PictureBase &picture_bottom,
+inline int updateLongTermReference(PictureBase &pic_frame, PictureBase &pic_top,
+                                   PictureBase &pict_bottom,
                                    int &LongTermPicNum) {
-  if (picture_frame.reference_marked_type == PICTURE_MARKED_AS_used_long_ref) {
-    picture_frame.LongTermPicNum = picture_frame.LongTermFrameIdx;
-    LongTermPicNum = picture_frame.LongTermPicNum;
-  }
+  if (pic_frame.reference_marked_type == PICTURE_MARKED_AS_used_long_ref)
+    LongTermPicNum = pic_frame.LongTermPicNum = pic_frame.LongTermFrameIdx;
 
-  if (picture_top.reference_marked_type == PICTURE_MARKED_AS_used_long_ref &&
-      picture_bottom.reference_marked_type == PICTURE_MARKED_AS_used_long_ref) {
-    picture_top.LongTermPicNum = picture_top.LongTermFrameIdx;
-    picture_bottom.LongTermPicNum = picture_bottom.LongTermFrameIdx;
-    LongTermPicNum = picture_top.LongTermPicNum;
+  if (pic_top.reference_marked_type == PICTURE_MARKED_AS_used_long_ref &&
+      pict_bottom.reference_marked_type == PICTURE_MARKED_AS_used_long_ref) {
+    pict_bottom.LongTermPicNum = pict_bottom.LongTermFrameIdx;
+    LongTermPicNum = pic_top.LongTermPicNum = pic_top.LongTermFrameIdx;
 
-    if (picture_top.LongTermPicNum != picture_bottom.LongTermPicNum) {
+    if (pic_top.LongTermPicNum != pict_bottom.LongTermPicNum) {
       std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
                 << std::endl;
       return -1;
@@ -370,8 +356,7 @@ inline int updateLongTermReference(PictureBase &picture_frame,
 int updatePicNum(PictureBase &field, int m_picture_coded_type,
                  bool isLongTerm) {
   int baseNum = isLongTerm ? field.LongTermFrameIdx : field.FrameNumWrap;
-  int offset =
-      (m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD) ? 1 : 0;
+  int offset = (m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD) ? 1 : 0;
 
   if (isLongTerm)
     field.LongTermPicNum = 2 * baseNum + offset;
@@ -392,51 +377,45 @@ int PictureBase::decoding_picture_numbers(Frame *(&dpb)[16]) {
 
   /* 变量 FrameNum、FrameNumWrap、PicNum、LongTermFrameIdx 和 LongTermPicNum 用于第 8.2.4.2 节中参考图片列表的初始化过程、第 8.2.4.3 节中参考图片列表的修改过程、第 8.2.5 节中的解码参考图片标记过程。以及第8.2.5.2节中frame_num中间隙的解码过程。 */
 
-  //-------------------------------------------- 处理FrameNumWrap --------------------------------------------
-  /* 对于每个短期参考图片，变量 FrameNum 和 FrameNumWrap 被分配如下。首先，将FrameNum设置为等于对应短期参考图片的Slice Header中已解码的语法元素frame_num。然后变量 FrameNumWrap 导出为:*/
-
-  //FrameNum 是解码顺序中的帧编号，而 MaxFrameNum 是允许的最大帧编号加一，定义了一个周期性边界，超过这个边界帧编号将回绕到 0。FrameNumWrap 是一个处理过的帧编号，用来适应帧编号的周期性回绕。
-  //NOTE: 前面在解码单个Slice的POC时候其实已经做个这个事情，这里是对缓存中的短、长参考帧进行一次整体和处理
-
+  //--------------------------------------- 处理FrameNumWrap --------------------------------------------
+  //FrameNum 是解码顺序中的帧编号，而 MaxFrameNum 是允许的最大帧编号加一，定义了一个周期性边界，超过这个边界帧编号将回绕到 0。FrameNumWrap 是一个处理过的帧编号，用来适应帧编号的周期性回绕。NOTE: 前面在解码单个Slice的POC时候其实已经做个这个事情，这里是对缓存中的短、长参考帧进行一次整体和处理
   for (int i = 0; i < size_dpb; i++) {
-    /* 帧，顶场，底场 */
     auto &pict_f = dpb[i]->m_picture_frame;
     auto &pict_t = dpb[i]->m_picture_top_filed;
     auto &pict_b = dpb[i]->m_picture_bottom_filed;
 
     if (!pict_f.m_slice || !pict_f.m_slice->slice_header->m_sps) continue;
+
     const uint32_t MaxFrameNum =
         pict_f.m_slice->slice_header->m_sps->MaxFrameNum;
+
+    /* 帧，顶场，底场 */
     updateFrameNumWrap(pict_f, FrameNum, MaxFrameNum);
     updateFrameNumWrap(pict_t, FrameNum, MaxFrameNum);
     updateFrameNumWrap(pict_b, FrameNum, MaxFrameNum);
   }
 
+  //--------------------------------------- 处理PicNum LongTermPicNum -------------------------------------
   /* 每个长期参考图片都有一个关联的 LongTermFrameIdx 值（按照第 8.2.5 节的规定分配给它） */
   // 8.2.5 Decoded reference picture marking process
-  // NOTE:向每个短期参考图片分配变量PicNum，并且向每个长期参考图片分配变量LongTermPicNum。这些变量的值取决于当前图片的field_pic_flag和bottom_field_flag的值，它们的设置如下： */
-
+  // 向每个短期参考图片分配变量PicNum，并且向每个长期参考图片分配变量LongTermPicNum
   int ret = 0;
   /* 帧编码 */
-  if (!header->field_pic_flag) {
+  if (header->field_pic_flag == 0) {
     for (int i = 0; i < size_dpb; i++) {
       // 获取各自的frame、top field和bottom field
       auto &pict_f = dpb[i]->m_picture_frame;
       auto &pict_t = dpb[i]->m_picture_top_filed;
       auto &pict_b = dpb[i]->m_picture_bottom_filed;
-
       /* 对于每个短期参考帧或互补参考场对 */
       ret = updateShortTermReference(pict_f, pict_t, pict_b, dpb[i]->PicNum);
-      RET(ret);
-
       /* 对于每个长期参考帧或长期互补参考场对 */
       ret = updateLongTermReference(pict_f, pict_t, pict_b,
                                     dpb[i]->LongTermPicNum);
       RET(ret);
     }
-
     /* 场编码 */
-  } else if (header->field_pic_flag) {
+  } else {
     for (int i = 0; i < size_dpb; i++) {
       auto &pict_t = dpb[i]->m_picture_top_filed;
       auto &pict_b = dpb[i]->m_picture_bottom_filed;
@@ -468,46 +447,39 @@ int PictureBase::decoding_picture_numbers(Frame *(&dpb)[16]) {
 int PictureBase::init_reference_picture_lists(Frame *(&dpb)[16],
                                               Frame *(&RefPicList0)[16],
                                               Frame *(&RefPicList1)[16]) {
-  SliceHeader *slice_header = m_slice->slice_header;
+  const SliceHeader *slice_header = m_slice->slice_header;
 
-  /* RefPicList0 和 RefPicList1 具有第 8.2.4.2.1 至 8.2.4.2.5 节中指定的初始条目。*/
   int ret = 0;
   if (slice_header->slice_type == SLICE_P ||
       slice_header->slice_type == SLICE_SP) {
+    /* 初始化P、SP Slice的参考列表，'列表'是因为参考帧不一定只有一个 */
+    //对于帧编码
+    if (m_picture_coded_type == PICTURE_CODED_TYPE_FRAME)
+      ret = init_ref_picture_list_P_SP_in_frames(dpb, RefPicList0,
+                                                 m_RefPicList0Length);
 
-    /* RefPicList0为排序后的dpb*/
+    //对于场编码
+    else if (m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD ||
+             m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD)
+      ret = init_ref_picture_list_P_SP_in_fields(dpb, RefPicList0,
+                                                 m_RefPicList0Length);
 
-    /* 初始化P、SP Slice的参考列表，'列表'是因为参考帧不一定只有一个(对于帧编码） */
-    if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME)
-      ret = init_reference_picture_list_P_SP_slices_in_frames(
-          dpb, RefPicList0, m_RefPicList0Length);
-
-    /* 初始化P、SP Slice的参考列表，'列表'是因为参考帧不一定只有一个(对于场编码） */
-    else if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD ||
-             m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
-      ret = init_reference_picture_list_P_SP_slices_in_fields(
-          dpb, RefPicList0, m_RefPicList0Length);
-
+    /* 初始化B Slice的参考列表，'列表'是因为参考帧不一定只有一个 */
   } else if (slice_header->slice_type == SLICE_B) {
+    //对于帧编码
+    if (m_picture_coded_type == PICTURE_CODED_TYPE_FRAME)
+      ret = init_ref_picture_lists_B_in_frames(dpb, RefPicList0, RefPicList1,
+                                               m_RefPicList0Length,
+                                               m_RefPicList1Length);
 
-    /* 初始化B Slice的参考列表，'列表'是因为参考帧不一定只有一个(对于帧编码） */
-    if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME)
-      ret = init_reference_picture_lists_B_slices_in_frames(
-          dpb, RefPicList0, RefPicList1, m_RefPicList0Length,
-          m_RefPicList1Length);
-
-    /* 初始化B Slice的参考列表，'列表'是因为参考帧不一定只有一个(对于场编码） */
-    else if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD ||
-             m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
-      ret = init_reference_picture_lists_B_slices_in_fields(
-          dpb, RefPicList0, RefPicList1, m_RefPicList0Length,
-          m_RefPicList1Length);
+    //对于场编码
+    else if (m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD ||
+             m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD)
+      ret = init_ref_picture_lists_B_in_fields(dpb, RefPicList0, RefPicList1,
+                                               m_RefPicList0Length,
+                                               m_RefPicList1Length);
   }
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return -1;
-  }
+  RET(ret);
 
   /* 当第 8.2.4.2.1 至 8.2.4.2.5 节中，指定的初始 RefPicList0 或 RefPicList1 中的条目数：
    * - 分别大于 num_ref_idx_l0_active_minus1 + 1 或 num_ref_idx_l1_active_minus1 + 1 时，超过位置 num_ref_idx_l0_active_minus1 或 num_ref_idx_l1_active_minus1 的额外条目应被丢弃从初始参考图片列表中。 
@@ -515,27 +487,27 @@ int PictureBase::init_reference_picture_lists(Frame *(&dpb)[16],
   int l0_num_ref = slice_header->num_ref_idx_l0_active_minus1 + 1;
   if (m_RefPicList0Length > l0_num_ref) {
     for (int i = l0_num_ref; i < m_RefPicList0Length; i++)
-      RefPicList0[i] = NULL;
+      RefPicList0[i] = nullptr;
     m_RefPicList0Length = l0_num_ref;
   } else if (m_RefPicList0Length < l0_num_ref)
     for (int i = m_RefPicList0Length; i < l0_num_ref; i++)
-      RefPicList0[i] = NULL;
+      RefPicList0[i] = nullptr;
 
   int l1_num_ref = slice_header->num_ref_idx_l1_active_minus1 + 1;
   if (m_RefPicList1Length > l1_num_ref) {
     for (int i = l1_num_ref; i < m_RefPicList1Length; i++)
-      RefPicList1[i] = NULL;
+      RefPicList1[i] = nullptr;
     m_RefPicList1Length = l1_num_ref;
   } else if (m_RefPicList1Length < l1_num_ref)
     for (int i = m_RefPicList1Length; i < l1_num_ref; i++)
-      RefPicList1[i] = NULL;
+      RefPicList1[i] = nullptr;
 
   return 0;
 }
 
 // 8.2.4.2.1 Initialisation process for the reference picture list for P and SP
 /* RefPicList0为排序后的dpb*/
-int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
+int PictureBase::init_ref_picture_list_P_SP_in_frames(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], int32_t &RefPicList0Length) {
   const int32_t size_dpb = 16;
 
@@ -602,7 +574,7 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_frames(
 /* 与PictureBase::init_reference_picture_list_P_SP_slices_in_frames同理 */
 /* 注 – 当对场进行解码时，可供参考的图片数量实际上至少是对解码顺序中相同位置的帧进行解码时的两倍。*/
 /* TODO YangJing 这个函数并没有经过测试验证 <24-08-31 00:49:10> */
-int PictureBase::init_reference_picture_list_P_SP_slices_in_fields(
+int PictureBase::init_ref_picture_list_P_SP_in_fields(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], int32_t &RefPicList0Length) {
   const int32_t size_dpb = 16;
   int index = 0;
@@ -626,7 +598,7 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_fields(
 
   /*2. 当当前场是互补参考场对的第二场（按解码顺序）并且第一场被标记为“用于短期参考”时，第一场被包括在短期参考帧列表refFrameList0ShortTerm中。*/
   Frame *curPic = m_parent;
-  if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) {
+  if (m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD) {
     if (curPic->m_picture_top_filed.reference_marked_type ==
         PICTURE_MARKED_AS_used_short_ref)
       refFrameList0ShortTerm.push_back(curPic);
@@ -672,7 +644,7 @@ int PictureBase::init_reference_picture_list_P_SP_slices_in_fields(
 // 8.2.4.2.3 Initialisation process for reference picture lists for B slices in frames
 /* 当解码编码帧中的 B 切片时，会调用此初始化过程。*/
 /* 为了形成参考图片列表RefPicList0和RefPicList1，指的是解码的参考帧或互补参考字段对。 */
-int PictureBase::init_reference_picture_lists_B_slices_in_frames(
+int PictureBase::init_ref_picture_lists_B_in_frames(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16],
     int32_t &RefPicList0Length, int32_t &RefPicList1Length) {
 
@@ -808,7 +780,7 @@ int PictureBase::init_reference_picture_lists_B_slices_in_frames(
 // 当对编码字段中的 B 切片进行解码时，会调用此初始化过程。
 /* 当调用这一过程时，应该有至少一个参考字段（可以是参考帧的字段）当前被标记为“用于参考”（即，“用于短期参考”或“用于参考”）。供长期参考”）并且没有标记为“不存在”。 */
 /* TODO YangJing 未经测试 <24-08-31 15:06:47> */
-int PictureBase::init_reference_picture_lists_B_slices_in_fields(
+int PictureBase::init_ref_picture_lists_B_in_fields(
     Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16],
     int32_t &RefPicList0Length, int32_t &RefPicList1Length) {
 
@@ -945,9 +917,9 @@ int PictureBase::init_reference_picture_lists_in_fields(
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence = coded_type;
       RefPicListX[index]->reference_marked_type =
           PICTURE_MARKED_AS_used_short_ref;
-      coded_type = (coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
-                       ? H264_PICTURE_CODED_TYPE_BOTTOM_FIELD
-                       : H264_PICTURE_CODED_TYPE_TOP_FIELD;
+      coded_type = (coded_type == PICTURE_CODED_TYPE_TOP_FIELD)
+                       ? PICTURE_CODED_TYPE_BOTTOM_FIELD
+                       : PICTURE_CODED_TYPE_TOP_FIELD;
       index++;
       j = i;
     }
@@ -961,9 +933,9 @@ int PictureBase::init_reference_picture_lists_in_fields(
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence = coded_type;
       RefPicListX[index]->reference_marked_type =
           PICTURE_MARKED_AS_used_short_ref;
-      coded_type = (coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
-                       ? H264_PICTURE_CODED_TYPE_BOTTOM_FIELD
-                       : H264_PICTURE_CODED_TYPE_TOP_FIELD;
+      coded_type = (coded_type == PICTURE_CODED_TYPE_TOP_FIELD)
+                       ? PICTURE_CODED_TYPE_BOTTOM_FIELD
+                       : PICTURE_CODED_TYPE_TOP_FIELD;
       index++;
       j = i;
     }
@@ -977,10 +949,10 @@ int PictureBase::init_reference_picture_lists_in_fields(
   // refFrameListXShortTerm.
   for (i = j + 1; i < size; i++) {
     if (refFrameListXShortTerm[i]->m_picture_top_filed.m_picture_coded_type ==
-        H264_PICTURE_CODED_TYPE_TOP_FIELD) {
+        PICTURE_CODED_TYPE_TOP_FIELD) {
       RefPicListX[index] = refFrameListXShortTerm[i];
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence =
-          H264_PICTURE_CODED_TYPE_TOP_FIELD;
+          PICTURE_CODED_TYPE_TOP_FIELD;
       RefPicListX[index]->reference_marked_type =
           PICTURE_MARKED_AS_used_short_ref;
       index++;
@@ -988,10 +960,10 @@ int PictureBase::init_reference_picture_lists_in_fields(
 
     if (refFrameListXShortTerm[i]
             ->m_picture_bottom_filed.m_picture_coded_type ==
-        H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) {
+        PICTURE_CODED_TYPE_BOTTOM_FIELD) {
       RefPicListX[index] = refFrameListXShortTerm[i];
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence =
-          H264_PICTURE_CODED_TYPE_BOTTOM_FIELD;
+          PICTURE_CODED_TYPE_BOTTOM_FIELD;
       RefPicListX[index]->reference_marked_type =
           PICTURE_MARKED_AS_used_short_ref;
       index++;
@@ -1011,9 +983,9 @@ int PictureBase::init_reference_picture_lists_in_fields(
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence = coded_type;
       RefPicListX[index]->reference_marked_type =
           PICTURE_MARKED_AS_used_long_ref;
-      coded_type = (coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
-                       ? H264_PICTURE_CODED_TYPE_BOTTOM_FIELD
-                       : H264_PICTURE_CODED_TYPE_TOP_FIELD;
+      coded_type = (coded_type == PICTURE_CODED_TYPE_TOP_FIELD)
+                       ? PICTURE_CODED_TYPE_BOTTOM_FIELD
+                       : PICTURE_CODED_TYPE_TOP_FIELD;
       index++;
       j = i;
     }
@@ -1026,9 +998,9 @@ int PictureBase::init_reference_picture_lists_in_fields(
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence = coded_type;
       RefPicListX[index]->reference_marked_type =
           PICTURE_MARKED_AS_used_long_ref;
-      coded_type = (coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD)
-                       ? H264_PICTURE_CODED_TYPE_BOTTOM_FIELD
-                       : H264_PICTURE_CODED_TYPE_TOP_FIELD;
+      coded_type = (coded_type == PICTURE_CODED_TYPE_TOP_FIELD)
+                       ? PICTURE_CODED_TYPE_BOTTOM_FIELD
+                       : PICTURE_CODED_TYPE_TOP_FIELD;
       index++;
       j = i;
     }
@@ -1042,20 +1014,20 @@ int PictureBase::init_reference_picture_lists_in_fields(
   // refFrameListLongTerm.
   for (i = j + 1; i < size; i++) {
     if (refFrameListXLongTerm[i]->m_picture_top_filed.m_picture_coded_type ==
-        H264_PICTURE_CODED_TYPE_TOP_FIELD) {
+        PICTURE_CODED_TYPE_TOP_FIELD) {
       RefPicListX[index] = refFrameListXLongTerm[i];
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence =
-          H264_PICTURE_CODED_TYPE_TOP_FIELD;
+          PICTURE_CODED_TYPE_TOP_FIELD;
       RefPicListX[index]->reference_marked_type =
           PICTURE_MARKED_AS_used_long_ref;
       index++;
     }
 
     if (refFrameListXLongTerm[i]->m_picture_bottom_filed.m_picture_coded_type ==
-        H264_PICTURE_CODED_TYPE_BOTTOM_FIELD) {
+        PICTURE_CODED_TYPE_BOTTOM_FIELD) {
       RefPicListX[index] = refFrameListXLongTerm[i];
       RefPicListX[index]->m_picture_coded_type_marked_as_refrence =
-          H264_PICTURE_CODED_TYPE_BOTTOM_FIELD;
+          PICTURE_CODED_TYPE_BOTTOM_FIELD;
       RefPicListX[index]->reference_marked_type =
           PICTURE_MARKED_AS_used_long_ref;
       index++;
@@ -1252,13 +1224,10 @@ int PictureBase::modif_reference_picture_lists_for_long_ref_pictures(
 }
 
 // 8.2.5 Decoded reference picture marking process
-// This process is invoked for decoded pictures when nal_ref_idc is not equal to
-// 0.
+// This process is invoked for decoded pictures when nal_ref_idc is not equal to 0.
 int PictureBase::Decoded_reference_picture_marking_process(Frame *(&dpb)[16]) {
-  int ret = 0;
-  ret =
-      Sequence_of_operations_for_decoded_reference_picture_marking_process(dpb);
-  return ret;
+  return Sequence_of_operations_for_decoded_reference_picture_marking_process(
+      dpb);
 }
 
 // 8.2.5.1 Sequence of operations for decoded reference picture marking process
@@ -1280,10 +1249,9 @@ int PictureBase::
     for (int i = 0; i < size_dpb; i++) {
       dpb[i]->reference_marked_type = PICTURE_MARKED_AS_unused_for_reference;
       dpb[i]->m_picture_coded_type_marked_as_refrence =
-          H264_PICTURE_CODED_TYPE_UNKNOWN;
+          PICTURE_CODED_TYPE_UNKNOWN;
       if (dpb[i] != this->m_parent) {
-        dpb[i]->m_picture_coded_type =
-            H264_PICTURE_CODED_TYPE_UNKNOWN; // FIXME:
+        dpb[i]->m_picture_coded_type = PICTURE_CODED_TYPE_UNKNOWN; // FIXME:
         // 需要先将之前解码的所有帧输出去
       }
     }
@@ -1294,12 +1262,12 @@ int PictureBase::
       MaxLongTermFrameIdx = NA; //"no long-term frame indices".
       m_parent->reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
 
-      if (m_parent->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
+      if (m_parent->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
         m_parent->m_picture_coded_type_marked_as_refrence =
-            H264_PICTURE_CODED_TYPE_FRAME;
+            PICTURE_CODED_TYPE_FRAME;
       } else {
         m_parent->m_picture_coded_type_marked_as_refrence =
-            H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
+            PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
       }
     } else // if (slice_header->long_term_reference_flag == 1)
     {
@@ -1308,12 +1276,12 @@ int PictureBase::
       MaxLongTermFrameIdx = 0;
       m_parent->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
 
-      if (m_parent->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
+      if (m_parent->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
         m_parent->m_picture_coded_type_marked_as_refrence =
-            H264_PICTURE_CODED_TYPE_FRAME;
+            PICTURE_CODED_TYPE_FRAME;
       } else {
         m_parent->m_picture_coded_type_marked_as_refrence =
-            H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
+            PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
       }
     }
   } else // the current picture is not an IDR picture
@@ -1342,12 +1310,12 @@ int PictureBase::
     MaxLongTermFrameIdx = NA; //"no long-term frame indices".
     m_parent->reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
 
-    if (m_parent->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME) {
+    if (m_parent->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
       m_parent->m_picture_coded_type_marked_as_refrence =
-          H264_PICTURE_CODED_TYPE_FRAME;
+          PICTURE_CODED_TYPE_FRAME;
     } else {
       m_parent->m_picture_coded_type_marked_as_refrence =
-          H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
+          PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
     }
   }
 
@@ -1377,7 +1345,7 @@ int PictureBase::
 int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
     Frame *(&dpb)[16]) {
   if (m_picture_coded_type ==
-          H264_PICTURE_CODED_TYPE_BOTTOM_FIELD // If the current picture is a
+          PICTURE_CODED_TYPE_BOTTOM_FIELD // If the current picture is a
       // coded field that is the second
       // field in decoding order of a
       // complementary reference field
@@ -1394,7 +1362,7 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
     reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
     m_parent->reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
     m_parent->m_picture_coded_type_marked_as_refrence =
-        H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
+        PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
   } else {
     int32_t size_dpb = 16;
     uint32_t numShortTerm = 0;
@@ -1493,17 +1461,17 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
         refPic->reference_marked_type = PICTURE_MARKED_AS_unused_for_reference;
 
         if (refPic->m_parent->m_picture_coded_type ==
-            H264_PICTURE_CODED_TYPE_FRAME) {
+            PICTURE_CODED_TYPE_FRAME) {
           refPic->m_parent->reference_marked_type =
               PICTURE_MARKED_AS_unused_for_reference;
           refPic->m_parent->m_picture_coded_type_marked_as_refrence =
-              H264_PICTURE_CODED_TYPE_UNKNOWN;
+              PICTURE_CODED_TYPE_UNKNOWN;
         } else if (refPic->m_parent->m_picture_coded_type ==
-                   H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+                   PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
           refPic->m_parent->reference_marked_type =
               PICTURE_MARKED_AS_unused_for_reference;
           refPic->m_parent->m_picture_coded_type_marked_as_refrence =
-              H264_PICTURE_CODED_TYPE_UNKNOWN;
+              PICTURE_CODED_TYPE_UNKNOWN;
           refPic->m_parent->m_picture_top_filed.reference_marked_type =
               PICTURE_MARKED_AS_unused_for_reference;
           refPic->m_parent->m_picture_bottom_filed.reference_marked_type =
@@ -1608,7 +1576,7 @@ int PictureBase::
             dpb[i]->reference_marked_type =
                 PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_coded_type_marked_as_refrence =
-                H264_PICTURE_CODED_TYPE_UNKNOWN;
+                PICTURE_CODED_TYPE_UNKNOWN;
             dpb[i]->m_picture_frame.reference_marked_type =
                 PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_top_filed.reference_marked_type =
@@ -1673,7 +1641,7 @@ int PictureBase::
           dpb[i]->reference_marked_type =
               PICTURE_MARKED_AS_unused_for_reference;
           dpb[i]->m_picture_coded_type_marked_as_refrence =
-              H264_PICTURE_CODED_TYPE_UNKNOWN;
+              PICTURE_CODED_TYPE_UNKNOWN;
           dpb[i]->m_picture_frame.reference_marked_type =
               PICTURE_MARKED_AS_unused_for_reference;
           dpb[i]->m_picture_top_filed.reference_marked_type =
@@ -1743,12 +1711,12 @@ int PictureBase::
               dpb[i]->m_picture_frame.PicNum == picNumX) {
             dpb[i]->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
             dpb[i]->m_picture_coded_type_marked_as_refrence =
-                H264_PICTURE_CODED_TYPE_FRAME;
+                PICTURE_CODED_TYPE_FRAME;
             dpb[i]->m_picture_frame.reference_marked_type =
                 PICTURE_MARKED_AS_used_long_ref;
 
             if (dpb[i]->m_picture_coded_type ==
-                H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+                PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
               dpb[i]->m_picture_top_filed.reference_marked_type =
                   PICTURE_MARKED_AS_used_long_ref;
               dpb[i]->m_picture_bottom_filed.reference_marked_type =
@@ -1775,13 +1743,13 @@ int PictureBase::
               dpb[i]->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
 
               if (dpb[i]->m_picture_frame.m_picture_coded_type ==
-                  H264_PICTURE_CODED_TYPE_FRAME) {
+                  PICTURE_CODED_TYPE_FRAME) {
                 dpb[i]->m_picture_coded_type_marked_as_refrence =
-                    H264_PICTURE_CODED_TYPE_FRAME;
+                    PICTURE_CODED_TYPE_FRAME;
               } else if (dpb[i]->m_picture_frame.m_picture_coded_type ==
-                         H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+                         PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
                 dpb[i]->m_picture_coded_type_marked_as_refrence =
-                    H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
+                    PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
               }
 
               dpb[i]->m_picture_frame.reference_marked_type =
@@ -1803,13 +1771,13 @@ int PictureBase::
               dpb[i]->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
 
               if (dpb[i]->m_picture_frame.m_picture_coded_type ==
-                  H264_PICTURE_CODED_TYPE_FRAME) {
+                  PICTURE_CODED_TYPE_FRAME) {
                 dpb[i]->m_picture_coded_type_marked_as_refrence =
-                    H264_PICTURE_CODED_TYPE_FRAME;
+                    PICTURE_CODED_TYPE_FRAME;
               } else if (dpb[i]->m_picture_frame.m_picture_coded_type ==
-                         H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+                         PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
                 dpb[i]->m_picture_coded_type_marked_as_refrence =
-                    H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
+                    PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
               }
 
               dpb[i]->m_picture_frame.reference_marked_type =
@@ -1863,11 +1831,11 @@ int PictureBase::
               PICTURE_MARKED_AS_unused_for_reference;
         }
 
-        if (dpb[i]->m_picture_coded_type == H264_PICTURE_CODED_TYPE_FRAME ||
+        if (dpb[i]->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME ||
             dpb[i]->m_picture_coded_type ==
-                H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+                PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
           dpb[i]->m_picture_coded_type_marked_as_refrence =
-              H264_PICTURE_CODED_TYPE_UNKNOWN;
+              PICTURE_CODED_TYPE_UNKNOWN;
           dpb[i]->reference_marked_type =
               PICTURE_MARKED_AS_unused_for_reference;
         }
@@ -1891,7 +1859,7 @@ int PictureBase::
                  .memory_management_control_operation == 5) {
       for (i = 0; i < size_dpb; i++) {
         dpb[i]->m_picture_coded_type_marked_as_refrence =
-            H264_PICTURE_CODED_TYPE_UNKNOWN;
+            PICTURE_CODED_TYPE_UNKNOWN;
         dpb[i]->reference_marked_type = PICTURE_MARKED_AS_unused_for_reference;
         dpb[i]->m_picture_frame.reference_marked_type =
             PICTURE_MARKED_AS_unused_for_reference;
@@ -1927,10 +1895,10 @@ int PictureBase::
           dpb[i]->reference_marked_type =
               PICTURE_MARKED_AS_unused_for_reference;
           dpb[i]->m_picture_coded_type_marked_as_refrence =
-              H264_PICTURE_CODED_TYPE_UNKNOWN;
+              PICTURE_CODED_TYPE_UNKNOWN;
 
           if (dpb[i]->m_picture_coded_type ==
-              H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+              PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
             dpb[i]->m_picture_top_filed.reference_marked_type =
                 PICTURE_MARKED_AS_unused_for_reference;
             dpb[i]->m_picture_bottom_filed.reference_marked_type =
@@ -1944,7 +1912,7 @@ int PictureBase::
         // reference".
         if (dpb[i]->m_picture_top_filed.LongTermFrameIdx == LongTermFrameIdx &&
             m_parent->m_picture_coded_type ==
-                H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR &&
+                PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR &&
             (dpb[i] != m_parent)) {
           dpb[i]->reference_marked_type =
               dpb[i]->m_picture_bottom_filed.reference_marked_type;
@@ -1955,7 +1923,7 @@ int PictureBase::
         } else if (dpb[i]->m_picture_bottom_filed.LongTermFrameIdx ==
                        LongTermFrameIdx &&
                    m_parent->m_picture_coded_type ==
-                       H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR &&
+                       PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR &&
                    (dpb[i] != m_parent)) {
           dpb[i]->reference_marked_type =
               dpb[i]->m_picture_top_filed.reference_marked_type;
@@ -1977,7 +1945,7 @@ int PictureBase::
       if (slice_header->field_pic_flag == 0) {
         // FIXME: what meaning 'both its fields'?
         if (m_parent->m_picture_coded_type ==
-            H264_PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+            PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
           m_parent->m_picture_top_filed.reference_marked_type =
               PICTURE_MARKED_AS_used_long_ref;
           m_parent->m_picture_top_filed.LongTermFrameIdx =
@@ -1996,7 +1964,7 @@ int PictureBase::
       // reference field pair is also marked as "used for long-term reference"
       // and assigned LongTermFrameIdx equal to long_term_frame_idx.
       if (slice_header->field_pic_flag == 1 &&
-          m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD &&
+          m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD &&
           m_parent->m_picture_top_filed.reference_marked_type ==
               PICTURE_MARKED_AS_used_long_ref) {
         m_parent->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;

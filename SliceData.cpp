@@ -140,7 +140,7 @@ int SliceData::slice_decoding_process() {
     // 8.2.4 Decoding process for reference picture lists construction
     if (header->slice_type == SLICE_P || header->slice_type == SLICE_SP ||
         header->slice_type == SLICE_B) {
-      /* 当前帧需要参考帧预测，则需要进行参考帧重排序。在每个 P、SP 或 B 切片的解码过程开始时调用此过程。 */
+      /* 当前帧需要参考帧预测，则需要进行参考帧重排序。在每个 P、SP 或 B 切片的解码过程开始时调用 */
       pic->decoding_reference_picture_lists_construction(
           pic->m_dpb, pic->m_RefPicList0, pic->m_RefPicList1);
       /* (m_RefPicList0,m_RefPicList1为m_dpb排序后的前后参考列表）打印帧重排序先后信息 */

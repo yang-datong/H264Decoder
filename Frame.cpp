@@ -37,8 +37,8 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop) {
 }
 
 int Frame::reset() {
-  m_picture_coded_type = H264_PICTURE_CODED_TYPE_UNKNOWN;
-  m_picture_coded_type_marked_as_refrence = H264_PICTURE_CODED_TYPE_UNKNOWN;
+  m_picture_coded_type = PICTURE_CODED_TYPE_UNKNOWN;
+  m_picture_coded_type_marked_as_refrence = PICTURE_CODED_TYPE_UNKNOWN;
 
   TopFieldOrderCnt = 0;
   BottomFieldOrderCnt = 0;

@@ -44,7 +44,7 @@ int GOP::getOneEmptyPicture(Frame *&pic) {
 
   for (int i = 0; i < size_dpb; i++) {
     if (m_DecodedPictureBuffer[i]->m_picture_coded_type ==
-        H264_PICTURE_CODED_TYPE_UNKNOWN) // 重复利用被释放了的参考帧
+        PICTURE_CODED_TYPE_UNKNOWN) // 重复利用被释放了的参考帧
     {
       pic = m_DecodedPictureBuffer[i];
       RETURN_IF_FAILED(pic == NULL, -1);

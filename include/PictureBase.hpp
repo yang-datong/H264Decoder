@@ -131,17 +131,17 @@ class PictureBase {
 
   int init_reference_picture_lists(Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
                                    Frame *(&RefPicList1)[16]); // 8.2.4.2
-  int init_reference_picture_list_P_SP_slices_in_frames(
+  int init_ref_picture_list_P_SP_in_frames(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
       int32_t &RefPicList0Length); // 8.2.4.2.1
-  int init_reference_picture_list_P_SP_slices_in_fields(
+  int init_ref_picture_list_P_SP_in_fields(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
       int32_t &RefPicList0Length); // 8.2.4.2.2
-  int init_reference_picture_lists_B_slices_in_frames(
+  int init_ref_picture_lists_B_in_frames(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16],
       int32_t &RefPicList0Length,
       int32_t &RefPicList1Length); // 8.2.4.2.3
-  int init_reference_picture_lists_B_slices_in_fields(
+  int init_ref_picture_lists_B_in_fields(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16], Frame *(&RefPicList1)[16],
       int32_t &RefPicList0Length,
       int32_t &RefPicList1Length); // 8.2.4.2.4
