@@ -89,10 +89,10 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   }
 
   if (m_sps->pic_order_cnt_type == 0) {
-    cout << "\t图像顺序计数(POC)方法:使用帧号和帧场号计算" << endl;
+    cout << "\t图像顺序计数(POC)方法:使用帧号和帧场号计算";
     pic_order_cnt_lsb =
         _bs->readUn(m_sps->log2_max_pic_order_cnt_lsb_minus4 + 4);
-    cout << "\t图像顺序计数(POC低位):" << pic_order_cnt_lsb << endl;
+    cout << ", 图像顺序计数(POC低位):" << pic_order_cnt_lsb << endl;
     if (m_pps->bottom_field_pic_order_in_frame_present_flag &&
         !field_pic_flag) {
       delta_pic_order_cnt_bottom = _bs->readSE();
@@ -139,10 +139,10 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
       num_ref_idx_l0_active_minus1 = _bs->readUE();
       if (slice_type == SLICE_B) {
         num_ref_idx_l1_active_minus1 = _bs->readUE();
-        cout << "\t参考帧列表0的活动参考帧数减1:"
-             << num_ref_idx_l0_active_minus1
-             << ",参考帧列表1的活动参考帧数减1:" << num_ref_idx_l1_active_minus1
-             << endl;
+        cout << "\t参考帧列表0的活动参考帧数:"
+             << num_ref_idx_l0_active_minus1 + 1
+             << ", 参考帧列表1的活动参考帧数:"
+             << num_ref_idx_l1_active_minus1 + 1 << endl;
       }
       /* 编码器未提供则使用PPS（全局）中提供的 */
     } else
@@ -195,7 +195,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
       slice_alpha_c0_offset_div2 = _bs->readSE();
       slice_beta_offset_div2 = _bs->readSE();
       cout << "\t去块效应滤波器的Alpha偏移值:" << slice_alpha_c0_offset_div2
-           << ",去块效应滤波器的Beta偏移值:" << slice_beta_offset_div2 << endl;
+           << ", 去块效应滤波器的Beta偏移值:" << slice_beta_offset_div2 << endl;
     }
   }
 
@@ -211,22 +211,15 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   }
 
   //----------- 下面都是一些额外信息，比如还原偏移，或者事先计算一些值，后面方便用 ------------
-  SliceQPY = 26 + m_pps->pic_init_qp_minus26 + slice_qp_delta;
-  cout << "\tSlice的量化参数:" << SliceQPY << endl;
-
-  /* 对于首个Slice而言前一个Slice的量化参数应该初始化为当前量化参数，而不是0 */
-  QPY_prev = SliceQPY;
-
   MbaffFrameFlag = (m_sps->mb_adaptive_frame_field_flag && !field_pic_flag);
   cout << "\t宏块自适应帧场模式(MBAFF):" << MbaffFrameFlag << endl;
 
   PicWidthInMbs = m_sps->PicWidthInMbs;
   PicHeightInMbs = m_sps->FrameHeightInMbs / (1 + field_pic_flag);
-  cout << "\t图像宽度（宏块数）:" << PicWidthInMbs
-       << ",图像高度（宏块数）:" << PicHeightInMbs << endl;
-
   PicSizeInMbs = m_sps->PicWidthInMbs * PicHeightInMbs;
-  cout << "\t图像大小（宏块数）:" << PicSizeInMbs << endl;
+  cout << "\t图像宽度(宏块数):" << PicWidthInMbs
+       << ", 图像高度(宏块数):" << PicHeightInMbs
+       << ", 图像大小(宏块数):" << PicSizeInMbs << endl;
 
   /* 计算采样宽度和比特深度 */
   PicWidthInSamplesL = PicWidthInMbs * 16;
@@ -249,6 +242,10 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
                               m_sps->PicSizeInMapUnits);
   cout << "\t首个Slice Group中的宏块数:" << MapUnitsInSliceGroup0 << endl;
 
+  SliceQPY = 26 + m_pps->pic_init_qp_minus26 + slice_qp_delta;
+  cout << "\tSlice的量化参数:" << SliceQPY << endl;
+  /* 对于首个Slice而言前一个Slice的量化参数应该初始化为当前量化参数，而不是0 */
+  QPY_prev = SliceQPY;
   QSY = 26 + m_pps->pic_init_qs_minus26 + slice_qs_delta;
   cout << "\tSP Slice的量化参数:" << QSY << endl;
 
@@ -330,7 +327,7 @@ void SliceHeader::pred_weight_table() {
   /* Chrome */
   if (m_sps->ChromaArrayType != 0) chroma_log2_weight_denom = _bs->readUE();
   cout << "\t\t亮度权重的对数基数:" << luma_log2_weight_denom
-       << ",色度权重的对数基数:" << chroma_log2_weight_denom << endl;
+       << ", 色度权重的对数基数:" << chroma_log2_weight_denom << endl;
 
   for (int i = 0; i <= (int)num_ref_idx_l0_active_minus1; i++) {
     /* 初始化 */
@@ -360,12 +357,13 @@ void SliceHeader::pred_weight_table() {
   }
 
   for (uint32_t i = 0; i <= num_ref_idx_l0_active_minus1; ++i) {
-    cout << "\t\t前参考帧列表亮度权重:" << luma_weight_l0[i] << endl;
-    cout << "\t\t前参考帧列表亮度权重:" << luma_offset_l0[i] << endl;
-    cout << "\t\t前参考帧列表色度权重:" << chroma_weight_l0[i][0] << endl;
-    cout << "\t\t前参考帧列表色度权重:" << chroma_weight_l0[i][1] << endl;
-    cout << "\t\t前参考帧列表色度偏移:" << chroma_offset_l0[i][0] << endl;
-    cout << "\t\t前参考帧列表色度偏移:" << chroma_offset_l0[i][1] << endl;
+    cout << "\t\t前参考帧列表[" << i << "] -> {"
+         << "Luma权重:" << luma_weight_l0[i]
+         << ",Luma偏移:" << luma_offset_l0[i]
+         << ",Cb权重:" << chroma_weight_l0[i][0]
+         << ",Cr权重:" << chroma_weight_l0[i][1]
+         << ",Cb偏移:" << chroma_offset_l0[i][0]
+         << ",Cr偏移:" << chroma_offset_l0[i][1] << "}" << std::endl;
   }
 
   if (slice_type == SLICE_B) {
@@ -396,13 +394,14 @@ void SliceHeader::pred_weight_table() {
       }
     }
 
-    for (int i = 0; i <= (int)num_ref_idx_l1_active_minus1; ++i) {
-      cout << "\t\t后参考帧列表亮度权重:" << luma_weight_l1[i] << endl;
-      cout << "\t\t后参考帧列表亮度偏移:" << luma_offset_l1[i] << endl;
-      cout << "\t\t后参考帧列表色度权重:" << chroma_weight_l1[i][0] << endl;
-      cout << "\t\t后参考帧列表色度权重:" << chroma_weight_l1[i][1] << endl;
-      cout << "\t\t后参考帧列表色度偏移:" << chroma_offset_l1[i][0] << endl;
-      cout << "\t\t后参考帧列表色度偏移:" << chroma_offset_l1[i][1] << endl;
+    for (uint32_t i = 0; i <= num_ref_idx_l1_active_minus1; ++i) {
+      cout << "\t\t后参考帧列表[" << i << "] -> {"
+           << "Luma权重:" << luma_weight_l1[i]
+           << ",Luma偏移:" << luma_offset_l1[i]
+           << ",Cb权重:" << chroma_weight_l1[i][0]
+           << ",Cr权重:" << chroma_weight_l1[i][1]
+           << ",Cb偏移:" << chroma_offset_l1[i][0]
+           << ",Cr偏移:" << chroma_offset_l1[i][1] << "}" << std::endl;
     }
   }
   cout << "\t}" << endl;

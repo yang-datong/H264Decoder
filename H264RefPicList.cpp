@@ -925,76 +925,73 @@ int PictureBase::init_ref_picture_lists_in_fields(
 }
 
 // 8.2.4.3 Modification process for reference picture lists
+/* 修改指的是调整参考帧列表的优先级，由于修改的操作问题，这里可能会出现重复参考帧的问题（一般会出现在最后一个）*/
 int PictureBase::modif_ref_picture_lists(Frame *(&RefPicList0)[16],
                                          Frame *(&RefPicList1)[16]) {
+  SliceHeader *header = m_slice->slice_header;
+  /* 输出 */
+  int32_t &refIdxL0 = header->refIdxL0;
+  int32_t &refIdxL1 = header->refIdxL1;
+  int32_t &picNumL0Pred = header->picNumL0Pred;
+  int32_t &picNumL1Pred = header->picNumL1Pred;
+
+  /* 输入 */
+  const uint32_t &num_ref_idx_l0_active_minus1 =
+      header->num_ref_idx_l0_active_minus1;
+  const uint32_t &num_ref_idx_l1_active_minus1 =
+      header->num_ref_idx_l1_active_minus1;
+
+  /* 当对于Slice第一次调用本子句中指定的过程时（即，对于在ref_pic_list_modification()语法中第一次出现modification_of_pic_nums_idc等于0或1），picNumL0Pred和picNumL1Pred最初被设置为等于CurrPicNum。 */
+  header->picNumL0Pred = header->picNumL1Pred = header->CurrPicNum;
+
   int ret;
-  SliceHeader *slice_header = m_slice->slice_header;
-  /* 当ref_pic_list_modification_flag_l0等于1时，以下适用： */
-  if (slice_header->ref_pic_list_modification_flag_l0 == 1) {
+  if (header->ref_pic_list_modification_flag_l0) {
     // 1.令refIdxL0为参考图片列表RefPicList0中的索引。它最初设置为等于0。
-    slice_header->refIdxL0 = 0;
-
-    /* 2. 对应的语法元素modification_of_pic_nums_idc 按照它们在比特流中出现的顺序进行处理。对于这些语法元素中的每一个，以下适用： */
-    for (int i = 0; i < slice_header->ref_pic_list_modification_count_l0; i++) {
-      int32_t modif_idc = slice_header->modification_of_pic_nums_idc[0][i];
-
-      if (modif_idc == 0 || modif_idc == 1) {
-        //* — 如果modification_of_pic_nums_idc等于0或等于1，则使用refIdxL0作为输入调用第8.2.4.3.1节中指定的过程，并将输出分配给refIdxL0。
+    refIdxL0 = 0;
+    for (int i = 0; i < header->ref_pic_list_modification_count_l0; i++) {
+      int32_t modif_idc = header->modification_of_pic_nums_idc[0][i];
+      //* — 使用refIdxL0作为输入调用第8.2.4.3.1节中指定的过程，并将输出分配给refIdxL0。
+      if ((modif_idc & ~1) == 0) {
         ret = modif_ref_picture_lists_for_short_ref_pictures(
-            slice_header->refIdxL0, slice_header->picNumL0Pred, modif_idc,
-            slice_header->abs_diff_pic_num_minus1[0][i],
-            slice_header->num_ref_idx_l0_active_minus1, RefPicList0);
+            refIdxL0, picNumL0Pred, modif_idc,
+            header->abs_diff_pic_num_minus1[0][i] + 1,
+            num_ref_idx_l0_active_minus1, RefPicList0);
+        //* — 使用refIdxL0作为输入调用第8.2.4.3.2节中指定的过程，并将输出分配给refIdxL0。
       } else if (modif_idc == 2) {
-        //* — 否则，如果modification_of_pic_nums_idc等于2，则使用refIdxL0作为输入调用第8.2.4.3.2节中指定的过程，并将输出分配给refIdxL0。
         ret = modif_ref_picture_lists_for_long_ref_pictures(
-            slice_header->refIdxL0, slice_header->num_ref_idx_l0_active_minus1,
-            slice_header->long_term_pic_num[0][i], RefPicList0);
-      } else
+            refIdxL0, num_ref_idx_l0_active_minus1,
+            header->long_term_pic_num[0][i], RefPicList0);
         //* – 否则（modification_of_pic_nums_idc等于3），参考图片列表RefPicList0的修改过程完成。
-        break;
-
-      if (ret != 0) {
-        std::cerr << "An error occurred on " << __FUNCTION__
-                  << "():" << __LINE__ << std::endl;
-        return ret;
-      }
-    }
-  }
-
-  /* 当当前切片是B切片并且ref_pic_list_modification_flag_l1等于1时，以下适用： */
-  if (slice_header->slice_type == SLICE_B &&
-      slice_header->ref_pic_list_modification_flag_l1) {
-
-    /* 1.令refIdxL1为参考图片列表RefPicList1的索引。它最初设置为 0。 */
-    slice_header->refIdxL1 = 0;
-
-    /* 2.对应的语法元素modification_of_pic_nums_idc按照它们在比特流中出现的顺序进行处理。对于每个语法元素，以下内容适用： */
-    for (int i = 0; i < slice_header->ref_pic_list_modification_count_l1; i++) {
-
-      int32_t modif_idc = slice_header->modification_of_pic_nums_idc[1][i];
-      if (modif_idc == 0 || modif_idc == 1) {
-        // – 如果modification_of_pic_nums_idc等于0或等于1，则使用refIdxL1作为输入调用第8.2.4.3.1节中指定的过程，并将输出分配给refIdxL1。
-        ret = modif_ref_picture_lists_for_short_ref_pictures(
-            slice_header->refIdxL1, slice_header->picNumL1Pred, modif_idc,
-            slice_header->abs_diff_pic_num_minus1[1][i],
-            slice_header->num_ref_idx_l1_active_minus1, RefPicList1);
-      } else if (modif_idc == 2) {
-        // — 否则，如果modification_of_pic_nums_idc等于2，则使用refIdxL1作为输入调用第8.2.4.3.2节中指定的过程，并将输出分配给refIdxL1。
-        ret = modif_ref_picture_lists_for_long_ref_pictures(
-            slice_header->refIdxL1, slice_header->num_ref_idx_l1_active_minus1,
-            slice_header->long_term_pic_num[1][i], RefPicList1);
       } else
-        // – 否则（modification_of_pic_nums_idc等于3），参考图片列表RefPicList1的修改过程完成。 */
         break;
-
-      if (ret != 0) {
-        std::cerr << "An error occurred on " << __FUNCTION__
-                  << "():" << __LINE__ << std::endl;
-        return ret;
-      }
+      RET(ret);
     }
   }
 
+  /* 当前切片是B切片并且ref_pic_list_modification_flag_l1等于1时，以下适用： */
+  if (header->slice_type == SLICE_B &&
+      header->ref_pic_list_modification_flag_l1) {
+    /* 1.令refIdxL1为参考图片列表RefPicList1的索引。它最初设置为 0。 */
+    refIdxL1 = 0;
+    /* 2.对应的语法元素modification_of_pic_nums_idc按照它们在比特流中出现的顺序进行处理。对于每个语法元素，以下内容适用： */
+    for (int i = 0; i < header->ref_pic_list_modification_count_l1; i++) {
+      int32_t modif_idc = header->modification_of_pic_nums_idc[1][i];
+      // – 使用refIdxL1作为输入调用第8.2.4.3.1节中指定的过程，并将输出分配给refIdxL1。
+      if ((modif_idc & ~1) == 0) {
+        ret = modif_ref_picture_lists_for_short_ref_pictures(
+            refIdxL1, picNumL1Pred, modif_idc,
+            header->abs_diff_pic_num_minus1[1][i] + 1,
+            num_ref_idx_l1_active_minus1, RefPicList1);
+        // — 使用refIdxL1作为输入调用第8.2.4.3.2节中指定的过程，并将输出分配给refIdxL1。
+      } else if (modif_idc == 2) {
+        ret = modif_ref_picture_lists_for_long_ref_pictures(
+            refIdxL1, num_ref_idx_l1_active_minus1,
+            header->long_term_pic_num[1][i], RefPicList1);
+      } else
+        break;
+      RET(ret);
+    }
+  }
   return 0;
 }
 
@@ -1003,71 +1000,90 @@ int PictureBase::modif_ref_picture_lists(Frame *(&RefPicList0)[16],
  * 该过程的输出是递增的索引 refIdxLX。*/
 int PictureBase::modif_ref_picture_lists_for_short_ref_pictures(
     int32_t &refIdxLX, int32_t &picNumLXPred, const int32_t modif_idc,
-    const int32_t abs_diff_pic_num_minus1,
-    const int32_t num_ref_idx_lX_active_minus1, Frame *(&RefPicListX)[16]) {
+    const int32_t abs_diff_pic_num, const int32_t num_ref_idx_lX_active_minus1,
+    Frame *(&RefPicListX)[16]) {
 
-  SliceHeader *slice_header = m_slice->slice_header;
+  const SliceHeader *header = m_slice->slice_header;
+  const int MaxPicNum = header->MaxPicNum;
 
-  /* 变量 picNumLXNoWrap 的推导如下：*/
+  /* 计算picNumLXNoWrap（未包裹的短期参考帧编号），参考帧编号有最大值限制（MaxPicNum），所以如果差值计算导致超出范围，需要进行“包裹”（wrap-around）处理。 */
   int32_t picNumLXNoWrap = 0;
+  /* 减法操作：参考帧编号需要减去 abs_diff_pic_num，以找到之前的一个参考帧编号 */
   if (modif_idc == 0) {
-    if (picNumLXPred - (abs_diff_pic_num_minus1 + 1) < 0)
-      picNumLXNoWrap = picNumLXPred - (abs_diff_pic_num_minus1 + 1) +
-                       slice_header->MaxPicNum;
+    //预测图像编号 - 实际的图片编号差异
+    if (picNumLXPred - abs_diff_pic_num < 0)
+      picNumLXNoWrap = picNumLXPred - abs_diff_pic_num + MaxPicNum;
     else
-      picNumLXNoWrap = picNumLXPred - (abs_diff_pic_num_minus1 + 1);
+      picNumLXNoWrap = picNumLXPred - abs_diff_pic_num;
 
+    /* 加法操作：参考帧编号需要加上 abs_diff_pic_num，以找到之前的一个参考帧编号 */
   } else {
-    if (picNumLXPred + (abs_diff_pic_num_minus1 + 1) >= slice_header->MaxPicNum)
-      picNumLXNoWrap = picNumLXPred + (abs_diff_pic_num_minus1 + 1) -
-                       slice_header->MaxPicNum;
+    //预测图像编号 + 实际的图片编号差异
+    if (picNumLXPred + abs_diff_pic_num >= MaxPicNum)
+      picNumLXNoWrap = picNumLXPred + abs_diff_pic_num - MaxPicNum;
     else
-      picNumLXNoWrap = picNumLXPred + (abs_diff_pic_num_minus1 + 1);
+      picNumLXNoWrap = picNumLXPred + abs_diff_pic_num;
   }
+  /* TODO YangJing 为什么编码器会知道abs_diff_pic_num？ <24-09-17 01:47:15> */
 
-  /* picNumLXPred 是变量 picNumLXNoWrap 的预测值。当对于切片第一次调用本子句中指定的过程时（即，对于在ref_pic_list_modification()语法中第一次出现modification_of_pic_nums_idc等于0或1），picNumL0Pred和picNumL1Pred最初被设置为等于CurrPicNum。每次分配 picNumLXNoWrap 后，picNumLXNoWrap 的值都会分配给 picNumLXPred。 */
+  /* 每次分配 picNumLXNoWrap 后，picNumLXNoWrap 的值都会分配给 picNumLXPred */
   picNumLXPred = picNumLXNoWrap;
 
-  /* 变量 picNumLX 是由以下伪代码指定导出的： */
-  int32_t picNumLX = 0;
-  if (picNumLXNoWrap > (int32_t)slice_header->CurrPicNum)
-    picNumLX = picNumLXNoWrap - slice_header->MaxPicNum;
-  else
-    picNumLX = picNumLXNoWrap;
-  /* picNumLX应等于标记为“用于短期参考”的参考图片的PicNum，并且不应等于标记为“不存在”的短期参考图片的PicNum。 */
+  /* 对picNumLXNoWrap去环绕得到picNumLX */
+  int32_t picNumLX = picNumLXNoWrap;
+  if (picNumLXNoWrap > header->CurrPicNum)
+    picNumLX = picNumLXNoWrap - MaxPicNum;
+
+  /* TODO:picNumLX应等于标记为“用于短期参考”的参考图片的PicNum，并且不应等于标记为“不存在”的短期参考图片的PicNum。 */
 
   /* 执行以下过程以将具有短期图像编号picNumLX的图像放置到索引位置refIdxLX中，将任何其他剩余图像的位置移动到列表中的后面，并且递增refIdxLX的值。*/
+
   int32_t cIdx;
+  /* 在待修改的帧处，复制一份，并将之后的帧整体往后移动一位，如：
+  RefPicListX = {0x5555555f8ff0, 0x5555555f71a0, 0x5555555f5350, 0x0 <repeats 13 times>}
+  refIdxLX = 0时，移动后为：
+  RefPicListX = {0x5555555f8ff0, 0x5555555f8ff0, 0x5555555f71a0, 0x5555555f5350, 0x0 <repeats 12 times>}
+                    (新增）*/
   for (cIdx = num_ref_idx_lX_active_minus1 + 1; cIdx > refIdxLX; cIdx--)
     RefPicListX[cIdx] = RefPicListX[cIdx - 1];
 
   for (cIdx = 0; cIdx < num_ref_idx_lX_active_minus1 + 1; cIdx++) {
+    /* 根据需要修改的具体帧编号，且该帧编号为被参考帧状态，得到该帧在参考列表中的索引值 */
     if (RefPicListX[cIdx]->PicNum == picNumLX &&
         RefPicListX[cIdx]->reference_marked_type ==
             PICTURE_MARKED_AS_used_short_ref)
       break;
   }
 
+  /*将待修改的帧，放到前面挪出空位的索引处，则有(假设cIdx为0）：
+  RefPicListX = {0x5555555f8ff0, 0x5555555f8ff0, 0x5555555f71a0, 0x5555555f5350, 0x0 <repeats 12 times>}
+              (由RefPicListX[0]覆盖，所以这里并没有变化）*/
   RefPicListX[refIdxLX++] = RefPicListX[cIdx];
-  int32_t nIdx = refIdxLX;
 
-  for (cIdx = refIdxLX; cIdx <= num_ref_idx_lX_active_minus1 + 1; cIdx++) {
-    if (RefPicListX[cIdx] != NULL) {
-      /* 如果图片RefPicListX[cIdx]被标记为“用于短期参考”，则PicNumF(RefPicListX[cIdx])是图片RefPicListX[cIdx]的PicNum，否则(图片RefPicListX[cIdx]没有被标记为“用于短期参考”)，PicNumF(RefPicListX[cIdx])等于MaxPicNum。 */
+  int32_t nIdx = refIdxLX;
+  /* 从挪动的后面列表开始遍历 */
+  for (cIdx = refIdxLX; cIdx < num_ref_idx_lX_active_minus1 + 2; cIdx++) {
+    if (RefPicListX[cIdx]) {
       int32_t PicNumF;
+      /* 图片被标记为“用于短期参考”，则PicNumF(RefPicListX[cIdx])是图片RefPicListX[cIdx]的PicNum
+       * 否则(图片RefPicListX[cIdx]没有被标记为“用于短期参考”)，PicNumF(RefPicListX[cIdx])等于MaxPicNum。 */
       if (RefPicListX[cIdx]->reference_marked_type ==
           PICTURE_MARKED_AS_used_short_ref)
         PicNumF = RefPicListX[cIdx]->PicNum;
       else
-        PicNumF = slice_header->MaxPicNum;
+        PicNumF = MaxPicNum;
 
+      /* 对于其他帧（非修改的帧）依次放在修改帧的后面 */
       if (PicNumF != picNumLX) RefPicListX[nIdx++] = RefPicListX[cIdx];
     }
   }
+  /* 最后处理得到列表为：
+   * refpiclistx = {0x5555555f8ff0, 0x5555555f71a0, 0x5555555f5350, 0x5555555f5350, 0x0 <repeats 12 times>}*/
 
-  /* 在该伪代码过程中，列表RefPicListX的长度暂时比最终列表所需的长度长一个元素。执行此过程后，仅需要保留列表中的 0 到 num_ref_idx_lX_active_minus1 元素。 */
-  RefPicListX[num_ref_idx_lX_active_minus1 + 1] = NULL;
-
+  /* 除去最后一位多余的帧，还原参考列表长度 */
+  RefPicListX[num_ref_idx_lX_active_minus1 + 1] = nullptr;
+  /* 最后处理得到列表为：
+   * ref pic list = {0x5555555f8ff0, 0x5555555f71a0, 0x5555555f5350, 0x0, 0x0 <repeats 12 times>}*/
   return 0;
 }
 

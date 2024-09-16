@@ -4,6 +4,7 @@
 #include "MacroBlock.hpp"
 #include "SliceHeader.hpp"
 #include "Type.hpp"
+#include <algorithm>
 #include <cstdint>
 
 extern int32_t g_PicNumCnt;
@@ -30,6 +31,7 @@ int PictureBase::reset() {
   //----------------------
   if (m_mbs) {
     memset(m_mbs, 0, sizeof(MacroBlock) * PicSizeInMbs);
+    //fill(m_mbs, m_mbs + PicSizeInMbs, MacroBlock());
   }
 
   if (m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
@@ -132,9 +134,8 @@ int PictureBase::init(Slice *slice) {
 
   //----------------------------
   if (m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
-    m_mbs = (MacroBlock *)my_malloc(
-        sizeof(MacroBlock) *
-        PicSizeInMbs); // 因为MacroBlock构造函数中，有对变量初始化，可以考虑使用C++/new申请内存，此处使用C/my_malloc
+    m_mbs = (MacroBlock *)my_malloc(sizeof(MacroBlock) * PicSizeInMbs);
+    // 因为MacroBlock构造函数中，有对变量初始化，可以考虑使用C++/new申请内存，此处使用C/my_malloc
     RETURN_IF_FAILED(m_mbs == NULL, -1);
     memset(m_mbs, 0, sizeof(MacroBlock) * PicSizeInMbs);
 
@@ -251,7 +252,8 @@ int PictureBase::copyData(const PictureBase &src, bool isMallocAndCopyData) {
     ret = init(src.m_slice);
     RETURN_IF_FAILED(ret, -1);
 
-    memcpy(m_mbs, src.m_mbs, sizeof(MacroBlock) * PicSizeInMbs);
+    //memcpy(m_mbs, src.m_mbs, sizeof(MacroBlock) * PicSizeInMbs);
+    copy(src.m_mbs, src.m_mbs + PicSizeInMbs, m_mbs);
 
     memcpy(m_pic_buff_luma, src.m_pic_buff_luma,
            sizeof(uint8_t) * PicWidthInSamplesL * PicHeightInSamplesL);
@@ -339,7 +341,8 @@ int PictureBase::copyData2(const PictureBase &src, int32_t copyMbsDataFlag) {
     m_mbs = src.m_mbs;
     m_is_malloc_mem_by_myself = 0; // src.m_is_malloc_mem_by_myself;
   } else if (copyMbsDataFlag == 1) {
-    memcpy(m_mbs, src.m_mbs, sizeof(MacroBlock) * PicSizeInMbs);
+    //memcpy(m_mbs, src.m_mbs, sizeof(MacroBlock) * PicSizeInMbs);
+    copy(src.m_mbs, src.m_mbs + PicSizeInMbs, m_mbs);
     m_is_malloc_mem_by_myself = 1;
   } else {
     // do nothing

@@ -180,6 +180,7 @@ class SliceHeader {
   /* 参考帧列表1的色度偏移 */
   int32_t chroma_offset_l1[32][2] = {{0}};
 
+  // ref_pic_list_modification
  public:
   /* 参考帧列表0的预测图像编号 */
   int32_t picNumL0Pred = 0;
@@ -190,18 +191,18 @@ class SliceHeader {
   /* 参考帧列表1的参考索引 */
   int32_t refIdxL1 = 0;
 
-  // ref_pic_list_modification
- public:
   int32_t ref_pic_list_modification_flag_l0 = 0;
   int32_t ref_pic_list_modification_flag_l1 = 0;
-
-  int32_t modification_of_pic_nums_idc[2][32] = {{0}};
-
-  int32_t abs_diff_pic_num_minus1[2][32] = {{0}};
-  int32_t long_term_pic_num[2][32] = {{0}};
-
   int32_t ref_pic_list_modification_count_l0 = 0;
   int32_t ref_pic_list_modification_count_l1 = 0;
+  /* modification_of_pic_nums_idc的取值如下：
+ * 0: 减去帧编号差值
+ * 1: 加上帧编号差值
+ * 2: 使用长编码号的参考帧
+ * 3: 结束参考帧列表的修改*/
+  int32_t modification_of_pic_nums_idc[2][32] = {{0}};
+  int32_t abs_diff_pic_num_minus1[2][32] = {{0}};
+  int32_t long_term_pic_num[2][32] = {{0}};
 
   // dec_ref_pic_marking
  public:

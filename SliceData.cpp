@@ -3,6 +3,7 @@
 #include "GOP.hpp"
 #include "PictureBase.hpp"
 #include "Type.hpp"
+#include <cstdint>
 #include <cstdlib>
 
 /* 7.3.4 Slice data syntax */
@@ -29,9 +30,6 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
     pic->m_slice_cnt = 0;
   else
     pic->m_slice_cnt++;
-
-  /* 更新参考帧列表0,1的预测图像编号 */
-  header->picNumL0Pred = header->picNumL1Pred = header->CurrPicNum;
 
   /* 8.2 Slice decoding process */
   slice_decoding_process();
@@ -84,15 +82,15 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
     }
     CurrMbAddr = NextMbAddress(CurrMbAddr, header);
 
-    //std::cout << "CurrMbAddr:" << CurrMbAddr << std::endl;
-    //std::cout << "m_sps->PicSizeInMapUnits:" << m_sps->PicSizeInMapUnits
-    //<< std::endl;
-    //std::cout << "header->PicSizeInMbs:" << header->PicSizeInMbs << std::endl;
+    //cout << "CurrMbAddr:" << CurrMbAddr << endl;
+    //cout << "m_sps->PicSizeInMapUnits:" << m_sps->PicSizeInMapUnits
+    //<< endl;
+    //cout << "header->PicSizeInMbs:" << header->PicSizeInMbs << endl;
   } while (moreDataFlag);
 
   /* TODO YangJing 这里暂时用不上 <24-09-03 00:46:48> */
   //if (picture->mb_cnt == picture->PicSizeInMbs) picture->m_is_decode_finished = 1;
-  //std::cout << "picture->mb_cnt:" << picture->mb_cnt << std::endl;
+  //cout << "picture->mb_cnt:" << picture->mb_cnt << endl;
 
   slice_number++;
   return 0;
@@ -126,7 +124,7 @@ int SliceData::slice_decoding_process() {
     /* 解码参考帧重排序(POC) */
     // 8.2.1 Decoding process for picture order count
     pic->decoding_picture_order_count(m_sps->pic_order_cnt_type);
-    std::cout << "\tPOC:" << pic->PicOrderCnt << std::endl;
+    //cout << "\tPOC:" << pic->PicOrderCnt << endl;
     if (m_sps->frame_mbs_only_flag == 0) {
       /* 存在场宏块 */
       pic->m_parent->m_picture_top_filed.copyDataPicOrderCnt(*pic);
@@ -505,14 +503,14 @@ int NextMbAddress(int currMbAddr, SliceHeader *header) {
   }
 
   if (nextMbAddr < 0)
-    std::cerr << "An error occurred CurrMbAddr:" << nextMbAddr << " on "
-              << __FUNCTION__ << "():" << __LINE__ << std::endl;
+    cerr << "An error occurred CurrMbAddr:" << nextMbAddr << " on "
+         << __FUNCTION__ << "():" << __LINE__ << endl;
   return nextMbAddr;
 }
 
 void SliceData::printFrameReorderPriorityInfo() {
   string sliceType = "UNKNOWN";
-  std::cout << "\tGOP[" << pic->m_PicNumCnt + 1 << "] -> {" << std::endl;
+  cout << "\tGOP[" << pic->m_PicNumCnt + 1 << "] -> {" << endl;
   for (int i = 0; i < GOP_SIZE; ++i) {
     const auto &refPic = pic->m_dpb[i];
     if (refPic) {
@@ -523,62 +521,73 @@ void SliceData::printFrameReorderPriorityInfo() {
           frame.PicNum == 0 && frame.m_PicNumCnt == 0)
         continue;
       sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader->slice_type);
-      std::cout << "\t\t DPB[" << i << "]: " << sliceType
-                << "; PicOrderCnt(显示顺序)=" << frame.PicOrderCnt
-                << "; PicNum(帧编号)=" << frame.PicNum
-                << "; PicNumCnt(位置)=" << frame.m_PicNumCnt << ";\n";
+      if (pic->PicOrderCnt == frame.PicOrderCnt)
+        cout << "\t\t* DPB[" << i << "]: ";
+      else
+        cout << "\t\t  DPB[" << i << "]: ";
+      cout << sliceType << "; POC(显示顺序)=" << frame.PicOrderCnt
+           << "; frame_num(帧编号，编码顺序)="
+           << frame.PicNum
+           //<< "; 帧总数=" << frame.m_PicNumCnt
+           << ";\n";
     }
   }
-  std::cout << "\t}" << std::endl;
+  cout << "\t}" << endl;
 
-  std::cout << "\t当前帧所参考帧列表(已排序) -> {" << std::endl;
-  for (int i = 0; i < pic->m_RefPicList0Length; ++i) {
+  if (header->slice_type == SLICE_P || header->slice_type == SLICE_SP)
+    cout << "\t当前帧所参考帧列表(按frame_num排序) -> {" << endl;
+  else if (header->slice_type == SLICE_B)
+    cout << "\t当前帧所参考帧列表(按POC排序) -> {" << endl;
+
+  for (uint32_t i = 0; i < pic->m_RefPicList0Length; ++i) {
     const auto &refPic = pic->m_RefPicList0[i];
     if (refPic) {
       auto &frame = refPic->m_picture_frame;
       auto &sliceHeader = frame.m_slice->slice_header;
 
       sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader->slice_type);
-      std::cout << "\t\t(前参考)m_RefPicList0[" << i << "]: " << sliceType
-                << "; PicOrderCnt(参考帧显示顺序)=" << frame.PicOrderCnt
-                << "; PicNum(参考帧编号)=" << frame.PicNum
-                << "; PicNumCnt(原参考列表中的位置)=" << frame.m_PicNumCnt
-                << ";\n";
+      cout << "\t\t(前参考)RefPicList0[" << i << "]: " << sliceType
+           << "; POC(显示顺序)=" << frame.PicOrderCnt
+           << "; frame_num(帧编号，编码顺序)="
+           << frame.PicNum
+           //<< "; PicNumCnt(原参考列表中的位置)=" << frame.m_PicNumCnt
+           << ";\n";
     }
   }
 
-  for (int i = 0; i < pic->m_RefPicList1Length; ++i) {
+  for (uint32_t i = 0; i < pic->m_RefPicList1Length; ++i) {
     const auto &refPic = pic->m_RefPicList1[i];
     if (refPic) {
       auto &frame = refPic->m_picture_frame;
       auto &sliceHeader = frame.m_slice->slice_header;
 
       sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader->slice_type);
-      std::cout << "\t\t(后参考)m_RefPicList1[" << i << "]: " << sliceType
-                << "; PicOrderCnt(参考帧显示顺序)=" << frame.PicOrderCnt
-                << "; PicNum(参考帧编号)=" << frame.PicNum
-                << "; PicNumCnt(原参考列表中的位置)=" << frame.m_PicNumCnt
-                << ";\n";
+      cout << "\t\t(后参考)RefPicList0[" << i << "]: " << sliceType
+           << "; POC(显示顺序)=" << frame.PicOrderCnt
+           << "; frame_num(帧编号，编码顺序)="
+           << frame.PicNum
+           //<< "; PicNumCnt(原参考列表中的位置)=" << frame.m_PicNumCnt
+           << ";\n";
     }
   }
-  std::cout << "\t}" << std::endl;
+  cout << "\t}" << endl;
 }
 
 //8.2.2.1 Specification for interleaved slice group map type
 int SliceData::interleaved_slice_group_map_type(
     int32_t *&mapUnitToSliceGroupMap) {
-  int i = 0;
+  uint32_t i = 0;
   do {
-    for (int iGroup = 0; iGroup <= (int)m_pps->num_slice_groups_minus1 &&
-                         i < (int)m_sps->PicSizeInMapUnits;
-         i += (int)m_pps->run_length_minus1[iGroup++] + 1) {
-      for (int j = 0; j <= (int)m_pps->run_length_minus1[iGroup] &&
-                      i + j < (int)m_sps->PicSizeInMapUnits;
+    for (uint32_t iGroup = 0; iGroup <= m_pps->num_slice_groups_minus1 &&
+                              i < m_sps->PicSizeInMapUnits;
+         i += m_pps->run_length_minus1[iGroup++] + 1) {
+      for (uint32_t j = 0; j <= m_pps->run_length_minus1[iGroup] &&
+                           i + j < m_sps->PicSizeInMapUnits;
            j++) {
         mapUnitToSliceGroupMap[i + j] = iGroup;
       }
     }
-  } while (i < (int)m_sps->PicSizeInMapUnits);
+  } while (i < m_sps->PicSizeInMapUnits);
   return 0;
 }
 //8.2.2.2 Specification for dispersed slice group map type
