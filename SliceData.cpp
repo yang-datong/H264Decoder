@@ -126,6 +126,7 @@ int SliceData::slice_decoding_process() {
     /* 解码参考帧重排序(POC) */
     // 8.2.1 Decoding process for picture order count
     pic->decoding_picture_order_count(m_sps->pic_order_cnt_type);
+    std::cout << "\tPOC:" << pic->PicOrderCnt << std::endl;
     if (m_sps->frame_mbs_only_flag == 0) {
       /* 存在场宏块 */
       pic->m_parent->m_picture_top_filed.copyDataPicOrderCnt(*pic);

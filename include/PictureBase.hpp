@@ -117,7 +117,7 @@ class PictureBase {
 
   //--------------参考帧列表重排序------------------------
   int decoding_picture_order_count(const uint32_t &pic_order_cnt_type);
-  int decoding_picture_order_count_type_0(
+  int32_t decoding_picture_order_count_type_0(
       const PictureBase *picture_previous_ref); // 8.2.1.1
   int decoding_picture_order_count_type_1(
       const PictureBase *picture_previous); // 8.2.1.2
@@ -468,8 +468,8 @@ class PictureBase {
       H264_MB_TYPE mb_type_, H264_MB_TYPE subMbType[4], int32_t xP, int32_t yP,
       int32_t &mbPartIdxN, int32_t &subMbPartIdxN); // 6.4.13.4
 
-  int PicOrderCntFunc(
-      PictureBase *picX); // 8.2.1 POC: picture order count 图像序列号
+  // 8.2.1 POC: picture order count 图像序列号
+  int picOrderCntFunc(PictureBase *picX);
   int DiffPicOrderCnt(PictureBase *picA, PictureBase *picB);
 
   //--------------去方块(环路)滤波过程------------------------

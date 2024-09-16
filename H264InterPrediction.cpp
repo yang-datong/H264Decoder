@@ -3214,5 +3214,5 @@ int PictureBase::
 //8.2.1 Decoding process for picture order count (8-2)
 /* 两张图片相差的距离（即两图片计数器的差值） */
 int PictureBase::DiffPicOrderCnt(PictureBase *picA, PictureBase *picB) {
-  return PicOrderCntFunc(picA) - PicOrderCntFunc(picB);
+  return picOrderCntFunc(picA) - picOrderCntFunc(picB);
 }
