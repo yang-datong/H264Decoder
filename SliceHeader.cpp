@@ -216,20 +216,27 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
 
   PicWidthInMbs = m_sps->PicWidthInMbs;
   PicHeightInMbs = m_sps->FrameHeightInMbs / (1 + field_pic_flag);
-  PicSizeInMbs = m_sps->PicWidthInMbs * PicHeightInMbs;
-  cout << "\t图像宽度(宏块数):" << PicWidthInMbs
-       << ", 图像高度(宏块数):" << PicHeightInMbs
-       << ", 图像大小(宏块数):" << PicSizeInMbs << endl;
+  PicSizeInMbs = PicWidthInMbs * PicHeightInMbs;
+  cout << "\tLuma 水平方向宏块数:" << PicWidthInMbs
+       << ", Luma 垂直方向宏块数:" << PicHeightInMbs
+       << ", Luma 总宏块数:" << PicSizeInMbs << endl;
 
-  /* 计算采样宽度和比特深度 */
+  /* TODO YangJing  <24-09-17 16:36:13> */
+  //cout << "\tChroma 水平方向宏块数:" << PicWidthInMbs
+  //<< ", Chroma 垂直方向宏块数:" << PicHeightInMbs
+  //<< ", Chroma 总宏块数:" << PicSizeInMbs << endl;
+
+  /* 计算采样宽、高度和比特深度（Luma） */
   PicWidthInSamplesL = PicWidthInMbs * 16;
-  PicWidthInSamplesC = PicWidthInMbs * m_sps->MbWidthC;
-
-  /* 计算采样高度和比特深度 */
   PicHeightInSamplesL = PicHeightInMbs * 16;
+  cout << "\tCoded Width(Luma):" << PicWidthInSamplesL
+       << ", Coded Height(Luma):" << PicHeightInSamplesL << endl;
+
+  /* 计算采样宽、高度和比特深度（Chrome） */
+  PicWidthInSamplesC = PicWidthInMbs * m_sps->MbWidthC;
   PicHeightInSamplesC = PicHeightInMbs * m_sps->MbHeightC;
-  cout << "\tCodec width:" << PicWidthInSamplesL
-       << ", Codec height:" << PicHeightInSamplesL << endl;
+  cout << "\tCoded Width(Chroma):" << PicWidthInSamplesC
+       << ", Coded Height(Chroma):" << PicHeightInSamplesC << endl;
 
   MaxPicNum = (!field_pic_flag) ? m_sps->MaxFrameNum : (2 * m_sps->MaxFrameNum);
 
