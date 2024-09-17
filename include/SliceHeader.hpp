@@ -201,6 +201,7 @@ class SliceHeader {
  * 2: 使用长编码号的参考帧
  * 3: 结束参考帧列表的修改*/
   int32_t modification_of_pic_nums_idc[2][32] = {{0}};
+  /* 当前帧的预测帧编号与目标参考帧编号的绝对差值，这个差值可以是正值，也可以是负值，具体取决于要向前或向后参考哪一帧 */
   int32_t abs_diff_pic_num_minus1[2][32] = {{0}};
   int32_t long_term_pic_num[2][32] = {{0}};
 

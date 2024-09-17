@@ -1010,7 +1010,7 @@ int PictureBase::modif_ref_picture_lists_for_short_ref_pictures(
   int32_t picNumLXNoWrap = 0;
   /* 减法操作：参考帧编号需要减去 abs_diff_pic_num，以找到之前的一个参考帧编号 */
   if (modif_idc == 0) {
-    //预测图像编号 - 实际的图片编号差异
+    //预测图像编号 - 当前参考帧与当前帧之间的 PicNum 的绝对差值
     if (picNumLXPred - abs_diff_pic_num < 0)
       picNumLXNoWrap = picNumLXPred - abs_diff_pic_num + MaxPicNum;
     else
@@ -1018,13 +1018,12 @@ int PictureBase::modif_ref_picture_lists_for_short_ref_pictures(
 
     /* 加法操作：参考帧编号需要加上 abs_diff_pic_num，以找到之前的一个参考帧编号 */
   } else {
-    //预测图像编号 + 实际的图片编号差异
+    //预测图像编号 + 当前参考帧与当前帧之间的 PicNum 的绝对差值
     if (picNumLXPred + abs_diff_pic_num >= MaxPicNum)
       picNumLXNoWrap = picNumLXPred + abs_diff_pic_num - MaxPicNum;
     else
       picNumLXNoWrap = picNumLXPred + abs_diff_pic_num;
   }
-  /* TODO YangJing 为什么编码器会知道abs_diff_pic_num？ <24-09-17 01:47:15> */
 
   /* 每次分配 picNumLXNoWrap 后，picNumLXNoWrap 的值都会分配给 picNumLXPred */
   picNumLXPred = picNumLXNoWrap;
@@ -1060,6 +1059,7 @@ int PictureBase::modif_ref_picture_lists_for_short_ref_pictures(
               (由RefPicListX[0]覆盖，所以这里并没有变化）*/
   RefPicListX[refIdxLX++] = RefPicListX[cIdx];
 
+  /* TODO YangJing 还有问题，在某些情况下，前两帧可能会出现重复问题 <24-09-17 14:23:00> */
   int32_t nIdx = refIdxLX;
   /* 从挪动的后面列表开始遍历 */
   for (cIdx = refIdxLX; cIdx < num_ref_idx_lX_active_minus1 + 2; cIdx++) {
@@ -1080,7 +1080,7 @@ int PictureBase::modif_ref_picture_lists_for_short_ref_pictures(
   /* 最后处理得到列表为：
    * refpiclistx = {0x5555555f8ff0, 0x5555555f71a0, 0x5555555f5350, 0x5555555f5350, 0x0 <repeats 12 times>}*/
 
-  /* 除去最后一位多余的帧，还原参考列表长度 */
+  /* 除去最后一位多余的帧，还原参考列表实际可用帧长度 */
   RefPicListX[num_ref_idx_lX_active_minus1 + 1] = nullptr;
   /* 最后处理得到列表为：
    * ref pic list = {0x5555555f8ff0, 0x5555555f71a0, 0x5555555f5350, 0x0, 0x0 <repeats 12 times>}*/

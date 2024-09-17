@@ -26,26 +26,23 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
   /* 宏块的初始地址（或宏块索引），在A Frame = A Slice的情况下，初始地址应该为0 */
   pic->CurrMbAddr = CurrMbAddr =
       header->first_mb_in_slice * (1 + header->MbaffFrameFlag);
-  if (CurrMbAddr == 0)
-    pic->m_slice_cnt = 0;
-  else
-    pic->m_slice_cnt++;
 
   /* 8.2 Slice decoding process */
   slice_decoding_process();
 
-  //----------------------- 开始对Slice分割为MacroBlock进行处理（如果是单帧=单Slice的情况，那么这里就是遍历Slice的每个宏块） ----------------------------
-  bool moreDataFlag = 1;
+  //----------------------- 开始对Slice分割为MacroBlock进行处理 ----------------------------
+  // TODO: 如果是单帧=单Slice属于同一个Slice Gruop的情况，那么这里就是遍历Slice的每个宏块，反之，不清楚，没遇到过这种情况
+  bool moreDataFlag = true;
   int32_t prevMbSkipped = 0;
   do {
-    /* 1. 对于非I帧，先解码出mb_skip_flag，判断是否跳过对MacroBlock的处理 */
+    /* 1. 对于P,B帧，先解码出mb_skip_flag，判断是否跳过对MacroBlock的处理（因为I帧和SI帧不使用跳过宏块的机制） */
     if (header->slice_type != SLICE_I && header->slice_type != SLICE_SI) {
       if (m_pps->entropy_coding_mode_flag == 0) {
-        /* CAVLC熵编码 */
+        /* CAVLC熵解码：连续跳过的宏块数量 */
         process_mb_skip_run(prevMbSkipped);
         if (mb_skip_run > 0) moreDataFlag = bs->more_rbsp_data();
       } else {
-        /* CABAC熵编码 */
+        /* CABAC熵解码：单个宏块是否被跳过 */
         process_mb_skip_flag(prevMbSkipped);
         moreDataFlag = !mb_skip_flag;
       }
@@ -54,9 +51,10 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
     /* 2. 如果当前宏块未执行跳过处理，则进一步对MacroBlock的处理 */
     if (moreDataFlag) {
       /* I,P,B帧都会进到这里，但是对于I帧来说这里是首次进入到宏块层处理 */
+
+      // 对于MBAFF模式，"偶数地址" 或 "奇数地址且前一个宏块被跳过"，决定了当前宏块是作为场编码还是帧编码进行处理
       if (header->MbaffFrameFlag &&
           (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
-        /* 当前处于MBAFF模式，且当前为 “顶宏块” 或者 “底宏块并且对应的顶宏块执行了跳过操作” */
         process_mb_field_decoding_flag(m_pps->entropy_coding_mode_flag);
 
       /* 在宏块层解码帧内、帧间所需要的必须信息 */
@@ -66,20 +64,25 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
       decoding_process();
     }
 
+    //更新和管理循环条件
+    /* 如果当前是CAVLC模式，则再次检查数据（这个好像是CAVLC的一个特性？在JPEG算法中也有这个类似操作） */
     if (!m_pps->entropy_coding_mode_flag)
-      /* 如果当前是CAVLC模式，则再次检查数据（这个好像是CAVLC的一个特性？在JPEG算法中也有这个类似操作） */
       moreDataFlag = bs->more_rbsp_data();
     else {
+      /* 对于P帧和B帧，更新prevMbSkipped为当前宏块的跳过标志mb_skip_flag，以便下一个宏块处理时参考 */
       if (header->slice_type != SLICE_I && header->slice_type != SLICE_SI)
         prevMbSkipped = mb_skip_flag;
+
+      /* 如果当前是顶宏块，说明后面一定还有底宏块 */
       if (header->MbaffFrameFlag && CurrMbAddr % 2 == 0)
-        /* 如果当前是顶宏块，说明后面一定还有底宏块 */
         moreDataFlag = 1;
       else {
+        /* 判断是否到达Slice的末尾 */
         process_end_of_slice_flag(end_of_slice_flag);
         moreDataFlag = !end_of_slice_flag;
       }
     }
+    /* 计算下一个宏块的地址 */
     CurrMbAddr = NextMbAddress(CurrMbAddr, header);
 
     //cout << "CurrMbAddr:" << CurrMbAddr << endl;
@@ -119,12 +122,11 @@ int SliceData::initCABAC() {
 }
 
 int SliceData::slice_decoding_process() {
-  /* 判断0是在场编码时可能存在多个slice data，那么就只需要对首个slice data进行定位，防止对附属的slice data进行再次解码工作 */
+  /* 在场编码时可能存在多个slice data，只需要对首个slice data进行定位，同时在下面的操作中，只需要在首次进入Slice时才需要执行的 */
   if (pic->m_slice_cnt == 0) {
     /* 解码参考帧重排序(POC) */
     // 8.2.1 Decoding process for picture order count
     pic->decoding_picture_order_count(m_sps->pic_order_cnt_type);
-    //cout << "\tPOC:" << pic->PicOrderCnt << endl;
     if (m_sps->frame_mbs_only_flag == 0) {
       /* 存在场宏块 */
       pic->m_parent->m_picture_top_filed.copyDataPicOrderCnt(*pic);
@@ -141,6 +143,7 @@ int SliceData::slice_decoding_process() {
       /* 当前帧需要参考帧预测，则需要进行参考帧重排序。在每个 P、SP 或 B 切片的解码过程开始时调用 */
       pic->decoding_ref_picture_lists_construction(
           pic->m_dpb, pic->m_RefPicList0, pic->m_RefPicList1);
+
       /* (m_RefPicList0,m_RefPicList1为m_dpb排序后的前后参考列表）打印帧重排序先后信息 */
       printFrameReorderPriorityInfo();
     }
@@ -541,7 +544,9 @@ void SliceData::printFrameReorderPriorityInfo() {
 
   for (uint32_t i = 0; i < pic->m_RefPicList0Length; ++i) {
     const auto &refPic = pic->m_RefPicList0[i];
-    if (refPic) {
+    if (refPic &&
+        (refPic->reference_marked_type == PICTURE_MARKED_AS_used_short_ref ||
+         refPic->reference_marked_type == PICTURE_MARKED_AS_used_long_ref)) {
       auto &frame = refPic->m_picture_frame;
       auto &sliceHeader = frame.m_slice->slice_header;
 
@@ -557,7 +562,9 @@ void SliceData::printFrameReorderPriorityInfo() {
 
   for (uint32_t i = 0; i < pic->m_RefPicList1Length; ++i) {
     const auto &refPic = pic->m_RefPicList1[i];
-    if (refPic) {
+    if (refPic &&
+        (refPic->reference_marked_type == PICTURE_MARKED_AS_used_short_ref ||
+         refPic->reference_marked_type == PICTURE_MARKED_AS_used_long_ref)) {
       auto &frame = refPic->m_picture_frame;
       auto &sliceHeader = frame.m_slice->slice_header;
 
