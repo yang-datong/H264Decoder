@@ -86,8 +86,7 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
     CurrMbAddr = NextMbAddress(CurrMbAddr, header);
 
     //cout << "CurrMbAddr:" << CurrMbAddr << endl;
-    //cout << "m_sps->PicSizeInMapUnits:" << m_sps->PicSizeInMapUnits
-    //<< endl;
+    //cout << "m_sps->PicSizeInMapUnits:" << m_sps->PicSizeInMapUnits << endl;
     //cout << "header->PicSizeInMbs:" << header->PicSizeInMbs << endl;
   } while (moreDataFlag);
 
@@ -175,7 +174,7 @@ inline int SliceData::mapUnitToSliceGroupMap() {
    * – 如果 num_slice_groups_minus1 等于 0，则为范围从 0 到 PicSizeInMapUnits − 1（含）的所有 i 生成Slice Group映射的映射单元，如 mapUnitToSliceGroupMap[ i ] = 0 */
   /* 整个图像只被分为一个 slice group */
   if (m_pps->num_slice_groups_minus1 == 0) {
-    /* 这里按照一个宏块或宏块对（当为场编码时，遍历大小减小一半）处理 */
+    /* 这里按照一个宏块或宏块对（当为MBAFF时，遍历大小减小一半）处理 */
     for (int i = 0; i < (int)m_sps->PicSizeInMapUnits; i++)
       /* 确保在只有一个切片组的情况下，整个图像的所有宏块都被正确地映射到这个唯一的切片组上，简化处理逻辑这里赋值不一定非要为0,只要保持映射单元内都是同一个值就行了 */
       mapUnitToSliceGroupMap[i] = 0;
@@ -261,6 +260,13 @@ inline int SliceData::mbToSliceGroupMap() {
   return 0;
 }
 
+/* TODO YangJing 既然在MBAFF模式下，以宏块对处理，那么上下垂直宏块又要物理相邻，且扫描方式还是逐行，那么到底是怎么样的一个扫描法？：
+ *  |1 |3 |5|7| 
+ *  |2 |4 |6|8| 
+ *  |9 |11| | |
+ *  |10|12| | |
+ *  这样样子？
+ * <24-09-18 02:13:14> */
 /* 跟process_mb_skip_flag()函数很相似 */
 /* 对于CAVLC熵编码时，调用 */
 int SliceData::process_mb_skip_run(int32_t &prevMbSkipped) {

@@ -2582,6 +2582,10 @@ int PictureBase::inverse_macroblock_scanning_process(
     //光栅扫描顺序是从左到右、从上到下逐行扫描的顺序。
     x = InverseRasterScan(mbAddr, 16, 16, PicWidthInSamplesL, 0);
     y = InverseRasterScan(mbAddr, 16, 16, PicWidthInSamplesL, 1);
+    /* 比如一个720x624分辨率的Slice被分为了45x39=1755（宽45个，高39个）个宏块，那么按照逐行扫描的方式，第46个宏块应该是在第二行的第一个宏块，对于亮度样本而言，此时的x,y = (16,16)
+     * 第48个宏块应该是在第二行的第三个宏块，对于亮度样本而言，此时的x,y = (16*3,16)
+     * 最后一个宏块即x,y=(720-16,624-16)，x,y以宏块的左上角坐标为准
+     * 第一个宏块即x,y=(0,0)*/
   } else {
     int32_t xO = InverseRasterScan(mbAddr / 2, 16, 32, PicWidthInSamplesL, 0);
     int32_t yO = InverseRasterScan(mbAddr / 2, 16, 32, PicWidthInSamplesL, 1);
