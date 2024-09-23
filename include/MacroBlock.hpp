@@ -13,7 +13,7 @@ class SliceData;
 
 class MacroBlock {
  public:
-  MacroBlock() {};
+  MacroBlock(){};
   ~MacroBlock();
   /* 宏块类型，指示宏块的编码模式（如帧内、帧间、PCM等），取决于切片类型 */
   /* 对于I Slice: mb_type取值区间为：[0-25]
@@ -164,7 +164,7 @@ class MacroBlock {
   /* 当前正在处理的宏块 */
   int32_t CurrMbAddr;
   /* 指示当前宏块所属的片的ID */
-  int32_t slice_id;
+  //int32_t slice_id;
   /* 指示当前片在序列中的编号 */
   uint32_t slice_number;
   /* 当前片的类型（如I片、P片、B片等） */
@@ -172,7 +172,7 @@ class MacroBlock {
   /* 滤波器偏移A,B，用于去块效应滤波器的参数 */
   int32_t FilterOffsetA;
   int32_t FilterOffsetB;
-  /* 受限帧内预测标志，指示是否使用受限帧内预测 */
+  //受限帧内预测标志，这个标志决定了是否可以在帧内预测中使用非帧内编码的宏块
   int32_t constrained_intra_pred_flag;
 
   /* 宏块部分宽、高度，指示宏块部分的宽度 */

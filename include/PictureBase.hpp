@@ -66,8 +66,6 @@ class PictureBase {
       PICTURE_MARKED_AS_unkown; // I,P作为参考帧的mark状态
 
   Slice *m_slice;
-  //SliceHeader m_h264_slice_header;
-  //SliceBody m_h264_slice_data; // 注意：一个picture中可能有多个slice data
   MacroBlock *m_mbs; // 存储当前图像的所有宏块 m_mbs[PicSizeInMbs] =
                      // m_mbs[PicWidthInMbs * PicHeightInMbs];
   int32_t LevelScale4x4[6][4][4];
@@ -130,7 +128,7 @@ class PictureBase {
   int decoding_picture_numbers(Frame *(&dpb)[16]); // 8.2.4.1
 
   int init_ref_picture_lists(Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
-                                   Frame *(&RefPicList1)[16]); // 8.2.4.2
+                             Frame *(&RefPicList1)[16]); // 8.2.4.2
   int init_ref_picture_list_P_SP_in_frames(
       Frame *(&dpb)[16], Frame *(&RefPicList0)[16],
       uint32_t &RefPicList0Length); // 8.2.4.2.1

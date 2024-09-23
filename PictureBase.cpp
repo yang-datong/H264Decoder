@@ -2576,8 +2576,6 @@ int PictureBase::Sample_construction_process_for_I_PCM_macroblocks() {
 int PictureBase::inverse_macroblock_scanning_process(
     int32_t MbaffFrameFlag, int32_t mbAddr, int32_t mb_field_decoding_flag,
     int32_t &x, int32_t &y) {
-
-  /* 逆宏块扫描过程具体如下： */
   if (MbaffFrameFlag == 0) {
     //光栅扫描顺序是从左到右、从上到下逐行扫描的顺序。
     x = InverseRasterScan(mbAddr, 16, 16, PicWidthInSamplesL, 0);
@@ -2587,14 +2585,12 @@ int PictureBase::inverse_macroblock_scanning_process(
      * 最后一个宏块即x,y=(720-16,624-16)，x,y以宏块的左上角坐标为准
      * 第一个宏块即x,y=(0,0)*/
   } else {
-    int32_t xO = InverseRasterScan(mbAddr / 2, 16, 32, PicWidthInSamplesL, 0);
-    int32_t yO = InverseRasterScan(mbAddr / 2, 16, 32, PicWidthInSamplesL, 1);
-
-    x = xO;
+    x = InverseRasterScan(mbAddr / 2, 16, 32, PicWidthInSamplesL, 0);
+    y = InverseRasterScan(mbAddr / 2, 16, 32, PicWidthInSamplesL, 1);
     if (mb_field_decoding_flag == 0)
-      y = yO + (mbAddr % 2) * 16;
+      y += (mbAddr % 2) * 16;
     else
-      y = yO + (mbAddr % 2);
+      y += (mbAddr % 2);
   }
   return 0;
 }

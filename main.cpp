@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
     /* 714x624 场编码(IDR帧解码出来的图片部分绿屏，找到原因了，宏块数量不对，会是slice_skip_flag的问题吗？） */
     //filePath = "./test/demo_10_frames_interlace.h264";
     /* 714x624 场编码(隔行扫描，顶场优先)*/
-    //filePath = "./test/demo_10_frames_TFF.h264";
+    filePath = "./test/demo_10_frames_TFF.h264";
     /* 714x624 帧编码(CAVLC 熵编码模式,即profile=baseline) */
     //filePath = "./test/demo_10_frames_cavlc.h264";
     /* 714x624 场编码(CAVLC 熵编码模式，有一点点绿色宏块)*/

@@ -8,6 +8,7 @@
 #include "SliceHeader.hpp"
 #include "Type.hpp"
 #include <cstdint>
+#include <cstdlib>
 
 MacroBlock::~MacroBlock() {
   _is_cabac = 0;
@@ -19,18 +20,19 @@ MacroBlock::~MacroBlock() {
 
 void MacroBlock::initFromSlice(const SliceHeader &header,
                                const SliceData &slice_data) {
-  field_pic_flag = header.field_pic_flag;
-  bottom_field_flag = header.bottom_field_flag;
-  mb_skip_flag = slice_data.mb_skip_flag;
   mb_field_decoding_flag = slice_data.mb_field_decoding_flag;
   MbaffFrameFlag = header.MbaffFrameFlag;
-  disable_deblocking_filter_idc = header.disable_deblocking_filter_idc;
+  field_pic_flag = header.field_pic_flag;
   CurrMbAddr = slice_data.CurrMbAddr;
-  //slice_id = slice_data.slice_id;
+
   slice_number = slice_data.slice_number;
   m_slice_type = header.slice_type;
+  mb_skip_flag = slice_data.mb_skip_flag;
+  bottom_field_flag = header.bottom_field_flag;
   FilterOffsetA = header.FilterOffsetA;
   FilterOffsetB = header.FilterOffsetB;
+  disable_deblocking_filter_idc = header.disable_deblocking_filter_idc;
+  constrained_intra_pred_flag = header.m_pps->constrained_intra_pred_flag;
 }
 
 // 7.3.5 Macroblock layer syntax -> page 57
@@ -53,9 +55,6 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
   PPS *pps = _picture->m_slice->slice_header->m_pps;
   /* ------------------  End ------------------ */
 
-  /* 受限帧内预测标志，这个标志决定了是否可以在帧内预测中使用非帧内编码的宏块 */
-  constrained_intra_pred_flag =
-      _picture->m_slice->slice_header->m_pps->constrained_intra_pred_flag;
   initFromSlice(*header, slice_data);
   /* ------------------  End ------------------ */
   process_mb_type(*header, header->slice_type);
@@ -168,50 +167,32 @@ int MacroBlock::macroblock_mb_skip(PictureBase &picture,
   this->_picture = &picture;
   if (_gb == nullptr) this->_gb = new CH264Golomb();
   /* ------------------  End ------------------ */
-  int ret = 0;
-
-  /* TODO YangJing 这里的header应该是输入，不应该存在输出 <24-09-03 21:12:33> */
   SliceHeader *header = _picture->m_slice->slice_header;
-  int32_t &QPY_prev = header->QPY_prev;
-  const uint32_t QpBdOffsetY =
-      _picture->m_slice->slice_header->m_sps->QpBdOffsetY;
-
-  /* 受限帧内预测标志，这个标志决定了是否可以在帧内预测中使用非帧内编码的宏块 */
-  constrained_intra_pred_flag =
-      _picture->m_slice->slice_header->m_pps->constrained_intra_pred_flag;
   initFromSlice(*header, slice_data);
+  //输入
+  const uint32_t QpBdOffsetY = header->m_sps->QpBdOffsetY;
+  //输出
+  int32_t &QPY_prev = header->QPY_prev;
 
-  /* 执行逆宏块扫描过程，确定当前宏块在帧中的位置。这一步通常是为了处理宏块的地址映射，特别是在使用宏块自适应帧场编码（MBAFF）时 */
-  ret = _picture->inverse_macroblock_scanning_process(
-      header->MbaffFrameFlag, CurrMbAddr, mb_field_decoding_flag,
+  // 计算宏块的左上角亮度样本相对于图片左上角样本的位置 ( x, y )，比如说x,y应该是(0,0) (16,0) (32,0) (48,0) */
+  int ret = _picture->inverse_macroblock_scanning_process(
+      MbaffFrameFlag, CurrMbAddr, mb_field_decoding_flag,
       _picture->m_mbs[CurrMbAddr].m_mb_position_x,
       _picture->m_mbs[CurrMbAddr].m_mb_position_y);
-  /* 比如说，这里出来的x,y应该是(0,0) (16,0) (32,0) (48,0) */
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return ret;
-  }
 
-  /* 当Slice为P,SP时，5表示P_Skip，即跳过宏块处理，当Slice为B时，23表示P_Skip，即跳过宏块处理 */
+  /* 将宏块类型设置为跳过解码类型 */
   if (header->slice_type == SLICE_P || header->slice_type == SLICE_SP)
     m_mb_type_fixed = mb_type = MB_TYPE_P_SP_Skip;
   else if (header->slice_type == SLICE_B)
     m_mb_type_fixed = mb_type = MB_TYPE_B_Skip;
-
   m_slice_type_fixed = header->slice_type;
-
   /* 据宏块类型和其他参数，设置宏块的预测模式。这一步决定了如何对宏块进行预测和解码 */
   /* 7.4.5 Macroblock layer semantics -> mb_type */
   ret = MbPartPredMode(m_slice_type_fixed, transform_size_8x8_flag,
                        m_mb_type_fixed, 0, m_NumMbPart, CodedBlockPatternChroma,
                        CodedBlockPatternLuma, Intra16x16PredMode,
                        m_name_of_mb_type, m_mb_pred_mode);
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return ret;
-  }
+  RET(ret);
 
   /* 计算当前宏块的量化参数（QP）。量化参数影响解码后的图像质量和压缩率*/
 
@@ -1362,7 +1343,7 @@ string MacroBlock::getNameOfMbTypeStr(H264_MB_TYPE name_of_mb_type) {
 
 int MacroBlock::process_mb_type(SliceHeader &header, const int32_t slice_type) {
   int ret = _picture->inverse_macroblock_scanning_process(
-      header.MbaffFrameFlag, CurrMbAddr, mb_field_decoding_flag,
+      MbaffFrameFlag, CurrMbAddr, mb_field_decoding_flag,
       _picture->m_mbs[CurrMbAddr].m_mb_position_x,
       _picture->m_mbs[CurrMbAddr].m_mb_position_y);
   RET(ret);
@@ -1434,8 +1415,7 @@ int MacroBlock::process_transform_size_8x8_flag(int32_t &is_8x8_flag) {
 
     /* 如果当前片段是 I 片段 (SLICE_I)，并且宏块类型为 0（即 m_mb_type_fixed == 0），则根据 transform_size_8x8_flag 的值来设置 mb_type_I_slice */
     if ((m_slice_type_fixed % 5) == SLICE_I && m_mb_type_fixed == 0)
-      mb_type_I_slice =
-          mb_type_I_slices_define[transform_size_8x8_flag ? 1 : 0];
+      mb_type_I_slice = mb_type_I_slices_define[transform_size_8x8_flag];
   }
 
   return 0;
