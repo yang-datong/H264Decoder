@@ -188,10 +188,7 @@ int MacroBlock::macroblock_mb_skip(PictureBase &picture,
   m_slice_type_fixed = header->slice_type;
   /* 据宏块类型和其他参数，设置宏块的预测模式。这一步决定了如何对宏块进行预测和解码 */
   /* 7.4.5 Macroblock layer semantics -> mb_type */
-  ret = MbPartPredMode(m_slice_type_fixed, transform_size_8x8_flag,
-                       m_mb_type_fixed, 0, m_NumMbPart, CodedBlockPatternChroma,
-                       CodedBlockPatternLuma, Intra16x16PredMode,
-                       m_name_of_mb_type, m_mb_pred_mode);
+  ret = MbPartPredMode(m_mb_type_fixed, 0, m_name_of_mb_type, m_mb_pred_mode);
   RET(ret);
 
   /* 计算当前宏块的量化参数（QP）。量化参数影响解码后的图像质量和压缩率*/
@@ -470,14 +467,12 @@ int MacroBlock::fix_mb_type(const int32_t slice_type_raw,
  * Table 7-12 – Macroblock type with value 0 for SI slices
  * Table 7-13 – Macroblock type values 0 to 4 for P and SP slices
  * Table 7-14 – Macroblock type values 0 to 22 for B slices */
-int MacroBlock::MbPartPredMode(
-    int32_t slice_type, int32_t transform_size_8x8_flag, int32_t _mb_type,
-    int32_t index, int32_t &NumMbPart, int32_t &CodedBlockPatternChroma,
-    int32_t &CodedBlockPatternLuma, int32_t &_Intra16x16PredMode,
-    H264_MB_TYPE &name_of_mb_type, H264_MB_PART_PRED_MODE &mb_pred_mode) {
+int MacroBlock::MbPartPredMode(int32_t _mb_type, int32_t index,
+                               H264_MB_TYPE &name_of_mb_type,
+                               H264_MB_PART_PRED_MODE &mb_pred_mode) {
 
   //Table 7-11 – Macroblock types for I slices
-  if ((slice_type % 5) == SLICE_I) {
+  if ((m_slice_type_fixed % 5) == SLICE_I) {
     const int I_NxN = 0;
     if (_mb_type == I_NxN) {
       if (transform_size_8x8_flag == 0) {
@@ -494,7 +489,7 @@ int MacroBlock::MbPartPredMode(
           mb_type_I_slices_define[_mb_type + 1].CodedBlockPatternChroma;
       CodedBlockPatternLuma =
           mb_type_I_slices_define[_mb_type + 1].CodedBlockPatternLuma;
-      _Intra16x16PredMode =
+      Intra16x16PredMode =
           mb_type_I_slices_define[_mb_type + 1].Intra16x16PredMode;
       mb_pred_mode = mb_type_I_slices_define[_mb_type + 1].MbPartPredMode;
     } else {
@@ -504,7 +499,7 @@ int MacroBlock::MbPartPredMode(
     }
 
     //Table 7-12 – Macroblock type with value 0 for SI slices
-  } else if ((slice_type % 5) == SLICE_SI) {
+  } else if ((m_slice_type_fixed % 5) == SLICE_SI) {
     if (_mb_type == 0) {
       name_of_mb_type = mb_type_SI_slices_define[0].name_of_mb_type;
       mb_pred_mode = mb_type_SI_slices_define[0].MbPartPredMode;
@@ -515,10 +510,11 @@ int MacroBlock::MbPartPredMode(
     }
 
     //Table 7-13 – Macroblock type values 0 to 4 for P and SP slices
-  } else if ((slice_type % 5) == SLICE_P || (slice_type % 5) == SLICE_SP) {
+  } else if ((m_slice_type_fixed % 5) == SLICE_P ||
+             (m_slice_type_fixed % 5) == SLICE_SP) {
     if (_mb_type >= 0 && _mb_type <= 5) {
       name_of_mb_type = mb_type_P_SP_slices_define[_mb_type].name_of_mb_type;
-      NumMbPart = mb_type_P_SP_slices_define[_mb_type].NumMbPart;
+      m_NumMbPart = mb_type_P_SP_slices_define[_mb_type].NumMbPart;
       if (index == 0)
         mb_pred_mode = mb_type_P_SP_slices_define[_mb_type].MbPartPredMode0;
       else
@@ -530,10 +526,10 @@ int MacroBlock::MbPartPredMode(
     }
 
     //Table 7-14 – Macroblock type values 0 to 22 for B slices
-  } else if ((slice_type % 5) == SLICE_B) {
+  } else if ((m_slice_type_fixed % 5) == SLICE_B) {
     if (_mb_type >= 0 && _mb_type <= 23) {
       name_of_mb_type = mb_type_B_slices_define[_mb_type].name_of_mb_type;
-      NumMbPart = mb_type_B_slices_define[_mb_type].NumMbPart;
+      m_NumMbPart = mb_type_B_slices_define[_mb_type].NumMbPart;
       if (index == 0)
         mb_pred_mode = mb_type_B_slices_define[_mb_type].MbPartPredMode0;
       else
@@ -1362,10 +1358,7 @@ int MacroBlock::process_mb_type(SliceHeader &header, const int32_t slice_type) {
   ret = MbPartPredMode();
   RET(ret);
 
-  ret = MbPartPredMode(m_slice_type_fixed, transform_size_8x8_flag,
-                       m_mb_type_fixed, 0, m_NumMbPart, CodedBlockPatternChroma,
-                       CodedBlockPatternLuma, Intra16x16PredMode,
-                       m_name_of_mb_type, m_mb_pred_mode);
+  ret = MbPartPredMode(m_mb_type_fixed, 0, m_name_of_mb_type, m_mb_pred_mode);
   RET(ret);
   return 0;
 }
@@ -1407,10 +1400,7 @@ int MacroBlock::process_transform_size_8x8_flag(int32_t &is_8x8_flag) {
   if (is_8x8_flag != transform_size_8x8_flag) {
     transform_size_8x8_flag = is_8x8_flag;
     /* 重新计算宏块的预测模式 */
-    ret = MbPartPredMode(m_slice_type_fixed, transform_size_8x8_flag,
-                         m_mb_type_fixed, 0, m_NumMbPart,
-                         CodedBlockPatternChroma, CodedBlockPatternLuma,
-                         Intra16x16PredMode, m_name_of_mb_type, m_mb_pred_mode);
+    ret = MbPartPredMode(m_mb_type_fixed, 0, m_name_of_mb_type, m_mb_pred_mode);
     RET(ret);
 
     /* 如果当前片段是 I 片段 (SLICE_I)，并且宏块类型为 0（即 m_mb_type_fixed == 0），则根据 transform_size_8x8_flag 的值来设置 mb_type_I_slice */

@@ -265,11 +265,7 @@ class MacroBlock {
 
  private:
   int MbPartPredMode();
-  int MbPartPredMode(int32_t slice_type, int32_t transform_size_8x8_flag,
-                     int32_t _mb_type, int32_t index, int32_t &NumMbPart,
-                     int32_t &CodedBlockPatternChroma,
-                     int32_t &CodedBlockPatternLuma,
-                     int32_t &_Intra16x16PredMode,
+  int MbPartPredMode(int32_t _mb_type, int32_t index,
                      H264_MB_TYPE &name_of_mb_type,
                      H264_MB_PART_PRED_MODE &mb_pred_mode);
 
