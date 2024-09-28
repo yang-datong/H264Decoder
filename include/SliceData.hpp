@@ -28,14 +28,18 @@ class SliceData {
 
   /* 由CABAC单独解码而来的重要控制变量 */
  public:
+  /* 当前宏块是否跳过解码标志 */
   int32_t mb_skip_flag = 0;
-  int32_t mb_field_decoding_flag = 0;
+  /* 下一宏块是否跳过解码标志 */
   int32_t mb_skip_flag_next_mb = 0;
   uint32_t mb_skip_run = 0;
+  int32_t mb_field_decoding_flag = 0;
   int32_t end_of_slice_flag = -1;
 
  private:
-  bool is_need_skip_read_mb_field_decoding_flag = false;
+  /* 引用自Slice Header，不能在SliceData中进行二次修改，但是为了代码设计，这里并没有设置为const模式 */
+  bool MbaffFrameFlag = 0;
+  bool is_mb_field_decoding_flag_prcessed = false;
 
  private:
   /* 由外部(parseSliceData)传进来的指针，不是Slice Data的一部分，随着parseSliceData后一起消灭 */

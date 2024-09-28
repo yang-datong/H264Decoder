@@ -155,7 +155,10 @@ class MacroBlock {
   int32_t bottom_field_flag;
   /* 宏块跳过标志，指示当前宏块是否被跳过 */
   int32_t mb_skip_flag;
-  /* 宏块场解码标志，指示当前宏块是否使用场解码模式 */
+  /* 宏块场解码标志，指示当前宏块是否使用场解码模式
+    Mb_field_decoding_flag:0 -> 帧宏块，宏块对中两个宏块合并处理。
+    Mb_field_decoding_flag:1 -> 场宏块，某些部分需要场间隔解码，宏块对中两个宏块单独处理。
+   */
   int32_t mb_field_decoding_flag;
   /* 宏块自适应帧场编码标志，指示是否使用宏块自适应帧场编码 */
   int32_t MbaffFrameFlag;
@@ -237,11 +240,11 @@ class MacroBlock {
   MB_RESIDUAL_LEVEL _mb_residual_level_ac = MB_RESIDUAL_UNKOWN;
 
  public:
-  int macroblock_layer(BitStream &bs, PictureBase &picture,
-                       const SliceData &slice_data, CH264Cabac &cabac);
+  int decode(BitStream &bs, PictureBase &picture, const SliceData &slice_data,
+             CH264Cabac &cabac);
 
-  int macroblock_mb_skip(PictureBase &picture, const SliceData &slice_data,
-                         CH264Cabac &cabac);
+  int decode_skip(PictureBase &picture, const SliceData &slice_data,
+                  CH264Cabac &cabac);
 
   static int getMbPartWidthAndHeight(H264_MB_TYPE name_of_mb_type,
                                      int32_t &_MbPartWidth,

@@ -15,17 +15,17 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
   bs = &bitStream;
   m_sps = &sps;
   m_pps = &pps;
+  MbaffFrameFlag = header->MbaffFrameFlag;
 
   /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
   initCABAC();
 
   /* 如果当前帧不使用MBAFF编码模式。所有宏块都作为帧/场宏块进行编码，而不需要进行动态切换帧、场编码 */
-  if (header->MbaffFrameFlag == 0)
-    mb_field_decoding_flag = header->field_pic_flag;
+  if (MbaffFrameFlag == 0) mb_field_decoding_flag = header->field_pic_flag;
 
   /* 宏块的初始地址（或宏块索引），在A Frame = A Slice的情况下，初始地址应该为0 */
   pic->CurrMbAddr = CurrMbAddr =
-      header->first_mb_in_slice * (1 + header->MbaffFrameFlag);
+      header->first_mb_in_slice * (1 + MbaffFrameFlag);
 
   /* 8.2 Slice decoding process */
   slice_decoding_process();
@@ -52,17 +52,14 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
     if (moreDataFlag) {
       /* 1. 在MBAFF下，且当前宏块为宏块对中的首宏块，则读取是否在宏块级别对帧进行场间隔解码;
          2. 在MBAFF下，且当前宏块为宏块对中的次宏块，且上一个宏块被跳过，则读取是否在宏块级别对帧进行场间隔解码;
-      解释一下2，前宏块（首宏块）被标记为“跳过”，即编码器认为该宏块的内容与之前的宏块或参考帧的相应部分相似，因此不对该宏块进行"显式编码"，次宏块仍需要通过引用首宏块的信息来重构内容。
-      当前宏块（首宏块）没有被标记跳过，实际上该次宏块已经在上次迭代中，通过首宏块一并处理过了*/
-      if (header->MbaffFrameFlag &&
+      解释一下2，前宏块（首宏块）被标记为“跳过”，即编码器认为该宏块的内容与之前的宏块或参考帧的相应部分相似，因此不对该宏块进行"显式编码"，次宏块仍需要通过引用首宏块的信息来重构内容。*/
+      if (MbaffFrameFlag &&
           (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
         process_mb_field_decoding_flag(m_pps->entropy_coding_mode_flag);
-      //Mb_field_decoding_flag:0 -> 帧宏块，宏块对中两个宏块合并处理。
-      //Mb_field_decoding_flag:1 -> 场宏块，某些部分需要场间隔解码，宏块对中两个宏块单独处理。
+      //NOTE: 次宏块没有被标记跳过，实际上该次宏块已经在上次迭代中，通过首宏块一并处理过了
 
       /* 在宏块层解码帧内、帧间所需要的必须信息 */
       do_macroblock_layer();
-
       /* 帧内预测、帧间预测、解码宏块、去块滤波 */
       decoding_process();
     }
@@ -71,12 +68,12 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
     if (!m_pps->entropy_coding_mode_flag)
       moreDataFlag = bs->more_rbsp_data();
     else {
-      /* 对于P帧和B帧，更新prefab Skipped为当前宏块的跳过标志Mb_skip_flag，以便下一个宏块处理时参考 */
+      /* 对于P帧和B帧，更新prevMbSkipped为当前宏块的跳过标志Mb_skip_flag，以便下一个宏块处理时参考 */
       if (header->slice_type != SLICE_I && header->slice_type != SLICE_SI)
         prevMbSkipped = mb_skip_flag;
 
-      /* 如果当前是顶宏块，说明后面一定还有底宏块 */
-      if (header->MbaffFrameFlag && CurrMbAddr % 2 == 0)
+      /* MBAFF模式下，若当前是首宏块，当在奇数Slice中，最后一行作为首宏块处理，即使已经到达了Slice末尾，也需要与一个虚拟的底宏块组成宏块对进行处理 */
+      if (MbaffFrameFlag && CurrMbAddr % 2 == 0)
         moreDataFlag = true;
       else {
         /* 判断是否到达Slice的末尾 */
@@ -141,7 +138,7 @@ int SliceData::slice_decoding_process() {
     // 8.2.4 Decoding process for reference picture lists construction
     if (header->slice_type == SLICE_P || header->slice_type == SLICE_SP ||
         header->slice_type == SLICE_B) {
-      /* 当前帧需要参考帧预测，则需要进行参考帧重排序。在每个 P、SP 或 B 切片的解码过程开始时调用 */
+      /* 当前帧需要参考帧预测，则需要进行参考帧重排序。在每个 P、SP 或 B Slice的解码过程开始时调用 */
       pic->decoding_ref_picture_lists_construction(
           pic->m_dpb, pic->m_RefPicList0, pic->m_RefPicList1);
 
@@ -156,7 +153,7 @@ int SliceData::slice_decoding_process() {
 // 8.2.2 Decoding process for macroblock to slice group map
 /* 输入:活动图像参数集和要解码的Slice header。  
  * 输出:宏块到Slice Group映射MbToSliceGroupMap。 */
-//该过程在每个切片开始时调用（如果是单帧由单个Slice组成的情况，那么这里几乎没有逻辑）
+//该过程在每个Slice开始时调用（如果是单帧由单个Slice组成的情况，那么这里几乎没有逻辑）
 inline int SliceData::decoding_macroblock_to_slice_group_map() {
   //输出为：mapUnitToSliceGroupMap
   mapUnitToSliceGroupMap();
@@ -178,7 +175,7 @@ inline int SliceData::mapUnitToSliceGroupMap() {
   if (m_pps->num_slice_groups_minus1 == 0) {
     /* 这里按照一个宏块或宏块对（当为MBAFF时，遍历大小减小一半）处理 */
     for (int i = 0; i < (int)m_sps->PicSizeInMapUnits; i++)
-      /* 确保在只有一个切片组的情况下，整个图像的所有宏块都被正确地映射到这个唯一的切片组上，简化处理逻辑这里赋值不一定非要为0,只要保持映射单元内都是同一个值就行了 */
+      /* 确保在只有一个Slice组的情况下，整个图像的所有宏块都被正确地映射到这个唯一的Slice组上，简化处理逻辑这里赋值不一定非要为0,只要保持映射单元内都是同一个值就行了 */
       mapUnitToSliceGroupMap[i] = 0;
     /* TODO YangJing 有问题，如果是场编码，那么这里实际上只处理了一半映射 <24-09-16 00:07:20> */
     return 0;
@@ -224,7 +221,7 @@ inline int SliceData::mapUnitToSliceGroupMap() {
 }
 
 // 8.2.2.8 Specification for conversion of map unit to slice group map to macroblock to slice group map
-/* 宏块（Macroblock）的位置映射到切片（Slice）的过程*/
+/* 宏块（Macroblock）的位置映射到Slice（Slice）的过程*/
 inline int SliceData::mbToSliceGroupMap() {
   /* 输入：存储每个宏块单元对应的Slice Group索引，在A Frame = A Slice的情况下，这里均为0 */
   const int32_t *mapUnitToSliceGroupMap = header->mapUnitToSliceGroupMap;
@@ -237,7 +234,7 @@ inline int SliceData::mbToSliceGroupMap() {
     if (m_sps->frame_mbs_only_flag || header->field_pic_flag)
       /* 对于一个全帧或全场（即不存在混合帧、场），每个宏块独立对应一个映射单位 */
       MbToSliceGroupMap[mbIndex] = mapUnitToSliceGroupMap[mbIndex];
-    else if (header->MbaffFrameFlag)
+    else if (MbaffFrameFlag)
       /* 映射基于宏块对，一个宏块对（2个宏块）共享一个映射单位 */
       MbToSliceGroupMap[mbIndex] = mapUnitToSliceGroupMap[mbIndex / 2];
     else {
@@ -262,30 +259,30 @@ inline int SliceData::mbToSliceGroupMap() {
   return 0;
 }
 
-/* mb_skip_run指定连续跳过的宏块的数量，在解码P或SP切片时，MB_type应被推断为P_Skip并且宏块类型统称为P宏块类型，或者在解码B切片时， MB_type应被推断为B_Skip，并且宏块类型统称为B宏块类型 */
+/* mb_skip_run指定连续跳过的宏块的数量，在解码P或SPSlice时，MB_type应被推断为P_Skip并且宏块类型统称为P宏块类型，或者在解码BSlice时， MB_type应被推断为B_Skip，并且宏块类型统称为B宏块类型 */
 int SliceData::process_mb_skip_run(int32_t &prevMbSkipped) {
   mb_skip_run = bs->readUE();
 
   /* 当mb_skip_run > 0时，实际上在接下来的宏块解析中，将要跳过处理，所以能够表示prevMbSkipped = 1*/
   prevMbSkipped = mb_skip_run > 0;
 
-  /* 对于每个跳过的宏块 */
+  /* 对于每个跳过的宏块，不同于CABAC的处理，这里是处理多个宏块，而CABAC是处理单个宏块 */
   for (uint32_t i = 0; i < mb_skip_run; i++) {
     /* 1. 计算当前宏块的位置 */
-    updatesLocationOfCurrentMacroblock(header->MbaffFrameFlag);
+    updatesLocationOfCurrentMacroblock(MbaffFrameFlag);
 
     /* 2. 对于跳过的宏块同样需要增加实际的宏块计数 */
     pic->mb_cnt++;
 
     /* 3. 对于MBAFF模式下，顶宏块需要先确定当前是否为帧宏块还是场宏块，以确定下面的帧间预测中如何处理宏块对 */
-    if (header->MbaffFrameFlag && CurrMbAddr % 2 == 0)
+    if (MbaffFrameFlag && CurrMbAddr % 2 == 0)
       //这里是推导（根据前面已解码的宏块进行推导当前值），而不是解码
       derivation_for_mb_field_decoding_flag();
 
     /* 4. 宏块层也需要将该宏块该宏块的类型设置“Skip类型” */
-    pic->m_mbs[pic->CurrMbAddr].macroblock_mb_skip(*pic, *this, *cabac);
+    pic->m_mbs[pic->CurrMbAddr].decode_skip(*pic, *this, *cabac);
 
-    /* 5. 帧间预测，“跳过”的宏块是指不需要显示的解码宏块，这些宏块可以直接参加帧间预测来重构宏块 */
+    /* 5. 由于跳过的宏块只能是P,B Slice中的宏块，那么就只需要调用帧间预测 */
     pic->inter_prediction_process();
 
     /* 6. 外层循环也需要更新宏块跳过地址 */
@@ -298,90 +295,75 @@ int SliceData::process_mb_skip_run(int32_t &prevMbSkipped) {
 /* 输入：PicWidthInMbs,MbaffFrameFlag
  * 输出：mb_x, mb_y, CurrMbAddr*/
 void SliceData::updatesLocationOfCurrentMacroblock(const bool MbaffFrameFlag) {
-  /* m 代表每行宏块的总数，对于MBAFF模式下，分为宏块对，那么这里说的一行实际上是两行 */
-  uint8_t h = MbaffFrameFlag ? 2 : 1;
-  const int32_t w =
-      (pic->PicWidthInMbs * h); //当为宏块对模式时，实际上$W = 2*W$
+  const uint32_t h = MbaffFrameFlag ? 2 : 1;
+  const uint32_t w = pic->PicWidthInMbs * h; //当为宏块对模式时，实际上$W = 2*W$
   pic->mb_x = (CurrMbAddr % w) / h;
   pic->mb_y = (CurrMbAddr / w * h) + ((CurrMbAddr % w) % h);
   pic->CurrMbAddr = CurrMbAddr;
-  //std::cout << "pic->mb_x:" << pic->mb_x << std::endl;
-  //std::cout << "pic->mb_y:" << pic->mb_y << std::endl;
-  //std::cout << "pic->CurrMbAddr:" << pic->CurrMbAddr << std::endl;
 }
 
 /* 如果当前宏块的运动矢量与参考帧中的预测块非常接近，且残差（即当前块与预测块的差异）非常小或为零，编码器可能会选择跳过该宏块的编码。
  * 在这种情况下，解码器可以通过运动矢量预测和参考帧直接重建宏块，而无需传输额外的残差信息。
  * 一般来说，在I帧中，不会出现宏块跳过处理。这是因为I帧中的宏块是使用帧内预测进行编码的，而不是基于参考帧的帧间预测 */
-
-/* NOTE: 顶宏块与底宏块是垂直方向的宏块对，而不是水平方向的，见Figure 6-8 – Partitioning of the decoded frame into macroblock pairs  */
 int SliceData::process_mb_skip_flag(const int32_t prevMbSkipped) {
   /* 1. 计算当前宏块的位置 */
-  updatesLocationOfCurrentMacroblock(header->MbaffFrameFlag);
+  updatesLocationOfCurrentMacroblock(MbaffFrameFlag);
 
-  /* 2. 设置当前宏块的切片编号 */
-  pic->m_mbs[pic->CurrMbAddr].slice_number = slice_number;
+  MacroBlock &curr_mb = pic->m_mbs[CurrMbAddr];
+  MacroBlock &next_mb = pic->m_mbs[CurrMbAddr + 1];
+
+  /* 2. 设置当前宏块的Slice编号 */
+  curr_mb.slice_number = slice_number;
 
   /* 3. 当前帧是MBAFF帧，且顶宏块和底宏块的场解码标志都未设置，则推导出mb_field_decoding_flag的值 */
-  if (header->MbaffFrameFlag) {
-    // 当前帧使用MBAFF编码模式。每个宏块对可以独立地选择是作为帧宏块对还是场宏块对进行编码。
-    /* 当 MbaffFrameFlag 等于 1 并且宏块对的顶部和底部宏块均不存在 mb_field_decoding_flag 时，应按如下方式推断 mb_field_decoding_flag 的值：调用 mb_field_decoding_flag. ->  Rec. ITU-T H.264 (08/2021) 98*/
+  if (MbaffFrameFlag) {
+    /* 当 mb_field_decoding_flag 未设置，需要推导其初始值，根据相邻“宏块对”来推导当前宏块类型，若为首个宏块(0,0)则设置为帧宏块。（不能理解为"当宏块对作为帧宏块处理时"）*/
+    if (CurrMbAddr % 2 == 0 &&
+        (!curr_mb.mb_field_decoding_flag && !next_mb.mb_field_decoding_flag))
+      derivation_for_mb_field_decoding_flag();
 
-    /* 字段解释：
-     * CurrMbAddr % 2 == 0表示当前宏块地址是偶数（由于是场宏块，则即当前宏块是一个宏块对的前宏块）
-     * mb_x = 0表示宏块在图像的最左边，水平位置为0
-     * mb_y = 0表示宏块在图像的最顶部，垂直位置为0
-     * 如果两个宏块的slice_number相同表示它们属于同一个Slice */
-
-    /* 是否为顶宏块，即宏块对中的前宏块 */
-    if (CurrMbAddr % 2 == 0) {
-      /* 顶宏块，是否已经完成解码 */
-      int32_t is_top_decoding_flag =
-          pic->m_mbs[CurrMbAddr].mb_field_decoding_flag;
-      /* 底宏块，是否已经完成解码 */
-      int32_t is_bottom_decoding_flag =
-          pic->m_mbs[CurrMbAddr + 1].mb_field_decoding_flag;
-      if (!is_top_decoding_flag && !is_bottom_decoding_flag)
-        derivation_for_mb_field_decoding_flag();
-    }
-
-    pic->m_mbs[pic->CurrMbAddr].mb_field_decoding_flag = mb_field_decoding_flag;
+    curr_mb.mb_field_decoding_flag = mb_field_decoding_flag;
   }
 
-  if (header->MbaffFrameFlag && CurrMbAddr % 2 == 1 && prevMbSkipped)
-    /* 若处于MBAFF模式，且当前宏块是否是宏块对中的第二个，且前一个宏块被跳过，则当前宏块同样跳过（即该宏块对一起跳过，注意这里已经是第二轮了，已经执行完了下面部分的代码） */
+  /* 4. 在当前宏块对中，若首宏块跳过处理，则次宏块跳过标记设置为下个宏块对的首宏块一致。NOTE:这里是CABAC的一个特殊规则，为了减少比特流中需要传输的标志位数量 */
+  if (MbaffFrameFlag && CurrMbAddr % 2 == 1 && prevMbSkipped)
     mb_skip_flag = mb_skip_flag_next_mb;
+
+  /* 若非MBAFF模式，则直接解码获取是否需要跳过该宏块*/
   else
-    /* 若非MBAFF模式可直接解码获取是否需要跳过该宏块*/
     cabac->decode_mb_skip_flag(CurrMbAddr, mb_skip_flag);
 
-  /* 4. 如果当前宏块跳过处理（或顶宏块或底宏块） */
+  /* 5. 宏块需要进行跳过处理时：由于宏块跳过时，一般来说没有残差数据，则需要运动矢量预测和参考帧直接重建宏块（帧间预测,P,B Slice） */
   if (mb_skip_flag && header->slice_type != SLICE_I &&
       header->slice_type != SLICE_SI) {
-    // 本宏块没有残差数据，则需要运动矢量预测和参考帧直接重建宏块（帧间预测,P,B Slice）。
     pic->mb_cnt++;
 
-    /* MBAFF模型下的顶宏块 */
-    if (header->MbaffFrameFlag && CurrMbAddr % 2 == 0) {
-      pic->m_mbs[pic->CurrMbAddr].mb_skip_flag = mb_skip_flag;
-      // 底场，顶场宏块的mb_field_decoding_flag值是相同的，进行宏块对的同步
-      pic->m_mbs[pic->CurrMbAddr + 1].slice_number = slice_number;
-      pic->m_mbs[pic->CurrMbAddr + 1].mb_field_decoding_flag =
-          mb_field_decoding_flag;
+    /* 若为MBAFF模式，则宏块对需要一并处理 */
+    if (MbaffFrameFlag && CurrMbAddr % 2 == 0) {
+      curr_mb.mb_skip_flag = mb_skip_flag;
 
-      /* 如果下一个宏块，不进行跳过处理 */
+      // 次宏块与首宏块的宏块对是相同的（要么都是帧宏块，要么都是场宏块），进行宏块对的同步
+      next_mb.slice_number = slice_number;
+      next_mb.mb_field_decoding_flag = mb_field_decoding_flag;
+
+      /* 解码次宏块是否需要跳过宏块处理（由于宏块对是一起操作的，所以这里允许先解码下一个宏块）*/
       cabac->decode_mb_skip_flag(CurrMbAddr + 1, mb_skip_flag_next_mb);
+
+      /* 当首宏块跳过处理，但次宏块需要解码 */
       if (mb_skip_flag_next_mb == 0) {
         cabac->decode_mb_field_decoding_flag(mb_field_decoding_flag);
-        is_need_skip_read_mb_field_decoding_flag = true;
-      } else
+        is_mb_field_decoding_flag_prcessed = true;
+      }
+      /* 当首、次宏块均跳过处理时，需根据标准规定，要再次推导当前首宏块的宏块对解码类型，确保宏块对类型正确（与上面一次调用不同的是，CABAC解码需要根据最新的上下文重新推导
+       * NOTE: 这里有一个情况是当一个Slice被分为奇数行宏块时，那么在MBAFF模式下，宏块对的划分后，最后一行宏块会被当作首宏块处理，且需要与一个虚拟的底宏块组成宏块对进行处理，虚拟的底宏块会被视为跳过的宏块，不包含任何数据。 */
+      else
         derivation_for_mb_field_decoding_flag();
     }
 
     /* 宏块层对应的处理 */
-    pic->m_mbs[pic->CurrMbAddr].macroblock_mb_skip(*pic, *this, *cabac);
+    curr_mb.decode_skip(*pic, *this, *cabac);
 
-    /* 8.4 Inter prediction process(当解码 P 和 B 宏块类型时调用，也就是P Slice,B Slice的宏块) */
+    /* 由于跳过的宏块只能是P,B Slice中的宏块，那么就只需要调用帧间预测 */
     pic->inter_prediction_process(); // 帧间预测
   }
 
@@ -391,13 +373,16 @@ int SliceData::process_mb_skip_flag(const int32_t prevMbSkipped) {
 //解码mb_field_decoding_flag: 表示本宏块对是帧宏块对，还是场宏块对
 int SliceData::process_mb_field_decoding_flag(bool entropy_coding_mode_flag) {
   int ret = 0;
-  if (is_need_skip_read_mb_field_decoding_flag == false) {
-    if (entropy_coding_mode_flag)
-      ret = cabac->decode_mb_field_decoding_flag(mb_field_decoding_flag);
-    else
-      mb_field_decoding_flag = bs->readU1();
-  } else
-    is_need_skip_read_mb_field_decoding_flag = false;
+  if (is_mb_field_decoding_flag_prcessed) {
+    is_mb_field_decoding_flag_prcessed = false;
+    return 1;
+  }
+
+  if (entropy_coding_mode_flag)
+    ret = cabac->decode_mb_field_decoding_flag(mb_field_decoding_flag);
+  else
+    mb_field_decoding_flag = bs->readU1();
+
   RET(ret);
   return 0;
 }
@@ -410,15 +395,16 @@ int SliceData::process_end_of_slice_flag(int32_t &end_of_slice_flag) {
 /* mb_field_decoding_flag. ->  Rec. ITU-T H.264 (08/2021) 98*/
 //该函数只适用于MBAFF模式下调用，根据相邻“宏块对”的状态来推断当前“宏块对”的 mb_field_decoding_flag 值
 int SliceData::derivation_for_mb_field_decoding_flag() {
-  /* 在同一Slice内，编码模式只能是一种，若存在左邻宏块或上邻宏块则编码模式必然一致（只能通过左、上方向推导、这是扫描顺序决定的） */
+  /* NOTE:在同一Slice内，编码模式只能是一种，若存在左邻宏块或上邻宏块则编码模式必然一致（只能通过左、上方向推导、这是扫描顺序决定的） */
+  /* 同一片中当前宏块对的左侧或上方不存在相邻宏块对，即默认为帧宏块 */
   mb_field_decoding_flag = 0;
   if (pic->mb_x > 0) {
-    /* 左侧的相邻宏块对 */
+    /* 存在左侧的相邻宏块对，且属于同一Slice group，则直接copy */
     auto &left_mb = pic->m_mbs[CurrMbAddr - 2];
     if (left_mb.slice_number == slice_number)
       mb_field_decoding_flag = left_mb.mb_field_decoding_flag;
   } else if (pic->mb_y > 0) {
-    /* 上方的相邻宏块对 */
+    /* 存在上侧的相邻宏块对，且属于同一Slice group，则直接copy */
     auto &top_mb = pic->m_mbs[CurrMbAddr - 2 * pic->PicWidthInMbs];
     if (top_mb.slice_number == slice_number)
       mb_field_decoding_flag = top_mb.mb_field_decoding_flag;
@@ -427,9 +413,10 @@ int SliceData::derivation_for_mb_field_decoding_flag() {
 }
 
 int SliceData::do_macroblock_layer() {
-  updatesLocationOfCurrentMacroblock(header->MbaffFrameFlag);
-  /* 在宏块层中对每个宏块处理得到对应帧内、帧间解码所需要的信息，以及解码当前的控制层的信息 */
-  pic->m_mbs[pic->CurrMbAddr].macroblock_layer(*bs, *pic, *this, *cabac);
+  /* 1. 计算当前宏块的位置 */
+  updatesLocationOfCurrentMacroblock(MbaffFrameFlag);
+  /* 2. 在宏块层中对每个宏块处理得到对应帧内、帧间解码所需要的信息，以及解码当前的控制层的信息 */
+  pic->m_mbs[pic->CurrMbAddr].decode(*bs, *pic, *this, *cabac);
   pic->mb_cnt++;
   return 0;
 }

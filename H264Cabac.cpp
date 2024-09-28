@@ -3882,27 +3882,15 @@ int CH264Cabac::decode_coeff_sign_flag(int32_t &synElVal) {
 }
 
 int CH264Cabac::decode_end_of_slice_flag(int32_t &synElVal) {
-  int ret = 0;
-
-  // int32_t maxBinIdxCtx = 0;
-  int32_t ctxIdxOffset = 0;
-  int32_t binVal = 0;
-  int32_t ctxIdx = 0;
-  int32_t bypassFlag = 0;
-
+  int32_t ctxIdxOffset = 0, binVal = 0, ctxIdx = 0, bypassFlag = 0;
   //------Table 9-34: ctxIdxOffset: 276--------
-  // maxBinIdxCtx = 0;
   ctxIdxOffset = 276;
 
-  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values
-  // except those related to the syntax elements coded_block_flag,
-  // significant_coeff_flag, last_significant_coeff_flag, and
-  // coeff_abs_level_minus1
-
+  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
   //---------------注意是：FL, cMax=1------------------------
-  ctxIdx = ctxIdxOffset + 0;                   // ctxIdxOffset + ctxIdxInc;
-  ret = DecodeBin(bypassFlag, ctxIdx, binVal); // binIdx = 0;
-  RETURN_IF_FAILED(ret != 0, -1);
+  ctxIdx = ctxIdxOffset + 0;                       // ctxIdxOffset + ctxIdxInc;
+  int ret = DecodeBin(bypassFlag, ctxIdx, binVal); // binIdx = 0;
+  RET(ret);
 
   // fixedLength = Ceil( Log2( cMax + 1 ) ) = Ceil( Log2( 1 + 1 ) ) = 1;
   synElVal = binVal;

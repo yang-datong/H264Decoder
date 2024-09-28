@@ -37,9 +37,8 @@ void MacroBlock::initFromSlice(const SliceHeader &header,
 
 // 7.3.5 Macroblock layer syntax -> page 57
 /* 负责解码一个宏块（这里的宏块指的是16x16 的矩阵块，并不是真的“一个”宏块）的各种信息，包括宏块类型、预测模式、残差数据 */
-int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
-                                 const SliceData &slice_data,
-                                 CH264Cabac &cabac) {
+int MacroBlock::decode(BitStream &bs, PictureBase &picture,
+                       const SliceData &slice_data, CH264Cabac &cabac) {
   /* ------------------ 初始化常用变量 ------------------ */
   this->_picture = &picture;
   this->_cabac = &cabac;
@@ -158,9 +157,8 @@ int MacroBlock::macroblock_layer(BitStream &bs, PictureBase &picture,
 #define MB_TYPE_P_SP_Skip 5
 #define MB_TYPE_B_Skip 23
 /* 该函数将一个宏块进行预处理，设置宏块跳过的状态，但是并不需要进行真正的解码操作 */
-int MacroBlock::macroblock_mb_skip(PictureBase &picture,
-                                   const SliceData &slice_data,
-                                   CH264Cabac &cabac) {
+int MacroBlock::decode_skip(PictureBase &picture, const SliceData &slice_data,
+                            CH264Cabac &cabac) {
   /* ------------------ 初始化常用变量 ------------------ */
   this->_cabac = &cabac;
   this->_picture = &picture;
@@ -202,6 +200,8 @@ int MacroBlock::macroblock_mb_skip(PictureBase &picture,
    *  其中 (QPY_prev + mb_qp_delta + 52 + 2 * QpBdOffsetY) 是为了确保即使在 (mb_qp_delta) 为负数的情况下，加法的结果也保持正值，从而有效地执行模运算。
    *  模运算: (x % (52 + QpBdOffsetY)) 确保结果在合法的量化参数范围内。
    *  调整值：最后从上一步的结果中减去 ( QpBdOffsetY )，将量化参数值重新调整回标准范围。这步确保即使在使用色度偏移的情况下，最终的量化参数仍然是有效的。
+   *
+	$QP_y = (QP_{y0} + \Delta{QP} + 52 + 2 \cdot QP_{offset_y}) \bmod ( 52 + QP_{offset_y} ) - QP_{offset_y}$
 */
   QPY_prev = QPY =
       ((QPY_prev + mb_qp_delta + 52 + 2 * QpBdOffsetY) % (52 + QpBdOffsetY)) -
@@ -621,8 +621,9 @@ int MacroBlock::MbPartPredMode(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
 }
 
 int MacroBlock::MbPartPredMode() {
+  const int32_t slice_type = m_slice_type_fixed % 5;
   //Table 7-11 – Macroblock types for I slices
-  if ((m_slice_type_fixed % 5) == SLICE_I) {
+  if (slice_type == SLICE_I) {
     if (m_mb_type_fixed == 0) {
       if (transform_size_8x8_flag == 0)
         mb_type_I_slice = mb_type_I_slices_define[0];
@@ -635,15 +636,14 @@ int MacroBlock::MbPartPredMode() {
       RET(-1);
 
     //Table 7-12 – Macroblock type with value 0 for SI slices
-  } else if ((m_slice_type_fixed % 5) == SLICE_SI) {
+  } else if (slice_type == SLICE_SI) {
     if (m_mb_type_fixed == 0)
       mb_type_SI_slice = mb_type_SI_slices_define[0];
     else
       RET(-1);
 
     //Table 7-13 – Macroblock type values 0 to 4 for P and SP slices
-  } else if ((m_slice_type_fixed % 5) == SLICE_P ||
-             (m_slice_type_fixed % 5) == SLICE_SP) {
+  } else if (slice_type == SLICE_P || slice_type == SLICE_SP) {
     if (m_mb_type_fixed >= 0 && m_mb_type_fixed <= 5)
       mb_type_P_SP_slice = mb_type_P_SP_slices_define[m_mb_type_fixed];
     else
@@ -654,7 +654,7 @@ int MacroBlock::MbPartPredMode() {
     m_NumMbPart = mb_type_P_SP_slice.NumMbPart;
 
     //Table 7-14 – Macroblock type values 0 to 22 for B slices
-  } else if ((m_slice_type_fixed % 5) == SLICE_B) {
+  } else if (slice_type == SLICE_B) {
     if (m_mb_type_fixed >= 0 && m_mb_type_fixed <= 23)
       mb_type_B_slice = mb_type_B_slices_define[m_mb_type_fixed];
     else
