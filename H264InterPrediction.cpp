@@ -1454,6 +1454,8 @@ int PictureBase::
     int32_t refIdxL0Frm = NA;
 
     for (int i = 0; i < H264_MAX_REF_PIC_LIST_COUNT; i++) {
+      if(!m_RefPicList0[i])
+        break;
       if ((m_RefPicList0[i]->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME &&
            (&m_RefPicList0[i]->m_picture_frame == colPic)) ||
           (m_RefPicList0[i]->m_picture_coded_type ==
