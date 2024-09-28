@@ -72,34 +72,32 @@ int MacroBlock::decode(BitStream &bs, PictureBase &picture,
     bool noSubMbPartSizeLessThan8x8 = true;
 
     //------------------------- 3.宏块预测 -------------------------
-    // I_NxN，Intra_16x16 是一种帧内预测模式（所以这里表示的是帧间预测）
+    // 对于P_8x8,B_8x8宏块，且为无预测模式时，说明需要进行子宏块预测（一般子宏块预测主要用于P和B帧中)
     if (m_name_of_mb_type != I_NxN && m_mb_pred_mode != Intra_16x16 &&
         m_NumMbPart == 4) {
-      // 当前宏块为非Intra的宏块，并且被分成了4个8x8子宏块（一般4个8x8就是为了运动预测）,进行子宏块预测
       sub_mb_pred(slice_data);
-      //子宏块大小检查
+      // 子宏块大小检查
       check_sub_mb_size(noSubMbPartSizeLessThan8x8,
                         sps->direct_8x8_inference_flag);
-    } else {
-      //若支持8x8变换，且当前为帧内预测模式，则进一步判断是否使用8x8变换
+    }
+    // 其他情况均为整宏块预测
+    else {
+      //若I_8x8,I_4x4预测模式，且支持8x8变换，则进一步判断是否使用8x8变换
       if (pps->transform_8x8_mode_flag && m_name_of_mb_type == I_NxN)
         process_transform_size_8x8_flag(transform_size_8x8_flag_temp);
 
-      /* 整宏块预测 */
+      /* 整宏块预测(或帧间，或帧内) */
       mb_pred(slice_data);
     }
 
     //------------------------- 4.编码块模式和残差数据 -------------------------
+    /* 1. 预测模式为 I_16x16 时，意味着使用单一的帧内预测模式进行编码，通常是在图像较为均匀或者简单的区域使用，会有固定的CBP处理;
+       2. 其他预测模式（如I_4x4、I_8x8,P,B等）可能涉及更复杂或更灵活的编码块结构，需要动态CBP决策处理; */
     if (m_mb_pred_mode != Intra_16x16) {
-      /* NOTE:对于帧内预测模式，表示整个宏块作为一个16x16的块进行预测和编码。在这种模式下，宏块不会被进一步分割成更小的块，因此不需要考虑8x8变换 */
-
       //处理编码块模式（Coded Block Pattern, CBP），它决定了哪些块（亮度块和色度块）包含非零系数。
       process_coded_block_pattern(sps->ChromaArrayType);
 
-      /* - CodedBlockPatternLuma > 0: 说明宏块中至少有一个亮度块包含非零系数，因此需要对这些块进行逆变换和反量化。在这种情况下，可能需要考虑使用8x8变换;
-       * - I_NxN 是帧内预测模式的一种，表示宏块被分割成多个4x4的小块进行预测。在这种模式下，通常不会使用8x8变换，因为块的大小已经是4x4;
-       * - noSubMbPartSizeLessThan8x8Flag == 1 : 如果存在任一子宏块的大小小于8x8，那么使用8x8变换就不合适，因为变换块的大小应该与子宏块的大小匹配;
-       * - B_Direct_16x16 是B帧中的一种直接模式，表示整个宏块作为一个16x16的块进行直接预测*/
+      /* 宏块中存在亮度块包含非零系数，需要对这些块进行逆变换和反量化，且宏块大小至少有8x8的大小(8x8,16x8,8x16,16x16)，在这种情况下，可能需要考虑使用8x8变换。 注，这里I_8x8也是不需要进行的*/
       if (CodedBlockPatternLuma > 0 && pps->transform_8x8_mode_flag &&
           m_name_of_mb_type != I_NxN && noSubMbPartSizeLessThan8x8 &&
           (m_name_of_mb_type != B_Direct_16x16 ||
@@ -107,12 +105,12 @@ int MacroBlock::decode(BitStream &bs, PictureBase &picture,
         process_transform_size_8x8_flag(transform_size_8x8_flag_temp);
     }
 
-    // 处理残差数据（即 CodedBlockPatternLuma 或 CodedBlockPatternChroma 不为 0）
+    // 宏块中存在非零系数(或亮度或色度）或当前为整块预测(简单区域一般压缩数据较多)，处理残差数据
+    // NOTE: 对于P,B Slice也可能会存在I宏块，所以残差并不是针对I Slice
     if (CodedBlockPatternLuma > 0 || CodedBlockPatternChroma > 0 ||
         m_mb_pred_mode == Intra_16x16) {
-      //--------------------------- 帧内预测(I) -------------------------------
       process_mb_qp_delta();
-      /* 处理残差数据，startIdx 和 endIdx 是针对整个 4x4 块的残差系数的索引 */
+      /* 处理残差数据，startIdx 和 endIdx 是相对于整个 4x4 块的残差系数的索引，比如I_16x16宏块被分成了16个4x4的子块（索引从0到15），又或者I_8x8宏块分为8个I_4x4 */
       residual(0, 15);
     }
   }
@@ -460,12 +458,12 @@ int MacroBlock::MbPartPredMode(int32_t _mb_type, int32_t index,
   if ((m_slice_type_fixed % 5) == SLICE_I) {
     const int I_NxN = 0;
     if (_mb_type == I_NxN) {
-      if (transform_size_8x8_flag == 0) {
-        name_of_mb_type = mb_type_I_slices_define[0].name_of_mb_type;
-        mb_pred_mode = mb_type_I_slices_define[0].MbPartPredMode;
-      } else {
+      if (transform_size_8x8_flag) {
         name_of_mb_type = mb_type_I_slices_define[1].name_of_mb_type;
         mb_pred_mode = mb_type_I_slices_define[1].MbPartPredMode;
+      } else {
+        name_of_mb_type = mb_type_I_slices_define[0].name_of_mb_type;
+        mb_pred_mode = mb_type_I_slices_define[0].MbPartPredMode;
       }
     } else if (_mb_type >= MIN_MB_TYPE_FOR_I_SLICE &&
                _mb_type <= MAX_MB_TYPE_FOR_I_SLICE) {
@@ -784,8 +782,7 @@ int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
   //----------------------------- 处理 Luma 信息 --------------------------------------
   /*帧内残差：对于整个 16x16 宏块使用一个预测模式,残差数据分为 DC 和 AC 两部分
     DC 残差：表示整个 16x16 宏块的平均亮度值。
-    AC 残差：表示宏块内的细节变化。
-  */
+    AC 残差：表示宏块内的细节变化。*/
 
   // 设置宏块的 DC 和 AC 残差级别，然后调用 residual_luma 函数处理亮度残差。residual_luma 函数负责解码亮度残差系数。
   _mb_residual_level_dc = MB_RESIDUAL_Intra16x16DCLevel;
@@ -800,29 +797,27 @@ int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
   memcpy(LumaLevel8x8, level8x8, sizeof(level8x8));
 
   //----------------------------- 处理 Chroma 信息 --------------------------------------
-  /* 对于YUV420 , YUV422*/
+  /* 在YUV420,YUV422中，色度分量通常被下采样，意味着色度的分辨率比亮度低 */
   if (ChromaArrayType == 1 || ChromaArrayType == 2) {
-    /* 在YUV420,YUV422中，色度分量通常被下采样，意味着色度的分辨率比亮度低。SubWidthC 和 SubHeightC 表示色度分量的下采样因子。NumC8x8 表示色度块的数量 */
-    int32_t NumC8x8 = 4 / (SubWidthC * SubHeightC);
-    /* 循环处理两个色度分量（Cb和Cr）。iCbCr的值为0时处理Cb分量，为1时处理Cr分量 */
+    int32_t NumC8x8 = 4 / (SubWidthC * SubHeightC); //NumC8x8 表示色度块的数量
+
+    /* iCbCr为0时处理Cb分量，为1时处理Cr分量 */
     for (int iCbCr = 0; iCbCr < 2; iCbCr++) {
+      /* CodedBlockPatternChroma != 0时，则说明存在DC残差数据，且startIdx == 0(DC系数矩阵)，则调用residual_block_DC函数来解码DC系数。 */
       if ((CodedBlockPatternChroma & 3) && startIdx == 0)
-        /* CodedBlockPatternChroma != 0时，则说明存在DC残差数据。且startIdx == 0(第一个系数，DC)，则调用residual_block_DC函数来解码DC系数。 */
         residual_block_DC(ChromaDCLevel[iCbCr], 0, 4 * NumC8x8 - 1, 4 * NumC8x8,
                           iCbCr, 0);
+
+      /* 如不存在DC残差值，则将所有色度块的DC置为零，这里是以4x4宏块为单位处理的所以需要乘回4 */
       else
-        /* TODO 如不存在残差值，则将所有色度块的DC置为零，注意这里是以4x4宏块为单位处理的 */
         for (int i = 0; i < 4 * NumC8x8; i++)
           ChromaDCLevel[iCbCr][i] = 0;
     }
 
     /* 处理色度分量的AC残差系数 */
-    //第一层循环: 两个色度分量：Cb 和 Cr
-    for (int iCbCr = 0; iCbCr < 2; iCbCr++) {
-      //第二层循环: 遍历每个色度块
-      for (int i8x8 = 0; i8x8 < NumC8x8; i8x8++)
-        //第三层循环: 遍历每个色度块中的4x4子块
-        for (int i4x4 = 0; i4x4 < 4; i4x4++) {
+    for (int iCbCr = 0; iCbCr < 2; iCbCr++) { // 两个色度分量：Cb 和 Cr
+      for (int i8x8 = 0; i8x8 < NumC8x8; i8x8++) // 遍历每个色度块
+        for (int i4x4 = 0; i4x4 < 4; i4x4++) { // 遍历每个色度块中的4x4子块
           /* BlkIdx 是当前4x4子块的索引（以4x4宏块为单位） */
           int32_t BlkIdx = i8x8 * 4 + i4x4;
           /* 当CodedBlockPatternChroma == 2时，则说明存在DC,AC残差数据。 */

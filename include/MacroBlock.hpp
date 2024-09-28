@@ -51,7 +51,7 @@ class MacroBlock {
   int32_t prev_intra8x8_pred_mode_flag[4] = {0};
   /* 剩余的8x8帧内预测模式 */
   int32_t rem_intra8x8_pred_mode[4] = {0};
-  /* 帧内色度预测模式 */
+  /* 帧内色度预测模式: 0: DC, 1: Horizontal, 2: Vertical, 3: Plane*/
   int32_t intra_chroma_pred_mode = 0;
   /* 参考帧索引（列表0） */
   int32_t ref_idx_l0[4] = {0};
@@ -258,7 +258,8 @@ class MacroBlock {
  private:
   int pcm_sample_copy(const SPS *sps);
   int process_mb_qp(SliceHeader *&header, int32_t min = 0, int32_t max = 0);
-  int check_sub_mb_size(bool &noSubMbPartSizeLessThan8x8Flag,bool direct_8x8_inference_flag);
+  int check_sub_mb_size(bool &noSubMbPartSizeLessThan8x8Flag,
+                        bool direct_8x8_inference_flag);
 
   string getNameOfMbTypeStr(H264_MB_TYPE name_of_mb_type);
 

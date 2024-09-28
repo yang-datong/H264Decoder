@@ -120,6 +120,8 @@ class SPS {
   uint32_t num_ref_frames_in_pic_order_cnt_cycle = 0;
 
   int32_t Chroma_Format = 0;
+
+  /* SubWidthC 和 SubHeightC 表示色度分量的下采样因子 */
   int32_t SubWidthC = 0;
   int32_t SubHeightC = 0;
 
