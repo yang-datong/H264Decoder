@@ -44,18 +44,16 @@ int MacroBlock::decode(BitStream &bs, PictureBase &picture,
   _cabac = &cabac;
   if (_gb == nullptr) _gb = new CH264Golomb();
   _bs = &bs;
-  // 是否CABAC编码
-  _is_cabac = _pic->m_slice->slice_header->m_pps->entropy_coding_mode_flag;
+  _is_cabac = _pic->m_slice->slice_header->m_pps
+                  ->entropy_coding_mode_flag; // 是否CABAC编码
   /* ------------------  End ------------------ */
 
-  /* ------------------ 设置别名 ------------------ */
   SliceHeader *header = _pic->m_slice->slice_header;
-  SPS *sps = _pic->m_slice->slice_header->m_sps;
-  PPS *pps = _pic->m_slice->slice_header->m_pps;
+  const SPS *sps = _pic->m_slice->slice_header->m_sps;
+  const PPS *pps = _pic->m_slice->slice_header->m_pps;
   initFromSlice(*header, slice_data);
-  /* ------------------  End ------------------ */
 
-  // 计算宏块的左上角亮度样本相对于图片左上角样本的位置 ( x, y )，比如说x,y应该是(0,0) (16,0) (32,0) (48,0) */
+  // 计算宏块的左上角亮度样本相对于图片左上角样本的位置 (x,y)，如x,y应该是(0,0) (16,0) (32,0) (48,0) */
   int32_t &x = _pic->m_mbs[CurrMbAddr].m_mb_position_x;
   int32_t &y = _pic->m_mbs[CurrMbAddr].m_mb_position_y;
   _pic->inverse_mb_scanning_process(MbaffFrameFlag, CurrMbAddr,
@@ -64,67 +62,55 @@ int MacroBlock::decode(BitStream &bs, PictureBase &picture,
   /* 解码当前宏块类型 */
   process_mb_type(*header, header->slice_type);
 
-  /* 1. 如果宏块类型是 I_PCM，则直接从比特流中读取未压缩的 PCM 样本数据（非帧内、帧间预测，直接copy原始数据） */
-  if (m_mb_type_fixed == I_PCM) {
-    while (!bs.byte_aligned())
-      pcm_alignment_zero_bit = bs.readUn(1);
-    for (int i = 0; i < 256; i++)
-      pcm_sample_luma[i] = bs.readUn(sps->BitDepthY);
-    for (int i = 0; i < 2 * (int)(sps->MbWidthC * sps->MbHeightC); i++)
-      pcm_sample_chroma[i] = bs.readUn(sps->BitDepthC);
+  /* 1. 如果宏块类型是 I_PCM，直接从比特流中读取未压缩的 LCM 样本数据（直接copy原始数据） */
+  if (m_mb_type_fixed == I_PCM) pcm_sample_copy(sps);
 
-    /* 2. 如果宏块类型不是 I_PCM，则根据宏块类型和预测模式进行子宏块预测或宏块预测，根据宏块的类型和预测模式来决定如何处理宏块的预测信息。
-     * 对于I帧而言，首次进入时即为I_NxN, 对于P、B帧而言，m_mb_pred_mode,m_NumMbPart在macroblock_mb_skip()函数中已经计算过了 */
-  } else {
+  /* 2. 非I_PCM，根据宏块类型和预测模式进行子宏块预测或宏块预测 */
+  else {
     int32_t transform_size_8x8_flag_temp = 0;
     /* 是否所有子宏块的大小都不小于8x8 */
-    bool noSubMbPartSizeLessThan8x8Flag = 1;
+    bool noSubMbPartSizeLessThan8x8 = true;
+
+    //------------------------- 3.宏块预测 -------------------------
     // I_NxN，Intra_16x16 是一种帧内预测模式（所以这里表示的是帧间预测）
     if (m_name_of_mb_type != I_NxN && m_mb_pred_mode != Intra_16x16 &&
         m_NumMbPart == 4) {
-      //------------------------------------- 帧间预测(P,B) ---------------------------------------
-      /* 当前宏块是一个非Intra的宏块，并且被分成了4个8x8子宏块（一般来说4个8x8就是为了运动预测），进行子宏块预测 */
+      // 当前宏块为非Intra的宏块，并且被分成了4个8x8子宏块（一般4个8x8就是为了运动预测）,进行子宏块预测
       sub_mb_pred(slice_data);
-      /* 3. 子宏块大小检查 */
-      for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
-        if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8) {
-          if (NumSubMbPartFunc(mbPartIdx) > 1)
-            noSubMbPartSizeLessThan8x8Flag = 0;
-        } else if (!sps->direct_8x8_inference_flag)
-          noSubMbPartSizeLessThan8x8Flag = 0;
-      }
-
+      //子宏块大小检查
+      check_sub_mb_size(noSubMbPartSizeLessThan8x8,
+                        sps->direct_8x8_inference_flag);
     } else {
-      //------------------------------------- 帧内预测(I) ---------------------------------------
+      //若支持8x8变换，且当前为帧内预测模式，则进一步判断是否使用8x8变换
       if (pps->transform_8x8_mode_flag && m_name_of_mb_type == I_NxN)
         process_transform_size_8x8_flag(transform_size_8x8_flag_temp);
+
+      /* 整宏块预测 */
       mb_pred(slice_data);
     }
 
-    /* 4. 处理编码块模式，在上面步骤中，不管是帧间、帧内都已经完成了运动矢量的计算 */
+    //------------------------- 4.编码块模式和残差数据 -------------------------
     if (m_mb_pred_mode != Intra_16x16) {
-      //------------------------------------- 帧间预测(P,B) ---------------------------------------
-      /* 对于帧内预测模式，表示整个宏块作为一个16x16的块进行预测和编码。在这种模式下，宏块不会被进一步分割成更小的块，因此不需要考虑8x8变换 */
+      /* NOTE:对于帧内预测模式，表示整个宏块作为一个16x16的块进行预测和编码。在这种模式下，宏块不会被进一步分割成更小的块，因此不需要考虑8x8变换 */
 
       //处理编码块模式（Coded Block Pattern, CBP），它决定了哪些块（亮度块和色度块）包含非零系数。
       process_coded_block_pattern(sps->ChromaArrayType);
 
       /* - CodedBlockPatternLuma > 0: 说明宏块中至少有一个亮度块包含非零系数，因此需要对这些块进行逆变换和反量化。在这种情况下，可能需要考虑使用8x8变换;
-       * - pps.transform_8x8_mode_flag：检查是否编码器允许使用8x8变换;
        * - I_NxN 是帧内预测模式的一种，表示宏块被分割成多个4x4的小块进行预测。在这种模式下，通常不会使用8x8变换，因为块的大小已经是4x4;
        * - noSubMbPartSizeLessThan8x8Flag == 1 : 如果存在任一子宏块的大小小于8x8，那么使用8x8变换就不合适，因为变换块的大小应该与子宏块的大小匹配;
        * - B_Direct_16x16 是B帧中的一种直接模式，表示整个宏块作为一个16x16的块进行直接预测*/
       if (CodedBlockPatternLuma > 0 && pps->transform_8x8_mode_flag &&
-          m_name_of_mb_type != I_NxN && noSubMbPartSizeLessThan8x8Flag &&
+          m_name_of_mb_type != I_NxN && noSubMbPartSizeLessThan8x8 &&
           (m_name_of_mb_type != B_Direct_16x16 ||
            sps->direct_8x8_inference_flag))
         process_transform_size_8x8_flag(transform_size_8x8_flag_temp);
     }
 
-    /* 3. 如果宏块有残差数据（即 CodedBlockPatternLuma 或 CodedBlockPatternChroma 不为 0），则调用 residual 函数解码残差数据 */
+    // 处理残差数据（即 CodedBlockPatternLuma 或 CodedBlockPatternChroma 不为 0）
     if (CodedBlockPatternLuma > 0 || CodedBlockPatternChroma > 0 ||
         m_mb_pred_mode == Intra_16x16) {
-      //------------------------------------- 帧内预测(I) ---------------------------------------
+      //--------------------------- 帧内预测(I) -------------------------------
       process_mb_qp_delta();
       /* 处理残差数据，startIdx 和 endIdx 是针对整个 4x4 块的残差系数的索引 */
       residual(0, 15);
@@ -132,31 +118,12 @@ int MacroBlock::decode(BitStream &bs, PictureBase &picture,
   }
 
   /* 4. 根据解码的量化参数增量（mb_qp_delta），更新当前宏块的量化参数 QPY。*/
-  /* 7.4.5 Macroblock layer semantics , page 105 */
-  /* mb_qp_delta可以改变宏块层中QPY的值。 mb_qp_delta 的解码值应在 -( 26 + QpBdOffsetY / 2) 至 +( 25 + QpBdOffsetY / 2 ) 的范围内，包括端值。当 mb_qp_delta 对于任何宏块（包括 P_Skip 和 B_Skip 宏块类型）不存在时，应推断其等于 0。如果 mb_qp_delta 超出了范围，它会被修正到合法范围内。 */
-  if (mb_qp_delta < (int32_t)(-(26 + (int32_t)sps->QpBdOffsetY / 2)) ||
-      mb_qp_delta > (25 + (int32_t)sps->QpBdOffsetY / 2)) {
-    /* 如果 mb_qp_delta 超出范围，使用 CLIP3 函数将其限制在合法范围内 */
-    mb_qp_delta = CLIP3((-(26 + (int32_t)sps->QpBdOffsetY / 2)),
-                        (25 + (int32_t)sps->QpBdOffsetY / 2), mb_qp_delta);
-  }
-
-  /* 计算当前宏块的量化参数 QPY */
-  QPY = ((header->QPY_prev + mb_qp_delta + 52 + 2 * sps->QpBdOffsetY) %
-         (52 + sps->QpBdOffsetY)) -
-        sps->QpBdOffsetY;
-
-  /* 还原偏移后的QP */
-  QP1Y = QPY + sps->QpBdOffsetY;
-
-  /* 更新前一个宏块的量化参数（也就是当前宏快，对于下一个宏快来说就是前一个） */
-  header->QPY_prev = QPY;
+  const int32_t max = 26 + sps->QpBdOffsetY / 2;
+  process_mb_qp(header, -(max - 1), max);
 
   // 7.4.5 Macroblock layer semantics -> mb_qp_delta
   /* 计算出是否启用变换旁路模式 */
-  TransformBypassModeFlag =
-      (sps->qpprime_y_zero_transform_bypass_flag == 1 && QP1Y == 0) ? 1 : 0;
-
+  TransformBypassModeFlag = sps->qpprime_y_zero_transform_bypass_flag && !QP1Y;
   return 0;
 }
 
@@ -173,8 +140,6 @@ int MacroBlock::decode_skip(PictureBase &picture, const SliceData &slice_data,
   SliceHeader *header = _pic->m_slice->slice_header;
   m_slice_type_fixed = header->slice_type;
   initFromSlice(*header, slice_data);
-  const uint32_t QpBdOffsetY = header->m_sps->QpBdOffsetY; //输入
-  int32_t &QPY_prev = header->QPY_prev;                    //输出
 
   // 计算宏块的左上角亮度样本相对于图片左上角样本的位置 ( x, y )，比如说x,y应该是(0,0) (16,0) (32,0) (48,0) */
   int32_t &x = _pic->m_mbs[CurrMbAddr].m_mb_position_x;
@@ -194,33 +159,52 @@ int MacroBlock::decode_skip(PictureBase &picture, const SliceData &slice_data,
   RET(ret);
 
   /* 计算当前宏块的量化参数（QP）。量化参数影响解码后的图像质量和压缩率*/
-
-  /* 7.4.5 Macroblock layer semantics(page 105)：mb_qp_delta可以改变宏块层中QPY的值。 mb_qp_delta 的解码值应在 -( 26 + QpBdOffsetY / 2) 至 +( 25 + QpBdOffsetY / 2 ) 的范围内，包括端值。当 mb_qp_delta 对于任何宏块（包括 P_Skip 和 B_Skip 宏块类型）不存在时，应推断其等于 0。如果 mb_qp_delta 超出了范围，它会被修正到合法范围内。 */
-
-  //由于宏块被跳过，量化参数差值（mb_qp_delta）为0
-  mb_qp_delta = 0;
-
-  /*  计算当前宏块的量化参数 QPY，同时更新前宏块的量化参数（即当前宏快，对于下一个宏快来说就是前一个）
-   *  52: 在H.264标准中，量化参数的范围是0到51。这里的52用于处理循环。
-   *  QpBdOffsetY: 色度量化参数偏移量，通常与色度位深有关。在更高的色度位深（比如10bit或12bit）时，该偏移量使得量化参数可以在更宽的范围内调整。
-   *  其中 (QPY_prev + mb_qp_delta + 52 + 2 * QpBdOffsetY) 是为了确保即使在 (mb_qp_delta) 为负数的情况下，加法的结果也保持正值，从而有效地执行模运算。
-   *  模运算: (x % (52 + QpBdOffsetY)) 确保结果在合法的量化参数范围内。
-   *  调整值：最后从上一步的结果中减去 ( QpBdOffsetY )，将量化参数值重新调整回标准范围。这步确保即使在使用色度偏移的情况下，最终的量化参数仍然是有效的。
-   *
-	$QP_y = (QP_{y0} + \Delta{QP} + 52 + 2 \cdot QP_{offset_y}) \bmod ( 52 + QP_{offset_y} ) - QP_{offset_y}$
-*/
-  QPY_prev = QPY =
-      ((QPY_prev + mb_qp_delta + 52 + 2 * QpBdOffsetY) % (52 + QpBdOffsetY)) -
-      QpBdOffsetY;
-
-  // 还原偏移后的QP
-  QP1Y = QPY + QpBdOffsetY;
+  process_mb_qp(header);
 
   /* 将宏块类型和相关的片段信息设置到宏块中，以便后续的解码过程使用 */
   ret = MbPartPredMode();
 
   // 因CABAC会用到MbPartWidth/MbPartHeight信息，所以需要尽可能提前设置相关值
   RET(ret);
+  return 0;
+}
+
+int MacroBlock::process_mb_qp(SliceHeader *&header, int32_t min, int32_t max) {
+  const uint32_t QpBdOffsetY = header->m_sps->QpBdOffsetY; //输入
+  int32_t &QPY_prev = header->QPY_prev;                    //输出
+
+  /* 7.4.5 Macroblock layer semantics(page 105)：mb_qp_delta可以改变宏块层中QPY的值。 mb_qp_delta 的解码值应在 -( 26 + QpBdOffsetY / 2) 至 +( 25 + QpBdOffsetY / 2 ) 的范围内，包括端值。当 mb_qp_delta 对于任何宏块（包括 P_Skip 和 B_Skip 宏块类型）不存在时，应推断其等于 0。如果 mb_qp_delta 超出了范围，它会被修正到合法范围内。 */
+  if (min == 0 && max == 0)
+    //宏块被跳过时，量化参数差值（mb_qp_delta）为0
+    mb_qp_delta = 0;
+  else
+    mb_qp_delta = CLIP3(min, max, mb_qp_delta);
+
+  /*  计算当前宏块的量化参数 QPY，同时更新前宏块的量化参数（即当前宏快，对于下一个宏快来说就是前一个）
+   *  52: 在H.264标准中，量化参数的范围是0到51。这里的52用于处理循环。
+   *  QpBdOffsetY: 色度量化参数偏移量，通常与色度位深有关。在更高的色度位深（比如10bit或12bit）时，该偏移量使得量化参数可以在更宽的范围内调整。
+   *  其中 (QPY_prev + mb_qp_delta + 52 + 2 * QpBdOffsetY) 是为了确保即使在 (mb_qp_delta) 为负数的情况下，加法的结果也保持正值，从而有效地执行模运算。
+   *  模运算: (x % (52 + QpBdOffsetY)) 确保结果在合法的量化参数范围内。
+   *  调整值：最后从上一步的结果中减去 ( QpBdOffsetY )，将量化参数值重新调整回标准范围。这步确保即使在使用色度偏移的情况下，最终的量化参数仍然是有效的。*/
+  // $QP_y = (QP_{y0} + \Delta{QP} + 52 + 2 \cdot QP_{offset_y}) \bmod ( 52 + QP_{offset_y} ) - QP_{offset_y}$
+  QPY_prev = QPY =
+      ((QPY_prev + mb_qp_delta + 52 + 2 * QpBdOffsetY) % (52 + QpBdOffsetY)) -
+      QpBdOffsetY;
+
+  // 还原偏移后的QP
+  QP1Y = QPY + QpBdOffsetY;
+  return 0;
+}
+
+int MacroBlock::pcm_sample_copy(const SPS *sps) {
+  while (!_bs->byte_aligned())
+    pcm_alignment_zero_bit = _bs->readUn(1);
+
+#define LUMA_MB_SIZE 256 // 16x16
+  for (uint32_t i = 0; i < LUMA_MB_SIZE; i++)
+    pcm_sample_luma[i] = _bs->readUn(sps->BitDepthY);
+  for (uint32_t i = 0; i < 2 * sps->MbWidthC * sps->MbHeightC; i++)
+    pcm_sample_chroma[i] = _bs->readUn(sps->BitDepthC);
   return 0;
 }
 
@@ -409,56 +393,53 @@ int MacroBlock::NumSubMbPartFunc(int mbPartIdx) {
   return NumSubMbPart;
 }
 
-int MacroBlock::fix_mb_type(const int32_t slice_type_raw,
-                            const int32_t mb_type_raw,
+int MacroBlock::fix_mb_type(int32_t slice_type_raw, int32_t mb_type_raw,
                             int32_t &slice_type_fixed, int32_t &mb_type_fixed) {
   slice_type_fixed = slice_type_raw;
   mb_type_fixed = mb_type_raw;
 
-  if ((slice_type_raw % 5) == SLICE_I) {
-    // 不需要修正
-  } else if ((slice_type_raw % 5) == SLICE_SI) {
-    // The macroblock types for SI slices are specified in Tables 7-12 and 7-11.
-    // The mb_type value 0 is specified in Table 7-12 and the mb_type values 1
-    // to 26 are specified in Table 7-11, indexed by subtracting 1 from the
-    // value of mb_type.
+  /* SI Slice的宏块类型在表 7-12 和 7-11 中指定。 mb_type 值 0 在表 7-12 中指定，mb_type 值 1 到 26 在表 7-11 中指定，通过从 mb_type 值减 1 进行索引。 */
+  if ((slice_type_raw % 5) == SLICE_SI) {
     if (mb_type_raw == 0) {
       // 不需要修正
     } else if (mb_type_raw >= 1 && mb_type_raw <= 26) {
+      // 说明 SI slices 中含有I宏块,
       slice_type_fixed = SLICE_I;
-      mb_type_fixed = mb_type_raw - 1; // 说明 SI slices 中含有I宏块
+      mb_type_fixed = mb_type_raw - 1;
     } else {
-      printf("SI slices: mb_type_raw=%d; Must be in [0..26]\n", mb_type_raw);
+      std::cerr << "SI Slice must be in [0..26]. " << __FUNCTION__
+                << "():" << __LINE__ << std::endl;
       return -1;
     }
-  } else if ((slice_type_raw % 5) == SLICE_P ||
-             (slice_type_raw % 5) == SLICE_SP) {
-    // The macroblock types for P and SP slices are specified in Tables 7-13 and
-    // 7-11. mb_type values 0 to 4 are specified in Table 7-13 and mb_type
-    // values 5 to 30 are specified in Table 7-11, indexed by subtracting 5 from
-    // the value of mb_type.
+  }
+
+  /* P 和 SP 片的宏块类型在表 7-13 和 7-11 中指定。 mb_type 值 0 到 4 在表 7-13 中指定，mb_type 值 5 到 30 在表 7-11 中指定，通过从 mb_type 值减去 5 进行索引。 */
+  else if ((slice_type_raw % 5) == SLICE_P ||
+           (slice_type_raw % 5) == SLICE_SP) {
     if (mb_type_raw >= 0 && mb_type_raw <= 4) {
       // 不需要修正
     } else if (mb_type_raw >= 5 && mb_type_raw <= 30) {
+      // 说明 P and SP slices 中含有I宏块
       slice_type_fixed = SLICE_I;
-      mb_type_fixed = mb_type_raw - 5; // 说明 P and SP slices 中含有I宏块
+      mb_type_fixed = mb_type_raw - 5;
     } else {
-      printf("P and SP slices: mb_type_raw=%d; Must be in [0..30]\n",
-             mb_type_raw);
+      std::cerr << "P,SP Slice must be in [0..30]. " << __FUNCTION__
+                << "():" << __LINE__ << std::endl;
       return -1;
     }
-  } else if ((slice_type_raw % 5) == SLICE_B) {
-    // The macroblock types for B slices are specified in Tables 7-14 and 7-11.
-    // The mb_type values 0 to 22 are specified in Table 7-14 and the mb_type
-    // values 23 to 48 are specified in Table 7-11, indexed by subtracting 23
-    // from the value of mb_type.
+  }
+
+  /* B Slice的宏块类型在表 7-14 和 7-11 中指定。 mb_type 值 0 到 22 在表 7-14 中指定，mb_type 值 23 到 48 在表 7-11 中指定，通过从 mb_type 值减去 23 进行索引。 */
+  else if ((slice_type_raw % 5) == SLICE_B) {
     if (mb_type_raw >= 0 && mb_type_raw <= 22) {
       // 不需要修正
     } else if (mb_type_raw >= 23 && mb_type_raw <= 48) {
+      // 说明 B slices 中含有I宏块
       slice_type_fixed = SLICE_I;
-      mb_type_fixed = mb_type_raw - 23; // 说明 B slices 中含有I宏块
+      mb_type_fixed = mb_type_raw - 23;
     } else {
-      printf("B slices: mb_type_raw=%d; Must be in [0..48]\n", mb_type_raw);
+      std::cerr << "B Slice must be in [0..48]. " << __FUNCTION__
+                << "():" << __LINE__ << std::endl;
       return -1;
     }
   }
@@ -1311,6 +1292,18 @@ string MacroBlock::getNameOfMbTypeStr(H264_MB_TYPE name_of_mb_type) {
   return "MB_TYPE_NA";
 }
 
+int MacroBlock::check_sub_mb_size(bool &noSubMbPartSizeLessThan8x8Flag,
+                                  bool direct_8x8_inference_flag) {
+  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
+    if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8) {
+      if (NumSubMbPartFunc(mbPartIdx) > 1)
+        noSubMbPartSizeLessThan8x8Flag = false;
+    } else if (!direct_8x8_inference_flag)
+      noSubMbPartSizeLessThan8x8Flag = false;
+  }
+  return 0;
+}
+
 int MacroBlock::process_mb_type(const SliceHeader &header, int32_t slice_type) {
   int ret = 0;
   if (_is_cabac)
@@ -1319,7 +1312,7 @@ int MacroBlock::process_mb_type(const SliceHeader &header, int32_t slice_type) {
     mb_type = _gb->get_ue_golomb(*_bs);
   RET(ret);
 
-  // 需要立即修正mb_type的值
+  // 调整该宏块的mb_type、slice_type的值，为了更好的归属宏块类型，进行不同的类型预测
   ret = fix_mb_type(slice_type, mb_type, m_slice_type_fixed, m_mb_type_fixed);
   RET(ret);
 

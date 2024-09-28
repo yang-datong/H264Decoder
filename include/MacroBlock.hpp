@@ -256,9 +256,13 @@ class MacroBlock {
                            int32_t &SubMbPartWidth, int32_t &SubMbPartHeight);
 
  private:
+  int pcm_sample_copy(const SPS *sps);
+  int process_mb_qp(SliceHeader *&header, int32_t min = 0, int32_t max = 0);
+  int check_sub_mb_size(bool &noSubMbPartSizeLessThan8x8Flag,bool direct_8x8_inference_flag);
+
   string getNameOfMbTypeStr(H264_MB_TYPE name_of_mb_type);
 
-  int fix_mb_type(const int32_t slice_type_raw, const int32_t mb_type_raw,
+  int fix_mb_type(int32_t slice_type_raw, int32_t mb_type_raw,
                   int32_t &slice_type_fixed, int32_t &mb_type_fixed);
 
  public:
