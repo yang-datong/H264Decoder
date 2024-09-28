@@ -235,7 +235,7 @@ class MacroBlock {
   CH264Cabac *_cabac = nullptr;
   BitStream *_bs = nullptr;
   CH264ResidualBlockCavlc *_cavlc = nullptr;
-  PictureBase *_picture = nullptr;
+  PictureBase *_pic = nullptr;
   MB_RESIDUAL_LEVEL _mb_residual_level_dc = MB_RESIDUAL_UNKOWN;
   MB_RESIDUAL_LEVEL _mb_residual_level_ac = MB_RESIDUAL_UNKOWN;
 

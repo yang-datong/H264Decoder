@@ -40,28 +40,34 @@ void MacroBlock::initFromSlice(const SliceHeader &header,
 int MacroBlock::decode(BitStream &bs, PictureBase &picture,
                        const SliceData &slice_data, CH264Cabac &cabac) {
   /* ------------------ 初始化常用变量 ------------------ */
-  this->_picture = &picture;
-  this->_cabac = &cabac;
-  _is_cabac = _picture->m_slice->slice_header->m_pps
-                  ->entropy_coding_mode_flag; // 是否CABAC编码
-  if (_gb == nullptr) this->_gb = new CH264Golomb();
-  this->_bs = &bs;
+  _pic = &picture;
+  _cabac = &cabac;
+  if (_gb == nullptr) _gb = new CH264Golomb();
+  _bs = &bs;
+  // 是否CABAC编码
+  _is_cabac = _pic->m_slice->slice_header->m_pps->entropy_coding_mode_flag;
   /* ------------------  End ------------------ */
 
   /* ------------------ 设置别名 ------------------ */
-  SliceHeader *header = _picture->m_slice->slice_header;
-  SPS *sps = _picture->m_slice->slice_header->m_sps;
-  PPS *pps = _picture->m_slice->slice_header->m_pps;
+  SliceHeader *header = _pic->m_slice->slice_header;
+  SPS *sps = _pic->m_slice->slice_header->m_sps;
+  PPS *pps = _pic->m_slice->slice_header->m_pps;
   initFromSlice(*header, slice_data);
   /* ------------------  End ------------------ */
 
+  // 计算宏块的左上角亮度样本相对于图片左上角样本的位置 ( x, y )，比如说x,y应该是(0,0) (16,0) (32,0) (48,0) */
+  int32_t &x = _pic->m_mbs[CurrMbAddr].m_mb_position_x;
+  int32_t &y = _pic->m_mbs[CurrMbAddr].m_mb_position_y;
+  _pic->inverse_mb_scanning_process(MbaffFrameFlag, CurrMbAddr,
+                                    mb_field_decoding_flag, x, y);
+
+  /* 解码当前宏块类型 */
   process_mb_type(*header, header->slice_type);
 
   /* 1. 如果宏块类型是 I_PCM，则直接从比特流中读取未压缩的 PCM 样本数据（非帧内、帧间预测，直接copy原始数据） */
   if (m_mb_type_fixed == I_PCM) {
     while (!bs.byte_aligned())
       pcm_alignment_zero_bit = bs.readUn(1);
-    /* 16x16 */
     for (int i = 0; i < 256; i++)
       pcm_sample_luma[i] = bs.readUn(sps->BitDepthY);
     for (int i = 0; i < 2 * (int)(sps->MbWidthC * sps->MbHeightC); i++)
@@ -161,21 +167,20 @@ int MacroBlock::decode_skip(PictureBase &picture, const SliceData &slice_data,
                             CH264Cabac &cabac) {
   /* ------------------ 初始化常用变量 ------------------ */
   this->_cabac = &cabac;
-  this->_picture = &picture;
+  this->_pic = &picture;
   if (_gb == nullptr) this->_gb = new CH264Golomb();
   /* ------------------  End ------------------ */
-  SliceHeader *header = _picture->m_slice->slice_header;
+  SliceHeader *header = _pic->m_slice->slice_header;
   m_slice_type_fixed = header->slice_type;
   initFromSlice(*header, slice_data);
   const uint32_t QpBdOffsetY = header->m_sps->QpBdOffsetY; //输入
   int32_t &QPY_prev = header->QPY_prev;                    //输出
 
   // 计算宏块的左上角亮度样本相对于图片左上角样本的位置 ( x, y )，比如说x,y应该是(0,0) (16,0) (32,0) (48,0) */
-  int ret = _picture->inverse_macroblock_scanning_process(
-      MbaffFrameFlag, CurrMbAddr, mb_field_decoding_flag,
-      _picture->m_mbs[CurrMbAddr].m_mb_position_x,
-      _picture->m_mbs[CurrMbAddr].m_mb_position_y);
-  RET(ret);
+  int32_t &x = _pic->m_mbs[CurrMbAddr].m_mb_position_x;
+  int32_t &y = _pic->m_mbs[CurrMbAddr].m_mb_position_y;
+  _pic->inverse_mb_scanning_process(MbaffFrameFlag, CurrMbAddr,
+                                    mb_field_decoding_flag, x, y);
 
   /* 宏块类型处理：将宏块类型设置为跳过解码类型 */
   if (header->slice_type == SLICE_P || header->slice_type == SLICE_SP)
@@ -184,7 +189,8 @@ int MacroBlock::decode_skip(PictureBase &picture, const SliceData &slice_data,
     m_mb_type_fixed = mb_type = MB_TYPE_B_Skip;
 
   /* 宏块预测模式处理：据宏块类型，设置宏块的预测模式。这一步决定了如何对宏块进行预测和解码 */
-  ret = MbPartPredMode(m_mb_type_fixed, 0, m_name_of_mb_type, m_mb_pred_mode);
+  int ret =
+      MbPartPredMode(m_mb_type_fixed, 0, m_name_of_mb_type, m_mb_pred_mode);
   RET(ret);
 
   /* 计算当前宏块的量化参数（QP）。量化参数影响解码后的图像质量和压缩率*/
@@ -223,8 +229,8 @@ int MacroBlock::decode_skip(PictureBase &picture, const SliceData &slice_data,
  * 此处的预测模式包括帧内预测（Intra）和帧间预测（Inter）*/
 int MacroBlock::mb_pred(const SliceData &slice_data) {
   /* ------------------ 设置别名 ------------------ */
-  const SliceHeader *header = _picture->m_slice->slice_header;
-  SPS *sps = _picture->m_slice->slice_header->m_sps;
+  const SliceHeader *header = _pic->m_slice->slice_header;
+  SPS *sps = _pic->m_slice->slice_header->m_sps;
   /* ------------------  End ------------------ */
 
   /* --------------------------这一部分属于帧间预测-------------------------- */
@@ -341,7 +347,7 @@ void MacroBlock::set_current_mb_info(SUB_MB_TYPE_B_MBS_T type, int mbPartIdx) {
 /* 一般来说在处理 P 帧和 B 帧时会分割为子宏块处理，这样才能更好的进行运动预测（帧间预测） */
 /* 作用：计算出子宏块的预测值。这些预测值将用于后续的残差计算和解码过程。 */
 int MacroBlock::sub_mb_pred(const SliceData &slice_data) {
-  const SliceHeader *header = _picture->m_slice->slice_header;
+  const SliceHeader *header = _pic->m_slice->slice_header;
 
   /* 1. 解析子宏块类型，至于这里为什么是固定4个，是因为在macroblock_layer()函数中，已经通过 if (m_name_of_mb_type != I_NxN && m_mb_pred_mode != Intra_16x16 && m_NumMbPart == 4)进行限定 */
   for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++)
@@ -788,11 +794,11 @@ int MacroBlock::residual_block2(int32_t coeffLevel[], int32_t startIdx,
 int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
   int ret = 0;
 
-  if (!_cavlc) _cavlc = new CH264ResidualBlockCavlc(_picture, _bs);
+  if (!_cavlc) _cavlc = new CH264ResidualBlockCavlc(_pic, _bs);
   const uint32_t ChromaArrayType =
-      _picture->m_slice->slice_header->m_sps->ChromaArrayType;
-  const int32_t SubWidthC = _picture->m_slice->slice_header->m_sps->SubWidthC;
-  const int32_t SubHeightC = _picture->m_slice->slice_header->m_sps->SubHeightC;
+      _pic->m_slice->slice_header->m_sps->ChromaArrayType;
+  const int32_t SubWidthC = _pic->m_slice->slice_header->m_sps->SubWidthC;
+  const int32_t SubHeightC = _pic->m_slice->slice_header->m_sps->SubHeightC;
 
   //----------------------------- 处理 Luma 信息 --------------------------------------
   /*帧内残差：对于整个 16x16 宏块使用一个预测模式,残差数据分为 DC 和 AC 两部分
@@ -1306,20 +1312,15 @@ string MacroBlock::getNameOfMbTypeStr(H264_MB_TYPE name_of_mb_type) {
 }
 
 int MacroBlock::process_mb_type(const SliceHeader &header, int32_t slice_type) {
-  int ret = _picture->inverse_macroblock_scanning_process(
-      MbaffFrameFlag, CurrMbAddr, mb_field_decoding_flag,
-      _picture->m_mbs[CurrMbAddr].m_mb_position_x,
-      _picture->m_mbs[CurrMbAddr].m_mb_position_y);
-  RET(ret);
-
+  int ret = 0;
   if (_is_cabac)
     ret = _cabac->decode_mb_type(mb_type);
   else
     mb_type = _gb->get_ue_golomb(*_bs);
   RET(ret);
 
-  ret = fix_mb_type(slice_type, mb_type, m_slice_type_fixed,
-                    m_mb_type_fixed); // 需要立即修正mb_type的值
+  // 需要立即修正mb_type的值
+  ret = fix_mb_type(slice_type, mb_type, m_slice_type_fixed, m_mb_type_fixed);
   RET(ret);
 
   // 因CABAC会用到MbPartWidth/MbPartHeight信息，所以需要尽可能提前设置相关值

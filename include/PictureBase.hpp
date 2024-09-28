@@ -202,7 +202,7 @@ class PictureBase {
       uint8_t *pic_buff_chroma_pred, int32_t PicWidthInSamples); // 8.3.4.5
   int Sample_construction_process_for_I_PCM_macroblocks();       // 8.3.5
 
-  int inverse_macroblock_scanning_process(int32_t MbaffFrameFlag,
+  int inverse_mb_scanning_process(int32_t MbaffFrameFlag,
                                           int32_t mbAddr,
                                           int32_t mb_field_decoding_flag,
                                           int32_t &x,

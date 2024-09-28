@@ -1123,10 +1123,9 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
       int32_t yM = 0;
 
       // 6.4.1 Inverse macroblock scanning process
-      ret = inverse_macroblock_scanning_process(
+      inverse_mb_scanning_process(
           m_slice->slice_header->MbaffFrameFlag, mbAddrN,
           m_mbs[mbAddrN].mb_field_decoding_flag, xM, yM);
-      RETURN_IF_FAILED(ret != 0, ret);
 
       //--------------------------
       if (m_slice->slice_header->MbaffFrameFlag == 1 &&
@@ -1484,10 +1483,9 @@ int PictureBase::Intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
       int32_t yM = 0;
 
       // 6.4.1 Inverse macroblock scanning process
-      ret = inverse_macroblock_scanning_process(
+      inverse_mb_scanning_process(
           m_slice->slice_header->MbaffFrameFlag, mbAddrN,
           m_mbs[mbAddrN].mb_field_decoding_flag, xM, yM);
-      RETURN_IF_FAILED(ret != 0, ret);
 
       //--------------------------
       if (m_slice->slice_header->MbaffFrameFlag == 1 &&
@@ -1915,10 +1913,9 @@ int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
       int32_t yM = 0;
 
       // 6.4.1 Inverse macroblock scanning process
-      ret = inverse_macroblock_scanning_process(
+      inverse_mb_scanning_process(
           m_slice->slice_header->MbaffFrameFlag, mbAddrN,
           m_mbs[mbAddrN].mb_field_decoding_flag, xM, yM);
-      RETURN_IF_FAILED(ret != 0, ret);
 
       //--------------------------
       if (m_slice->slice_header->MbaffFrameFlag == 1 &&
@@ -2217,10 +2214,9 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
       int32_t yM = 0;
 
       // 6.4.1 Inverse macroblock scanning process
-      ret = inverse_macroblock_scanning_process(
+      inverse_mb_scanning_process(
           m_slice->slice_header->MbaffFrameFlag, mbAddrN,
           m_mbs[mbAddrN].mb_field_decoding_flag, xL, yL);
-      RETURN_IF_FAILED(ret != 0, ret);
 
       xM = (xL >> 4) * MbWidthC;
       yM = ((yL >> 4) * MbHeightC) + (yL % 2);
@@ -2511,30 +2507,21 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV444(
 // 8.3.5 Sample construction process for I_PCM macroblocks
 // This process is invoked when mb_type is equal to I_PCM.
 int PictureBase::Sample_construction_process_for_I_PCM_macroblocks() {
-  int ret = 0;
-
   int32_t i = 0;
   int32_t dy = 0;
 
-  //SliceHeader &slice_header = m_h264_slice_header;
-
   if (m_slice->slice_header->MbaffFrameFlag == 1 &&
-      m_mbs[CurrMbAddr].mb_field_decoding_flag == 1) {
+      m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
     dy = 2;
-  } else // MbaffFrameFlag is equal to 0 or the current macroblock is a frame
-         // macroblock
-  {
+  else // MbaffFrameFlag is equal to 0 or the current macroblock is a frame macroblock
     dy = 1;
-  }
 
   int32_t xP = 0;
   int32_t yP = 0;
 
   // 6.4.1 Inverse macroblock scanning processy
-  ret = inverse_macroblock_scanning_process(
-      m_slice->slice_header->MbaffFrameFlag, CurrMbAddr,
-      m_mbs[CurrMbAddr].mb_field_decoding_flag, xP, yP);
-  RETURN_IF_FAILED(ret != 0, ret);
+  inverse_mb_scanning_process(m_slice->slice_header->MbaffFrameFlag, CurrMbAddr,
+                              m_mbs[CurrMbAddr].mb_field_decoding_flag, xP, yP);
 
   //--------------------------------------
   for (i = 0; i < 256; ++i) {
@@ -2573,9 +2560,10 @@ int PictureBase::Sample_construction_process_for_I_PCM_macroblocks() {
 // 6.4.1 Inverse macroblock scanning process
 /* 输入: 宏块地址mbAddr。  
  * 输出: 地址为 mbAddr 的宏块的左上角亮度样本相对于图片左上角样本的位置 ( x, y )。*/
-int PictureBase::inverse_macroblock_scanning_process(
-    int32_t MbaffFrameFlag, int32_t mbAddr, int32_t mb_field_decoding_flag,
-    int32_t &x, int32_t &y) {
+int PictureBase::inverse_mb_scanning_process(int32_t MbaffFrameFlag,
+                                             int32_t mbAddr,
+                                             int32_t mb_field_decoding_flag,
+                                             int32_t &x, int32_t &y) {
   if (MbaffFrameFlag == 0) {
     //光栅扫描顺序是从左到右、从上到下逐行扫描的顺序。
     x = InverseRasterScan(mbAddr, 16, 16, PicWidthInSamplesL, 0);
@@ -4343,9 +4331,8 @@ int PictureBase::picture_construction_process_prior_to_deblocking_filter(
   /* 当前宏块的左上角亮度样本的位置是通过调用第 6.4.1 节中的逆宏块扫描过程来导出的，其中 CurrMbAddr 作为输入，输出被分配给 ( xP, yP )。 */
   int32_t xP = 0, yP = 0;
   // 6.4.1 Inverse macroblock scanning process
-  int ret = inverse_macroblock_scanning_process(MbaffFrameFlag, CurrMbAddr,
-                                                mb_field_decoding_flag, xP, yP);
-  RET(ret);
+  inverse_mb_scanning_process(MbaffFrameFlag, CurrMbAddr,
+                              mb_field_decoding_flag, xP, yP);
 
   /* 当 u 是亮度块时，对于亮度块的每个样本 uij，指定以下有序步骤：
    * 1. 根据块 u 的大小，适用以下规则： 
