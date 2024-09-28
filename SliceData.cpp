@@ -38,11 +38,11 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
     /* 1. 对于P,B帧，先解码出mb_skip_flag，判断是否跳过对MacroBlock的处理（P、B帧中存在不需要显式解码类型的宏块） */
     if (header->slice_type != SLICE_I && header->slice_type != SLICE_SI) {
       if (m_pps->entropy_coding_mode_flag == 0) {
-        /* CAVLC熵解码：连续跳过的宏块数量 */
+        /* CAVLC熵解码：连续跳过的宏块数量，同时在宏块层处理跳过的宏块，这里包括了解码跳过的宏块 */
         process_mb_skip_run(prevMbSkipped);
         if (mb_skip_run > 0) moreDataFlag = bs->more_rbsp_data();
       } else {
-        /* CABAC熵解码：单个宏块是否被跳过 */
+        /* CABAC熵解码：单个宏块是否被跳过，同时在宏块层处理跳过的宏块，这里包括了解码跳过的宏块 */
         process_mb_skip_flag(prevMbSkipped);
         moreDataFlag = !mb_skip_flag;
       }
@@ -50,17 +50,15 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
 
     /* 2. 如果当前宏块未执行跳过处理，则进一步对MacroBlock的处理 */
     if (moreDataFlag) {
-      /* 
-      1. 在MBAFF下，且当前宏块为宏块对中的首宏块，则读取是否在宏块级别对帧进行场间隔解码
-      2. 在MBAFF下，且当前宏块为宏块对中的次宏块，且上一个宏块被跳过，则读取是否在宏块级别对帧进行场间隔解码
-      这里解释一下2，前宏块（首宏块）被标记为“跳过”，即编码器认为该宏块的内容与之前的宏块或参考帧的相应部分相似，因此不对该宏块进行"显式编码"，次宏块仍需要通过引用首宏块的信息来重构内容。
+      /* 1. 在MBAFF下，且当前宏块为宏块对中的首宏块，则读取是否在宏块级别对帧进行场间隔解码;
+         2. 在MBAFF下，且当前宏块为宏块对中的次宏块，且上一个宏块被跳过，则读取是否在宏块级别对帧进行场间隔解码;
+      解释一下2，前宏块（首宏块）被标记为“跳过”，即编码器认为该宏块的内容与之前的宏块或参考帧的相应部分相似，因此不对该宏块进行"显式编码"，次宏块仍需要通过引用首宏块的信息来重构内容。
       当前宏块（首宏块）没有被标记跳过，实际上该次宏块已经在上次迭代中，通过首宏块一并处理过了*/
       if (header->MbaffFrameFlag &&
           (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
         process_mb_field_decoding_flag(m_pps->entropy_coding_mode_flag);
-
-      //mb_field_decoding_flag:0 -> 帧宏块，宏块对中两个宏块合并处理。
-      //mb_field_decoding_flag:1 -> 场宏块，某些部分需要场间隔解码，宏块对中两个宏块单独处理。
+      //Mb_field_decoding_flag:0 -> 帧宏块，宏块对中两个宏块合并处理。
+      //Mb_field_decoding_flag:1 -> 场宏块，某些部分需要场间隔解码，宏块对中两个宏块单独处理。
 
       /* 在宏块层解码帧内、帧间所需要的必须信息 */
       do_macroblock_layer();
@@ -73,13 +71,13 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
     if (!m_pps->entropy_coding_mode_flag)
       moreDataFlag = bs->more_rbsp_data();
     else {
-      /* 对于P帧和B帧，更新prevMbSkipped为当前宏块的跳过标志mb_skip_flag，以便下一个宏块处理时参考 */
+      /* 对于P帧和B帧，更新prefab Skipped为当前宏块的跳过标志Mb_skip_flag，以便下一个宏块处理时参考 */
       if (header->slice_type != SLICE_I && header->slice_type != SLICE_SI)
         prevMbSkipped = mb_skip_flag;
 
       /* 如果当前是顶宏块，说明后面一定还有底宏块 */
       if (header->MbaffFrameFlag && CurrMbAddr % 2 == 0)
-        moreDataFlag = 1;
+        moreDataFlag = true;
       else {
         /* 判断是否到达Slice的末尾 */
         process_end_of_slice_flag(end_of_slice_flag);
@@ -264,14 +262,12 @@ inline int SliceData::mbToSliceGroupMap() {
   return 0;
 }
 
-/* 跟process_MB_skip_flag()函数很相似 */
-/* 对于CALK熵编码时，调用 */
+/* mb_skip_run指定连续跳过的宏块的数量，在解码P或SP切片时，MB_type应被推断为P_Skip并且宏块类型统称为P宏块类型，或者在解码B切片时， MB_type应被推断为B_Skip，并且宏块类型统称为B宏块类型 */
 int SliceData::process_mb_skip_run(int32_t &prevMbSkipped) {
-  /* MB_skip_run指定连续跳过的宏块的数量，在解码P或SP切片时，MB_type应被推断为P_Skip并且宏块类型统称为P宏块类型，或者在解码B切片时， MB_type应被推断为B_Skip，并且宏块类型统称为B宏块类型 */
+  mb_skip_run = bs->readUE();
 
   /* 当mb_skip_run > 0时，实际上在接下来的宏块解析中，将要跳过处理，所以能够表示prevMbSkipped = 1*/
-  mb_skip_run = bs->readUE();
-  prevMbSkipped = (mb_skip_run > 0);
+  prevMbSkipped = mb_skip_run > 0;
 
   /* 对于每个跳过的宏块 */
   for (uint32_t i = 0; i < mb_skip_run; i++) {
@@ -281,7 +277,7 @@ int SliceData::process_mb_skip_run(int32_t &prevMbSkipped) {
     /* 2. 对于跳过的宏块同样需要增加实际的宏块计数 */
     pic->mb_cnt++;
 
-    /* 3. 对于MBAFF模式下,顶宏块需要先得到mb_field_decoding_flag值，以确定下面的帧间预测中如何处理宏块对 */
+    /* 3. 对于MBAFF模式下，顶宏块需要先确定当前是否为帧宏块还是场宏块，以确定下面的帧间预测中如何处理宏块对 */
     if (header->MbaffFrameFlag && CurrMbAddr % 2 == 0)
       //这里是推导（根据前面已解码的宏块进行推导当前值），而不是解码
       derivation_for_mb_field_decoding_flag();
@@ -304,10 +300,14 @@ int SliceData::process_mb_skip_run(int32_t &prevMbSkipped) {
 void SliceData::updatesLocationOfCurrentMacroblock(const bool MbaffFrameFlag) {
   /* m 代表每行宏块的总数，对于MBAFF模式下，分为宏块对，那么这里说的一行实际上是两行 */
   uint8_t h = MbaffFrameFlag ? 2 : 1;
-  const int32_t m = (pic->PicWidthInMbs * h);
-  pic->mb_x = (CurrMbAddr % m) / h;
-  pic->mb_y = (CurrMbAddr / m * h) + ((CurrMbAddr % m) % h);
+  const int32_t w =
+      (pic->PicWidthInMbs * h); //当为宏块对模式时，实际上$W = 2*W$
+  pic->mb_x = (CurrMbAddr % w) / h;
+  pic->mb_y = (CurrMbAddr / w * h) + ((CurrMbAddr % w) % h);
   pic->CurrMbAddr = CurrMbAddr;
+  //std::cout << "pic->mb_x:" << pic->mb_x << std::endl;
+  //std::cout << "pic->mb_y:" << pic->mb_y << std::endl;
+  //std::cout << "pic->CurrMbAddr:" << pic->CurrMbAddr << std::endl;
 }
 
 /* 如果当前宏块的运动矢量与参考帧中的预测块非常接近，且残差（即当前块与预测块的差异）非常小或为零，编码器可能会选择跳过该宏块的编码。
@@ -388,18 +388,17 @@ int SliceData::process_mb_skip_flag(const int32_t prevMbSkipped) {
   return 0;
 }
 
-int SliceData::process_mb_field_decoding_flag(
-    const bool entropy_coding_mode_flag) {
-  int ret;
+//解码mb_field_decoding_flag: 表示本宏块对是帧宏块对，还是场宏块对
+int SliceData::process_mb_field_decoding_flag(bool entropy_coding_mode_flag) {
+  int ret = 0;
   if (is_need_skip_read_mb_field_decoding_flag == false) {
-    //2 u(1) | ae(v) 表示本宏块对是帧宏块对，还是场宏块对
-    if (entropy_coding_mode_flag) {
+    if (entropy_coding_mode_flag)
       ret = cabac->decode_mb_field_decoding_flag(mb_field_decoding_flag);
-      RETURN_IF_FAILED(ret != 0, ret);
-    } else
+    else
       mb_field_decoding_flag = bs->readU1();
   } else
     is_need_skip_read_mb_field_decoding_flag = false;
+  RET(ret);
   return 0;
 }
 
@@ -428,12 +427,10 @@ int SliceData::derivation_for_mb_field_decoding_flag() {
 }
 
 int SliceData::do_macroblock_layer() {
-
   updatesLocationOfCurrentMacroblock(header->MbaffFrameFlag);
-  pic->mb_cnt++;
-
   /* 在宏块层中对每个宏块处理得到对应帧内、帧间解码所需要的信息，以及解码当前的控制层的信息 */
   pic->m_mbs[pic->CurrMbAddr].macroblock_layer(*bs, *pic, *this, *cabac);
+  pic->mb_cnt++;
   return 0;
 }
 
@@ -538,9 +535,7 @@ void SliceData::printFrameReorderPriorityInfo() {
         cout << "\t\t  DPB[" << i << "]: ";
       cout << sliceType << "; POC(显示顺序)=" << frame.PicOrderCnt
            << "; frame_num(帧编号，编码顺序)="
-           << frame.PicNum
-           //<< "; 帧总数=" << frame.m_PicNumCnt
-           << ";\n";
+           << frame.m_slice->slice_header->frame_num << ";\n";
     }
   }
   cout << "\t}" << endl;
@@ -561,10 +556,7 @@ void SliceData::printFrameReorderPriorityInfo() {
       sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader->slice_type);
       cout << "\t\t(前参考)RefPicList0[" << i << "]: " << sliceType
            << "; POC(显示顺序)=" << frame.PicOrderCnt
-           << "; frame_num(帧编号，编码顺序)="
-           << frame.PicNum
-           //<< "; PicNumCnt(原参考列表中的位置)=" << frame.m_PicNumCnt
-           << ";\n";
+           << "; frame_num(帧编号，编码顺序)=" << frame.PicNum << ";\n";
     }
   }
 
@@ -577,12 +569,9 @@ void SliceData::printFrameReorderPriorityInfo() {
       auto &sliceHeader = frame.m_slice->slice_header;
 
       sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader->slice_type);
-      cout << "\t\t(后参考)RefPicList0[" << i << "]: " << sliceType
+      cout << "\t\t(后参考)RefPicList1[" << i << "]: " << sliceType
            << "; POC(显示顺序)=" << frame.PicOrderCnt
-           << "; frame_num(帧编号，编码顺序)="
-           << frame.PicNum
-           //<< "; PicNumCnt(原参考列表中的位置)=" << frame.m_PicNumCnt
-           << ";\n";
+           << "; frame_num(帧编号，编码顺序)=" << frame.PicNum << ";\n";
     }
   }
   cout << "\t}" << endl;

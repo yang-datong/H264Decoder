@@ -271,7 +271,7 @@ class MacroBlock {
 
   void initFromSlice(const SliceHeader &header, const SliceData &slice_data);
 
-  int process_mb_type(SliceHeader &header, const int32_t slice_type);
+  int process_mb_type(const SliceHeader &header, int32_t slice_type);
   //Sub MacroBlock
   int process_sub_mb_type(const int mbPartIdx);
 

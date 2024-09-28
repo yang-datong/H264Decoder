@@ -3302,11 +3302,7 @@ int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
   int ctxIdxInc = 0;
   // 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element mb_field_decoding_flag
   int ret = derivation_of_ctxIdxInc_for_mb_field_decoding_flag(ctxIdxInc);
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return -1;
-  }
+  RET(ret);
 
   // Table 9-34 – Syntax elements and associated types of binarization,maxBinIdxCtx, and ctxIdxOffset
   int ctxIdxOffset = 70;
@@ -3315,11 +3311,7 @@ int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
 
   int &bin = synElVal;
   ret = DecodeBin(bypassFlag, ctxIdx, bin); // binIdx = 0;
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return -1;
-  }
+  RET(ret);
   return 0;
 }
 
