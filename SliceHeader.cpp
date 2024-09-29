@@ -469,7 +469,7 @@ int SliceHeader::set_scaling_lists_values() {
     // 如果编码器未给出缩放矩阵值，则缩放矩阵值全部默认为16
     fill_n(&ScalingList4x4[0][0], 6 * 16, 16u);
     fill_n(&ScalingList8x8[0][0], 6 * 64, 16u);
-    /* TODO YangJing 使用H264的默认矩阵？ <24-09-15 20:02:42> */
+    /* NOTE:这里使用H264的默认矩阵，会有问题，在默认情况下可能编码器就是使用的16量化值 <24-09-15 20:02:42> */
   } else {
     /* PPS中存在缩放矩阵则使用（PPS缩放矩阵优先级更高） */
     if (m_pps->pic_scaling_matrix_present_flag)
@@ -630,8 +630,8 @@ void SliceHeader::printf_scaling_lists_values() {
     for (int i = 0; i < row; ++i) {
       std::cout << "\t\t|";
       for (int j = 0; j < clo; ++j)
-        std::cout << setw(4) << ScalingList4x4[index][row * i + j];
-      std::cout << "|" << std::endl;
+        std::cout << setw(3) << (int)ScalingList4x4[index][row * i + j];
+      std::cout << " |" << std::endl;
     }
   }
   std::cout << "\t}" << std::endl;
@@ -643,8 +643,8 @@ void SliceHeader::printf_scaling_lists_values() {
     for (int i = 0; i < row; ++i) {
       std::cout << "\t\t|";
       for (int j = 0; j < clo; ++j)
-        std::cout << setw(4) << ScalingList8x8[index][row * i + j];
-      std::cout << "|" << std::endl;
+        std::cout << setw(3) << (int)ScalingList8x8[index][row * i + j];
+      std::cout << " |" << std::endl;
     }
   }
   std::cout << "\t}" << std::endl;
