@@ -21,12 +21,6 @@ PictureBase::PictureBase() {
 
 PictureBase::~PictureBase() { unInit(); }
 
-int PictureBase::printInfo() {
-  printf("---------Picture info------------\n");
-
-  return 0;
-}
-
 int PictureBase::reset() {
   //----------------------
   if (m_mbs) {
@@ -2869,10 +2863,9 @@ int PictureBase::Derivation_process_for_neighbouring_4x4_chroma_blocks(
  * – ( xW, yW )：相对于当前宏块表示的位置 (xN, yN) mbAddrN 宏块的左上角（而不是相对于当前宏块的左上角）。
  * */
 int PictureBase::derivation_for_neighbouring_locations(
-    const int32_t MbaffFrameFlag, const int32_t xN, const int32_t yN,
-    const int32_t currMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
-    int32_t &b4x4BlkIdxN, int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW,
-    const int32_t isChroma) {
+    int32_t MbaffFrameFlag, int32_t xN, int32_t yN, int32_t currMbAddr,
+    MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN, int32_t &b4x4BlkIdxN,
+    int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW, int32_t isChroma) {
 
   /* maxW 和 maxH 分别为指定位置分量 xN、xW 和 yN、yW 的最大值的变量 */
   int32_t maxW = 0, maxH = 0;
@@ -2942,8 +2935,8 @@ inline int PictureBase::derivation_of_availability_macroblock_addresses(
     +-----+-----+-----+
 */
 int PictureBase::derivation_for_neighbouring_macroblock_addr_availability(
-    const int32_t xN, const int32_t yN, const int32_t maxW, const int32_t maxH,
-    const int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN) {
+    int32_t xN, int32_t yN, int32_t maxW, int32_t maxH, int32_t CurrMbAddr,
+    MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN) {
 
   mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
   mbAddrN = -1;
@@ -3012,10 +3005,9 @@ int PictureBase::derivation_for_neighbouring_macroblock_addr_availability(
 
 // 6.4.12.1 Specification for neighbouring locations in fields and non-MBAFF frames
 int PictureBase::neighbouring_locations_non_MBAFF(
-    const int32_t xN, const int32_t yN, const int32_t maxW, const int32_t maxH,
-    const int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
-    int32_t &b4x4BlkIdx, int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW,
-    const int32_t isChroma) {
+    int32_t xN, int32_t yN, int32_t maxW, int32_t maxH, int32_t CurrMbAddr,
+    MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN, int32_t &b4x4BlkIdx,
+    int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW, int32_t isChroma) {
 
   mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
   mbAddrN = -1;
@@ -3102,10 +3094,9 @@ int PictureBase::
 // 6.4.12.2 Specification for neighbouring locations in MBAFF frames
 // Table 6-4 – Specification of mbAddrN and yM
 int PictureBase::neighbouring_locations_MBAFF(
-    const int32_t xN, const int32_t yN, const int32_t maxW, const int32_t maxH,
-    const int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
-    int32_t &b4x4BlkIdxN, int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW,
-    const int32_t isChroma) {
+    int32_t xN, int32_t yN, int32_t maxW, int32_t maxH, int32_t CurrMbAddr,
+    MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN, int32_t &b4x4BlkIdxN,
+    int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW, int32_t isChroma) {
 
   int32_t yM = 0;
   mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
