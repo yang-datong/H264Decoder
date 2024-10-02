@@ -69,24 +69,29 @@ int MacroBlock::decode(BitStream &bs, PictureBase &picture,
   else {
     int32_t transform_size_8x8_flag_temp = 0;
     /* 是否所有子宏块的大小都不小于8x8 */
-    bool noSubMbPartSizeLessThan8x8 = true;
+    bool noSubMbSizeLessThan8x8 = true;
 
-    //------------------------- 3.宏块预测 -------------------------
+    //------------------------- 3.宏块预测信息解码 -------------------------
     // 对于P_8x8,B_8x8宏块，且为无预测模式时，说明需要进行子宏块预测（一般子宏块预测主要用于P和B帧中)
     if (m_name_of_mb_type != I_NxN && m_mb_pred_mode != Intra_16x16 &&
         m_NumMbPart == 4) {
+      //  解析4个8x8子宏块类型
+      for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++)
+        process_sub_mb_type(mbPartIdx);
+
+      // 解码子宏块预测(或帧间，或帧内)信息，如获取预测模式（帧内）、运动矢量差（帧间）
       sub_mb_pred(slice_data);
-      // 子宏块大小检查
-      check_sub_mb_size(noSubMbPartSizeLessThan8x8,
-                        sps->direct_8x8_inference_flag);
+
+      // 检查是否所有子宏块的大小都不小于8x8，用于后面的8x8变换模式
+      check_sub_mb_size(noSubMbSizeLessThan8x8, sps->direct_8x8_inference_flag);
     }
     // 其他情况均为整宏块预测
     else {
-      //若I_8x8,I_4x4预测模式，且支持8x8变换，则进一步判断是否使用8x8变换
+      //若为I_8x8,I_4x4预测模式，且编码器支持8x8变换，则进一步判断是否使用8x8变换
       if (pps->transform_8x8_mode_flag && m_name_of_mb_type == I_NxN)
         process_transform_size_8x8_flag(transform_size_8x8_flag_temp);
 
-      /* 整宏块预测(或帧间，或帧内) */
+      // 解码整宏块预测(或帧间，或帧内)信息，如获取预测模式（帧内）、运动矢量差（帧间）
       mb_pred(slice_data);
     }
 
@@ -99,7 +104,7 @@ int MacroBlock::decode(BitStream &bs, PictureBase &picture,
 
       /* 宏块中存在亮度块包含非零系数，需要对这些块进行逆变换和反量化，且宏块大小至少有8x8的大小(8x8,16x8,8x16,16x16)，在这种情况下，可能需要考虑使用8x8变换。 注，这里I_8x8也是不需要进行的*/
       if (CodedBlockPatternLuma > 0 && pps->transform_8x8_mode_flag &&
-          m_name_of_mb_type != I_NxN && noSubMbPartSizeLessThan8x8 &&
+          m_name_of_mb_type != I_NxN && noSubMbSizeLessThan8x8 &&
           (m_name_of_mb_type != B_Direct_16x16 ||
            sps->direct_8x8_inference_flag))
         process_transform_size_8x8_flag(transform_size_8x8_flag_temp);
@@ -207,20 +212,18 @@ int MacroBlock::pcm_sample_copy(const SPS *sps) {
 }
 
 // 7.3.5.1 Macroblock prediction syntax
-/* 根据宏块的预测模式（m_mb_pred_mode），处理亮度和色度的预测模式以及运动矢量差（MVD）的计算 
- * 此处的预测模式包括帧内预测（Intra）和帧间预测（Inter）*/
+/* 根据宏块的预测模式（m_mb_pred_mode），处理亮度和色度的预测模式以及运动矢量差（MVD）的计算。此处的预测模式包括帧内预测（Intra）和帧间预测（Inter）*/
 int MacroBlock::mb_pred(const SliceData &slice_data) {
   /* ------------------ 设置别名 ------------------ */
   const SliceHeader *header = _pic->m_slice->slice_header;
-  SPS *sps = _pic->m_slice->slice_header->m_sps;
+  const SPS *sps = _pic->m_slice->slice_header->m_sps;
   /* ------------------  End ------------------ */
 
-  /* --------------------------这一部分属于帧间预测-------------------------- */
+  /* --------------------------这一部分属于帧内预测-------------------------- */
   /* 获取当前宏块所使用的预测模式 */
   if (m_mb_pred_mode == Intra_4x4 || m_mb_pred_mode == Intra_8x8 ||
       m_mb_pred_mode == Intra_16x16) {
-
-    /* 宏块的大小通常是 16x16 像素。对于 Intra_4x4 预测模式，宏块被划分为 16 个 4x4 的亮度块（luma blocks），每个 4x4 块独立进行预测。这种模式允许更细粒度的预测，从而更好地适应图像中的局部变化。 */
+    /* 宏块的大小通常是 16x16 像素。对于 Intra_4x4 预测模式，宏块被分区为 16 个 4x4 的亮度块（luma blocks），每个 4x4 块独立进行预测。这种模式允许更细粒度的预测，从而更好地适应图像中的局部变化。 */
 
     // NOTE: 这里有一个规则：每个块（假如是4x4) 可以选择一个预测模式（总共有 9 种可能的模式）。然而，相邻的 4x4 块通常会选择相同或相似的预测模式。为了减少冗余信息，H.264 标准引入了一个标志位 prev_intra4x4_pred_mode_flag，用于指示当前块是否使用了与前一个块相同的预测模式。通过这种方式，编码器可以在相邻块使用相同预测模式时节省比特数，因为不需要为每个块单独编码预测模式。只有在预测模式发生变化时，才需要额外编码新的模式，从而减少了整体的编码开销。
 
@@ -229,8 +232,8 @@ int MacroBlock::mb_pred(const SliceData &slice_data) {
       for (int luma4x4BlkIdx = 0; luma4x4BlkIdx < 16; luma4x4BlkIdx++) {
         //解码每个块的前一个 Intra 4x4 预测模式标志
         process_prev_intra4x4_pred_mode_flag(luma4x4BlkIdx);
-        if (!prev_intra4x4_pred_mode_flag[luma4x4BlkIdx])
-          //当前一个块不存在预测模式时，解码剩余的 Intra 4x4 预测模式
+        //当前一个块不存在预测模式时，解码当前的 Intra 4x4 预测模式
+        if (prev_intra4x4_pred_mode_flag[luma4x4BlkIdx] == 0)
           process_rem_intra4x4_pred_mode(luma4x4BlkIdx);
       }
     }
@@ -240,70 +243,67 @@ int MacroBlock::mb_pred(const SliceData &slice_data) {
       for (int luma8x8BlkIdx = 0; luma8x8BlkIdx < 4; luma8x8BlkIdx++) {
         //解码每个块的前一个 Intra 8x8 预测模式标志
         process_prev_intra8x8_pred_mode_flag(luma8x8BlkIdx);
+        //当前一个块不存在预测模式时，解码当前的 Intra 8x8 预测模式
         if (!prev_intra8x8_pred_mode_flag[luma8x8BlkIdx])
-          //当前一个块不存在预测模式时，解码剩余的 Intra 8x8 预测模式
           process_rem_intra8x8_pred_mode(luma8x8BlkIdx);
       }
     }
 
-    /* 如果色度阵列类型为 YUV420 或 YUV422，则处理色度的 Intra 预测模式 */
+    /* 3. 对于 Intra_16x16 模式，这里不需要显示的解码，后续直接使用 */
+    if (m_mb_pred_mode == Intra_16x16) {
+    }
+
+    /* 4. 色度阵列类型为 YUV420 或 YUV422时，则解码intra_chroma_pred_mode，色度通常有自己的帧内预测模式 */
     if (sps->ChromaArrayType == 1 || sps->ChromaArrayType == 2)
       process_intra_chroma_pred_mode();
 
-    /* 当前预测模式不为直接模式(通过周围块的信息来推导运动矢量) */
-  } else if (m_mb_pred_mode != Direct) {
     /* --------------------------这一部分属于帧间预测-------------------------- */
+  } else if (m_mb_pred_mode != Direct) {
     int ret;
     H264_MB_PART_PRED_MODE mb_pred_mode = MB_PRED_MODE_NA;
+
+    //------------------------- 运动矢量参考帧索引 ----------------------------
+    //m_NumMbPart为宏块分区：一般为1,2，即为1时：P_16x16, B_16x16, 为2时：P_16x8, P_8x16, B_16x8, B_8x16
     for (int mbPartIdx = 0; mbPartIdx < m_NumMbPart; mbPartIdx++) {
       ret = MbPartPredMode(m_name_of_mb_type, mbPartIdx,
                            transform_size_8x8_flag, mb_pred_mode);
       RET(ret);
-
-      /* (前参考）参考帧列表 0 中有多于一个参考帧可供选择 || 当前宏块的场解码模式与整个图片的场模式不同(这种情况下需要特别处理参考帧索引) 
-       * 并且它使用的是参考帧列表 0（非RefPicList1，即RefPicList0）进行预测*/
-      if ((header->num_ref_idx_l0_active_minus1 + 1 > 1 ||
+      /* 前参考帧列表中有多于一个参考帧可供选择 || 当前宏块的场解码模式与整个图片的场模式不同(这种情况下需要特别处理参考帧索引) */
+      if ((header->num_ref_idx_l0_active_minus1 > 0 ||
            mb_field_decoding_flag != field_pic_flag) &&
-          mb_pred_mode != Pred_L1)
-        /* 根据预测模式处理参考索引*/
+          (mb_pred_mode == Pred_L0 || mb_pred_mode == BiPred))
+        /* 根据预测模式处理参考索引，如P_L0_16x16 -> Pred_L0 , P_L0_L0_8x16 -> Pred_L0 , B_Bi_16x16 -> BiPred*/
         process_ref_idx_l0(mbPartIdx, header->num_ref_idx_l0_active_minus1);
-    }
 
-    for (int mbPartIdx = 0; mbPartIdx < m_NumMbPart; mbPartIdx++) {
-      ret = MbPartPredMode(m_name_of_mb_type, mbPartIdx,
-                           transform_size_8x8_flag, mb_pred_mode);
-      RET(ret);
-
-      /* (后参考）参考帧列表 1 中有多于一个参考帧可供选择 || 当前宏块的场解码模式与整个图片的场模式不同(这种情况下需要特别处理参考帧索引) 
-       * 并且它使用的是参考帧列表 1（非RefPicList0，即RefPicList1）进行预测*/
-      if ((header->num_ref_idx_l1_active_minus1 + 1 > 1 ||
+      /* 后参考帧列表中有多于一个参考帧可供选择*/
+      if ((header->num_ref_idx_l1_active_minus1 > 0 ||
            mb_field_decoding_flag != field_pic_flag) &&
-          mb_pred_mode != Pred_L0)
-        /* 根据预测模式处理参考索引*/
+          (mb_pred_mode == Pred_L1 || mb_pred_mode == BiPred))
+        /* 根据预测模式处理参考索引，如B_L1_16x16 -> Pred_L1 , B_L1_Bi_8x16 -> BiPred */
         process_ref_idx_l1(mbPartIdx, header->num_ref_idx_l1_active_minus1);
     }
 
-    //NOTE: 预测模式可以是 Pred_L0、Pred_L1 或 BiPred，分别表示使用参考帧列表0、参考帧列表1或双向预测
-
+    //------------------------- 运动矢量 ----------------------------
+    //前预测模式，或双向预测
     for (int mbPartIdx = 0; mbPartIdx < m_NumMbPart; mbPartIdx++) {
       ret = MbPartPredMode(m_name_of_mb_type, mbPartIdx,
                            transform_size_8x8_flag, mb_pred_mode);
-      if (mb_pred_mode != Pred_L1) {
-        /* 根据预测模式处理运动矢量差，运动矢量差是当前宏块部分的运动矢量与预测运动矢量之间的差值 */
+      RET(ret);
+      if (mb_pred_mode == Pred_L0 || mb_pred_mode == BiPred)
+        /* 分别处理水平方向和垂直方向上的运动矢量差 */
         for (int compIdx = 0; compIdx < 2; compIdx++)
-          /* compIdx 遍历两个分量（通常是水平方向和垂直方向），分别处理这两个方向上的运动矢量差。 */
+          /* 根据预测模式处理运动矢量差 */
           process_mvd_l0(mbPartIdx, compIdx);
-      }
     }
 
+    //后预测模式，或双向预测
     for (int mbPartIdx = 0; mbPartIdx < m_NumMbPart; mbPartIdx++) {
       ret = MbPartPredMode(m_name_of_mb_type, mbPartIdx,
                            transform_size_8x8_flag, mb_pred_mode);
-      if (mb_pred_mode != Pred_L0) {
-        /* 同上 */
+      RET(ret);
+      if (mb_pred_mode == Pred_L1 || mb_pred_mode == BiPred)
         for (int compIdx = 0; compIdx < 2; compIdx++)
           process_mvd_l1(mbPartIdx, compIdx);
-      }
     }
   }
   return 0;
@@ -330,47 +330,47 @@ void MacroBlock::set_current_mb_info(SUB_MB_TYPE_B_MBS_T type, int mbPartIdx) {
 /* 作用：计算出子宏块的预测值。这些预测值将用于后续的残差计算和解码过程。 */
 int MacroBlock::sub_mb_pred(const SliceData &slice_data) {
   const SliceHeader *header = _pic->m_slice->slice_header;
+  /* NOTE:由于是子宏块，所以没有帧内预测信息 */
 
-  /* 1. 解析子宏块类型，至于这里为什么是固定4个，是因为在macroblock_layer()函数中，已经通过 if (m_name_of_mb_type != I_NxN && m_mb_pred_mode != Intra_16x16 && m_NumMbPart == 4)进行限定 */
-  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++)
-    process_sub_mb_type(mbPartIdx);
-
-  /* 2. 解析参考帧索引 */
+  //------------------------- 运动矢量参考帧索引 ----------------------------
+  /* TODO：这里进行了合并，还没有测试有没有问题 */
   for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
     if ((header->num_ref_idx_l0_active_minus1 > 0 ||
          mb_field_decoding_flag != field_pic_flag) &&
-        m_name_of_mb_type != P_8x8ref0 &&
-        m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
+        m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8) {
+
+      /* 前参考帧列表中有多于一个参考帧可供选择，NOTE:ref0表明对于所有这些子宏块，运动矢量的参考索引固定为0 */
+      if (m_name_of_mb_type != P_8x8ref0 &&
+          m_sub_mb_pred_mode[mbPartIdx] != Pred_L1)
+        /* 根据预测模式处理参考索引，如P_8x8 -> Pred_L0 */
+        process_ref_idx_l0(mbPartIdx, header->num_ref_idx_l0_active_minus1);
+
+      /* 后参考帧列表中有多于一个参考帧可供选择*/
+      if (m_sub_mb_pred_mode[mbPartIdx] != Pred_L0)
+        process_ref_idx_l1(mbPartIdx, header->num_ref_idx_l1_active_minus1);
+    }
+  }
+
+  //------------------------- 运动矢量 ----------------------------
+  //前预测模式，或双向预测
+  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
+    if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
         m_sub_mb_pred_mode[mbPartIdx] != Pred_L1)
-      process_ref_idx_l0(mbPartIdx, header->num_ref_idx_l0_active_minus1);
+      //m_NumMbPart[mbPartIdx]为宏块分区：一般为1,2，即为1时：P_8x8, B_8x8, 为2时：P_4x8, P_8x4, B_4x8, B_8x4
+      for (int subMbIdx = 0; subMbIdx < NumSubMbPart[mbPartIdx]; subMbIdx++)
+        /* 分别处理水平方向和垂直方向上的运动矢量差 */
+        for (int compIdx = 0; compIdx < 2; compIdx++)
+          /* 根据预测模式处理运动矢量差 */
+          process_mvd_l0(mbPartIdx, compIdx, subMbIdx);
   }
 
+  //后预测模式，或双向预测
   for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
-    if ((header->num_ref_idx_l1_active_minus1 > 0 ||
-         mb_field_decoding_flag != field_pic_flag) &&
-        m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
+    if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
         m_sub_mb_pred_mode[mbPartIdx] != Pred_L0)
-      process_ref_idx_l1(mbPartIdx, header->num_ref_idx_l1_active_minus1);
-  }
-
-  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
-    if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
-        m_sub_mb_pred_mode[mbPartIdx] != Pred_L1) {
-      for (int subMbPartIdx = 0; subMbPartIdx < NumSubMbPart[mbPartIdx];
-           subMbPartIdx++)
+      for (int subMbIdx = 0; subMbIdx < NumSubMbPart[mbPartIdx]; subMbIdx++)
         for (int compIdx = 0; compIdx < 2; compIdx++)
-          process_mvd_l0(mbPartIdx, compIdx, subMbPartIdx);
-    }
-  }
-
-  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
-    if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8 &&
-        m_sub_mb_pred_mode[mbPartIdx] != Pred_L0) {
-      for (int subMbPartIdx = 0; subMbPartIdx < NumSubMbPart[mbPartIdx];
-           subMbPartIdx++)
-        for (int compIdx = 0; compIdx < 2; compIdx++)
-          process_mvd_l1(mbPartIdx, compIdx, subMbPartIdx);
-    }
+          process_mvd_l1(mbPartIdx, compIdx, subMbIdx);
   }
 
   return 0;
@@ -1329,14 +1329,14 @@ int MacroBlock::process_sub_mb_type(const int mbPartIdx) {
   RET(ret);
 
   /* 2. 根据子宏块类型设置预测模式等信息 */
+  // 设置 P 帧子宏块信息
   if (m_slice_type_fixed == SLICE_P && sub_mb_type[mbPartIdx] >= 0 &&
       sub_mb_type[mbPartIdx] <= 3)
-    // 设置 P 帧子宏块信息
     set_current_mb_info(sub_mb_type_P_mbs_define[sub_mb_type[mbPartIdx]],
                         mbPartIdx);
+  // 设置 B 帧子宏块信息
   else if (m_slice_type_fixed == SLICE_B && sub_mb_type[mbPartIdx] >= 0 &&
            sub_mb_type[mbPartIdx] <= 12)
-    // 设置 B 帧子宏块信息
     set_current_mb_info(sub_mb_type_B_mbs_define[sub_mb_type[mbPartIdx]],
                         mbPartIdx);
   else
@@ -1448,19 +1448,17 @@ int MacroBlock::process_intra_chroma_pred_mode() {
 int MacroBlock::process_ref_idx_l0(int mbPartIdx,
                                    uint32_t num_ref_idx_l0_active_minus1) {
   int ret = 0;
-  const int32_t ref_idx_flag = 0;
   if (_is_cabac)
-    ret = _cabac->decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
-                                    ref_idx_l0[mbPartIdx]);
+    ret = _cabac->decode_ref_idx_lX(0, mbPartIdx, ref_idx_l0[mbPartIdx]);
   else {
-    /* ref_idx_l0[ mbPartIdx ]的范围、参考图片列表 0 中的索引以及用于预测的参考图片内的字段奇偶校验（如果适用）指定如下： 
-     * – 如果 MbaffFrameFlag 等于 0 或 mb_field_decoding_flag 为等于 0，ref_idx_l0[ mbPartIdx ] 的值应在 0 到 num_ref_idx_l0_active_minus1 的范围内（包括 0 和 num_ref_idx_l0_active_minus1）。  
-     * — 否则（MbaffFrameFlag 等于 1 并且 mb_field_decoding_flag 等于 1），ref_idx_l0[ mbPartIdx ] 的值应在 0 到 2 * num_ref_idx_l0_active_minus1 + 1 的范围内（含）。  当仅使用一张参考图片进行帧间预测时，ref_idx_l0[mbPartIdx]的值应被推断为等于0。 */
+    /* 如果当前不是MBAFF帧或宏块不是场模式解码，size就直接设置为num_ref_idx_l0_active_minus1
+     * 如果这两个标志表示当前宏块是在MBAFF帧的场模式下，size被设置为num_ref_idx_l0_active_minus1 * 2
+     * 目的是在场模式下，每个场可能都需要独立的参考帧，因此参考列表的实际长度可能是帧模式的两倍。 */
     uint32_t size = 0;
-    if (MbaffFrameFlag == 0 || mb_field_decoding_flag == 0)
-      size = num_ref_idx_l0_active_minus1;
-    else
+    if (MbaffFrameFlag || mb_field_decoding_flag)
       size = num_ref_idx_l0_active_minus1 * 2;
+    else
+      size = num_ref_idx_l0_active_minus1;
 
     ref_idx_l0[mbPartIdx] = _gb->get_te_golomb(*_bs, size);
   }
@@ -1470,16 +1468,14 @@ int MacroBlock::process_ref_idx_l0(int mbPartIdx,
 int MacroBlock::process_ref_idx_l1(int mbPartIdx,
                                    uint32_t num_ref_idx_l1_active_minus1) {
   int ret = 0;
-  const int32_t ref_idx_flag = 1;
   if (_is_cabac)
-    ret = _cabac->decode_ref_idx_lX(ref_idx_flag, mbPartIdx,
-                                    ref_idx_l1[mbPartIdx]);
+    ret = _cabac->decode_ref_idx_lX(1, mbPartIdx, ref_idx_l1[mbPartIdx]);
   else {
     uint32_t size = 0;
-    if (MbaffFrameFlag == 0 || mb_field_decoding_flag == 0)
-      size = num_ref_idx_l1_active_minus1;
-    else
+    if (MbaffFrameFlag || mb_field_decoding_flag)
       size = num_ref_idx_l1_active_minus1 * 2;
+    else
+      size = num_ref_idx_l1_active_minus1;
 
     ref_idx_l1[mbPartIdx] = _gb->get_te_golomb(*_bs, size);
   }
