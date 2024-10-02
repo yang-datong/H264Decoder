@@ -271,14 +271,16 @@ int MacroBlock::mb_pred(const SliceData &slice_data) {
       /* 前参考帧列表中有多于一个参考帧可供选择 || 当前宏块的场解码模式与整个图片的场模式不同(这种情况下需要特别处理参考帧索引) */
       if ((header->num_ref_idx_l0_active_minus1 > 0 ||
            mb_field_decoding_flag != field_pic_flag) &&
-          (mb_pred_mode == Pred_L0 || mb_pred_mode == BiPred))
+          //(mb_pred_mode == Pred_L0 || mb_pred_mode == BiPred))
+          mb_pred_mode != Pred_L1)
         /* 根据预测模式处理参考索引，如P_L0_16x16 -> Pred_L0 , P_L0_L0_8x16 -> Pred_L0 , B_Bi_16x16 -> BiPred*/
         process_ref_idx_l0(mbPartIdx, header->num_ref_idx_l0_active_minus1);
 
       /* 后参考帧列表中有多于一个参考帧可供选择*/
       if ((header->num_ref_idx_l1_active_minus1 > 0 ||
            mb_field_decoding_flag != field_pic_flag) &&
-          (mb_pred_mode == Pred_L1 || mb_pred_mode == BiPred))
+          //(mb_pred_mode == Pred_L1 || mb_pred_mode == BiPred))
+          mb_pred_mode != Pred_L0)
         /* 根据预测模式处理参考索引，如B_L1_16x16 -> Pred_L1 , B_L1_Bi_8x16 -> BiPred */
         process_ref_idx_l1(mbPartIdx, header->num_ref_idx_l1_active_minus1);
     }
@@ -289,7 +291,8 @@ int MacroBlock::mb_pred(const SliceData &slice_data) {
       ret = MbPartPredMode(m_name_of_mb_type, mbPartIdx,
                            transform_size_8x8_flag, mb_pred_mode);
       RET(ret);
-      if (mb_pred_mode == Pred_L0 || mb_pred_mode == BiPred)
+      //if (mb_pred_mode == Pred_L0 || mb_pred_mode == BiPred)
+      if (mb_pred_mode != Pred_L1)
         /* 分别处理水平方向和垂直方向上的运动矢量差 */
         for (int compIdx = 0; compIdx < 2; compIdx++)
           /* 根据预测模式处理运动矢量差 */
@@ -301,7 +304,8 @@ int MacroBlock::mb_pred(const SliceData &slice_data) {
       ret = MbPartPredMode(m_name_of_mb_type, mbPartIdx,
                            transform_size_8x8_flag, mb_pred_mode);
       RET(ret);
-      if (mb_pred_mode == Pred_L1 || mb_pred_mode == BiPred)
+      //if (mb_pred_mode == Pred_L1 || mb_pred_mode == BiPred)
+      if (mb_pred_mode != Pred_L0)
         for (int compIdx = 0; compIdx < 2; compIdx++)
           process_mvd_l1(mbPartIdx, compIdx);
     }
@@ -334,22 +338,23 @@ int MacroBlock::sub_mb_pred(const SliceData &slice_data) {
 
   //------------------------- 运动矢量参考帧索引 ----------------------------
   /* TODO：这里进行了合并，还没有测试有没有问题 */
-  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++) {
-    if ((header->num_ref_idx_l0_active_minus1 > 0 ||
-         mb_field_decoding_flag != field_pic_flag) &&
-        m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8) {
+  for (int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++)
+    if (m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8) {
 
       /* 前参考帧列表中有多于一个参考帧可供选择，NOTE:ref0表明对于所有这些子宏块，运动矢量的参考索引固定为0 */
       if (m_name_of_mb_type != P_8x8ref0 &&
+          (header->num_ref_idx_l0_active_minus1 > 0 ||
+           mb_field_decoding_flag != field_pic_flag) &&
           m_sub_mb_pred_mode[mbPartIdx] != Pred_L1)
         /* 根据预测模式处理参考索引，如P_8x8 -> Pred_L0 */
         process_ref_idx_l0(mbPartIdx, header->num_ref_idx_l0_active_minus1);
 
       /* 后参考帧列表中有多于一个参考帧可供选择*/
-      if (m_sub_mb_pred_mode[mbPartIdx] != Pred_L0)
+      if ((header->num_ref_idx_l1_active_minus1 > 0 ||
+           mb_field_decoding_flag != field_pic_flag) &&
+          m_sub_mb_pred_mode[mbPartIdx] != Pred_L0)
         process_ref_idx_l1(mbPartIdx, header->num_ref_idx_l1_active_minus1);
     }
-  }
 
   //------------------------- 运动矢量 ----------------------------
   //前预测模式，或双向预测
