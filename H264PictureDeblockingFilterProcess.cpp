@@ -4,9 +4,11 @@
 /* 该过程的输出为： 
  * – mbAddrA：当前宏块左侧宏块的地址及其可用性状态， 
  * – mbAddrB：当前宏块上方宏块的地址及其可用性状态。*/
-int PictureBase::derivation_for_neighbouring_macroblocks(
-    const int32_t MbaffFrameFlag, const int32_t currMbAddr, int32_t &mbAddrA,
-    int32_t &mbAddrB, const int32_t isChroma) {
+int PictureBase::derivation_for_neighbouring_macroblocks(int32_t MbaffFrameFlag,
+                                                         int32_t currMbAddr,
+                                                         int32_t &mbAddrA,
+                                                         int32_t &mbAddrB,
+                                                         int32_t isChroma) {
 
   int32_t xW = 0, yW = 0;
 
@@ -736,7 +738,7 @@ int PictureBase::Filtering_process_for_block_edges(
 
   // 6.4.1 Inverse macroblock scanning process
   ret = inverse_mb_scanning_process(MbaffFrameFlag, _CurrMbAddr,
-                                            mb_field_decoding_flag, xI, yI);
+                                    mb_field_decoding_flag, xI, yI);
   RETURN_IF_FAILED(ret != 0, ret);
 
   int32_t xP = 0;

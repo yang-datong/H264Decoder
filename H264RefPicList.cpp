@@ -10,8 +10,7 @@
 
 // 8.2.1 Decoding process for picture order count
 /* 此过程的输出为 TopFieldOrderCnt（如果适用）和 BottomFieldOrderCnt（如果适用）*/
-int PictureBase::decoding_picture_order_count(
-    const uint32_t &pic_order_cnt_type) {
+int PictureBase::decoding_picture_order_count(uint32_t pic_order_cnt_type) {
   /* 为每个帧、场（无论是从编码场解码还是作为解码帧的一部分）或互补场对导出图像顺序计数信息，如下所示： 
    * – 每个编码帧与两个图像顺序计数相关联，称为 TopFieldOrderCnt 和BottomFieldOrderCnt 分别表示其顶部字段和底部字段。  
    * – 每个编码字段都与图片顺序计数相关联，对于编码顶部字段称为 TopFieldOrderCnt，对于底部字段称为 BottomFieldOrderCnt。  
@@ -999,8 +998,8 @@ int PictureBase::modif_ref_picture_lists(Frame *(&RefPicList0)[16],
 /* 该过程的输入是索引 refIdxLX（X 为 0 或 1）
  * 该过程的输出是递增的索引 refIdxLX。*/
 int PictureBase::modif_ref_picture_lists_for_short_ref_pictures(
-    int32_t &refIdxLX, int32_t &picNumLXPred, const int32_t modif_idc,
-    const int32_t abs_diff_pic_num, const int32_t num_ref_idx_lX_active_minus1,
+    int32_t &refIdxLX, int32_t &picNumLXPred, int32_t modif_idc,
+    int32_t abs_diff_pic_num, int32_t num_ref_idx_lX_active_minus1,
     Frame *(&RefPicListX)[16]) {
 
   const SliceHeader *header = m_slice->slice_header;
@@ -1091,8 +1090,8 @@ int PictureBase::modif_ref_picture_lists_for_short_ref_pictures(
 /* 该过程的输入是索引 refIdxLX（X 为 0 或 1）。  
  * 该过程的输出是递增的索引 refIdxLX。*/
 int PictureBase::modif_ref_picture_lists_for_long_ref_pictures(
-    int32_t &refIdxLX, const int32_t num_ref_idx_lX_active_minus1,
-    const int32_t long_term_pic_num, Frame *(&RefPicListX)[16]) {
+    int32_t &refIdxLX, int32_t num_ref_idx_lX_active_minus1,
+    int32_t long_term_pic_num, Frame *(&RefPicListX)[16]) {
 
   /* 执行以下过程以将具有长期图片编号long_term_pic_num的图片放置到索引位置refIdxLX中，将任何其他剩余图片的位置移动到列表中的后面，并递增refIdxLX的值。 */
   int32_t cIdx = 0;
