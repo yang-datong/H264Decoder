@@ -3386,11 +3386,10 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
 
       //3. 当 TransformBypassModeFlag 等于 1，宏块预测模式等于 Intra_4x4，并且 Intra4x4PredMode[ luma4x4BlkIdx ] 等于 0 或 1 时，使用 nW 设置调用第 8.5.15 节中指定的帧内残差变换旁路解码过程。等于4，nH设置为等于4，horPredFlag设置为等于Intra4x4PredMode[luma4x4BlkIdx]，并且4x4数组r作为输入，并且输出是4x4数组r的修改版本。
       if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_4x4 &&
-          (mb.Intra4x4PredMode[luma4x4BlkIdx] & ~1) == 0) {
-        int32_t horPredFlag = mb.Intra4x4PredMode[luma4x4BlkIdx];
+          (mb.Intra4x4PredMode[luma4x4BlkIdx] & ~1) == 0)
         // 8.5.15 Intra residual transform-bypass decoding process
-        intra_residual_transform_bypass_decoding(4, 4, horPredFlag, &r[0][0]);
-      }
+        intra_residual_transform_bypass_decoding(
+            4, 4, mb.Intra4x4PredMode[luma4x4BlkIdx], &r[0][0]);
 
       // 帧内预测
       RET(Intra_4x4_sample_prediction(luma4x4BlkIdx, PicWidthInSamples,
@@ -3406,14 +3405,13 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
 
       // 5.4x4 数组 u 的元素为 uij，i, j = 0..3 的推导如下：
       int32_t u[16] = {0};
-      for (int32_t i = 0; i < 4; i++) {
+      for (int32_t i = 0; i < 4; i++)
         for (int32_t j = 0; j < 4; j++) {
           int32_t y = mb.m_mb_position_y + (yO + i) * (1 + isMbAff);
           int32_t x = mb.m_mb_position_x + (xO + j);
           u[i * 4 + j] =
               Clip1C(pic_buff[y * PicWidthInSamples + x] + r[i][j], BitDepth);
         }
-      }
 
       //6. 使用 u 和 luma4x4BlkIdx 作为输入来调用第 8.5.14 节中的去块滤波器过程之前的图像构造过程。
       RET(picture_construction_process_prior_to_deblocking_filter(
@@ -3428,12 +3426,17 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
 /* 当TransformBypassModeFlag等于1，宏块预测模式等于Intra_4x4、Intra_8x8或Intra_16x16，并且适用的帧内预测模式等于垂直或水平模式时，调用该过程。 Cb 和 Cr 分量的处理方式与亮度（L 或 Y）分量的处理方式相同。  
  * 输入： – 两个变量 nW 和 nH， – 变量 horPredFlag， – 带有元素 rij 的 (nW)x(nH) 数组 r，它是与亮度分量的残差变换旁路块相关的数组，或者与 Cb 和 Cr 分量的残差变换旁路块相关的数组。  
  * 输出: (nW)x(nH) 数组 r 的修改版本，其中元素 rij 包含帧内残差变换旁路解码过程的结果。 */
+/* TODO YangJing 这个函数未测试过，可能有问题 <24-10-03 19:22:29> */
 int PictureBase::intra_residual_transform_bypass_decoding(int32_t nW,
                                                           int32_t nH,
                                                           int32_t horPredFlag,
                                                           int32_t *r) {
   /* 设 f 是一个临时 (nW)x(nH) 数组，其中元素 fij 是通过以下方式导出的： */
-  int32_t f[4][4] = {{0}};
+  //int32_t f[4][4] = {{0}};
+  int32_t **f = new int32_t *[nH];
+  for (int i = 0; i < nH; i++)
+    f[i] = new int32_t[nW];
+
   for (int32_t i = 0; i <= nH - 1; i++)
     for (int32_t j = 0; j <= nW - 1; j++)
       f[i][j] = r[i * nW + j];
@@ -3498,6 +3501,7 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
       dcY[2][2], dcY[2][3], dcY[3][2], dcY[3][3],
   };
 
+  //------------------ 下面与transform_decoding_for_4x4_luma_residual_blocks()是一样的逻辑 ------------------
   int32_t rMb[16][16] = {{0}};
   for (int32_t _4x4BlkIdx = 0; _4x4BlkIdx < 16; _4x4BlkIdx++) {
     int32_t lumaList[16] = {0};
@@ -3505,16 +3509,13 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
     for (int32_t k = 1; k < 16; k++)
       lumaList[k] = Intra16x16ACLevel[_4x4BlkIdx][k - 1];
 
-    //第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程是用 lumaList 作为输入和二维数组 c 作为输出来调用的
     int32_t c[4][4] = {{0}};
     RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
         lumaList, c, mb.field_pic_flag | mb.mb_field_decoding_flag));
 
-    // 使用 c 作为输入和 r 作为输出来调用第 8.5.12 节中指定的残差 4x4 块的缩放和变换过程。
     int32_t r[4][4] = {{0}};
     RET(scaling_and_transformation_process_for_residual_4x4_blocks(c, r, 0, 0));
 
-    // 6.4.3 Inverse 4x4 luma block scanning process
     int32_t xO = InverseRasterScan(_4x4BlkIdx / 4, 8, 8, 16, 0) +
                  InverseRasterScan(_4x4BlkIdx % 4, 4, 4, 8, 0);
     int32_t yO = InverseRasterScan(_4x4BlkIdx / 4, 8, 8, 16, 1) +
@@ -3525,38 +3526,13 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
         rMb[yO + i][xO + j] = r[i][j];
   }
 
-  if (mb.TransformBypassModeFlag && (mb.Intra16x16PredMode & ~1) == 0) {
-    // 8.5.15 Intra residual transform-bypass decoding process
-    int32_t nW = 16, nH = 16;
-    int32_t horPredFlag = mb.Intra16x16PredMode;
+  if (mb.TransformBypassModeFlag && (mb.Intra16x16PredMode & ~1) == 0)
+    intra_residual_transform_bypass_decoding(16, 16, mb.Intra16x16PredMode,
+                                             &rMb[0][0]);
 
-    int32_t f[16][16] = {{0}};
-    for (int32_t i = 0; i < nH; i++)
-      for (int32_t j = 0; j < nW; j++)
-        f[i][j] = rMb[i][j];
-
-    if (horPredFlag == 0) {
-      for (int32_t i = 0; i < nH; i++)
-        for (int32_t j = 0; j < nW; j++) {
-          rMb[i][j] = 0;
-          for (int32_t k = 0; k <= i; k++)
-            rMb[i][j] += f[k][j];
-        }
-    } else {
-      for (int32_t i = 0; i < nH; i++)
-        for (int32_t j = 0; j < nW; j++) {
-          rMb[i][j] = 0;
-          for (int32_t k = 0; k <= j; k++)
-            rMb[i][j] += f[i][k];
-        }
-    }
-  }
-
-  // 帧内预测
   RET(Intra_16x16_sample_prediction(pic_buff, PicWidthInSamples, isChroma,
                                     BitDepth));
 
-  // 5.16x16 数组 u 的元素为 uij，i, j = 0..15 的推导如下：
   int32_t u[16 * 16] = {0};
   for (int32_t i = 0; i < 16; i++)
     for (int32_t j = 0; j < 16; j++) {
@@ -3572,107 +3548,53 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
   return 0;
 }
 
-// 8.5.3 Specification of transform decoding process for 8x8 luma residual
-// blocks This specification applies when transform_size_8x8_flag is equal to 1.
+// 8.5.3 Specification of transform decoding process for 8x8 luma residual blocks
+// This specification applies when transform_size_8x8_flag is equal to 1.
+// NOTE:与transform_decoding_for_4x4_luma_residual_blocks()逻辑一致
 int PictureBase::transform_decoding_for_8x8_luma_residual_blocks(
     int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
     int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff) {
-  int ret = 0;
+
+  /* ------------------ 设置别名 ------------------ */
+  MacroBlock &mb = m_mbs[CurrMbAddr];
+  bool isMbAff =
+      m_slice->slice_header->MbaffFrameFlag && mb.mb_field_decoding_flag;
+  /* ------------------  End ------------------ */
 
   RET(scaling_functions(isChroma, isChromaCb));
 
-  int32_t isMbAff = (m_slice->slice_header->MbaffFrameFlag == 1 &&
-                     m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
-                        ? 1
-                        : 0;
-
-  for (int32_t luma8x8BlkIdx = 0; luma8x8BlkIdx <= 3;
-       luma8x8BlkIdx++) // or cb8x8BlkIdx or cr8x8BlkIdx
-  {
+  for (int32_t luma8x8BlkIdx = 0; luma8x8BlkIdx < 4; luma8x8BlkIdx++) {
     int32_t c[8][8] = {{0}};
+    RET(Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
+        Level8x8[luma8x8BlkIdx], c,
+        mb.field_pic_flag | mb.mb_field_decoding_flag));
+
     int32_t r[8][8] = {{0}};
+    RET(Scaling_and_transformation_process_for_residual_8x8_blocks(
+        c, r, isChroma, isChromaCb));
 
-    ret =
-        Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
-            Level8x8[luma8x8BlkIdx], c,
-            m_mbs[CurrMbAddr].field_pic_flag |
-                m_mbs[CurrMbAddr].mb_field_decoding_flag);
-    RETURN_IF_FAILED(ret != 0, ret);
+    if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_8x8 &&
+        (mb.Intra8x8PredMode[luma8x8BlkIdx] & ~1) == 0)
+      intra_residual_transform_bypass_decoding(
+          8, 8, mb.Intra8x8PredMode[luma8x8BlkIdx], &r[0][0]);
 
-    ret = Scaling_and_transformation_process_for_residual_8x8_blocks(
-        c, r, isChroma, isChromaCb);
-    RETURN_IF_FAILED(ret != 0, ret);
+    RET(Intra_8x8_sample_prediction(luma8x8BlkIdx, PicWidthInSamples, pic_buff,
+                                    isChroma, BitDepth));
 
-    if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1 &&
-        m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_8x8 &&
-        (m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx] == 0 ||
-         m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx] == 1)) {
-      // 8.5.15 Intra residual transform-bypass decoding process
-      int32_t nW = 8;
-      int32_t nH = 8;
-      int32_t horPredFlag = m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx];
-
-      int32_t f[8][8];
-      for (int32_t i = 0; i <= nH - 1; i++) {
-        for (int32_t j = 0; j <= nW - 1; j++) {
-          f[i][j] = r[i][j];
-        }
-      }
-
-      if (horPredFlag == 0) {
-        for (int32_t i = 0; i <= nH - 1; i++) {
-          for (int32_t j = 0; j <= nW - 1; j++) {
-            r[i][j] = 0;
-            for (int32_t k = 0; k <= i; k++) {
-              r[i][j] += f[k][j];
-            }
-          }
-        }
-      } else // if (horPredFlag == 1)
-      {
-        for (int32_t i = 0; i <= nH - 1; i++) {
-          for (int32_t j = 0; j <= nW - 1; j++) {
-            r[i][j] = 0;
-            for (int32_t k = 0; k <= j; k++) {
-              r[i][j] += f[i][k];
-            }
-          }
-        }
-      }
-    }
-
-    // 6.4.5 Inverse 8x8 luma block scanning process
-    // InverseRasterScan = (a % (d / b) ) * b;    if e == 0;
-    // InverseRasterScan = (a / (d / b) ) * c;    if e == 1;
     int32_t xO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 0);
     int32_t yO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 1);
 
-    //--------帧内预测------------
-    ret = Intra_8x8_sample_prediction(luma8x8BlkIdx, PicWidthInSamples,
-                                      pic_buff, isChroma, BitDepth);
-    RETURN_IF_FAILED(ret != 0, ret);
-
     int32_t u[64] = {0};
-
-    for (int32_t i = 0; i <= 7; i++) {
-      for (int32_t j = 0; j <= 7; j++) {
-        // uij = Clip1Y( predL[ xO + j, yO + i ] + rij ) = Clip3( 0, ( 1 <<
-        // BitDepthY ) − 1, x ); u[i * 8 + j] = CLIP3(0, (1 << BitDepth) - 1,
-        // pic_buff[(mb_y * 16 + (yO + i)) * PicWidthInSamples + (mb_x * 16 +
-        // (xO + j))] + r[i][j]);
+    for (int32_t i = 0; i < 8; i++)
+      for (int32_t j = 0; j < 8; j++) {
+        int32_t y = mb.m_mb_position_y + (yO + i) * (1 + isMbAff);
+        int32_t x = mb.m_mb_position_x + (xO + j);
         u[i * 8 + j] =
-            CLIP3(0, (1 << BitDepth) - 1,
-                  pic_buff[(m_mbs[CurrMbAddr].m_mb_position_y +
-                            (yO + (i)) * (1 + isMbAff)) *
-                               PicWidthInSamples +
-                           (m_mbs[CurrMbAddr].m_mb_position_x + (xO + (j)))] +
-                      r[i][j]);
+            Clip1C(pic_buff[y * PicWidthInSamples + x] + r[i][j], BitDepth);
       }
-    }
 
-    ret = picture_construction_process_prior_to_deblocking_filter(
-        u, 8, 8, luma8x8BlkIdx, isChroma, PicWidthInSamples, pic_buff);
-    RETURN_IF_FAILED(ret != 0, ret);
+    RET(picture_construction_process_prior_to_deblocking_filter(
+        u, 8, 8, luma8x8BlkIdx, isChroma, PicWidthInSamples, pic_buff));
   }
 
   return 0;
