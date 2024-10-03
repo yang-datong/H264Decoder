@@ -1460,7 +1460,7 @@ int MacroBlock::process_ref_idx_l0(int mbPartIdx,
      * 如果这两个标志表示当前宏块是在MBAFF帧的场模式下，size被设置为num_ref_idx_l0_active_minus1 * 2
      * 目的是在场模式下，每个场可能都需要独立的参考帧，因此参考列表的实际长度可能是帧模式的两倍。 */
     uint32_t size = 0;
-    if (MbaffFrameFlag || mb_field_decoding_flag)
+    if (MbaffFrameFlag && mb_field_decoding_flag)
       size = num_ref_idx_l0_active_minus1 * 2;
     else
       size = num_ref_idx_l0_active_minus1;
@@ -1477,7 +1477,7 @@ int MacroBlock::process_ref_idx_l1(int mbPartIdx,
     ret = _cabac->decode_ref_idx_lX(1, mbPartIdx, ref_idx_l1[mbPartIdx]);
   else {
     uint32_t size = 0;
-    if (MbaffFrameFlag || mb_field_decoding_flag)
+    if (MbaffFrameFlag && mb_field_decoding_flag)
       size = num_ref_idx_l1_active_minus1 * 2;
     else
       size = num_ref_idx_l1_active_minus1;
