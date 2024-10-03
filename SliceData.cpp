@@ -415,7 +415,7 @@ int SliceData::derivation_for_mb_field_decoding_flag() {
 int SliceData::do_macroblock_layer() {
   /* 1. 计算当前宏块的位置 */
   updatesLocationOfCurrentMacroblock(MbaffFrameFlag);
-  /* 2. 在宏块层中对每个宏块处理得到对应帧内、帧间解码所需要的信息，以及解码当前的控制层的信息 */
+  /* 2. 在宏块层中对每个宏块处理或解码得到对应帧内、帧间解码所需要的信息*/
   pic->m_mbs[pic->CurrMbAddr].decode(*bs, *pic, *this, *cabac);
   pic->mb_cnt++;
   return 0;
@@ -434,29 +434,26 @@ int SliceData::decoding_process() {
   MacroBlock &mb = pic->m_mbs[pic->CurrMbAddr];
   /* ------------------  End ------------------ */
 
-  //----------------------------------- 帧内预测 -----------------------------------
   //8.5 Transform coefficient decoding process and picture construction process prior to deblocking filter process（根据不同类型的预测模式，进行去块滤波处理之前的变换系数解码处理和图片构造处理 ）
-
-  if (mb.m_mb_pred_mode == Intra_4x4)
-    /* 至此Luma数据完成全部解码工作，输出的pic_buff_luma即为解码的原始数据 */
+  //----------------------------------- 帧内预测 -----------------------------------
+  if (mb.m_mb_pred_mode == Intra_4x4) //分区预测，处理最为复杂的高纹理区域
     pic->transform_decoding_for_4x4_luma_residual_blocks(
         0, 0, BitDepth, picWidthInSamplesL, pic_buff_luma);
-  else if (mb.m_mb_pred_mode == Intra_8x8)
+  else if (mb.m_mb_pred_mode == Intra_8x8) //分区预测
     pic->transform_decoding_for_8x8_luma_residual_blocks(
         0, 0, BitDepth, picWidthInSamplesL, mb.LumaLevel8x8, pic_buff_luma);
-  else if (mb.m_mb_pred_mode == Intra_16x16)
-    pic->transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction(
+  else if (mb.m_mb_pred_mode == Intra_16x16) //整块预测，处理较为简单的区域
+    pic->transform_decoding_for_luma_samples_of_16x16_mb_prediction(
         0, BitDepth, mb.QP1Y, picWidthInSamplesL, mb.Intra16x16DCLevel,
         mb.Intra16x16ACLevel, pic_buff_luma);
-
+  //----------------------------------- 原始数据 -----------------------------------
   else if (mb.m_name_of_mb_type == I_PCM) {
-    //----------------------------------- 原始数据 -----------------------------------
     pic->Sample_construction_process_for_I_PCM_macroblocks();
-    return 0;
-  } else {
-    //----------------------------------- 帧间预测 -----------------------------------
+    goto eof;
+  }
+  //----------------------------------- 帧间预测 -----------------------------------
+  else {
     pic->inter_prediction_process();
-
     /* 选择 4x4 或 8x8 的残差块解码函数来处理亮度残差块 */
     if (mb.transform_size_8x8_flag == 0)
       pic->transform_decoding_for_4x4_luma_residual_blocks_inter(
@@ -470,17 +467,19 @@ int SliceData::decoding_process() {
                                                      pic_buff_cb);
     pic->transform_decoding_for_chroma_samples_inter(0, picWidthInSamplesC,
                                                      pic_buff_cr);
-    return 0;
+    goto eof;
   }
 
-  /* 当存在色度采样时，即YUV420,YUV422,YUV444进行色度解码; 反之，如果是YUV400，则不进行色度解码 */
-  if (m_sps->ChromaArrayType != 0) {
+  /* 帧内预测：当存在色度采样时，即YUV420,YUV422,YUV444进行色度解码; 反之，如果是YUV400，则不进行色度解码 */
+  if (m_sps->ChromaArrayType) {
     pic->transform_decoding_for_chroma_samples(1, picWidthInSamplesC,
                                                pic_buff_cb);
     pic->transform_decoding_for_chroma_samples(0, picWidthInSamplesC,
                                                pic_buff_cr);
   }
+
   /* 至此原始数据完成全部解码工作，输出的pic_buff_luma,pic_buff_cb,pic_buff_cr即为解码的原始数据 */
+eof:
   return 0;
 }
 

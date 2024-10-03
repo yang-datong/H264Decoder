@@ -32,6 +32,7 @@ int32_t h264_power2(int32_t value);
 #define IS_INTRA_Prediction_Mode(v)                                            \
   (v != MB_PRED_MODE_NA &&                                                     \
    (v == Intra_4x4 || v == Intra_8x8 || v == Intra_16x16))
+
 #define IS_INTER_Prediction_Mode(v)                                            \
   (v != MB_PRED_MODE_NA && (v == Pred_L0 || v == Pred_L1 || v == BiPred))
 

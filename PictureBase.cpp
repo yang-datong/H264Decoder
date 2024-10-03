@@ -3361,32 +3361,28 @@ int PictureBase::neighbouring_locations_MBAFF(
 int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
     int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
     int32_t PicWidthInSamples, uint8_t *pic_buff) {
-  int ret = 0;
 
   /* ------------------ 设置别名 ------------------ */
   MacroBlock &mb = m_mbs[CurrMbAddr];
   bool isMbAff =
-      (m_slice->slice_header->MbaffFrameFlag && mb.mb_field_decoding_flag);
+      m_slice->slice_header->MbaffFrameFlag && mb.mb_field_decoding_flag;
   /* ------------------  End ------------------ */
 
   /* 当当前宏块预测模式不等于Intra_16x16时，变量LumaLevel4x4包含亮度变换系数的级别。对于由 luma4x4BlkIdx = 0..15 索引的 4x4 亮度块，指定以下有序步骤： */
   if (mb.m_mb_pred_mode != Intra_16x16) {
-    /* TODO YangJing 这里为什么有一个缩放举证？ <24-09-08 02:52:34> */
-    ret = scaling_functions(isChroma, isChromaCb);
-    RET(ret);
-    for (int32_t luma4x4BlkIdx = 0; luma4x4BlkIdx <= 15; luma4x4BlkIdx++) {
+    RET(scaling_functions(isChroma, isChromaCb));
+
+    for (int32_t luma4x4BlkIdx = 0; luma4x4BlkIdx < 16; luma4x4BlkIdx++) {
       //1. 使用 LumaLevel4x4[ luma4x4BlkIdx ] 作为输入和二维数组 c 作为输出来调用第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程。
       int32_t c[4][4] = {{0}};
-      ret = inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
+      RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
           mb.LumaLevel4x4[luma4x4BlkIdx], c,
-          mb.field_pic_flag | mb.mb_field_decoding_flag);
-      RET(ret);
+          mb.field_pic_flag | mb.mb_field_decoding_flag));
 
       //2. 使用 c 作为输入和 r 作为输出来调用第 8.5.12 节中指定的残差 4x4 块的缩放和变换过程。（反量化与反整数变换）
       int32_t r[4][4] = {{0}};
-      ret = scaling_and_transformation_process_for_residual_4x4_blocks(
-          c, r, isChroma, isChromaCb);
-      RET(ret);
+      RET(scaling_and_transformation_process_for_residual_4x4_blocks(
+          c, r, isChroma, isChromaCb));
 
       //3. 当 TransformBypassModeFlag 等于 1，宏块预测模式等于 Intra_4x4，并且 Intra4x4PredMode[ luma4x4BlkIdx ] 等于 0 或 1 时，使用 nW 设置调用第 8.5.15 节中指定的帧内残差变换旁路解码过程。等于4，nH设置为等于4，horPredFlag设置为等于Intra4x4PredMode[luma4x4BlkIdx]，并且4x4数组r作为输入，并且输出是4x4数组r的修改版本。
       if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_4x4 &&
@@ -3396,6 +3392,10 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
         intra_residual_transform_bypass_decoding(4, 4, horPredFlag, &r[0][0]);
       }
 
+      // 帧内预测
+      RET(Intra_4x4_sample_prediction(luma4x4BlkIdx, PicWidthInSamples,
+                                      pic_buff, isChroma, BitDepth));
+
       //4. 宏块内部具有索引 luma4x4BlkIdx 的 4x4 亮度块的左上角样本的位置是通过调用第 6.4.3 节中的逆 4x4 亮度块扫描过程来导出的，其中 luma4x4BlkIdx 作为输入，输出被分配给 ( xO ，yO ）
       // 6.4.3 Inverse 4x4 luma block scanning process
       /* 逆 4x4 亮度块扫描过程由下式指定: */
@@ -3403,11 +3403,6 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
                    InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
       int32_t yO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
                    InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
-
-      //--------帧内预测------------
-      ret = Intra_4x4_sample_prediction(luma4x4BlkIdx, PicWidthInSamples,
-                                        pic_buff, isChroma, BitDepth);
-      RET(ret);
 
       // 5.4x4 数组 u 的元素为 uij，i, j = 0..3 的推导如下：
       int32_t u[16] = {0};
@@ -3421,9 +3416,8 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
       }
 
       //6. 使用 u 和 luma4x4BlkIdx 作为输入来调用第 8.5.14 节中的去块滤波器过程之前的图像构造过程。
-      ret = picture_construction_process_prior_to_deblocking_filter(
-          u, 4, 4, luma4x4BlkIdx, isChroma, PicWidthInSamples, pic_buff);
-      RET(ret);
+      RET(picture_construction_process_prior_to_deblocking_filter(
+          u, 4, 4, luma4x4BlkIdx, isChroma, PicWidthInSamples, pic_buff));
     }
   }
 
@@ -3464,35 +3458,40 @@ int PictureBase::intra_residual_transform_bypass_decoding(int32_t nW,
   return 0;
 }
 
-// 8.5.2 Specification of transform decoding process for luma samples of
-// Intra_16x16 macroblock prediction mode
-int PictureBase::
-    transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction(
-        int32_t isChroma, int32_t BitDepth, int32_t QP1,
-        int32_t PicWidthInSamples, int32_t Intra16x16DCLevel[16],
-        int32_t Intra16x16ACLevel[16][16], uint8_t *pic_buff) {
-  int ret = 0;
+// 8.5.2 Specification of transform decoding process for luma samples of Intra_16x16 macroblock prediction mode
+int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
+    int32_t isChroma, int32_t BitDepth, int32_t QP1, int32_t PicWidthInSamples,
+    int32_t Intra16x16DCLevel[16], int32_t Intra16x16ACLevel[16][16],
+    uint8_t *pic_buff) {
 
-  ret = scaling_functions(isChroma, 0);
-  RETURN_IF_FAILED(ret != 0, ret);
+  /* ------------------ 设置别名 ------------------ */
+  MacroBlock &mb = m_mbs[CurrMbAddr];
+  bool isMbAff =
+      m_slice->slice_header->MbaffFrameFlag && mb.mb_field_decoding_flag;
+  /* ------------------  End ------------------ */
 
-  // The 4x4 luma DC transform coefficients of all 4x4 luma blocks of the
-  // macroblock are decoded.
-  int32_t c2[4][4] = {{0}};
+  RET(scaling_functions(isChroma, 0));
+
+  //1. 使用 Intra16x16DCLevel 作为输入和二维数组 c 作为输出来调用第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程(Zigzag scan)。
+  int32_t c[4][4] = {{0}};
+  RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
+      Intra16x16DCLevel, c, mb.field_pic_flag | mb.mb_field_decoding_flag));
+
+  //2. 使用 BitDepth、QP' 和 c 作为输入以及 dcY 作为输出来调用第 8.5.10 节中指定的 Intra_16x16 宏块类型的亮度 DC 变换系数的缩放和变换过程
   int32_t dcY[4][4] = {{0}};
+  RET(scaling_and_transformation_for_DC_coeff_for_I16x16(BitDepth, QP1, c,
+                                                         dcY));
 
-  ret = inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
-      Intra16x16DCLevel, c2,
-      m_mbs[CurrMbAddr].field_pic_flag |
-          m_mbs[CurrMbAddr].mb_field_decoding_flag);
-  RETURN_IF_FAILED(ret != 0, ret);
-
-  ret =
-      Scaling_and_transformation_process_for_DC_transform_coefficients_for_Intra_16x16_macroblock_type(
-          BitDepth, QP1, c2, dcY);
-  RETURN_IF_FAILED(ret != 0, ret);
-
-  // raster scan
+  /* 分块Zigzag扫描，它按照从左到右、从上到下的顺序依次访问每个2x2子块中的元素，然后再移动到下一个2x2子块: 
+   +-----+-----+-----+-----+
+   |  0  |  1  |  4  |  5  |
+   +-----+-----+-----+-----+
+   |  2  |  3  |  6  |  7  |
+   +-----+-----+-----+-----+
+   |  8  |  9  | 12  | 13  |
+   +-----+-----+-----+-----+
+   | 10  | 11  | 14  | 15  |
+   +-----+-----+-----+-----+ */
   int32_t dcY_to_luma_index[16] = {
       dcY[0][0], dcY[0][1], dcY[1][0], dcY[1][1], dcY[0][2], dcY[0][3],
       dcY[1][2], dcY[1][3], dcY[2][0], dcY[2][1], dcY[3][0], dcY[3][1],
@@ -3500,120 +3499,75 @@ int PictureBase::
   };
 
   int32_t rMb[16][16] = {{0}};
-
-  int32_t isMbAff = (m_slice->slice_header->MbaffFrameFlag == 1 &&
-                     m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
-                        ? 1
-                        : 0;
-
-  for (int32_t _4x4BlkIdx = 0; _4x4BlkIdx <= 15;
-       _4x4BlkIdx++) // luma4x4BlkIdx or cb4x4BlkIdx or cr4x4BlkIdx
-  {
-    int32_t lumaList[16]; // or CbList[16] or CrList[16]
-
+  for (int32_t _4x4BlkIdx = 0; _4x4BlkIdx < 16; _4x4BlkIdx++) {
+    int32_t lumaList[16] = {0};
     lumaList[0] = dcY_to_luma_index[_4x4BlkIdx];
-
-    for (int32_t k = 1; k <= 15; k++) {
+    for (int32_t k = 1; k < 16; k++)
       lumaList[k] = Intra16x16ACLevel[_4x4BlkIdx][k - 1];
-    }
 
-    // 8.5.6 Inverse scanning process for 4x4 transform coefficients and scaling
-    // lists
+    //第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程是用 lumaList 作为输入和二维数组 c 作为输出来调用的
     int32_t c[4][4] = {{0}};
-    int32_t r[4][4] = {{0}};
-    ret = inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
-        lumaList, c,
-        m_mbs[CurrMbAddr].field_pic_flag |
-            m_mbs[CurrMbAddr].mb_field_decoding_flag);
-    RETURN_IF_FAILED(ret != 0, ret);
+    RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
+        lumaList, c, mb.field_pic_flag | mb.mb_field_decoding_flag));
 
-    int32_t isChroma = 0;
-    int32_t isChromaCb = 0;
-    ret = scaling_and_transformation_process_for_residual_4x4_blocks(
-        c, r, isChroma, isChromaCb);
-    RETURN_IF_FAILED(ret != 0, ret);
+    // 使用 c 作为输入和 r 作为输出来调用第 8.5.12 节中指定的残差 4x4 块的缩放和变换过程。
+    int32_t r[4][4] = {{0}};
+    RET(scaling_and_transformation_process_for_residual_4x4_blocks(c, r, 0, 0));
 
     // 6.4.3 Inverse 4x4 luma block scanning process
-    // InverseRasterScan = (a % (d / b) ) * b;    if e == 0;
-    // InverseRasterScan = (a / (d / b) ) * c;    if e == 1;
     int32_t xO = InverseRasterScan(_4x4BlkIdx / 4, 8, 8, 16, 0) +
                  InverseRasterScan(_4x4BlkIdx % 4, 4, 4, 8, 0);
     int32_t yO = InverseRasterScan(_4x4BlkIdx / 4, 8, 8, 16, 1) +
                  InverseRasterScan(_4x4BlkIdx % 4, 4, 4, 8, 1);
 
-    for (int32_t i = 0; i <= 3; i++) {
-      for (int32_t j = 0; j <= 3; j++) {
+    for (int32_t i = 0; i < 4; i++)
+      for (int32_t j = 0; j < 4; j++)
         rMb[yO + i][xO + j] = r[i][j];
-      }
-    }
   }
 
-  //--------------------------------------------------
-  if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1 &&
-      (m_mbs[CurrMbAddr].Intra16x16PredMode == 0 ||
-       m_mbs[CurrMbAddr].Intra16x16PredMode == 1)) {
+  if (mb.TransformBypassModeFlag && (mb.Intra16x16PredMode & ~1) == 0) {
     // 8.5.15 Intra residual transform-bypass decoding process
-    int32_t nW = 16;
-    int32_t nH = 16;
-    int32_t horPredFlag = m_mbs[CurrMbAddr].Intra16x16PredMode;
+    int32_t nW = 16, nH = 16;
+    int32_t horPredFlag = mb.Intra16x16PredMode;
 
-    int32_t f[16][16];
-    for (int32_t i = 0; i <= nH - 1; i++) {
-      for (int32_t j = 0; j <= nW - 1; j++) {
+    int32_t f[16][16] = {{0}};
+    for (int32_t i = 0; i < nH; i++)
+      for (int32_t j = 0; j < nW; j++)
         f[i][j] = rMb[i][j];
-      }
-    }
 
     if (horPredFlag == 0) {
-      for (int32_t i = 0; i <= nH - 1; i++) {
-        for (int32_t j = 0; j <= nW - 1; j++) {
+      for (int32_t i = 0; i < nH; i++)
+        for (int32_t j = 0; j < nW; j++) {
           rMb[i][j] = 0;
-          for (int32_t k = 0; k <= i; k++) {
+          for (int32_t k = 0; k <= i; k++)
             rMb[i][j] += f[k][j];
-          }
         }
-      }
-    } else // if (horPredFlag == 1)
-    {
-      for (int32_t i = 0; i <= nH - 1; i++) {
-        for (int32_t j = 0; j <= nW - 1; j++) {
+    } else {
+      for (int32_t i = 0; i < nH; i++)
+        for (int32_t j = 0; j < nW; j++) {
           rMb[i][j] = 0;
-          for (int32_t k = 0; k <= j; k++) {
+          for (int32_t k = 0; k <= j; k++)
             rMb[i][j] += f[i][k];
-          }
         }
-      }
     }
   }
 
-  //--------------------------------------
-  //--------帧内预测------------
-  ret = Intra_16x16_sample_prediction(pic_buff, PicWidthInSamples, isChroma,
-                                      BitDepth);
-  RETURN_IF_FAILED(ret != 0, ret);
+  // 帧内预测
+  RET(Intra_16x16_sample_prediction(pic_buff, PicWidthInSamples, isChroma,
+                                    BitDepth));
 
+  // 5.16x16 数组 u 的元素为 uij，i, j = 0..15 的推导如下：
   int32_t u[16 * 16] = {0};
-
-  for (int32_t i = 0; i <= 15; i++) {
-    for (int32_t j = 0; j <= 15; j++) {
-      // uij = Clip1Y( predL[ j, i ] + rMb[ j, i ] )  = Clip3( 0, ( 1 <<
-      // BitDepthY ) − 1, x ); u[i * 16 + j] = CLIP3(0, (1 << BitDepth) - 1,
-      // pic_buff[(mb_y * 16  + i) * PicWidthInSamples + (mb_x * 16 + j)] +
-      // rMb[i][j]);
+  for (int32_t i = 0; i < 16; i++)
+    for (int32_t j = 0; j < 16; j++) {
+      int32_t y = mb.m_mb_position_y + (0 + i) * (1 + isMbAff);
+      int32_t x = mb.m_mb_position_x + (0 + j);
       u[i * 16 + j] =
-          CLIP3(0, (1 << BitDepth) - 1,
-                pic_buff[(m_mbs[CurrMbAddr].m_mb_position_y +
-                          (0 + (i)) * (1 + isMbAff)) *
-                             PicWidthInSamples +
-                         (m_mbs[CurrMbAddr].m_mb_position_x + (0 + (j)))] +
-                    rMb[i][j]);
+          Clip1C(pic_buff[y * PicWidthInSamples + x] + rMb[i][j], BitDepth);
     }
-  }
 
-  int32_t BlkIdx = 0;
-  ret = picture_construction_process_prior_to_deblocking_filter(
-      u, 16, 16, BlkIdx, isChroma, PicWidthInSamples, pic_buff);
-  RETURN_IF_FAILED(ret != 0, ret);
+  RET(picture_construction_process_prior_to_deblocking_filter(
+      u, 16, 16, 0, isChroma, PicWidthInSamples, pic_buff));
 
   return 0;
 }
@@ -3625,7 +3579,7 @@ int PictureBase::transform_decoding_for_8x8_luma_residual_blocks(
     int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff) {
   int ret = 0;
 
-  ret = scaling_functions(isChroma, isChromaCb);
+  RET(scaling_functions(isChroma, isChromaCb));
 
   int32_t isMbAff = (m_slice->slice_header->MbaffFrameFlag == 1 &&
                      m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
@@ -3804,7 +3758,7 @@ int PictureBase::transform_decoding_for_chroma_samples(
 
       //* b. 使用 chromaList 作为输入和二维数组 c 作为输出来调用第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程。
       int32_t c[4][4] = {{0}};
-      ret = inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
+      ret = inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
           chromaList, c, mb.field_pic_flag | mb.mb_field_decoding_flag);
       RET(ret);
 
@@ -3884,15 +3838,13 @@ int PictureBase::transform_decoding_for_chroma_samples_with_YUV444(
   int ret = 0;
   if (mb.m_mb_pred_mode == Intra_16x16) {
     if (isChromaCb)
-      ret =
-          transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction(
-              isChroma, BitDepth, mb.QP1Cb, PicWidthInSamples,
-              mb.CbIntra16x16DCLevel, mb.CbIntra16x16ACLevel, pic_buff);
+      ret = transform_decoding_for_luma_samples_of_16x16_mb_prediction(
+          isChroma, BitDepth, mb.QP1Cb, PicWidthInSamples,
+          mb.CbIntra16x16DCLevel, mb.CbIntra16x16ACLevel, pic_buff);
     else
-      ret =
-          transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction(
-              isChroma, BitDepth, mb.QP1Cr, PicWidthInSamples,
-              mb.CrIntra16x16DCLevel, mb.CrIntra16x16ACLevel, pic_buff);
+      ret = transform_decoding_for_luma_samples_of_16x16_mb_prediction(
+          isChroma, BitDepth, mb.QP1Cr, PicWidthInSamples,
+          mb.CrIntra16x16DCLevel, mb.CrIntra16x16ACLevel, pic_buff);
   } else if (mb.transform_size_8x8_flag) {
     if (isChromaCb)
       ret = transform_decoding_for_8x8_luma_residual_blocks(
@@ -4423,11 +4375,9 @@ int PictureBase::picture_construction_process_prior_to_deblocking_filter(
 }
 
 // 8.5.6 Inverse scanning process for 4x4 transform coefficients and scaling lists
-int PictureBase::
-    inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
-        int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag) {
-  // Table 8-13 – Specification of mapping of idx to cij for zig-zag and field
-  // scan
+int PictureBase::inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
+    const int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag) {
+  // Table 8-13 – Specification of mapping of idx to cij for zig-zag and field scan
   if (field_scan_flag == 0) {
     // zig-zag scan
     c[0][0] = values[0];
@@ -4449,8 +4399,7 @@ int PictureBase::
     c[2][3] = values[13];
     c[3][2] = values[14];
     c[3][3] = values[15];
-  } else // if (field_scan_flag == 1)
-  {
+  } else {
     // field scan
     c[0][0] = values[0];
     c[1][0] = values[1];
@@ -4723,143 +4672,90 @@ int PictureBase::get_chroma_quantisation_parameters2(int32_t QPY,
 }
 
 // 8.5.9 Derivation process for scaling functions
+/*  输出为： 
+ *  – LevelScale4x4：4x4 块变换亮度或色度系数级别的缩放因子; 
+ *  – LevelScale8x8：8x8 块变换亮度或色度系数级别的缩放因子; */
 int PictureBase::scaling_functions(int32_t isChroma, int32_t isChromaCb) {
-  int ret = 0;
-  int32_t mbIsInterFlag = 0;
 
-  //SliceHeader &slice_header = m_h264_slice_header;
+  /* -------------- 设置别名，初始化变量 -------------- */
+  MacroBlock &mb = m_mbs[CurrMbAddr];
+  bool mbIsInterFlag = !IS_INTRA_Prediction_Mode(mb.m_mb_pred_mode);
 
-  if (IS_INTRA_Prediction_Mode(m_mbs[CurrMbAddr].m_mb_pred_mode)) {
-    mbIsInterFlag = 0;
-  } else {
-    mbIsInterFlag = 1;
-  }
-
-  int32_t iYCbCr = 0;
-
-  if (m_slice->slice_header->m_sps->separate_colour_plane_flag == 1) {
+  int32_t iYCbCr = (!isChroma) ? 0 : (isChroma == 1 && isChromaCb == 1) ? 1 : 2;
+  //YUV444
+  if (m_slice->slice_header->m_sps->separate_colour_plane_flag)
     iYCbCr = m_slice->slice_header->colour_plane_id;
-  } else {
-    if (isChroma == 0) // If the scaling function LevelScale4x4 or LevelScale8x8
-                       // is derived for a luma residual block,
-    {
-      iYCbCr = 0;
-    } else if (isChroma == 1 &&
-               isChromaCb ==
-                   1) // if the scaling function LevelScale4x4 or LevelScale8x8
-                      // is derived for a chroma residual block and the chroma
-                      // component is equal to Cb,
-    {
-      iYCbCr = 1;
-    } else {
-      iYCbCr = 2;
-    }
-  }
 
-  //-------------------------
-  // The inverse scanning process for 4x4 transform coefficients and scaling
-  // lists as specified in clause 8.5.6 is invoked with ScalingList4x4[ iYCbCr +
-  // ( (mbIsInterFlag = = 1 ) ? 3 : 0 )] as the input and the output is assigned
-  // to the 4x4 matrix weightScale4x4.
+  const uint32_t *ScalingList4x4 =
+      m_slice->slice_header->ScalingList4x4[iYCbCr + (mbIsInterFlag ? 3 : 0)];
+  const uint32_t *ScalingList8x8 =
+      m_slice->slice_header->ScalingList8x8[2 * iYCbCr + mbIsInterFlag];
+  /* ------------------  End ------------------ */
 
+  //------------------------ 4x4 缩放矩阵 ----------------------------
   int32_t weightScale4x4[4][4] = {{0}};
+  RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
+      (int32_t *)ScalingList4x4, weightScale4x4,
+      mb.field_pic_flag | mb.mb_field_decoding_flag));
 
-  ret = inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
-      (int32_t *)m_slice->slice_header
-          ->ScalingList4x4[iYCbCr + ((mbIsInterFlag == 1) ? 3 : 0)],
-      weightScale4x4,
-      m_mbs[CurrMbAddr].field_pic_flag |
-          m_mbs[CurrMbAddr].mb_field_decoding_flag);
-  RETURN_IF_FAILED(ret != 0, ret);
-
-  int32_t v4x4[6][3] = {
-      {10, 16, 13}, {11, 18, 14}, {13, 20, 16},
-      {14, 23, 18}, {16, 25, 20}, {18, 29, 23},
-  };
-
-  // LevelScale4x4( m, i, j ) = weightScale4x4( i, j ) * normAdjust4x4( m, i, j
-  // );
-  for (int32_t m = 0; m <= 5; m++) {
-    for (int32_t i = 0; i <= 3; i++) {
-      for (int32_t j = 0; j <= 3; j++) {
-        if (i % 2 == 0 && j % 2 == 0) {
-          LevelScale4x4[m][i][j] = weightScale4x4[i][j] * v4x4[m][0];
-        } else if (i % 2 == 1 && j % 2 == 1) {
-          LevelScale4x4[m][i][j] = weightScale4x4[i][j] * v4x4[m][1];
-        } else {
-          LevelScale4x4[m][i][j] = weightScale4x4[i][j] * v4x4[m][2];
+  /* 其中 v 的第一个和第二个下标分别是矩阵的行索引和列索引 */
+  int32_t v4x4[6][3] = {{10, 16, 13}, {11, 18, 14}, {13, 20, 16},
+                        {14, 23, 18}, {16, 25, 20}, {18, 29, 23}};
+  /* m[0-5]分别表示帧内、帧间预测三个分量 */
+  for (int m = 0; m < 6; m++)
+    for (int m = 0; m < 6; m++)
+      for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++) {
+          if (i % 2 == 0 && j % 2 == 0)
+            LevelScale4x4[m][i][j] = weightScale4x4[i][j] * v4x4[m][0];
+          else if (i % 2 == 1 && j % 2 == 1)
+            LevelScale4x4[m][i][j] = weightScale4x4[i][j] * v4x4[m][1];
+          else
+            LevelScale4x4[m][i][j] = weightScale4x4[i][j] * v4x4[m][2];
         }
-      }
-    }
-  }
 
-  //--------------------------------------
-  // The inverse scanning process for 8x8 transform coefficients and scaling
-  // lists as specified in clause 8.5.7 is invoked with ScalingList8x8[ 2 *
-  // iYCbCr + mbIsInterFlag ] as the input and the output is assigned to the 8x8
-  // matrix weightScale8x8.
-
+  //------------------------ 8x8 缩放矩阵 ----------------------------
   int32_t weightScale8x8[8][8] = {{0}};
+  RET(Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
+      (int32_t *)ScalingList8x8, weightScale8x8,
+      mb.field_pic_flag | mb.mb_field_decoding_flag));
 
-  ret =
-      Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
-          (int32_t *)
-              m_slice->slice_header->ScalingList8x8[2 * iYCbCr + mbIsInterFlag],
-          weightScale8x8,
-          m_mbs[CurrMbAddr].field_pic_flag |
-              m_mbs[CurrMbAddr].mb_field_decoding_flag);
-  RETURN_IF_FAILED(ret != 0, ret);
-
+  /* 其中 v 的第一个和第二个下标分别是矩阵的行索引和列索引 */
   int32_t v8x8[6][6] = {
       {20, 18, 32, 19, 25, 24}, {22, 19, 35, 21, 28, 26},
       {26, 23, 42, 24, 33, 31}, {28, 25, 45, 26, 35, 33},
       {32, 28, 51, 30, 40, 38}, {36, 32, 58, 34, 46, 43},
   };
-
-  // LevelScale8x8( m, i, j ) = weightScale8x8( i, j ) * normAdjust8x8( m, i, j
-  // )
-  for (int32_t m = 0; m <= 5; m++) {
-    for (int32_t i = 0; i <= 7; i++) {
-      for (int32_t j = 0; j <= 7; j++) {
-        if (i % 4 == 0 && j % 4 == 0) {
+  /* m[0-5]分别表示帧内、帧间预测三个分量 */
+  for (int m = 0; m < 6; m++)
+    for (int i = 0; i < 8; i++)
+      for (int j = 0; j < 8; j++) {
+        if (i % 4 == 0 && j % 4 == 0)
           LevelScale8x8[m][i][j] = weightScale8x8[i][j] * v8x8[m][0];
-        } else if (i % 2 == 1 && j % 2 == 1) {
+        else if (i % 2 == 1 && j % 2 == 1)
           LevelScale8x8[m][i][j] = weightScale8x8[i][j] * v8x8[m][1];
-        } else if (i % 4 == 2 && j % 4 == 2) {
+        else if (i % 4 == 2 && j % 4 == 2)
           LevelScale8x8[m][i][j] = weightScale8x8[i][j] * v8x8[m][2];
-        } else if ((i % 4 == 0 && j % 2 == 1) || (i % 2 == 1 && j % 4 == 0)) {
+        else if ((i % 4 == 0 && j % 2 == 1) || (i % 2 == 1 && j % 4 == 0))
           LevelScale8x8[m][i][j] = weightScale8x8[i][j] * v8x8[m][3];
-        } else if ((i % 4 == 0 && j % 4 == 2) || (i % 4 == 2 && j % 4 == 0)) {
+        else if ((i % 4 == 0 && j % 4 == 2) || (i % 4 == 2 && j % 4 == 0))
           LevelScale8x8[m][i][j] = weightScale8x8[i][j] * v8x8[m][4];
-        } else {
+        else
           LevelScale8x8[m][i][j] = weightScale8x8[i][j] * v8x8[m][5];
-        }
       }
-    }
-  }
 
   return 0;
 }
 
-// 8.5.10 Scaling and transformation process for DC transform coefficients for
-// Intra_16x16 macroblock type
-int PictureBase::
-    Scaling_and_transformation_process_for_DC_transform_coefficients_for_Intra_16x16_macroblock_type(
-        int32_t bitDepth, int32_t qP, int32_t c[4][4], int32_t (&dcY)[4][4]) {
-  // int ret = 0;
-  // SliceHeader &slice_header = m_h264_slice_header;
+// 8.5.10 Scaling and transformation process for DC transform coefficients for Intra_16x16 macroblock type
+int PictureBase::scaling_and_transformation_for_DC_coeff_for_I16x16(
+    int32_t bitDepth, int32_t qP, int32_t c[4][4], int32_t (&dcY)[4][4]) {
 
-  if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1) {
-    for (int32_t i = 0; i <= 3; i++) {
-      for (int32_t j = 0; j <= 3; j++) {
+  if (m_mbs[CurrMbAddr].TransformBypassModeFlag) {
+    for (int32_t i = 0; i <= 3; i++)
+      for (int32_t j = 0; j <= 3; j++)
         dcY[i][j] = c[i][j];
-      }
-    }
-  } else // if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 0)
-  {
-    int32_t f[4][4];
-    int32_t g[4][4];
-
+  } else {
     // The inverse transform for the 4x4 luma DC transform coefficients
     // 4x4 luma亮度直流系数反变换
     //            | 1   1   1   1 |   | c00 c01 c02 c03 |   | 1   1   1   1 |
@@ -4867,6 +4763,7 @@ int PictureBase::
     //            | 1  -1  -1   1 |   | c20 c21 c22 c23 |   | 1  -1  -1   1 |
     //            | 1  -1   1  -1 |   | c30 c31 c32 c33 |   | 1  -1   1  -1 |
 
+    int32_t f[4][4] = {{0}}, g[4][4] = {{0}};
     // 先行变换
     g[0][0] = c[0][0] + c[1][0] + c[2][0] + c[3][0];
     g[0][1] = c[0][1] + c[1][1] + c[2][1] + c[3][1];
@@ -4909,25 +4806,16 @@ int PictureBase::
     f[3][2] = g[3][0] - g[3][1] - g[3][2] + g[3][3];
     f[3][3] = g[3][0] - g[3][1] + g[3][2] - g[3][3];
 
-    //-------------------------------
     if (qP >= 36) {
-      for (int32_t i = 0; i <= 3; i++) {
-        for (int32_t j = 0; j <= 3; j++) {
-          // dcYij = ( fij * LevelScale4x4( qP % 6, 0, 0 ) ) << ( qP / 6 − 6 );
+      for (int32_t i = 0; i <= 3; i++)
+        for (int32_t j = 0; j <= 3; j++)
           dcY[i][j] = (f[i][j] * LevelScale4x4[qP % 6][0][0]) << (qP / 6 - 6);
-        }
-      }
-    } else // if (qP < 36)
-    {
-      for (int32_t i = 0; i <= 3; i++) {
-        for (int32_t j = 0; j <= 3; j++) {
-          // dcYij = ( fij * LevelScale4x4( qP % 6, 0, 0 ) + ( 1 << ( 5 − qP /
-          // 6) ) ) >> ( 6 − qP / 6 );
+    } else {
+      for (int32_t i = 0; i <= 3; i++)
+        for (int32_t j = 0; j <= 3; j++)
           dcY[i][j] =
               (f[i][j] * LevelScale4x4[qP % 6][0][0] + (1 << (5 - qP / 6))) >>
               (6 - qP / 6);
-        }
-      }
     }
   }
 

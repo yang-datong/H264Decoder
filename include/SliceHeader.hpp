@@ -211,6 +211,14 @@ class SliceHeader {
   int32_t long_term_reference_flag = 0;
   int32_t adaptive_ref_pic_marking_mode_flag = 0;
   int32_t dec_ref_pic_marking_count = 0;
+  /* 当前使用的缩放矩阵值: 
+   * 对于4x4:
+     * 0-2为Sl_4x4_Intra_Y/Cb/Cr
+     * 3-5为Sl_4x4_Inter_Y/Cb/Cr
+   * 对于8x8:
+     * 0-1为Sl_8x8_Intra/Inter_Y
+     * 2-3为Sl_8x8_Intra/Inter_Cb
+     * 4-5为Sl_8x8_Intra/Inter_Cr */
   uint32_t ScalingList4x4[6][16] = {{0}};
   uint32_t ScalingList8x8[6][64] = {{0}};
   DEC_REF_PIC_MARKING m_dec_ref_pic_marking[32];

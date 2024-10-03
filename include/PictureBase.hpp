@@ -257,7 +257,7 @@ class PictureBase {
                                                       int32_t BitDepth,
                                                       int32_t PicWidthInSamples,
                                                       uint8_t *pic_buff);
-  int transform_decoding_for_luma_samples_of_Intra_16x16_macroblock_prediction(
+  int transform_decoding_for_luma_samples_of_16x16_mb_prediction(
       int32_t isChroma, int32_t BitDepth, int32_t QP1,
       int32_t PicWidthInSamples, int32_t Intra16x16DCLevel[16],
       int32_t Intra16x16ACLevel[16][16], uint8_t *pic_buff);
@@ -272,8 +272,8 @@ class PictureBase {
   int transformation_for_residual_4x4_blocks(int32_t d[4][4],
                                              int32_t (&r)[4][4]);
 
-  int inverse_scanning_for_4x4_transform_coefficients_and_scaling_lists(
-      int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag);
+  int inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
+      const int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag);
 
   int scaling_and_transformation_for_chroma_DC_transform_coefficients(
       int32_t isChromaCb, int32_t c[4][2], int32_t nW, int32_t nH,
@@ -298,7 +298,7 @@ class PictureBase {
   int get_chroma_quantisation_parameters2(int32_t QPY, int32_t isChromaCb,
                                           int32_t &QPC);
   int scaling_functions(int32_t isChroma, int32_t isChromaCb);
-  int Scaling_and_transformation_process_for_DC_transform_coefficients_for_Intra_16x16_macroblock_type(
+  int scaling_and_transformation_for_DC_coeff_for_I16x16(
       int32_t bitDepth, int32_t qP, int32_t c[4][4], int32_t (&dcY)[4][4]);
 
   //--------------帧间预测------------------------
