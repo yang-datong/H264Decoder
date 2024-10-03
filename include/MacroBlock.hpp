@@ -66,7 +66,7 @@ class MacroBlock {
   /* 子宏块类型，指示子宏块的编码模式 */
   int32_t sub_mb_type[4] = {0};
 
-  /* 亮度编码块模式，指示哪些亮度块包含非零系数，亮度块模式的值范围是0到15，即2^4 - 1 = 15，表示为3个bits位：
+  /* 亮度编码块模式，指示哪些亮度块包含非零系数，亮度块模式的值范围是0到15，即2^4 - 1 = 15，表示为4个bits位：
    * 比如 0b1010（即二进制的 1010），从低位往高位数，这意味着第 2 和第 4 个 8x8 块包含亮度残差数据，而第 1 和第 3 个 8x8 块没有亮度残差数据，在后面可以看到 if (CodedBlockPatternLuma & (1 << i8x8)) 这样的判断就是在做这件事情 */
   int32_t CodedBlockPatternLuma = -1;
 
@@ -280,9 +280,7 @@ class MacroBlock {
   void initFromSlice(const SliceHeader &header, const SliceData &slice_data);
 
   int process_mb_type(const SliceHeader &header, int32_t slice_type);
-  //Sub MacroBlock
   int process_sub_mb_type(const int mbPartIdx);
-
   int process_transform_size_8x8_flag(int32_t &transform_size_8x8_flag_temp);
   int process_coded_block_pattern(const uint32_t ChromaArrayType);
   int process_mb_qp_delta();
@@ -307,6 +305,8 @@ class MacroBlock {
 
   int residual(int32_t startIdx, int32_t endIdx);
   int residual_luma(int32_t startIdx, int32_t endIdx);
+  int residual_chroma(int32_t startIdx, int32_t endIdx, int32_t NumC8x8);
+
   int residual_block_DC(int32_t coeffLevel[], int32_t startIdx, int32_t endIdx,
                         int32_t maxNumCoeff, int iCbCr, int32_t BlkIdx);
   int residual_block_AC(int32_t coeffLevel[], int32_t startIdx, int32_t endIdx,

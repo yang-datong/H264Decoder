@@ -9,6 +9,7 @@
 #include "Type.hpp"
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 
 MacroBlock::~MacroBlock() {
   _is_cabac = 0;
@@ -96,27 +97,29 @@ int MacroBlock::decode(BitStream &bs, PictureBase &picture,
     }
 
     //------------------------- 4.编码块模式和残差数据 -------------------------
-    /* 1. 预测模式为 I_16x16 时，意味着使用单一的帧内预测模式进行编码，通常是在图像较为均匀或者简单的区域使用，会有固定的CBP处理;
-       2. 其他预测模式（如I_4x4、I_8x8,P,B等）可能涉及更复杂或更灵活的编码块结构，需要动态CBP决策处理; */
+    /* 1. 非Intra_16x16模式（如I_4x4、I_8x8,P,B等）的宏块可能包含部分子块不包含重要信息，也可能涉及更复杂或更灵活的编码块结构，需要动态CBP决策处理。*/
     if (m_mb_pred_mode != Intra_16x16) {
-      //处理编码块模式（Coded Block Pattern, CBP），它决定了哪些块（亮度块和色度块）包含非零系数。
+      //std::cout << "mb_type:" <<mb_type << ",m_name_of_mb_type:" << m_name_of_mb_type << ",m_mb_pred_mode:" << m_mb_pred_mode << std::endl;
+      //解码CBP，它决定了哪些块（亮度块和色度块）包含非零系数。
       process_coded_block_pattern(sps->ChromaArrayType);
 
-      /* 宏块中存在亮度块包含非零系数，需要对这些块进行逆变换和反量化，且宏块大小至少有8x8的大小(8x8,16x8,8x16,16x16)，在这种情况下，可能需要考虑使用8x8变换。 注，这里I_8x8也是不需要进行的*/
-      if (CodedBlockPatternLuma > 0 && pps->transform_8x8_mode_flag &&
-          m_name_of_mb_type != I_NxN && noSubMbSizeLessThan8x8 &&
+      /* 宏块中存在亮度块包含非零系数，需要对这些块进行逆变换和反量化，且宏块大小至少有8x8的大小(8x8,16x8,8x16,16x16)，在这种情况下，可能需要考虑使用8x8变换 */
+      if (CodedBlockPatternLuma > 0 && noSubMbSizeLessThan8x8 &&
           (m_name_of_mb_type != B_Direct_16x16 ||
            sps->direct_8x8_inference_flag))
-        process_transform_size_8x8_flag(transform_size_8x8_flag_temp);
+        //注，这里I_NxN在上面步骤中已经进行了一次解码
+        if (pps->transform_8x8_mode_flag && m_name_of_mb_type != I_NxN)
+          process_transform_size_8x8_flag(transform_size_8x8_flag_temp);
     }
 
+    /* 2. Intra_16x16模式的整个宏块的残差都需要被处理。由于整个宏块被统一处理，残差编码是整个块的一部分，不需要分别确定哪些子块包含重要信息 */
     // 宏块中存在非零系数(或亮度或色度）或当前为整块预测(简单区域一般压缩数据较多)，处理残差数据
-    // NOTE: 对于P,B Slice也可能会存在I宏块，所以残差并不是针对I Slice
     if (CodedBlockPatternLuma > 0 || CodedBlockPatternChroma > 0 ||
         m_mb_pred_mode == Intra_16x16) {
       process_mb_qp_delta();
-      /* 处理残差数据，startIdx 和 endIdx 是相对于整个 4x4 块的残差系数的索引，比如I_16x16宏块被分成了16个4x4的子块（索引从0到15），又或者I_8x8宏块分为8个I_4x4 */
+      /* 处理残差数据，startIdx 和 endIdx 是相对于整个 4x4 块的残差系数的最大索引，比如I_16x16宏块被分成了16个4x4的子块（索引从0到15），又或者I_8x8宏块分为8个I_4x4，同时也可以以8x8的宏块为单位处理 */
       residual(0, 15);
+      //TODO 没搞清楚这里的startIdx,endIdx具体是用在哪里 <24-10-03 16:08:51, YangJing>
     }
   }
 
@@ -673,11 +676,8 @@ int MacroBlock::SubMbPredMode(int32_t slice_type, int32_t sub_mb_type,
       SubMbPredMode = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPredMode;
       SubMbPartWidth = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPartWidth;
       SubMbPartHeight = sub_mb_type_P_mbs_define[sub_mb_type].SubMbPartHeight;
-    } else {
-      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-                << std::endl;
-      return -1;
-    }
+    } else
+      RET(-1);
   } else if (slice_type == SLICE_B) {
     if (sub_mb_type >= 0 && sub_mb_type <= 12) {
       /* Table 7-18 – Sub-macroblock types in B macroblocks */
@@ -685,16 +685,10 @@ int MacroBlock::SubMbPredMode(int32_t slice_type, int32_t sub_mb_type,
       SubMbPredMode = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPredMode;
       SubMbPartWidth = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPartWidth;
       SubMbPartHeight = sub_mb_type_B_mbs_define[sub_mb_type].SubMbPartHeight;
-    } else {
-      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-                << std::endl;
-      return -1;
-    }
-  } else {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return -1;
-  }
+    } else
+      RET(-1);
+  } else
+    RET(-1);
 
   return 0;
 }
@@ -702,11 +696,10 @@ int MacroBlock::SubMbPredMode(int32_t slice_type, int32_t sub_mb_type,
 int MacroBlock::residual_block_DC(int32_t coeffLevel[], int32_t startIdx,
                                   int32_t endIdx, int32_t maxNumCoeff,
                                   int iCbCr, int32_t BlkIdx) {
-  int ret = 0;
-  int TotalCoeff = 0;
-
+  int ret = 0, TotalCoeff = 0;
   MB_RESIDUAL_LEVEL mb_level =
       (iCbCr == 0) ? MB_RESIDUAL_ChromaDCLevelCb : MB_RESIDUAL_ChromaDCLevelCr;
+
   if (_is_cabac)
     ret = _cabac->residual_block_cabac(coeffLevel, startIdx, endIdx,
                                        maxNumCoeff, MB_RESIDUAL_ChromaDCLevel,
@@ -719,16 +712,14 @@ int MacroBlock::residual_block_DC(int32_t coeffLevel[], int32_t startIdx,
   RET(ret);
 
   mb_chroma_4x4_non_zero_count_coeff[iCbCr][BlkIdx] = TotalCoeff;
-  return ret;
+  return 0;
 }
 
 int MacroBlock::residual_block_AC(int32_t coeffLevel[], int32_t startIdx,
                                   int32_t endIdx, int32_t maxNumCoeff,
                                   int iCbCr, int32_t BlkIdx) {
 
-  int ret = 0;
-  int TotalCoeff = 0;
-
+  int ret = 0, TotalCoeff = 0;
   MB_RESIDUAL_LEVEL mb_level =
       (iCbCr == 0) ? MB_RESIDUAL_ChromaACLevelCb : MB_RESIDUAL_ChromaACLevelCr;
 
@@ -742,9 +733,8 @@ int MacroBlock::residual_block_AC(int32_t coeffLevel[], int32_t startIdx,
                                        BlkIdx, TotalCoeff);
 
   RET(ret);
-
   mb_chroma_4x4_non_zero_count_coeff[iCbCr][BlkIdx] = TotalCoeff;
-  return ret;
+  return 0;
 }
 
 int MacroBlock::residual_block2(int32_t coeffLevel[], int32_t startIdx,
@@ -769,15 +759,7 @@ int MacroBlock::residual_block2(int32_t coeffLevel[], int32_t startIdx,
 /* 残差数据是指编码过程中预测值与实际值之间的差异，它在解码时需要被重建，以恢复原始图像。这个函数的主要任务是处理亮度（Luma）和色度（Chroma）的残差数据。*/
 /* 对于帧内预测（I帧）：相邻的已解码像素生成预测值 -> 残差解码 -> 重建块 -> 去块效应滤波，其中残差解码有反量化残差系数，逆变换残差系数（DCT）*/
 /* 对于帧间预测（B、P帧）：运动补偿预测 -> 残差解码 -> 重建块，其中残差数据用于修正预测值 */
-
-/* 在该函数前已经完成了运动补偿或帧内预测：
-    对于帧间预测（Inter），解码器已经根据运动矢量从参考帧中预测了当前宏块。
-    对于帧内预测（Intra），解码器已经根据帧内预测模式生成了当前宏块的预测块。
-  在之后的步骤中，需要解码色度残差系数，逆量化和逆变换，重建图像块，去块效应滤波
- */
 int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
-  int ret = 0;
-
   if (!_cavlc) _cavlc = new CH264ResidualBlockCavlc(_pic, _bs);
   const uint32_t ChromaArrayType =
       _pic->m_slice->slice_header->m_sps->ChromaArrayType;
@@ -792,10 +774,9 @@ int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
   // 设置宏块的 DC 和 AC 残差级别，然后调用 residual_luma 函数处理亮度残差。residual_luma 函数负责解码亮度残差系数。
   _mb_residual_level_dc = MB_RESIDUAL_Intra16x16DCLevel;
   _mb_residual_level_ac = MB_RESIDUAL_Intra16x16ACLevel;
-  ret = residual_luma(startIdx, endIdx);
-  RET(ret);
+  residual_luma(startIdx, endIdx);
 
-  /* 将“预测后”的亮度数据保存，以16x16个数据量为单位处理 */
+  /* 将解码后的残差值(亮度)保存，以16x16个数据量为单位处理 */
   memcpy(Intra16x16DCLevel, i16x16DClevel, sizeof(i16x16DClevel));
   memcpy(Intra16x16ACLevel, i16x16AClevel, sizeof(i16x16AClevel));
   memcpy(LumaLevel4x4, level4x4, sizeof(level4x4));
@@ -803,48 +784,16 @@ int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
 
   //----------------------------- 处理 Chroma 信息 --------------------------------------
   /* 在YUV420,YUV422中，色度分量通常被下采样，意味着色度的分辨率比亮度低 */
-  if (ChromaArrayType == 1 || ChromaArrayType == 2) {
-    int32_t NumC8x8 = 4 / (SubWidthC * SubHeightC); //NumC8x8 表示色度块的数量
+  if (ChromaArrayType == 1 || ChromaArrayType == 2)
+    //表示色度块的数量，8x8宏块为一个色度块，NumC8x8 = 1则表示色度块为8x8，NumC8x8 = 2则表示色度块为16x8或8x16
+    residual_chroma(startIdx, endIdx, 4 / (SubWidthC * SubHeightC));
 
-    /* iCbCr为0时处理Cb分量，为1时处理Cr分量 */
-    for (int iCbCr = 0; iCbCr < 2; iCbCr++) {
-      /* CodedBlockPatternChroma != 0时，则说明存在DC残差数据，且startIdx == 0(DC系数矩阵)，则调用residual_block_DC函数来解码DC系数。 */
-      if ((CodedBlockPatternChroma & 3) && startIdx == 0)
-        residual_block_DC(ChromaDCLevel[iCbCr], 0, 4 * NumC8x8 - 1, 4 * NumC8x8,
-                          iCbCr, 0);
-
-      /* 如不存在DC残差值，则将所有色度块的DC置为零，这里是以4x4宏块为单位处理的所以需要乘回4 */
-      else
-        for (int i = 0; i < 4 * NumC8x8; i++)
-          ChromaDCLevel[iCbCr][i] = 0;
-    }
-
-    /* 处理色度分量的AC残差系数 */
-    for (int iCbCr = 0; iCbCr < 2; iCbCr++) { // 两个色度分量：Cb 和 Cr
-      for (int i8x8 = 0; i8x8 < NumC8x8; i8x8++) // 遍历每个色度块
-        for (int i4x4 = 0; i4x4 < 4; i4x4++) { // 遍历每个色度块中的4x4子块
-          /* BlkIdx 是当前4x4子块的索引（以4x4宏块为单位） */
-          int32_t BlkIdx = i8x8 * 4 + i4x4;
-          /* 当CodedBlockPatternChroma == 2时，则说明存在DC,AC残差数据。 */
-          if (CodedBlockPatternChroma & 2)
-            residual_block_AC(ChromaACLevel[iCbCr][BlkIdx],
-                              MAX(0, startIdx - 1), endIdx - 1, 15, iCbCr,
-                              BlkIdx);
-
-          /* 若当前4x4宏块不存在AC非零系数，则将当前的AC系数全部置空为0(出去DC系数就是16-1 = 15个） */
-          else
-            for (int i = 0; i < (16 - 1); i++)
-              ChromaACLevel[iCbCr][BlkIdx][i] = 0;
-        }
-    }
-
-    /* 对于YUV444，此处跟Luma（亮度）块一样的处理（因为没有对色度进行子采样）*/
-  } else if (ChromaArrayType == 3) {
+  /* 对于YUV444，此处跟Luma（亮度）块一样的处理（因为没有对色度进行子采样）*/
+  else if (ChromaArrayType == 3) {
     /* 处理U(Cb)数据 */
     _mb_residual_level_dc = MB_RESIDUAL_CbIntra16x16DCLevel;
     _mb_residual_level_ac = MB_RESIDUAL_CbIntra16x16ACLevel;
-    ret = residual_luma(startIdx, endIdx);
-    RET(ret);
+    residual_luma(startIdx, endIdx);
 
     memcpy(CbIntra16x16DCLevel, i16x16DClevel, sizeof(i16x16DClevel));
     memcpy(CbIntra16x16ACLevel, i16x16AClevel, sizeof(i16x16AClevel));
@@ -854,8 +803,7 @@ int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
     /* 处理V(Cr)数据 */
     _mb_residual_level_dc = MB_RESIDUAL_CrIntra16x16DCLevel;
     _mb_residual_level_ac = MB_RESIDUAL_CrIntra16x16ACLevel;
-    ret = residual_luma(startIdx, endIdx);
-    RET(ret);
+    residual_luma(startIdx, endIdx);
 
     memcpy(CrIntra16x16DCLevel, i16x16DClevel, sizeof(i16x16DClevel));
     memcpy(CrIntra16x16ACLevel, i16x16AClevel, sizeof(i16x16AClevel));
@@ -869,7 +817,7 @@ int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
 //7.3.5.3.1 Residual luma syntax （当Cb、Cr分量未被降低采样时，也会进入到这个函数处理，即YUV444）
 /* 残差系数解码。通过该函数，宏块的残差系数被解码并存储系数 */
 int MacroBlock::residual_luma(int32_t startIdx, int32_t endIdx) {
-  /* 如果当前的宏块是16x16整块，且为首个块（包含DC系数），则先处理 16x16 DC 残差系数 */
+  // 当前的宏块是16x16整宏块帧内预测，且为首个块（包含DC系数），则先处理 16x16 DC 残差系数
   if (startIdx == 0 && m_mb_pred_mode == Intra_16x16) {
     /* 该 4x4 block的残差中，总共有多少个非零系数 */
     int32_t TotalCoeff = 0;
@@ -881,72 +829,92 @@ int MacroBlock::residual_luma(int32_t startIdx, int32_t endIdx) {
 
   /* 宏块被分为4个8x8的子宏块，以8x8宏块为单位遍历 */
   for (int i8x8 = 0; i8x8 < 4; i8x8++) {
-
     /* 当未使用 8x8 变换 或者 为CAVLC编码模式（这里主要是表示为传统级别的编码） */
-    if (!transform_size_8x8_flag || _is_cabac == 0) {
-
-      /* 传统4x4变换：进一步遍历每个 8x8 块中的 4 个 4x4 子块 */
+    if (transform_size_8x8_flag == 0 || _is_cabac == 0) {
+      /* 对于传统4x4变换，需要增加遍历次数，达到遍历16个4x4 子块目的 */
       for (int i4x4 = 0; i4x4 < 4; i4x4++) {
-        /* BlkIdx 是当前4x4子块的索引（以4x4宏块为单位） */
-        int BlkIdx = i8x8 * 4 + i4x4;
+        int BlkIdx = i8x8 * 4 + i4x4; // 当前4x4子块的索引（以4x4宏块为单位）
 
+        /* NOTE:最外层的逻辑控制是基于8x8子宏块的CBP位的，即使代码内部是通过遍历每个4x4子块来处理，意味着至少有一个在这个8x8子宏块内的4x4子块包含非零残差系数 */
         if (CodedBlockPatternLuma & (1 << i8x8)) {
-          /* 当前亮度块包含亮度残差数据（按位索引计数） */
           int TotalCoeff = 0;
-          /* 在Intra_16x16 帧内预测模式中：
-              DC 分量：整个 16x16 宏块的 DC 分量是通过一个 4x4 的块来表示的（即 16 个系数）;
-              AC 分量：每个 4x4 子块的 AC 分量是单独存储的，每个 4x4 子块有 15 个 AC 残差系数
-             该模式中，残差系数分为 DC 和 AC 分量，DC 分量已经单独处理过，因此在处理 AC 残差时需要特殊处理（如索引范围调整）。*/
+          /* MAX(0, startIdx - 1)表示，上面已经单独处理了一次DC系数，由于上面单独经过了DC的处理，那么startIdx肯定还是0，所以，这里经过MAX后为MAX(0,-1) = 0，但是endIdx却实实在在的-1了，比如变为了15 - 1 = 14*/
           if (m_mb_pred_mode == Intra_16x16)
-            /* MAX(0, startIdx - 1)表示，上面已经单独处理了一次DC系数，由于上面单独经过了DC的处理，那么startIdx肯定还是0，所以，这里经过MAX后为MAX(0,-1) = 0，但是endIdx却实实在在的-1了，比如变为了15 - 1 = 14*/
             residual_block2(i16x16AClevel[BlkIdx], MAX(0, startIdx - 1),
                             endIdx - 1, 15, MB_RESIDUAL_Intra16x16ACLevel, -1,
                             BlkIdx, TotalCoeff);
-
-          /* 在其他模式下（如 Intra_4x4 或 Inter 模式），每个 4x4 子块的残差系数是独立处理的，没有像 Intra_16x16 那样的特殊 DC/AC 分离，残差系数直接存储在 level4x4 中，包含完整的 DC 和 AC 分量 */
+          /* 在其他模式下（如 Intra_NxN 或 Inter 模式），每个 4x4 子块的残差系数是独立处理的，没有像 Intra_16x16 那样的特殊 DC/AC 分离，残差系数直接存储在 level4x4 中，包含完整的 DC 和 AC 分量 */
           else
             residual_block2(level4x4[BlkIdx], startIdx, endIdx, 16,
                             MB_RESIDUAL_LumaLevel4x4, -1, BlkIdx, TotalCoeff);
 
           mb_luma_4x4_non_zero_count_coeff[BlkIdx] = TotalCoeff;
-          mb_luma_8x8_non_zero_count_coeff[i8x8] +=
-              mb_luma_4x4_non_zero_count_coeff[BlkIdx];
-        } else if (m_mb_pred_mode == Intra_16x16) {
-          /* 当前亮度块不包含亮度残差数据（按位索引计数），但为整个宏块16x16预测模式，由于上面单独经过了DC的处理，那么这里只需要处理后面15个AC系数 */
-          for (int i = 0; i < 15; i++)
-            i16x16AClevel[BlkIdx][i] = 0;
-        } else {
-          /* 否则，全部置空为0 */
-          for (int i = 0; i < 16; i++)
-            level4x4[BlkIdx][i] = 0;
+          mb_luma_8x8_non_zero_count_coeff[i8x8] += TotalCoeff;
         }
+        /* 当前亮度块不包含亮度残差数据，但为Intra_16x16预测模式，由于上面单独经过了DC的处理，那么这里只需要处理后面15个AC系数 */
+        else if (m_mb_pred_mode == Intra_16x16)
+          std::fill_n(i16x16AClevel[BlkIdx], 15, 0);
+        /* 当前亮度块不包含亮度残差数据，DC,AC系数全部置空为0 */
+        else
+          std::fill_n(level4x4[BlkIdx], 16, 0);
 
-        /* 当使用 8x8 变换 且 为CAVLC编码模式 */
+        /* 当在CAVLC编码模式下使用 8x8 变换：需要将已经处理的4x4变换系数重新映射（即组合）成8x8变换系数 */
         if (transform_size_8x8_flag && _is_cabac == 0) {
-          /* 将 4x4 变换系数重新映射到 8x8 变换系数数组中 */
           for (int i = 0; i < 16; i++)
-            /* 4 * i + i4x4 是将 4x4 块的系数映射到 8x8 块中的正确位置 */
             level8x8[i8x8][4 * i + i4x4] = level4x4[BlkIdx][i];
           mb_luma_8x8_non_zero_count_coeff[i8x8] +=
               mb_luma_4x4_non_zero_count_coeff[BlkIdx];
         }
       }
 
-      /* 当使用 8x8 变换 且 为CABAC编码模式（目前主流编码） */
+      /* 当使用 8x8 变换 且为CABAC编码模式（目前主流编码），且亮度块包含亮度残差数据 */
     } else if (CodedBlockPatternLuma & (1 << i8x8)) {
-      /* 当前亮度块包含亮度残差数据（按位索引计数） */
-      int BlkIdx = i8x8;
+      const int &BlkIdx = i8x8;
       int TotalCoeff = 0;
       residual_block2(level8x8[BlkIdx], 4 * startIdx, 4 * endIdx + 3, 64,
                       MB_RESIDUAL_LumaLevel8x8, -1, BlkIdx, TotalCoeff);
       mb_luma_8x8_non_zero_count_coeff[BlkIdx] = TotalCoeff;
-    } else {
-      /* 当前亮度块不包含亮度残差数据（按位索引计数）,直接将其系数清零 */
-      for (int i = 0; i < 64; i++)
-        level8x8[i8x8][i] = 0;
     }
+
+    /* 当前亮度块不包含亮度残差数据，直接将其系数清零 */
+    else
+      std::fill_n(level8x8[i8x8], 64, 0);
   }
 
+  return 0;
+}
+
+int MacroBlock::residual_chroma(int32_t startIdx, int32_t endIdx,
+                                int32_t NumC8x8) {
+  // -------------------- 处理残差DC系数 --------------------
+  // 两个色度分量：Cb 和 Cr
+  for (int iCbCr = 0; iCbCr < 2; iCbCr++) {
+    /* DC,AC系数分开存储，首个块为DC系数块，且至少有一些色度信息需要编码 */
+    if (startIdx == 0 && (CodedBlockPatternChroma & 3))
+      residual_block_DC(ChromaDCLevel[iCbCr], 0, 4 * NumC8x8 - 1, 4 * NumC8x8,
+                        iCbCr, 0);
+
+    /* 如不存在DC残差值，则将所有色度块的DC置为零，这里是以4x4宏块为单位处理 */
+    else
+      std::fill_n(ChromaDCLevel[iCbCr], 4 * NumC8x8, 0);
+  }
+
+  // -------------------- 处理残差AC系数 --------------------
+  for (int iCbCr = 0; iCbCr < 2; iCbCr++) {
+    for (int i8x8 = 0; i8x8 < NumC8x8; i8x8++) // 遍历每个8x8色度块
+      for (int i4x4 = 0; i4x4 < 4; i4x4++) { // 遍历每个色度块中的4x4子块
+        // BlkIdx 是当前4x4子块的索引（以4x4宏块为单位）
+        int32_t BlkIdx = i8x8 * 4 + i4x4;
+        // 存在AC系数需要处理
+        if (CodedBlockPatternChroma & 2)
+          residual_block_AC(ChromaACLevel[iCbCr][BlkIdx], MAX(0, startIdx - 1),
+                            endIdx - 1, 15, iCbCr, BlkIdx);
+
+        /* 若当前4x4宏块不存在AC非零系数，则将当前的AC系数全部置空为0(出去DC系数就是16-1 = 15个） */
+        else
+          std::fill_n(ChromaACLevel[iCbCr][BlkIdx], 16 - 1, 0);
+      }
+  }
   return 0;
 }
 

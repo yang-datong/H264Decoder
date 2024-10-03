@@ -15,159 +15,102 @@ int CH264ResidualBlockCavlc::printInfo() {
   return 0;
 }
 
+//7.3.5.3.2 Residual block CAVLC syntax
+//TODO 后续看一下这里具体解码系数 <24-10-03 16:06:02, YangJing> 
 int CH264ResidualBlockCavlc::residual_block_cavlc(
     int32_t *coeffLevel, int32_t startIdx, int32_t endIdx, int32_t maxNumCoeff,
     MB_RESIDUAL_LEVEL mb_residual_level, int32_t MbPartPredMode, int32_t BlkIdx,
     int32_t &TotalCoeff) {
-  int ret = 0;
-  int32_t i = 0;
-  int32_t suffixLength = 0;
-  int32_t levelSuffixSize = 0;
-  int32_t levelCode = 0;
-  int32_t zerosLeft = 0;
-  int32_t coeffNum = 0;
-  int32_t nC = 0;
   TotalCoeff = 0;
 
-  // for (i = 0; i < maxNumCoeff; i++) { coeffLevel[ i ] = 0; }
-  memset(coeffLevel, 0, sizeof(int32_t) * maxNumCoeff);
+  std::fill_n(coeffLevel, maxNumCoeff, 0);
 
-  // coeff_token; //3 | 4 ce(v)
-  ret = get_nC(mb_residual_level, MbPartPredMode, BlkIdx, nC);
-  RETURN_IF_FAILED(ret != 0, -1);
+  int32_t nC = 0;
+  RET(get_nC(mb_residual_level, MbPartPredMode, BlkIdx, nC)); //ce(v)
 
-  uint16_t coeff_token = _bs->getUn(16);
   //  先获取16bit数据（注意：并不是读取），因为coeff_token_table表里面最长的coeff_token为16bit，所以预先获取16bit数据就足够了
+  uint16_t coeff_token = _bs->getUn(16);
+  int32_t coeff_token_bit_length = 0, TrailingOnes = 0;
+  // 查表找到对应的TrailingOnes, TotalCoeff值
+  RET(coeff_token_table(nC, coeff_token, coeff_token_bit_length, TrailingOnes,
+                        TotalCoeff));
 
-  int32_t coeff_token_bit_length = 0;
-  int32_t TrailingOnes = 0;
+// 此处才是读取coeff_token_bit_length bit数据
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+  uint16_t coeff_token2 = _bs->readUn(coeff_token_bit_length);
+#pragma GCC diagnostic pop
 
-  ret = coeff_token_table(
-      nC, coeff_token, coeff_token_bit_length, TrailingOnes,
-      TotalCoeff); // 直接查表找到对应的TrailingOnes, TotalCoeff值
-  RETURN_IF_FAILED(ret != 0, -1);
-
-  /*uint16_t coeff_token2 =*/_bs->readUn(coeff_token_bit_length);
-  // 此处才是读取coeff_token_bit_length bit数据
-
-  //-------------------------------------------
+  int32_t suffixLength = 0;
   if (TotalCoeff > 0) {
-    if (TotalCoeff > 10 && TrailingOnes < 3) {
-      suffixLength = 1;
-    } else // if (TotalCoeff <= 10 || TrailingOnes == 3)
-    {
-      suffixLength = 0;
-    }
+    suffixLength = (TotalCoeff > 10 && TrailingOnes < 3) ? 1 : 0;
 
-    for (i = 0; i < TotalCoeff; i++) {
+    for (int32_t i = 0; i < TotalCoeff; i++) {
       if (i < TrailingOnes) {
-        trailing_ones_sign_flag = _bs->readUn(1); // 3 | 4 u(1)
-        levelVal[i] =
-            1 - 2 * trailing_ones_sign_flag; // 3个拖尾系数，只能是1或-1
+        trailing_ones_sign_flag = _bs->readUn(1);
+        levelVal[i] = 1 - 2 * trailing_ones_sign_flag;
       } else {
-        // level_prefix; //3 | 4 ce(v)
         int32_t leadingZeroBits = -1;
-        for (int32_t b = 0; !b; leadingZeroBits++) {
+        for (int32_t b = 0; !b; leadingZeroBits++)
           b = _bs->readUn(1);
-        }
         level_prefix = leadingZeroBits;
 
         //---------------levelSuffixSize-----------------------------------
-        if (level_prefix == 14 && suffixLength == 0) {
+        int32_t levelSuffixSize = 0;
+        if (level_prefix == 14 && suffixLength == 0)
           levelSuffixSize = 4;
-        } else if (level_prefix >= 15) {
+        else if (level_prefix >= 15)
           levelSuffixSize = level_prefix - 3;
-        } else {
+        else
           levelSuffixSize = suffixLength;
-        }
 
         //-----------------level_suffix---------------------------------
+        int32_t levelCode = 0;
         levelCode = (MIN(15, level_prefix) << suffixLength);
         if (suffixLength > 0 || level_prefix >= 14) {
-          // level_suffix ; //3 | 4 u(v)
-          if (levelSuffixSize > 0) {
-            level_suffix = _bs->readUn(levelSuffixSize);
-          } else // if (levelSuffixSize == 0)
-          {
-            level_suffix = 0;
-          }
-
+          level_suffix =
+              (levelSuffixSize > 0) ? _bs->readUn(levelSuffixSize) : 0;
           levelCode += level_suffix;
         }
 
         //--------------------------------------------------
-        if (level_prefix >= 15 && suffixLength == 0) {
-          levelCode += 15;
-        }
-
-        if (level_prefix >= 16) {
-          levelCode += (1 << (level_prefix - 3)) - 4096;
-        }
-
-        if (i == TrailingOnes && TrailingOnes < 3) {
-          levelCode += 2;
-        }
-
-        if (levelCode % 2 == 0) {
+        if (level_prefix >= 15 && suffixLength == 0) levelCode += 15;
+        if (level_prefix >= 16) levelCode += (1 << (level_prefix - 3)) - 4096;
+        if (i == TrailingOnes && TrailingOnes < 3) levelCode += 2;
+        if (levelCode % 2 == 0)
           levelVal[i] = (levelCode + 2) >> 1;
-        } else {
+        else
           levelVal[i] = (-levelCode - 1) >> 1;
-        }
-
-        if (suffixLength == 0) {
-          suffixLength = 1;
-        }
-
-        if (ABS(levelVal[i]) > (3 << (suffixLength - 1)) && suffixLength < 6) {
+        if (suffixLength == 0) suffixLength = 1;
+        if (ABS(levelVal[i]) > (3 << (suffixLength - 1)) && suffixLength < 6)
           suffixLength++;
-        }
       }
     }
 
     //---------------total_zeros--------------------------
+    int32_t zerosLeft = 0;
     if (TotalCoeff < endIdx - startIdx + 1) {
-      // total_zeros; //3 | 4 ce(v)
       int32_t tzVlcIndex = TotalCoeff;
-      ret = get_total_zeros(maxNumCoeff, tzVlcIndex, total_zeros);
-      RETURN_IF_FAILED(ret != 0, ret);
-
+      RET(get_total_zeros(maxNumCoeff, tzVlcIndex, total_zeros));
       zerosLeft = total_zeros;
-    } else {
+    } else
       zerosLeft = 0;
-    }
 
     //--------------run_before---------------------------
-    for (i = 0; i < TotalCoeff - 1; i++) {
+    for (int32_t i = 0; i < TotalCoeff - 1; i++) {
       if (zerosLeft > 0) {
-        // run_before; //3 | 4 ce(v)
-        ret = get_run_before(zerosLeft, run_before);
-        RETURN_IF_FAILED(ret != 0, ret);
-
+        RET(get_run_before(zerosLeft, run_before));
         runVal[i] = run_before;
-      } else {
+      } else
         runVal[i] = 0;
-      }
       zerosLeft = zerosLeft - runVal[i];
     }
-
     runVal[TotalCoeff - 1] = zerosLeft;
 
-    //---------------------
-    coeffNum = -1;
-    for (i = TotalCoeff - 1; i >= 0; i--) {
+    int32_t coeffNum = -1;
+    for (int32_t i = TotalCoeff - 1; i >= 0; i--) {
       coeffNum += runVal[i] + 1;
       coeffLevel[startIdx + coeffNum] = levelVal[i];
-    }
-  }
-
-  if (_picture->m_PicNumCnt == -1) {
-    printf("%s(%d): mb_x=%d; mb_y=%d; TotalCoeff=%d;\n", __FUNCTION__, __LINE__,
-           _picture->mb_x, _picture->mb_y, TotalCoeff);
-    for (i = 0; i < TotalCoeff; i++) {
-      printf(" %d", levelVal[i]);
-    }
-    if (TotalCoeff > 0) {
-      printf("\n");
     }
   }
 
@@ -194,8 +137,7 @@ int32_t Scan_for_4x4_luma_blocks[16] = {
  *      | or Partition  |
  *      | or Block      |
  */
-// 9.2.1 Parsing process for total number of non-zero transform coefficient
-// levels and number of trailing ones
+// 9.2.1 Parsing process for total number of non-zero transform coefficient levels and number of trailing ones
 int CH264ResidualBlockCavlc::get_nC(MB_RESIDUAL_LEVEL mb_residual_level,
                                     int32_t MbPartPredMode, int32_t BlkIdx,
                                     int32_t &nC) {

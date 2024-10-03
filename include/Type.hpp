@@ -108,7 +108,7 @@ typedef enum _H264_MB_TYPE_ {
   MB_TYPE_NA,
 
   // Macroblock types for I slices
-  I_NxN,         //            0
+  I_NxN,         //    0 -> 1
   I_16x16_0_0_0, //    1
   I_16x16_1_0_0, //    2
   I_16x16_2_0_0, //    3
@@ -133,44 +133,44 @@ typedef enum _H264_MB_TYPE_ {
   I_16x16_1_2_1, //    22
   I_16x16_2_2_1, //    23
   I_16x16_3_2_1, //    24
-  I_PCM,         //            25
+  I_PCM,         //    25
 
   // Macroblock type with value 0 for SI slices
-  SI, //              0
+  SI, //              0 -> 27
 
   // Macroblock type values 0 to 4 for P and SP slices
-  P_L0_16x16,   //      0
+  P_L0_16x16,   //    0 -> 28
   P_L0_L0_16x8, //    1
   P_L0_L0_8x16, //    2
-  P_8x8,        //           3
-  P_8x8ref0,    //       4
-  P_Skip,       //         -1
+  P_8x8,        //    3
+  P_8x8ref0,    //    4
+  P_Skip,       //   -1
 
   // Macroblock type values 0 to 22 for B slices
-  B_Direct_16x16, //  0
-  B_L0_16x16,     //      1
-  B_L1_16x16,     //      2
-  B_Bi_16x16,     //      3
-  B_L0_L0_16x8,   //    4
-  B_L0_L0_8x16,   //    5
-  B_L1_L1_16x8,   //    6
-  B_L1_L1_8x16,   //    7
-  B_L0_L1_16x8,   //    8
-  B_L0_L1_8x16,   //    9
-  B_L1_L0_16x8,   //    10
-  B_L1_L0_8x16,   //    11
-  B_L0_Bi_16x8,   //    12
-  B_L0_Bi_8x16,   //    13
-  B_L1_Bi_16x8,   //    14
-  B_L1_Bi_8x16,   //    15
-  B_Bi_L0_16x8,   //    16
-  B_Bi_L0_8x16,   //    17
-  B_Bi_L1_16x8,   //    18
-  B_Bi_L1_8x16,   //    19
-  B_Bi_Bi_16x8,   //    20
-  B_Bi_Bi_8x16,   //    21
-  B_8x8,          //           22
-  B_Skip,         //          -1
+  B_Direct_16x16, //  0 -> 34
+  B_L0_16x16,     //  1
+  B_L1_16x16,     //  2
+  B_Bi_16x16,     //  3
+  B_L0_L0_16x8,   //  4
+  B_L0_L0_8x16,   //  5
+  B_L1_L1_16x8,   //  6
+  B_L1_L1_8x16,   //  7
+  B_L0_L1_16x8,   //  8
+  B_L0_L1_8x16,   //  9
+  B_L1_L0_16x8,   //  10
+  B_L1_L0_8x16,   //  11
+  B_L0_Bi_16x8,   //  12
+  B_L0_Bi_8x16,   //  13
+  B_L1_Bi_16x8,   //  14
+  B_L1_Bi_8x16,   //  15
+  B_Bi_L0_16x8,   //  16
+  B_Bi_L0_8x16,   //  17
+  B_Bi_L1_16x8,   //  18
+  B_Bi_L1_8x16,   //  19
+  B_Bi_Bi_16x8,   //  20
+  B_Bi_Bi_8x16,   //  21
+  B_8x8,          //  22 -> 56
+  B_Skip,         //  -1
 
   // Sub-macroblock types in P macroblocks
   P_L0_8x8, //    0

@@ -4,6 +4,7 @@
 #include "PictureBase.hpp"
 #include "SliceHeader.hpp"
 #include "Type.hpp"
+#include <cstdint>
 
 /* 对于P、SP和B Slice 类型，初始化还取决于cabac_init_idc语法元素的值 */
 inline int CH264Cabac::init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
@@ -3934,149 +3935,98 @@ int CH264Cabac::decode_transform_size_8x8_flag(int32_t &synElVal) {
   return 0;
 }
 
-//-----------------------------------------------
-/*
- * T-REC-H.264-201704-S!!PDF-E.pdf
- * Page 62/84/812
- * 7.3.5.3.3 Residual block CABAC syntax
- */
+// 7.3.5.3.3 Residual block CABAC syntax
+// TODO 后面需要再仔细看一下，复现CABAC算法的时候吧 <24-10-03 15:51:55, YangJing> 
 int CH264Cabac::residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
                                      int32_t endIdx, int32_t maxNumCoeff,
                                      MB_RESIDUAL_LEVEL mb_block_level,
                                      int32_t BlkIdx, int32_t iCbCr,
                                      int32_t &TotalCoeff) {
-  int ret = 0;
-
-  int32_t ChromaArrayType =
+  const int32_t ChromaArrayType =
       picture.m_slice->slice_header->m_sps->ChromaArrayType;
-  int32_t i = 0;
-  int32_t coded_block_flag = 1; // When coded_block_flag is not present, it
-                                // shall be inferred to be equal to 1.
-  int32_t numCoeff = 0;
-  int32_t numDecodAbsLevelEq1 = 0;
-  int32_t numDecodAbsLevelGt1 = 0;
 
-  int32_t significant_coeff_flag[64] = {0};
-  int32_t last_significant_coeff_flag[64] = {0};
-  int32_t coeff_abs_level_minus1[64] = {0};
-  int32_t coeff_sign_flag[64] = {0};
-  int32_t index[64] = {0};
   TotalCoeff = 0;
 
-  if (maxNumCoeff != 64 || ChromaArrayType == 3) {
-    ret = decode_coded_block_flag(mb_block_level, BlkIdx, iCbCr,
-                                  coded_block_flag); // 3 | 4 ae(v)
-    RETURN_IF_FAILED(ret != 0, -1);
+  // 默认设置为1，意味着块总是被编码，除非显式地解码为0
+  int32_t coded_block_flag = 1;
+
+  //YUV4:4:4
+  if (maxNumCoeff != 64 || ChromaArrayType == 3)
+    RET(decode_coded_block_flag(mb_block_level, BlkIdx, iCbCr,
+                                coded_block_flag));
+
+  //将所有的残差系数初始化为 0
+  std::fill_n(coeffLevel, maxNumCoeff, 0);
+
+  if (!coded_block_flag) return 0;
+
+  //遍历从 startIdx 到 endIdx 的系数，解码重要系数标志（significant_coeff_flag）和最后的重要系数标志（last_significant_coeff_flag）
+  int32_t numCoeff = endIdx + 1;
+  int32_t i = startIdx;
+
+  int32_t significant_coeff_flag[64] = {0},
+          last_significant_coeff_flag[64] = {0};
+
+  while (i < numCoeff - 1) {
+    int32_t &levelListIdx = i;
+    RET(decode_significant_coeff_flag(mb_block_level, levelListIdx, 0,
+                                      significant_coeff_flag[i]));
+    if (significant_coeff_flag[i]) {
+      RET(decode_significant_coeff_flag(mb_block_level, levelListIdx, 1,
+                                        last_significant_coeff_flag[i]));
+      // 跳出循环，因为剩下的DCT变换系数都是0了
+      if (last_significant_coeff_flag[i]) numCoeff = i + 1;
+    }
+    i++;
   }
 
-  // for (i = 0; i < maxNumCoeff; i++) { coeffLevel[ i ] = 0; }
-  memset(coeffLevel, 0, sizeof(int32_t) * maxNumCoeff);
+  //对最后一个系数进行解码，包括其绝对值减1的级别和符号。然后计算并更新系数的实际值
+  int32_t numDecodAbsLevelEq1 = 0, numDecodAbsLevelGt1 = 0;
+  int32_t coeff_abs_level_minus1[64] = {0}, coeff_sign_flag[64] = {0};
+  RET(decode_coeff_abs_level_minus1(mb_block_level, numDecodAbsLevelEq1,
+                                    numDecodAbsLevelGt1,
+                                    coeff_abs_level_minus1[numCoeff - 1]));
+  RET(decode_coeff_sign_flag(coeff_sign_flag[numCoeff - 1]));
 
-  if (coded_block_flag) {
-    numCoeff = endIdx + 1;
+  coeffLevel[numCoeff - 1] = (coeff_abs_level_minus1[numCoeff - 1] + 1) *
+                             (1 - 2 * coeff_sign_flag[numCoeff - 1]);
 
-    i = startIdx;
+  //int32_t index[64] = {0};
+  //index[0] = numCoeff - 1;
+  TotalCoeff = 1;
+  if (ABS(coeffLevel[numCoeff - 1]) == 1)
+    numDecodAbsLevelEq1++;
+  else if (ABS(coeffLevel[numCoeff - 1]) > 1)
+    numDecodAbsLevelGt1++;
 
-    while (i < numCoeff - 1) {
-      int32_t &levelListIdx = i;
+  //逆序解码其它重要的系数，并更新它们的绝对值和符号
+  for (i = numCoeff - 2; i >= startIdx; i--) {
+    if (significant_coeff_flag[i]) {
+      //index[TotalCoeff] = i;
+      TotalCoeff++;
+      RET(decode_coeff_abs_level_minus1(mb_block_level, numDecodAbsLevelEq1,
+                                        numDecodAbsLevelGt1,
+                                        coeff_abs_level_minus1[i]));
+      RET(decode_coeff_sign_flag(coeff_sign_flag[i]));
+      coeffLevel[i] =
+          (coeff_abs_level_minus1[i] + 1) * (1 - 2 * coeff_sign_flag[i]);
 
-      ret = decode_significant_coeff_flag(
-          mb_block_level, levelListIdx, 0,
-          significant_coeff_flag[i]); // 3 | 4 ae(v)
-      RETURN_IF_FAILED(ret != 0, -1);
-
-      if (significant_coeff_flag[i]) // position i has a non-zero value.
-      {
-        ret = decode_significant_coeff_flag(
-            mb_block_level, levelListIdx, 1,
-            last_significant_coeff_flag[i]); // 3 | 4 ae(v)
-        RETURN_IF_FAILED(ret != 0, -1);
-
-        if (last_significant_coeff_flag
-                [i]) // all following transform coefficient levels (in scanning
-                     // order) of the block have value equal to 0.
-        {
-          numCoeff = i + 1; // 跳出循环，因为剩下的DCT变换系数都是0了
-        }
-      }
-
-      i++;
-    }
-
-    //-----------------------------------
-    ret = decode_coeff_abs_level_minus1(
-        mb_block_level, numDecodAbsLevelEq1, numDecodAbsLevelGt1,
-        coeff_abs_level_minus1[numCoeff - 1]); // 3 | 4 ae(v)
-    RETURN_IF_FAILED(ret != 0, -1);
-
-    ret = decode_coeff_sign_flag(coeff_sign_flag[numCoeff - 1]); // 3 | 4 ae(v)
-    RETURN_IF_FAILED(ret != 0, -1);
-
-    coeffLevel[numCoeff - 1] = (coeff_abs_level_minus1[numCoeff - 1] + 1) *
-                               (1 - 2 * coeff_sign_flag[numCoeff - 1]);
-
-    index[0] = numCoeff - 1;
-    TotalCoeff = 1;
-
-    //------------------------------------------
-    if (ABS(coeffLevel[numCoeff - 1]) == 1) {
-      numDecodAbsLevelEq1++;
-    } else if (ABS(coeffLevel[numCoeff - 1]) > 1) {
-      numDecodAbsLevelGt1++;
-    }
-
-    //------------------------------------------
-    for (i = numCoeff - 2; i >= startIdx; i--) {
-      if (significant_coeff_flag[i]) {
-        index[TotalCoeff] = i;
-        TotalCoeff++;
-
-        ret = decode_coeff_abs_level_minus1(
-            mb_block_level, numDecodAbsLevelEq1, numDecodAbsLevelGt1,
-            coeff_abs_level_minus1[i]); // 3 | 4 ae(v)
-        RETURN_IF_FAILED(ret != 0, -1);
-
-        ret = decode_coeff_sign_flag(coeff_sign_flag[i]); // 3 | 4 ae(v)
-        RETURN_IF_FAILED(ret != 0, -1);
-
-        coeffLevel[i] =
-            (coeff_abs_level_minus1[i] + 1) * (1 - 2 * coeff_sign_flag[i]);
-
-        //------------------------------------------
-        if (ABS(coeffLevel[i]) == 1) {
-          numDecodAbsLevelEq1++;
-        } else if (ABS(coeffLevel[i]) > 1) {
-          numDecodAbsLevelGt1++;
-        }
-      }
-    }
-
-    //--------------将coded_block_flag值保存起来----------------------------------------
-    if (mb_block_level == MB_RESIDUAL_Intra16x16DCLevel ||
-        mb_block_level == MB_RESIDUAL_ChromaDCLevel ||
-        mb_block_level == MB_RESIDUAL_CbIntra16x16DCLevel ||
-        mb_block_level == MB_RESIDUAL_CrIntra16x16DCLevel) // for DC
-    {
-      picture.m_mbs[picture.CurrMbAddr].coded_block_flag_DC_pattern ^=
-          1 << (iCbCr + 1); // iCbCr=-1 --> luma, iCbCr=0 --> cb, iCbCr=1 --> cr
-    } else                  // for AC
-    {
-      picture.m_mbs[picture.CurrMbAddr]
-          .coded_block_flag_AC_pattern[iCbCr + 1] ^=
-          1 << BlkIdx; // iCbCr=-1 --> luma, iCbCr=0 --> cb, iCbCr=1 --> cr
+      if (ABS(coeffLevel[i]) == 1)
+        numDecodAbsLevelEq1++;
+      else if (ABS(coeffLevel[i]) > 1)
+        numDecodAbsLevelGt1++;
     }
   }
 
-  if (picture.m_PicNumCnt == -1) {
-    printf("%s(%d): mb_x=%d; mb_y=%d; TotalCoeff=%d;\n", __FUNCTION__, __LINE__,
-           picture.mb_x, picture.mb_y, TotalCoeff);
-    for (i = 0; i < TotalCoeff; i++) {
-      printf(" %d", coeffLevel[index[i]]);
-    }
-    if (TotalCoeff > 0) {
-      printf("\n");
-    }
-  }
-
+  //根据块级别和色度分量，更新相应的编码块标志模式
+  if (mb_block_level == MB_RESIDUAL_Intra16x16DCLevel ||
+      mb_block_level == MB_RESIDUAL_ChromaDCLevel ||
+      mb_block_level == MB_RESIDUAL_CbIntra16x16DCLevel ||
+      mb_block_level == MB_RESIDUAL_CrIntra16x16DCLevel) {
+    picture.m_mbs[picture.CurrMbAddr].coded_block_flag_DC_pattern ^=
+        1 << (iCbCr + 1);
+  } else
+    picture.m_mbs[picture.CurrMbAddr].coded_block_flag_AC_pattern[iCbCr + 1] ^=
+        1 << BlkIdx;
   return 0;
 }
