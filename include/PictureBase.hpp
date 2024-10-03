@@ -292,7 +292,7 @@ class PictureBase {
       int32_t *u, int32_t nW, int32_t nH, int32_t BlkIdx, int32_t isChroma,
       int32_t PicWidthInSamples, uint8_t *pic_buff);
   int Decoding_process_for_P_macroblocks_in_SP_slices_or_SI_macroblocks();
-  int Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
+  int inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
       int32_t values[64], int32_t (&c)[8][8], int32_t field_scan_flag);
   int derivation_chroma_quantisation_parameters(int32_t isChromaCb);
   int get_chroma_quantisation_parameters2(int32_t QPY, int32_t isChromaCb,

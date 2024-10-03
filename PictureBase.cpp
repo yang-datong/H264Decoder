@@ -5,6 +5,7 @@
 #include "SliceHeader.hpp"
 #include "Type.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 extern int32_t g_PicNumCnt;
@@ -3372,19 +3373,21 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
   if (mb.m_mb_pred_mode != Intra_16x16) {
     RET(scaling_functions(isChroma, isChromaCb));
 
+    // 以4x4宏块为单位，遍历亮度块
     for (int32_t luma4x4BlkIdx = 0; luma4x4BlkIdx < 16; luma4x4BlkIdx++) {
-      //1. 使用 LumaLevel4x4[ luma4x4BlkIdx ] 作为输入和二维数组 c 作为输出来调用第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程。
+      //1. 按Zigzag扫描顺序，将单个 4x4 残差值宏块(一维数组）放入二维数组c中
       int32_t c[4][4] = {{0}};
       RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
           mb.LumaLevel4x4[luma4x4BlkIdx], c,
           mb.field_pic_flag | mb.mb_field_decoding_flag));
 
-      //2. 使用 c 作为输入和 r 作为输出来调用第 8.5.12 节中指定的残差 4x4 块的缩放和变换过程。（反量化与反整数变换）
+      //2. 对单个 4x4 残差值宏块进行反量化、反整数变换
       int32_t r[4][4] = {{0}};
       RET(scaling_and_transformation_process_for_residual_4x4_blocks(
           c, r, isChroma, isChromaCb));
 
-      //3. 当 TransformBypassModeFlag 等于 1，宏块预测模式等于 Intra_4x4，并且 Intra4x4PredMode[ luma4x4BlkIdx ] 等于 0 或 1 时，使用 nW 设置调用第 8.5.15 节中指定的帧内残差变换旁路解码过程。等于4，nH设置为等于4，horPredFlag设置为等于Intra4x4PredMode[luma4x4BlkIdx]，并且4x4数组r作为输入，并且输出是4x4数组r的修改版本。
+      //3. 当 TransformBypassModeFlag 等于 1，宏块预测模式等于 Intra_4x4，并且 Intra4x4PredMode[ luma4x4BlkIdx ] 等于 0 或 1 时，
+      //使用 nW 设置调用第 8.5.15 节中指定的帧内残差变换旁路解码过程。等于4，nH设置为等于4，horPredFlag设置为等于Intra4x4PredMode[luma4x4BlkIdx]，并且4x4数组r作为输入，并且输出是4x4数组r的修改版本。
       if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_4x4 &&
           (mb.Intra4x4PredMode[luma4x4BlkIdx] & ~1) == 0)
         // 8.5.15 Intra residual transform-bypass decoding process
@@ -3565,7 +3568,7 @@ int PictureBase::transform_decoding_for_8x8_luma_residual_blocks(
 
   for (int32_t luma8x8BlkIdx = 0; luma8x8BlkIdx < 4; luma8x8BlkIdx++) {
     int32_t c[8][8] = {{0}};
-    RET(Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
+    RET(inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
         Level8x8[luma8x8BlkIdx], c,
         mb.field_pic_flag | mb.mb_field_decoding_flag));
 
@@ -3926,18 +3929,14 @@ int PictureBase::scaling_and_transformation_process_for_residual_4x4_blocks(
   const uint32_t slice_type = m_slice->slice_header->slice_type % 5;
   const MacroBlock &mb = m_mbs[CurrMbAddr];
 
-  /* 变量 sMbFlag 的推导如下： 
-   * – 如果 mb_type 等于 SI 或宏块预测模式等于 SP 切片中的 Inter，则 sMbFlag 设置为等于 1， 
-   * – 否则（mb_type 不等于 SI 并且宏块预测模式为不等于 SP 切片中的 Inter），sMbFlag 设置为 0。 */
-  int32_t sMbFlag = 0;
+  /* 场景切换标志，需要特殊处理量化值 */
+  bool sMbFlag = false;
   if (slice_type == SLICE_SI ||
       (slice_type == SLICE_SP && IS_INTER_Prediction_Mode(mb.m_mb_pred_mode)))
-    sMbFlag = 1;
+    sMbFlag = true;
 
-  /* 先得到色度量化参数 */
-  // 8.5.8 Derivation process for chroma quantisation parameters
-  int ret = derivation_chroma_quantisation_parameters(isChromaCb);
-  RET(ret);
+  /* 为色差块计算量化参数 */
+  RET(derivation_chroma_quantisation_parameters(isChromaCb));
 
   /* 变量 qP(量化) 的推导如下： 
    * – 如果输入数组 c 与亮度残差块相关且 sMbFlag 等于 0，
@@ -3945,56 +3944,57 @@ int PictureBase::scaling_and_transformation_process_for_residual_4x4_blocks(
    * – 否则，如果输入数组 c 与色度残差块相关且 sMbFlag 等于 0，
    * – 否则（输入数组 c 与色度残差块相关且 sMbFlag 等于 1），*/
   int32_t qP = 0;
-  if (isChroma == 0 && sMbFlag == 0)
+  //对于亮度块，根据是否为场景切换，使用对应的量化值
+  if (isChroma == 0 && sMbFlag == false)
     qP = mb.QP1Y;
   else if (isChroma == 0 && sMbFlag)
     qP = mb.QSY;
-  else if (isChroma && sMbFlag == 0)
+  //对于色度块，根据是否为场景切换，使用对应的量化值
+  else if (isChroma && sMbFlag == false)
     qP = isChromaCb ? mb.QP1Cb : mb.QP1Cr;
   else if (isChroma && sMbFlag)
     qP = isChromaCb ? mb.QSCb : mb.QSCr;
 
-  /* 根据 TransformBypassModeFlag 的值，以下内容适用：*/
+  //变换旁路模式，即不进行任何变换或缩放处理
   if (mb.TransformBypassModeFlag) {
-    for (int32_t i = 0; i <= 3; i++)
-      for (int32_t j = 0; j <= 3; j++)
+    for (int i = 0; i < 4; i++)
+      for (int j = 0; j < 4; j++)
         r[i][j] = c[i][j];
   } else {
-    /* 1. 使用 bitDepth、qP 和 c 作为输入来调用第 8.5.12.1 节中指定的残差 4x4 块的缩放过程，并将输出分配给具有元素 dij 的缩放变换系数的 4x4 数组 d。
-     * 2. 使用 bitDepth 和 d 作为输入来调用第 8.5.12.2 节中指定的残差 4x4 块的变换过程，并将输出分配给具有元素 rij 的残差样本值的 4x4 数组 r。*/
-
     // 8.5.12.1 Scaling process for residual 4x4 blocks (反量化)
     int32_t d[4][4] = {{0}};
     scaling_for_residual_4x4_blocks(d, c, isChroma, mb.m_mb_pred_mode, qP);
 
     // 8.5.12.2 Transformation process for residual 4x4 blocks （反整数变换）
     transformation_for_residual_4x4_blocks(d, r);
+    /* TODO YangJing 量化和变换需要再了解下理论知识 <24-10-03 22:32:49> */
   }
 
   return 0;
 }
 
 //8.5.12.1 Scaling process for residual 4x4 blocks
-/* 输入： – 变量 bitDepth 和 qP， – 具有元素 cij 的 4x4 数组 c，它是与亮度分量的残差块相关的数组或与色度分量的残差块相关的数组。  
+/* 输入： 
+   * – 变量 bitDepth 和 qP 
+   * – 具有元素 cij 的 4x4 数组 c，它是与亮度分量的残差块相关的数组或与色度分量的残差块相关的数组。  
  * 输出: 缩放变换系数 d 的 4x4 数组，其中元素为 dij。 */
-/* 反量化操作 */
+// 对残差宏块进行反量化操作
 int PictureBase::scaling_for_residual_4x4_blocks(
     int32_t d[4][4], int32_t c[4][4], int32_t isChroma,
     const H264_MB_PART_PRED_MODE &m_mb_pred_mode, int32_t qP) {
 
   /* 比特流不应包含导致 c 的任何元素 cij 的数据，其中 i, j = 0..3 超出从 −2(7 + bitDepth) 到 2(7 + bitDepth) − 1（含）的整数值范围。 */
-  for (int32_t i = 0; i <= 3; i++) {
-    for (int32_t j = 0; j <= 3; j++) {
-      /* 如果以下所有条件均为真： – i 等于 0， – j 等于 0， – c 与使用 Intra_16x16 宏块预测模式编码的亮度残差块相关，或者 c 与色度残差块相关。  变量 d00 的导出方式为 */
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      //对于Intra_16x16模式下的亮度残差块，色度残差块的4x4残差块的首个样本（DC系数）直接进行复制
+      //TODO 这里还有点疑问，DC系数在这种情况下不是单独存放在4x4矩阵吗？为什么在这里是每个4x4的首个系数？<24-10-03 21:31:23, YangJing>
       if (i == 0 && j == 0 &&
           ((isChroma == 0 && m_mb_pred_mode == Intra_16x16) || isChroma))
         d[0][0] = c[0][0];
-      /* 否则，适用以下规则： – 如果 qP 大于或等于 24，则缩放结果的推导如下： 其中i, j = 0..3，除非如上所述
-           *  – 否则（qP 小于 24），缩放结果导出为 */
       else {
-        /* TODO YangJing 量化参数24这个数有什么特殊意义？ <24-09-08 18:46:35> */
         if (qP >= 24)
           d[i][j] = (c[i][j] * LevelScale4x4[qP % 6][i][j]) << (qP / 6 - 4);
+        //位移操作(x) << (qP / 6 - 4)，利用位移快速实现乘以或除以2的幂
         else
           d[i][j] = (c[i][j] * LevelScale4x4[qP % 6][i][j] +
                      h264_power2(3 - qP / 6)) >>
@@ -4013,39 +4013,41 @@ int PictureBase::transformation_for_residual_4x4_blocks(int32_t d[4][4],
                                                         int32_t (&r)[4][4]) {
 
   /* 比特流不得包含导致 d 的任何元素 dij 的数据，其中 i, j = 0..3 超出从 −2(7 + bitDepth) 到 2(7 + bitDepth) − 1（含）的整数值范围。  变换过程应以数学上等效的方式将缩放变换系数块转换为输出样本块。*/
-  int32_t f[4][4] = {{0}};
-  int32_t h[4][4] = {{0}};
-  for (int32_t i = 0; i <= 3; i++) {
-    // 首先，按如下方式使用一维逆变换对每一（水平）行缩放变换系数进行变换。  一组中间值的计算如下：
+  int32_t f[4][4] = {{0}}, h[4][4] = {{0}};
+  /* 行变换 */
+  for (int32_t i = 0; i < 4; i++) {
+    /* 1. 合并行中的第一个和第三个元素，分离这些元素的低频（平均值）和高频（差值）信息 */
     int32_t ei0 = d[i][0] + d[i][2];
     int32_t ei1 = d[i][0] - d[i][2];
+    /* 2. 用于调整数值范围，这种处理旨在降低计算复杂性同时提取有用的频率成分 */
     int32_t ei2 = (d[i][1] >> 1) - d[i][3];
     int32_t ei3 = d[i][1] + (d[i][3] >> 1);
 
-    // 然后，根据这些中间值计算转换结果，如下所示：
+    /* 3. 将这些计算结果组合起来形成新的行值 */
     f[i][0] = ei0 + ei3;
     f[i][1] = ei1 + ei2;
     f[i][2] = ei1 - ei2;
     f[i][3] = ei0 - ei3;
   }
 
-  for (int32_t j = 0; j <= 3; j++) {
-    //然后，使用相同的一维逆变换对所得矩阵的每个（垂直）列进行变换，如下所示。  一组中间值的计算如下：
+  /* 列变换：同理行变换 */
+  for (int32_t j = 0; j < 4; j++) {
     int32_t g0j = f[0][j] + f[2][j];
     int32_t g1j = f[0][j] - f[2][j];
     int32_t g2j = (f[1][j] >> 1) - f[3][j];
     int32_t g3j = f[1][j] + (f[3][j] >> 1);
 
-    //然后，根据这些中间值计算转换结果，如下所示：
     h[0][j] = g0j + g3j;
     h[1][j] = g1j + g2j;
     h[2][j] = g1j - g2j;
     h[3][j] = g0j - g3j;
   }
 
-  /* 在执行一维水平逆变换和一维垂直逆变换以产生变换样本数组之后，最终构建的残差样本值导出为： */
-  for (int32_t i = 0; i <= 3; i++)
-    for (int32_t j = 0; j <= 3; j++)
+  /* 后处理，标准化：
+   * 1. 偏移操作 (+ 32): 在处理变换数据时，引入偏置是为了避免负数的处理和优化数值的表示范围。偏置通常是量化步长的一半。
+   * 2. 缩放操作 (>> 6): 数值进行了除以 64 的操作，这是一种简单高效的方式来对数据进行缩放。在这里，缩放的目的是对数据进行量化，即将连续的或较大范围的数值映射到较小的、离散的数值范围内。*/
+  for (int32_t i = 0; i < 4; i++)
+    for (int32_t j = 0; j < 4; j++)
       r[i][j] = (h[i][j] + 32) >> 6;
 
   return 0;
@@ -4347,13 +4349,10 @@ int PictureBase::inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
   return 0;
 }
 
-// 8.5.7 Inverse scanning process for 8x8 transform coefficients and scaling
-// lists
-int PictureBase::
-    Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
-        int32_t values[64], int32_t (&c)[8][8], int32_t field_scan_flag) {
-  // Table 8-14 – Specification of mapping of idx to cij for 8x8 zig-zag and 8x8
-  // field scan
+// 8.5.7 Inverse scanning process for 8x8 transform coefficients and scaling lists
+int PictureBase::inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
+    int32_t values[64], int32_t (&c)[8][8], int32_t field_scan_flag) {
+  // Table 8-14 – Specification of mapping of idx to cij for 8x8 zig-zag and 8x8 field scan
   if (field_scan_flag == 0) {
     // 8x8 zig-zag scan
     c[0][0] = values[0];
@@ -4501,6 +4500,7 @@ int PictureBase::
 // 8.5.8 Derivation process for chroma quantisation parameters (色度量化参数的推导过程)
 /* 输出： – QPC：每个色度分量 Cb 和 Cr 的色度量化参数， 
  * – QSC：解码 SP 和 SI 切片所需的每个色度分量 Cb 和 Cr 的附加色度量化参数（如果适用）*/
+/* TODO YangJing 记得看 <24-10-03 21:02:25> */
 int PictureBase::derivation_chroma_quantisation_parameters(int32_t isChromaCb) {
   int32_t qPOffset = 0;
   if (isChromaCb == 1)
@@ -4536,8 +4536,7 @@ int PictureBase::derivation_chroma_quantisation_parameters(int32_t isChromaCb) {
     m_mbs[CurrMbAddr].QP1Cr = QP1C;
   }
 
-  // When the current slice is an SP or SI slice, QSC is derived using the above
-  // process, substituting QPY with QSY and QPC with QSC.
+  // When the current slice is an SP or SI slice, QSC is derived using the above process, substituting QPY with QSY and QPC with QSC.
   if (m_slice->slice_header->slice_type == SLICE_SP ||
       m_slice->slice_header->slice_type == SLICE_SI ||
       m_slice->slice_header->slice_type == SLICE_SP2 ||
@@ -4638,7 +4637,7 @@ int PictureBase::scaling_functions(int32_t isChroma, int32_t isChromaCb) {
 
   //------------------------ 8x8 缩放矩阵 ----------------------------
   int32_t weightScale8x8[8][8] = {{0}};
-  RET(Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
+  RET(inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
       (int32_t *)ScalingList8x8, weightScale8x8,
       mb.field_pic_flag | mb.mb_field_decoding_flag));
 

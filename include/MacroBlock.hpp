@@ -78,7 +78,7 @@ class MacroBlock {
   int32_t CodedBlockPatternChroma = -1;
 
   /* QPY: 当前宏块的亮度量化参数。
-    QSY: 当前宏块的亮度量化参数（备用）。
+    QSY: 当前宏块的亮度量化参数（场景切换状态下的量化值）。
     QP1Y: 加上QpBdOffset后的QPY */
   int32_t QPY = 0;
   int32_t QSY = 0;
@@ -115,7 +115,7 @@ class MacroBlock {
   int32_t level4x4[16][16] = {{0}};
   int32_t level8x8[4][64] = {{0}};
 
-  /* 4x4/8x8 亮,色度块的变换系数 */
+  /* 4x4/8x8 亮,色度块残差值 */
   int32_t LumaLevel4x4[16][16] = {{0}};
   int32_t LumaLevel8x8[4][64] = {{0}};
   int32_t CbLevel4x4[16][16] = {{0}};

@@ -142,7 +142,7 @@ int PictureBase::transform_decoding_for_8x8_luma_residual_blocks_inter(
     int32_t r[8][8] = {{0}};
 
     ret =
-        Inverse_scanning_process_for_8x8_transform_coefficients_and_scaling_lists(
+        inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
             Level8x8[luma8x8BlkIdx], c,
             m_mbs[CurrMbAddr].field_pic_flag |
                 m_mbs[CurrMbAddr].mb_field_decoding_flag);
