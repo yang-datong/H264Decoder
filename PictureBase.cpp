@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 
 extern int32_t g_PicNumCnt;
 
@@ -968,7 +969,8 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
      | L | |               |
      +---+ +---+---+---+---+
    * */
-  int32_t p[5 * 9] = {-1};
+  int32_t p[5 * 9] = {0};
+  memset(p, -1, sizeof(p));
 #define P(x, y) p[((y) + 1) * 9 + ((x) + 1)]
 
   const int32_t neighbouring_samples_x[13] = {-1, -1, -1, -1, -1, 0, 1,
@@ -1215,6 +1217,8 @@ int PictureBase::Intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
   int32_t p1[9 * 17] = {-1};
 #define P(x, y) p[((y) + 1) * 17 + ((x) + 1)]
 #define P1(x, y) p1[((y) + 1) * 17 + ((x) + 1)]
+  memset(p, -1, sizeof(p));
+  memset(p1, -1, sizeof(p1));
 
   const int32_t neighbouring_samples_x[25] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, 0,  1,  2, 3,
