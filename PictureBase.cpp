@@ -726,20 +726,17 @@ int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
   return ret;
 }
 
-//--------------帧内预测------------------------
-// 8.3.1.1 Derivation process for Intra4x4PredMode (8.3.1 Intra_4x4 prediction
-// process for luma samples)
-int PictureBase::getIntra4x4PredMode(
-    int32_t luma4x4BlkIdx,
-    int32_t &Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr, int32_t isChroma) {
-
+// 8.3.1.1 Derivation process for Intra4x4PredMode (8.3.1 Intra_4x4 prediction process for luma samples)
+int PictureBase::getIntra4x4PredMode(int32_t luma4x4BlkIdx,
+                                     int32_t &currMbAddrPredMode,
+                                     int32_t isChroma) {
+  /* ------------------ 设置别名 ------------------ */
   const bool constrained_flag =
       m_slice->slice_header->m_pps->constrained_intra_pred_flag;
   const bool MbaffFrameFlag = m_slice->slice_header->MbaffFrameFlag;
+  /* ------------------  End ------------------ */
 
-  // 6.4.11.4 Derivation process for neighbouring 4x4 luma blocks
-
-  // 6.4.3 Inverse 4x4 luma block scanning process
+  //TODO 为什么这里还需要扫描一次位置？ <24-10-04 16:46:43, YangJing>
   int32_t x = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
               InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
   int32_t y = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
@@ -748,9 +745,7 @@ int PictureBase::getIntra4x4PredMode(
   // 6.4.12 Derivation process for neighbouring locations
   int32_t maxW = 16, maxH = 16;
   if (isChroma) maxW = MbWidthC, maxH = MbHeightC;
-
-  int32_t xW = 0, yW = 0;
-  int32_t mbAddrN_A = -1, mbAddrN_B = -1;
+  int32_t xW = 0, yW = 0, mbAddrN_A = -1, mbAddrN_B = -1;
   int32_t luma4x4BlkIdxN_A = 0, luma4x4BlkIdxN_B = 0, luma8x8BlkIdxN_A = 0,
           luma8x8BlkIdxN_B = 0;
   MB_ADDR_TYPE mbAddrN_type_A = MB_ADDR_TYPE_UNKOWN,
@@ -828,155 +823,104 @@ int PictureBase::getIntra4x4PredMode(
           m_mbs[CurrMbAddr].rem_intra4x4_pred_mode[luma4x4BlkIdx] + 1;
   }
 
-  Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr =
-      m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx];
+  currMbAddrPredMode = m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx];
 
   return 0;
 }
 
-// 8.3.2.1 Derivation process for Intra8x8PredMode (8.3.2 Intra_8x8 prediction
-// process for luma samples)
-int PictureBase::getIntra8x8PredMode(
-    int32_t luma8x8BlkIdx,
-    int32_t &Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr, int32_t isChroma) {
-  int ret = 0;
-  int32_t x = 0;
-  int32_t y = 0;
-  int32_t maxW = 0;
-  int32_t maxH = 0;
-  int32_t xW = 0;
-  int32_t yW = 0;
+// 8.3.2.1 Derivation process for Intra8x8PredMode (8.3.2 Intra_8x8 prediction process for luma samples)
+// 与getIntra4x4PredMode()逻辑一样
+int PictureBase::getIntra8x8PredMode(int32_t luma8x8BlkIdx,
+                                     int32_t &currMbAddrPredMode,
+                                     int32_t isChroma) {
 
-  MB_ADDR_TYPE mbAddrN_type_A = MB_ADDR_TYPE_UNKOWN;
-  MB_ADDR_TYPE mbAddrN_type_B = MB_ADDR_TYPE_UNKOWN;
-  int32_t mbAddrN_A = -1;
-  int32_t mbAddrN_B = -1;
-  int32_t luma4x4BlkIdxN_A = 0;
-  int32_t luma4x4BlkIdxN_B = 0;
-  int32_t luma8x8BlkIdxN_A = 0;
-  int32_t luma8x8BlkIdxN_B = 0;
+  /* ------------------ 设置别名 ------------------ */
+  const bool constrained_flag =
+      m_slice->slice_header->m_pps->constrained_intra_pred_flag;
+  const bool MbaffFrameFlag = m_slice->slice_header->MbaffFrameFlag;
+  /* ------------------  End ------------------ */
 
-  //SliceHeader &slice_header = m_h264_slice_header;
-
-  // 6.4.11.2 Derivation process for neighbouring 8x8 luma block
-
-  // 6.4.12 Derivation process for neighbouring locations
-  if (isChroma == 0) {
-    maxW = 16;
-    maxH = 16;
-  } else // if (isChroma == 1)
-  {
-    maxW = MbWidthC;
-    maxH = MbHeightC;
-  }
-
-  x = (luma8x8BlkIdx % 2) * 8;
-  y = (luma8x8BlkIdx / 2) * 8;
-
-  if (m_slice->slice_header->MbaffFrameFlag == 0) {
-    ret = neighbouring_locations_non_MBAFF(
+  int32_t maxW = 16, maxH = 16;
+  if (isChroma) maxW = MbWidthC, maxH = MbHeightC;
+  int32_t xW = 0, yW = 0, mbAddrN_A = -1, mbAddrN_B = -1;
+  int32_t luma4x4BlkIdxN_A = 0, luma4x4BlkIdxN_B = 0, luma8x8BlkIdxN_A = 0,
+          luma8x8BlkIdxN_B = 0;
+  MB_ADDR_TYPE mbAddrN_type_A = MB_ADDR_TYPE_UNKOWN,
+               mbAddrN_type_B = MB_ADDR_TYPE_UNKOWN;
+  int32_t x = (luma8x8BlkIdx % 2) * 8, y = (luma8x8BlkIdx / 2) * 8;
+  if (MbaffFrameFlag) {
+    RET(neighbouring_locations_MBAFF(
         x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_type_A, mbAddrN_A,
-        luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
+        luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma));
 
-    ret = neighbouring_locations_non_MBAFF(
+    RET(neighbouring_locations_MBAFF(
         x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_type_B, mbAddrN_B,
-        luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification for
-         // neighbouring locations in MBAFF frames
-  {
-    ret = neighbouring_locations_MBAFF(
-        x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_type_A, mbAddrN_A,
-        luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    ret = neighbouring_locations_MBAFF(
-        x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_type_B, mbAddrN_B,
-        luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
-  }
-
-  //----------------------------------------
-  int32_t dcPredModePredictedFlag = 0;
-
-  if (mbAddrN_A < 0 || mbAddrN_B < 0 ||
-      (mbAddrN_A >= 0 &&
-       IS_INTER_Prediction_Mode(m_mbs[mbAddrN_A].m_mb_pred_mode) &&
-       m_slice->slice_header->m_pps->constrained_intra_pred_flag == 1) ||
-      (mbAddrN_B >= 0 &&
-       IS_INTER_Prediction_Mode(m_mbs[mbAddrN_B].m_mb_pred_mode) &&
-       m_slice->slice_header->m_pps->constrained_intra_pred_flag == 1)) {
-    dcPredModePredictedFlag = 1;
+        luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma));
   } else {
-    dcPredModePredictedFlag = 0;
+    RET(neighbouring_locations_non_MBAFF(
+        x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_type_A, mbAddrN_A,
+        luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma));
+    RET(neighbouring_locations_non_MBAFF(
+        x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_type_B, mbAddrN_B,
+        luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma));
   }
 
-  //------------------------------------
-  int32_t intraMxMPredModeA = 0;
-  int32_t intraMxMPredModeB = 0;
+  bool dcPredModePredictedFlag = false;
+  if (mbAddrN_A < 0 || mbAddrN_B < 0)
+    dcPredModePredictedFlag = true;
+  else if (mbAddrN_A >= 0 && constrained_flag &&
+           IS_INTER_Prediction_Mode(m_mbs[mbAddrN_A].m_mb_pred_mode))
+    dcPredModePredictedFlag = true;
+  else if (mbAddrN_B >= 0 && constrained_flag &&
+           IS_INTER_Prediction_Mode(m_mbs[mbAddrN_B].m_mb_pred_mode))
+    dcPredModePredictedFlag = true;
 
-  if (dcPredModePredictedFlag == 1 ||
+  int32_t intraMxMPredModeA = 0, intraMxMPredModeB = 0;
+
+  if (dcPredModePredictedFlag ||
       (mbAddrN_A >= 0 && m_mbs[mbAddrN_A].m_mb_pred_mode != Intra_4x4 &&
-       m_mbs[mbAddrN_A].m_mb_pred_mode != Intra_8x8)) {
-    intraMxMPredModeA =
-        Prediction_Mode_Intra_8x8_DC; // Prediction_Mode_Intra_8x8_DC = 2;
-  } else {
-    if (mbAddrN_A >= 0 && m_mbs[mbAddrN_A].m_mb_pred_mode == Intra_8x8) {
+       m_mbs[mbAddrN_A].m_mb_pred_mode != Intra_8x8))
+    intraMxMPredModeA = Prediction_Mode_Intra_8x8_DC;
+  else {
+    if (mbAddrN_A >= 0 && m_mbs[mbAddrN_A].m_mb_pred_mode == Intra_8x8)
       intraMxMPredModeA = m_mbs[mbAddrN_A].Intra8x8PredMode[luma8x8BlkIdxN_A];
-    } else // if (mbAddrN_A >= 0 && m_mbs[mbAddrN_A].m_mb_pred_mode ==
-           // Intra_4x4)
-    {
-      int32_t n = 0;
-
-      if (m_slice->slice_header->MbaffFrameFlag == 1 &&
-          m_mbs[CurrMbAddr].field_pic_flag == 0 &&
-          m_mbs[mbAddrN_A].field_pic_flag == 1 && luma8x8BlkIdx == 2) {
+    else {
+      int32_t n = 1;
+      if (MbaffFrameFlag && m_mbs[CurrMbAddr].field_pic_flag == 0 &&
+          m_mbs[mbAddrN_A].field_pic_flag && luma8x8BlkIdx == 2)
         n = 3;
-      } else {
-        n = 1;
-      }
-
       intraMxMPredModeA =
           m_mbs[mbAddrN_A].Intra4x4PredMode[luma8x8BlkIdxN_A * 4 + n];
     }
   }
 
-  if (dcPredModePredictedFlag == 1 ||
+  if (dcPredModePredictedFlag ||
       (mbAddrN_B >= 0 && m_mbs[mbAddrN_B].m_mb_pred_mode != Intra_4x4 &&
-       m_mbs[mbAddrN_B].m_mb_pred_mode != Intra_8x8)) {
-    intraMxMPredModeB =
-        Prediction_Mode_Intra_8x8_DC; // Prediction_Mode_Intra_8x8_DC = 2;
-  } else {
-    if (mbAddrN_B >= 0 && m_mbs[mbAddrN_B].m_mb_pred_mode == Intra_8x8) {
+       m_mbs[mbAddrN_B].m_mb_pred_mode != Intra_8x8))
+    intraMxMPredModeB = Prediction_Mode_Intra_8x8_DC;
+  else {
+    if (mbAddrN_B >= 0 && m_mbs[mbAddrN_B].m_mb_pred_mode == Intra_8x8)
       intraMxMPredModeB = m_mbs[mbAddrN_B].Intra8x8PredMode[luma8x8BlkIdxN_B];
-    } else // if (mbAddrN_B >= 0 && m_mbs[mbAddrN_B].m_mb_pred_mode ==
-           // Intra_4x4)
-    {
-      int32_t n = 2; // Otherwise (N is equal to B), n is set equal to 2
+    else
       intraMxMPredModeB =
-          m_mbs[mbAddrN_B].Intra4x4PredMode[luma8x8BlkIdxN_B * 4 + n];
-    }
+          m_mbs[mbAddrN_B].Intra4x4PredMode[luma8x8BlkIdxN_B * 4 + 2];
   }
 
-  //-----------------------------
   int32_t predIntra8x8PredMode = MIN(intraMxMPredModeA, intraMxMPredModeB);
 
-  if (m_mbs[CurrMbAddr].prev_intra8x8_pred_mode_flag[luma8x8BlkIdx]) {
+  if (m_mbs[CurrMbAddr].prev_intra8x8_pred_mode_flag[luma8x8BlkIdx])
     m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx] = predIntra8x8PredMode;
-  } else {
+  else {
     if (m_mbs[CurrMbAddr].rem_intra8x8_pred_mode[luma8x8BlkIdx] <
-        predIntra8x8PredMode) {
+        predIntra8x8PredMode)
       m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx] =
           m_mbs[CurrMbAddr].rem_intra8x8_pred_mode[luma8x8BlkIdx];
-    } else {
+    else
       m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx] =
           m_mbs[CurrMbAddr].rem_intra8x8_pred_mode[luma8x8BlkIdx] + 1;
-    }
   }
 
-  Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr =
-      m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx];
+  currMbAddrPredMode = m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx];
 
   return 0;
 }
@@ -1011,18 +955,18 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
     右上方的 4 个样本：位于当前 4x4 块右上方的 4 个样本，记为 E、F、G、H。
 
               上4x4宏块       右上4x4宏块
-     +---++---+---+---+---++---+---+---+---+
-     | X || A | B | C | D || E | F | G | H |
-     +---++---+---+---+---++---+---+---+---+
-     +---++---+---+---+---+
-     | I ||               |
- 左  +---++               +
- 4x4 | J ||               |
- 宏  +---++  待预测宏块   +
- 块  | K ||               |
-     +---++               +
-     | L ||               |
-     +---++---+---+---+---+
+     +---+ +---+---+---+---+ +---+---+---+---+
+     | X | | A | B | C | D | | E | F | G | H |
+     +---+ +---+---+---+---+ +---+---+---+---+
+     +---+ +---+---+---+---+
+     | I | |p(0,0)         |
+ 左  +---+ +               +
+ 4x4 | J | |               |
+ 宏  +---+ +  待预测宏块   +
+ 块  | K | |               |
+     +---+ +               +
+     | L | |               |
+     +---+ +---+---+---+---+
    * */
   int32_t p[5 * 9] = {-1};
 #define P(x, y) p[((y) + 1) * 9 + ((x) + 1)]
@@ -1031,22 +975,15 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
                                               2,  3,  4,  5,  6,  7};
   const int32_t neighbouring_samples_y[13] = {-1, 0,  1,  2,  3,  -1, -1,
                                               -1, -1, -1, -1, -1, -1};
-
-  int32_t xW = 0, yW = 0;
-  int32_t mbAddrN = -1;
-  MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
+  int32_t xW = 0, yW = 0, maxW = 0, maxH = 0, mbAddrN = -1;
   int32_t luma4x4BlkIdxN = 0, luma8x8BlkIdxN = 0;
-  int32_t maxW = 0, maxH = 0;
+  MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
 
   for (int32_t i = 0; i < 13; i++) {
     // 6.4.12 Derivation process for neighbouring locations
-    if (isChroma == 0)
-      maxW = maxH = 16;
-    else
-      maxW = MbWidthC, maxH = MbHeightC;
-
+    maxW = maxH = 16;
+    if (isChroma) maxW = MbWidthC, maxH = MbHeightC;
     const int32_t x = neighbouring_samples_x[i], y = neighbouring_samples_y[i];
-
     if (MbaffFrameFlag) {
       RET(neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
                                        mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
@@ -1057,9 +994,8 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
           luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma));
     }
 
-    //----------------
+    // 当样本 p[ x, y ] = -1 时表示标记为“不适用于 Intra_4x4 预测”
     const MacroBlock &mb1 = m_mbs[mbAddrN];
-
     if (mbAddrN < 0)
       P(x, y) = -1;
     else if (IS_INTER_Prediction_Mode(mb1.m_mb_pred_mode) &&
@@ -1071,8 +1007,8 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
     else if (x > 3 && (luma4x4BlkIdx == 3 || luma4x4BlkIdx == 11))
       P(x, y) = -1;
     else {
+      // 可用于 Intra_4x4 预测，首先获取宏块 mbAddrN 的左上亮度样本的位置(xM,yM)
       int32_t xM = 0, yM = 0;
-      // 6.4.1 Inverse macroblock scanning process
       inverse_mb_scanning_process(MbaffFrameFlag, mbAddrN,
                                   mb1.mb_field_decoding_flag, xM, yM);
       int32_t y0 = (yM + 1 * yW);
@@ -1081,7 +1017,7 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
     }
   }
 
-  //-----------------------------
+  // 当 x = 4..7 的样本 p[ x, −1 ] 被标记为“不可用于 Intra_4x4 预测”，并且样本 p[ 3, −1 ] 被标记为“可用于 Intra_4x4 预测”时: p[ 3, -1 ] 的样本值替换为样本值 p[ x, -1 ]，其中 x = 4..7，并且样本 p[ x, -1 ]，其中 x = 4..7，为标记为“可用于 Intra_4x4 预测”。
   if (P(4, -1) < 0 && P(5, -1) < 0 && P(6, -1) < 0 && P(7, -1) < 0 &&
       P(3, -1) >= 0) {
     P(4, -1) = P(3, -1);
@@ -1090,10 +1026,9 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
     P(7, -1) = P(3, -1);
   }
 
-  /* 获取预测模式 */
-  int32_t Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr = -1;
-  RET(getIntra4x4PredMode(
-      luma4x4BlkIdx, Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr, isChroma));
+  // 获取当前使用的帧间预测模式，将从下面9个预测模式中进行挑选
+  int32_t currMbAddrPredMode = -1;
+  RET(getIntra4x4PredMode(luma4x4BlkIdx, currMbAddrPredMode, isChroma));
 
   //----------9种帧内4x4预测模式----------------
 #define cSL(x, y)                                                              \
@@ -1102,23 +1037,22 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
                      (mb.m_mb_position_x + (xO + (x)))]
 
   // 8.3.1.2.1 Specification of Intra_4x4_Vertical prediction mode
-  if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 0) {
+  if (currMbAddrPredMode == 0) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0)
       for (int32_t y = 0; y <= 3; y++)
         for (int32_t x = 0; x <= 3; x++)
           cSL(x, y) = P(x, -1);
   }
   // 8.3.1.2.2 Specification of Intra_4x4_Horizontal prediction mode
-  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 1) {
+  else if (currMbAddrPredMode == 1) {
     if (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0)
       for (int32_t y = 0; y <= 3; y++)
         for (int32_t x = 0; x <= 3; x++)
           cSL(x, y) = P(-1, y);
   }
   // 8.3.1.2.3 Specification of Intra_4x4_DC prediction mode
-  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 2) {
+  else if (currMbAddrPredMode == 2) {
     int32_t mean_value = 0;
-
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0)
       mean_value = (P(0, -1) + P(1, -1) + P(2, -1) + P(3, -1) + P(-1, 0) +
@@ -1134,13 +1068,12 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
     else
       mean_value = 1 << (BitDepth - 1);
 
-    //-----------------------------------
     for (int32_t y = 0; y <= 3; y++)
       for (int32_t x = 0; x <= 3; x++)
         cSL(x, y) = mean_value;
   }
   // 8.3.1.2.4 Specification of Intra_4x4_Diagonal_Down_Left prediction mode
-  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 3) {
+  else if (currMbAddrPredMode == 3) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0)
       for (int32_t y = 0; y <= 3; y++)
@@ -1154,7 +1087,7 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
         }
   }
   // 8.3.1.2.5 Specification of Intra_4x4_Diagonal_Down_Right prediction mode
-  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 4) {
+  else if (currMbAddrPredMode == 4) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(-1, -1) >= 0 && P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
         P(-1, 3) >= 0)
@@ -1173,7 +1106,7 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
         }
   }
   // 8.3.1.2.6 Specification of Intra_4x4_Vertical_Right prediction mode
-  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 5) {
+  else if (currMbAddrPredMode == 5) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(-1, -1) >= 0 && P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
         P(-1, 3) >= 0)
@@ -1196,7 +1129,7 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
         }
   }
   // 8.3.1.2.7 Specification of Intra_4x4_Horizontal_Down prediction mode
-  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 6) {
+  else if (currMbAddrPredMode == 6) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(-1, -1) >= 0 && P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
         P(-1, 3) >= 0)
@@ -1219,7 +1152,7 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
         }
   }
   // 8.3.1.2.8 Specification of Intra_4x4_Vertical_Left prediction mode
-  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 7) {
+  else if (currMbAddrPredMode == 7) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0)
       for (int32_t y = 0; y <= 3; y++)
@@ -1234,7 +1167,7 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
         }
   }
   // 8.3.1.2.9 Specification of Intra_4x4_Horizontal_Up prediction mode
-  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 8) {
+  else if (currMbAddrPredMode == 8) {
     if (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0)
       for (int32_t y = 0; y <= 3; y++)
         for (int32_t x = 0; x <= 3; x++) {
@@ -1252,9 +1185,7 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
           else
             cSL(x, y) = P(-1, 3);
         }
-  } else
-    std::cerr << "Intra4x4PredMode luma4x4BlkIdx must be [0,8] on "
-              << __FUNCTION__ << "():" << __LINE__ << std::endl;
+  }
 
 #undef P
 #undef cSL
@@ -1262,127 +1193,70 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
   return 0;
 }
 
-// 8.3.2.2 Intra_8x8 sample prediction (8.3.2 Intra_8x8 prediction process for
-// luma sampless)
+// 8.3.2.2 Intra_8x8 sample prediction (8.3.2 Intra_8x8 prediction process for luma sampless)
 int PictureBase::Intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
                                              int32_t PicWidthInSamples,
                                              uint8_t *pic_buff_luma_pred,
                                              int32_t isChroma,
                                              int32_t BitDepth) {
-  int ret = 0;
-  int32_t xO = 0;
-  int32_t yO = 0;
-  int32_t xW = 0;
-  int32_t yW = 0;
-  int32_t maxW = 0;
-  int32_t maxH = 0;
 
-  MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-  int32_t mbAddrN = -1;
-  int32_t luma4x4BlkIdxN = 0;
-  int32_t luma8x8BlkIdxN = 0;
-
-  // The 25 neighbouring samples p[ x, y ] that are constructed luma samples
-  // prior to the deblocking filter process, with x = -1, y = -1..7 and x =
-  // 0..15, y = -1,
-  int32_t neighbouring_samples_x[25] = {-1, -1, -1, -1, -1, -1, -1, -1, -1,
-                                        0,  1,  2,  3,  4,  5,  6,  7,  8,
-                                        9,  10, 11, 12, 13, 14, 15};
-  int32_t neighbouring_samples_y[25] = {-1, 0,  1,  2,  3,  4,  5,  6,  7,
-                                        -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                                        -1, -1, -1, -1, -1, -1, -1};
-
-  int32_t p[9 * 17] = {
-      0}; // x范围[-1,15]，y范围[-1,7]，共9行17列，原点为pp[1][1]
-  int32_t p1[9 * 17] = {
-      0}; // x范围[-1,15]，y范围[-1,7]，共9行17列，原点为pp[1][1]
-#define P(x, y) p[((y) + 1) * 17 + ((x) + 1)]
-#define P1(x, y) p1[((y) + 1) * 17 + ((x) + 1)]
-  // #define cSL(x, y)    pic_buff_luma_pred[(mb_y * 16 + (yO + y)) *
-  // PicWidthInSamples + (mb_x * 16 + (xO + x))]
-#define IsMbAff                                                                \
-  ((m_slice->slice_header->MbaffFrameFlag == 1 &&                              \
-    m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)                             \
-       ? 1                                                                     \
-       : 0)
-#define cSL(x, y)                                                              \
-  pic_buff_luma_pred[(m_mbs[CurrMbAddr].m_mb_position_y +                      \
-                      (yO + (y)) * (1 + IsMbAff)) *                            \
-                         PicWidthInSamples +                                   \
-                     (m_mbs[CurrMbAddr].m_mb_position_x + (xO + (x)))]
-
-  memset(p, -1, sizeof(int32_t) * 9 * 17);
-  memset(p1, -1, sizeof(int32_t) * 9 * 17);
-
-  //SliceHeader &slice_header = m_h264_slice_header;
+  /* ------------------ 设置别名 ------------------ */
+  const MacroBlock &mb = m_mbs[CurrMbAddr];
+  const bool MbaffFrameFlag = m_slice->slice_header->MbaffFrameFlag;
+  const bool isMbAff = MbaffFrameFlag && mb.mb_field_decoding_flag;
+  /* ------------------  End ------------------ */
 
   // 6.4.5 Inverse 8x8 luma block scanning process
-  // InverseRasterScan = (a % (d / b) ) * b;    if e == 0;
-  // InverseRasterScan = (a / (d / b) ) * c;    if e == 1;
-  xO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 0);
-  yO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 1);
+  int32_t xO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 0);
+  int32_t yO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 1);
+  // x范围[-1,15]，y范围[-1,7]，共9行17列，原点为pp[1][1]
+  int32_t p[9 * 17] = {-1};
+  // x范围[-1,15]，y范围[-1,7]，共9行17列，原点为pp[1][1]
+  int32_t p1[9 * 17] = {-1};
+#define P(x, y) p[((y) + 1) * 17 + ((x) + 1)]
+#define P1(x, y) p1[((y) + 1) * 17 + ((x) + 1)]
+
+  const int32_t neighbouring_samples_x[25] = {
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, 0,  1,  2, 3,
+      4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15};
+  const int32_t neighbouring_samples_y[25] = {
+      -1, 0,  1,  2,  3,  4,  5,  6,  7,  -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+  int32_t xW = 0, yW = 0, maxW = 0, maxH = 0, mbAddrN = -1;
+  int32_t luma4x4BlkIdxN = 0, luma8x8BlkIdxN = 0;
+  MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
 
   for (int32_t i = 0; i < 25; i++) {
     // 6.4.12 Derivation process for neighbouring locations
-    if (isChroma == 0) {
-      maxW = 16;
-      maxH = 16;
-    } else // if (isChroma == 1)
-    {
-      maxW = MbWidthC;
-      maxH = MbHeightC;
-    }
+    maxW = maxH = 16;
+    if (isChroma) maxW = MbWidthC, maxH = MbHeightC;
 
-    int32_t x = neighbouring_samples_x[i];
-    int32_t y = neighbouring_samples_y[i];
+    const int32_t x = neighbouring_samples_x[i], y = neighbouring_samples_y[i];
 
     if (m_slice->slice_header->MbaffFrameFlag == 0) {
-      ret = neighbouring_locations_non_MBAFF(
+      RET(neighbouring_locations_non_MBAFF(
           xO + x, yO + y, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN,
-          luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma);
-      RETURN_IF_FAILED(ret != 0, ret);
-    } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification for
-           // neighbouring locations in MBAFF frames
-    {
-      ret = neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
-                                         mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                         luma8x8BlkIdxN, xW, yW, isChroma);
-      RETURN_IF_FAILED(ret != 0, ret);
+          luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma));
+    } else {
+      RET(neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
+                                       mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
+                                       luma8x8BlkIdxN, xW, yW, isChroma));
     }
 
-    //----------------
-    if (mbAddrN < 0 // mbAddrN is not available
-        || (IS_INTER_Prediction_Mode(m_mbs[mbAddrN].m_mb_pred_mode) &&
-            m_mbs[mbAddrN].constrained_intra_pred_flag == 1)) {
-      P(x, y) = -1; // the sample p[ x, y ] is marked as "not available for
-                    // Intra_8x8 prediction"
-    } else {
-      int32_t xM = 0;
-      int32_t yM = 0;
-
-      // 6.4.1 Inverse macroblock scanning process
-      inverse_mb_scanning_process(
-          m_slice->slice_header->MbaffFrameFlag, mbAddrN,
-          m_mbs[mbAddrN].mb_field_decoding_flag, xM, yM);
-
-      //--------------------------
-      if (m_slice->slice_header->MbaffFrameFlag == 1 &&
-          m_mbs[mbAddrN].mb_field_decoding_flag == 1) {
-        P(x, y) = pic_buff_luma_pred[(yM + 2 * yW) * PicWidthInSamples +
-                                     (xM + xW)]; // cSL[ xM + xW, yM + 2 * yW ];
-      } else {
-        P(x, y) = pic_buff_luma_pred[(yM + yW) * PicWidthInSamples +
-                                     (xM + xW)]; // cSL[ xM + xW, yM + yW ];
-      }
+    const MacroBlock &mb1 = m_mbs[mbAddrN];
+    if (mbAddrN < 0 || (IS_INTER_Prediction_Mode(mb1.m_mb_pred_mode) &&
+                        mb1.constrained_intra_pred_flag))
+      P(x, y) = -1;
+    else {
+      int32_t xM = 0, yM = 0;
+      inverse_mb_scanning_process(MbaffFrameFlag, mbAddrN,
+                                  mb1.mb_field_decoding_flag, xM, yM);
+      int32_t y0 = (yM + 1 * yW);
+      if (MbaffFrameFlag && mb1.mb_field_decoding_flag) y0 = (yM + 2 * yW);
+      P(x, y) = pic_buff_luma_pred[y0 * PicWidthInSamples + (xM + xW)];
     }
   }
 
-  //-----------------------------
-  // When samples p[ x, -1 ], with x = 8..15, are marked as "not available for
-  // Intra_8x8 prediction," and the sample p[ 7, -1 ] is marked as "available
-  // for Intra_8x8 prediction," the sample value of p[ 7, -1 ] is substituted
-  // for sample values p[ x, -1 ], with x = 8..15, and samples p[ x, -1 ], with
-  // x = 8..15, are marked as "available for Intra_8x8 prediction".
   if (P(8, -1) < 0 && P(9, -1) < 0 && P(10, -1) < 0 && P(11, -1) < 0 &&
       P(12, -1) < 0 && P(13, -1) < 0 && P(14, -1) < 0 && P(15, -1) < 0 &&
       P(7, -1) >= 0) {
@@ -1396,54 +1270,42 @@ int PictureBase::Intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
     P(15, -1) = P(7, -1);
   }
 
-  //-------------------------------------------
-  // 8.3.2.2.1 Reference sample filtering process for Intra_8x8 sample
-  // prediction
   if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
       P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0 &&
       P(8, -1) >= 0 && P(9, -1) >= 0 && P(10, -1) >= 0 && P(11, -1) >= 0 &&
       P(12, -1) >= 0 && P(13, -1) >= 0 && P(14, -1) >= 0 && P(15, -1) >= 0) {
-    if (P(-1, -1) >= 0) {
+    if (P(-1, -1) >= 0)
       P1(0, -1) = (P(-1, -1) + 2 * P(0, -1) + P(1, -1) + 2) >> 2;
-    } else {
+    else
       P1(0, -1) = (3 * P(0, -1) + P(1, -1) + 2) >> 2;
-    }
 
-    for (int32_t x = 1; x <= 14; x++) {
+    for (int32_t x = 1; x <= 14; x++)
       P1(x, -1) = (P(x - 1, -1) + 2 * P(x, -1) + P(x + 1, -1) + 2) >> 2;
-    }
 
     P1(15, -1) = (P(14, -1) + 3 * P(15, -1) + 2) >> 2;
   }
 
   if (P(-1, -1) >= 0) {
     if (P(0, -1) < 0 || P(-1, 0) < 0) {
-      if (P(0, -1) >= 0) {
+      if (P(0, -1) >= 0)
         P1(-1, -1) = (3 * P(-1, -1) + P(0, -1) + 2) >> 2;
-      } else if (P(0, -1) < 0 && P(-1, 0) >= 0) {
+      else if (P(0, -1) < 0 && P(-1, 0) >= 0)
         P1(-1, -1) = (3 * P(-1, -1) + P(-1, 0) + 2) >> 2;
-      } else // if (P(0, -1) < 0 && P(-1, 0) < 0)
-      {
+      else
         P1(-1, -1) = P(-1, -1);
-      }
-    } else // if (P(0, -1) >= 0 || P(-1, 0) >= 0)
-    {
+    } else
       P1(-1, -1) = (P(0, -1) + 2 * P(-1, -1) + P(-1, 0) + 2) >> 2;
-    }
   }
 
   if (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0 &&
       P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 && P(-1, 7) >= 0) {
-    if (P(-1, -1) >= 0) {
+    if (P(-1, -1) >= 0)
       P1(-1, 0) = (P(-1, -1) + 2 * P(-1, 0) + P(-1, 1) + 2) >> 2;
-    } else // if (P(-1, -1) < 0)
-    {
+    else
       P1(-1, 0) = (3 * P(-1, 0) + P(-1, 1) + 2) >> 2;
-    }
 
-    for (int32_t y = 1; y <= 6; y++) {
+    for (int32_t y = 1; y <= 6; y++)
       P1(-1, y) = (P(-1, y - 1) + 2 * P(-1, y) + P(-1, y + 1) + 2) >> 2;
-    }
 
     P1(-1, 7) = (P(-1, 6) + 3 * P(-1, 7) + 2) >> 2;
   }
@@ -1451,255 +1313,201 @@ int PictureBase::Intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
   memcpy(p, p1, sizeof(int32_t) * 9 * 17);
 
   //----------9种帧内8x8预测模式----------------
-  int32_t Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr = -1;
-  ret = getIntra8x8PredMode(
-      luma8x8BlkIdx, Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr, isChroma);
-  RETURN_IF_FAILED(ret != 0, ret);
+  int32_t currMbAddrPredMode = -1;
+  RET(getIntra8x8PredMode(luma8x8BlkIdx, currMbAddrPredMode, isChroma));
 
-  if (Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr ==
-      0) // 8.3.2.2.2 Specification of Intra_8x8_Vertical prediction mode
-  {
+#define cSL(x, y)                                                              \
+  pic_buff_luma_pred[(mb.m_mb_position_y + (yO + (y)) * (1 + isMbAff)) *       \
+                         PicWidthInSamples +                                   \
+                     (mb.m_mb_position_x + (xO + (x)))]
+  // 8.3.2.2.2 Specification of Intra_8x8_Vertical prediction mode
+  if (currMbAddrPredMode == 0) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
-        P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0) {
-      for (int32_t y = 0; y <= 7; y++) {
-        for (int32_t x = 0; x <= 7; x++) {
-          cSL(x, y) = P(x, -1); // pred8x8L[y * 8 + x ]
-        }
-      }
-    }
-  } else if (Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr ==
-             1) // 8.3.2.2.3 Specification of Intra_8x8_Horizontal prediction
-                // mode
-  {
+        P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0)
+      for (int32_t y = 0; y <= 7; y++)
+        for (int32_t x = 0; x <= 7; x++)
+          cSL(x, y) = P(x, -1);
+  }
+  // 8.3.2.2.3 Specification of Intra_8x8_Horizontal prediction mode}
+  else if (currMbAddrPredMode == 1) {
     if (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0 &&
-        P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 && P(-1, 7) >= 0) {
-      for (int32_t y = 0; y <= 7; y++) {
-        for (int32_t x = 0; x <= 7; x++) {
-          cSL(x, y) = P(-1, y); // pred8x8L[y * 8 + x ]
-        }
-      }
-    }
-  } else if (Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr ==
-             2) // 8.3.2.2.4 Specification of Intra_8x8_DC prediction mode
-  {
+        P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 && P(-1, 7) >= 0)
+      for (int32_t y = 0; y <= 7; y++)
+        for (int32_t x = 0; x <= 7; x++)
+          cSL(x, y) = P(-1, y);
+  }
+  // 8.3.2.2.4 Specification of Intra_8x8_DC prediction mode
+  else if (currMbAddrPredMode == 2) {
     int32_t mean_value = 0;
 
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0 &&
         P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0 &&
-        P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 && P(-1, 7) >= 0) {
+        P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 && P(-1, 7) >= 0)
       mean_value =
           (P(0, -1) + P(1, -1) + P(2, -1) + P(3, -1) + P(4, -1) + P(5, -1) +
            P(6, -1) + P(7, -1) + P(-1, 0) + P(-1, 1) + P(-1, 2) + P(-1, 3) +
            P(-1, 4) + P(-1, 5) + P(-1, 6) + P(-1, 7) + 8) >>
           4;
-    } else if ((P(0, -1) < 0 || P(1, -1) < 0 || P(2, -1) < 0 || P(3, -1) < 0 ||
-                P(4, -1) < 0 || P(5, -1) < 0 || P(6, -1) < 0 || P(7, -1) < 0) &&
-               (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
-                P(-1, 3) >= 0 && P(-1, 4) >= 0 && P(-1, 5) >= 0 &&
-                P(-1, 6) >= 0 && P(-1, 7) >= 0)) {
+    else if ((P(0, -1) < 0 || P(1, -1) < 0 || P(2, -1) < 0 || P(3, -1) < 0 ||
+              P(4, -1) < 0 || P(5, -1) < 0 || P(6, -1) < 0 || P(7, -1) < 0) &&
+             (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
+              P(-1, 3) >= 0 && P(-1, 4) >= 0 && P(-1, 5) >= 0 &&
+              P(-1, 6) >= 0 && P(-1, 7) >= 0))
       mean_value = (P(-1, 0) + P(-1, 1) + P(-1, 2) + P(-1, 3) + P(-1, 4) +
                     P(-1, 5) + P(-1, 6) + P(-1, 7) + 4) >>
                    3;
-    } else if ((P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 &&
-                P(3, -1) >= 0 && P(4, -1) >= 0 && P(5, -1) >= 0 &&
-                P(6, -1) >= 0 && P(7, -1) >= 0) &&
-               (P(-1, 0) < 0 || P(-1, 1) < 0 || P(-1, 2) < 0 || P(-1, 3) < 0 ||
-                P(-1, 4) < 0 || P(-1, 5) < 0 || P(-1, 6) < 0 || P(-1, 7) < 0)) {
+    else if ((P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 &&
+              P(3, -1) >= 0 && P(4, -1) >= 0 && P(5, -1) >= 0 &&
+              P(6, -1) >= 0 && P(7, -1) >= 0) &&
+             (P(-1, 0) < 0 || P(-1, 1) < 0 || P(-1, 2) < 0 || P(-1, 3) < 0 ||
+              P(-1, 4) < 0 || P(-1, 5) < 0 || P(-1, 6) < 0 || P(-1, 7) < 0))
       mean_value = (P(0, -1) + P(1, -1) + P(2, -1) + P(3, -1) + P(4, -1) +
                     P(5, -1) + P(6, -1) + P(7, -1) + 4) >>
                    3;
-    } else // some samples p[ x, -1 ], with x = 0..7, and some samples p[ -1, y
-           // ], with y = 0..7, are marked as "not available for Intra_8x8
-           // prediction")
-    {
-      mean_value = 1 << (BitDepth - 1); // mean_value = 1 << (8 - 1) = 128;
-    }
+    else
+      mean_value = 1 << (BitDepth - 1);
 
-    for (int32_t y = 0; y <= 7; y++) {
-      for (int32_t x = 0; x <= 7; x++) {
-        cSL(x, y) = mean_value; // red8x8L[y * 8 + x]
-      }
-    }
-  } else if (Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr ==
-             3) // 8.3.2.2.5 Specification of Intra_8x8_Diagonal_Down_Left
-                // prediction mode
-  {
+    for (int32_t y = 0; y <= 7; y++)
+      for (int32_t x = 0; x <= 7; x++)
+        cSL(x, y) = mean_value;
+  }
+  // 8.3.2.2.5 Specification of Intra_8x8_Diagonal_Down_Left prediction mode
+  else if (currMbAddrPredMode == 3) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0 &&
         P(8, -1) >= 0 && P(9, -1) >= 0 && P(10, -1) >= 0 && P(11, -1) >= 0 &&
-        P(12, -1) >= 0 && P(13, -1) >= 0 && P(14, -1) >= 0 && P(15, -1) >= 0) {
-      for (int32_t y = 0; y <= 7; y++) {
+        P(12, -1) >= 0 && P(13, -1) >= 0 && P(14, -1) >= 0 && P(15, -1) >= 0)
+      for (int32_t y = 0; y <= 7; y++)
         for (int32_t x = 0; x <= 7; x++) {
-          if (x == 7 && y == 7) {
-            cSL(x, y) =
-                (P(14, -1) + 3 * P(15, -1) + 2) >> 2; // red8x8L[y * 8 + x]
-          } else                                      // if (x != 7 || y != 7)
-          {
+          if (x == 7 && y == 7)
+            cSL(x, y) = (P(14, -1) + 3 * P(15, -1) + 2) >> 2;
+          else
             cSL(x, y) =
                 (P(x + y, -1) + 2 * P(x + y + 1, -1) + P(x + y + 2, -1) + 2) >>
-                2; // red8x8L[y * 8 + x]
-          }
+                2;
         }
-      }
-    }
-  } else if (Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr ==
-             4) // 8.3.2.2.6 Specification of Intra_8x8_Diagonal_Down_Right
-                // prediction mode
-  {
+  }
+  // 8.3.2.2.6 Specification of Intra_8x8_Diagonal_Down_Right prediction mode
+  else if (currMbAddrPredMode == 4) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0 &&
         P(-1, -1) >= 0 && P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
         P(-1, 3) >= 0 && P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 &&
-        P(-1, 7) >= 0) {
-      for (int32_t y = 0; y <= 7; y++) {
+        P(-1, 7) >= 0)
+      for (int32_t y = 0; y <= 7; y++)
         for (int32_t x = 0; x <= 7; x++) {
-          if (x > y) {
+          if (x > y)
             cSL(x, y) =
                 (P(x - y - 2, -1) + 2 * P(x - y - 1, -1) + P(x - y, -1) + 2) >>
-                2; // red8x8L[y * 8 + x]
-          } else if (x < y) {
+                2;
+          else if (x < y)
             cSL(x, y) =
                 (P(-1, y - x - 2) + 2 * P(-1, y - x - 1) + P(-1, y - x) + 2) >>
-                2; // red8x8L[y * 8 + x]
-          } else   // if (x == y)
-          {
-            cSL(x, y) = (P(0, -1) + 2 * P(-1, -1) + P(-1, 0) + 2) >>
-                        2; // red8x8L[y * 8 + x]
-          }
+                2;
+          else
+            cSL(x, y) = (P(0, -1) + 2 * P(-1, -1) + P(-1, 0) + 2) >> 2;
         }
-      }
-    }
-  } else if (Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr ==
-             5) // 8.3.2.2.7 Specification of Intra_8x8_Vertical_Right
-                // prediction mode
-  {
+  }
+  // 8.3.2.2.7 Specification of Intra_8x8_Vertical_Right prediction mode
+  else if (currMbAddrPredMode == 5) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0 &&
         P(-1, -1) >= 0 && P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
         P(-1, 3) >= 0 && P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 &&
-        P(-1, 7) >= 0) {
-      for (int32_t y = 0; y <= 7; y++) {
+        P(-1, 7) >= 0)
+      for (int32_t y = 0; y <= 7; y++)
         for (int32_t x = 0; x <= 7; x++) {
           int32_t zVR = 2 * x - y;
 
           if (zVR == 0 || zVR == 2 || zVR == 4 || zVR == 6 || zVR == 8 ||
-              zVR == 10 || zVR == 12 || zVR == 14) {
-            cSL(x, y) = (P(x - (y >> 1) - 1, -1) + P(x - (y >> 1), -1) + 1) >>
-                        1; // red8x8L[y * 8 + x]
-          } else if (zVR == 1 || zVR == 3 || zVR == 5 || zVR == 7 || zVR == 9 ||
-                     zVR == 11 || zVR == 13) {
+              zVR == 10 || zVR == 12 || zVR == 14)
+            cSL(x, y) =
+                (P(x - (y >> 1) - 1, -1) + P(x - (y >> 1), -1) + 1) >> 1;
+          else if (zVR == 1 || zVR == 3 || zVR == 5 || zVR == 7 || zVR == 9 ||
+                   zVR == 11 || zVR == 13)
             cSL(x, y) = (P(x - (y >> 1) - 2, -1) + 2 * P(x - (y >> 1) - 1, -1) +
                          P(x - (y >> 1), -1) + 2) >>
-                        2; // red8x8L[y * 8 + x]
-          } else if (zVR == -1) {
-            cSL(x, y) = (P(-1, 0) + 2 * P(-1, -1) + P(0, -1) + 2) >>
-                        2; // red8x8L[y * 8 + x]
-          } else // if (zVR == -2 || zVR == -3 || zVR == -4 || zVR == -5 || zVR
-                 // == -6 || zVR == -7)
-          {
+                        2;
+          else if (zVR == -1)
+            cSL(x, y) = (P(-1, 0) + 2 * P(-1, -1) + P(0, -1) + 2) >> 2;
+          else
             cSL(x, y) = (P(-1, y - 2 * x - 1) + 2 * P(-1, y - 2 * x - 2) +
                          P(-1, y - 2 * x - 3) + 2) >>
-                        2; // red8x8L[y * 8 + x]
-          }
+                        2;
         }
-      }
-    }
-  } else if (Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr ==
-             6) // 8.3.2.2.8 Specification of Intra_8x8_Horizontal_Down
-                // prediction mode
-  {
+  }
+  // 8.3.2.2.8 Specification of Intra_8x8_Horizontal_Down prediction mode
+  else if (currMbAddrPredMode == 6) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0 &&
         P(-1, -1) >= 0 && P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
         P(-1, 3) >= 0 && P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 &&
-        P(-1, 7) >= 0) {
-      for (int32_t y = 0; y <= 7; y++) {
+        P(-1, 7) >= 0)
+      for (int32_t y = 0; y <= 7; y++)
         for (int32_t x = 0; x <= 7; x++) {
           int32_t zHD = 2 * y - x;
 
           if (zHD == 0 || zHD == 2 || zHD == 4 || zHD == 6 || zHD == 8 ||
-              zHD == 10 || zHD == 12 || zHD == 14) {
-            cSL(x, y) = (P(-1, y - (x >> 1) - 1) + P(-1, y - (x >> 1)) + 1) >>
-                        1; // red8x8L[y * 8 + x]
-          } else if (zHD == 1 || zHD == 3 || zHD == 5 || zHD == 7 || zHD == 9 ||
-                     zHD == 11 || zHD == 13) {
+              zHD == 10 || zHD == 12 || zHD == 14)
+            cSL(x, y) =
+                (P(-1, y - (x >> 1) - 1) + P(-1, y - (x >> 1)) + 1) >> 1;
+          else if (zHD == 1 || zHD == 3 || zHD == 5 || zHD == 7 || zHD == 9 ||
+                   zHD == 11 || zHD == 13)
             cSL(x, y) = (P(-1, y - (x >> 1) - 2) + 2 * P(-1, y - (x >> 1) - 1) +
                          P(-1, y - (x >> 1)) + 2) >>
-                        2; // red8x8L[y * 8 + x]
-          } else if (zHD == -1) {
-            cSL(x, y) = (P(-1, 0) + 2 * P(-1, -1) + P(0, -1) + 2) >>
-                        2; // red8x8L[y * 8 + x]
-          } else // if (zHD == -2 || zHD == -3 || zHD == -4 || zHD == -5 || zHD
-                 // == -6 || zHD == -7)
-          {
+                        2;
+          else if (zHD == -1)
+            cSL(x, y) = (P(-1, 0) + 2 * P(-1, -1) + P(0, -1) + 2) >> 2;
+          else
             cSL(x, y) = (P(x - 2 * y - 1, -1) + 2 * P(x - 2 * y - 2, -1) +
                          P(x - 2 * y - 3, -1) + 2) >>
-                        2; // red8x8L[y * 8 + x]
-          }
+                        2;
         }
-      }
-    }
-  } else if (Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr ==
-             7) // 8.3.2.2.9 Specification of Intra_8x8_Vertical_Left prediction
-                // mode
-  {
+  }
+  // 8.3.2.2.9 Specification of Intra_8x8_Vertical_Left prediction mode
+  else if (currMbAddrPredMode == 7) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0 &&
         P(8, -1) >= 0 && P(9, -1) >= 0 && P(10, -1) >= 0 && P(11, -1) >= 0 &&
-        P(12, -1) >= 0 && P(13, -1) >= 0 && P(14, -1) >= 0 && P(15, -1) >= 0) {
-      for (int32_t y = 0; y <= 7; y++) {
+        P(12, -1) >= 0 && P(13, -1) >= 0 && P(14, -1) >= 0 && P(15, -1) >= 0)
+      for (int32_t y = 0; y <= 7; y++)
         for (int32_t x = 0; x <= 7; x++) {
-          if (y == 0 || y == 2 || y == 4 || y == 6) {
-            cSL(x, y) = (P(x + (y >> 1), -1) + P(x + (y >> 1) + 1, -1) + 1) >>
-                        1; // red8x8L[y * 8 + x]
-          } else           // if (y == 1 || y == 3 || y == 5 || y == 7)
-          {
+          if (y == 0 || y == 2 || y == 4 || y == 6)
+            cSL(x, y) =
+                (P(x + (y >> 1), -1) + P(x + (y >> 1) + 1, -1) + 1) >> 1;
+          else
             cSL(x, y) = (P(x + (y >> 1), -1) + 2 * P(x + (y >> 1) + 1, -1) +
                          P(x + (y >> 1) + 2, -1) + 2) >>
-                        2; // red8x8L[y * 8 + x]
-          }
+                        2;
         }
-      }
-    }
-  } else if (Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr ==
-             8) // 8.3.2.2.10 Specification of Intra_8x8_Horizontal_Up
-                // prediction mode
-  {
+  }
+  // 8.3.2.2.10 Specification of Intra_8x8_Horizontal_Up prediction mode
+  else if (currMbAddrPredMode == 8) {
     if (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0 &&
-        P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 && P(-1, 7) >= 0) {
-      for (int32_t y = 0; y <= 7; y++) {
+        P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 && P(-1, 7) >= 0)
+      for (int32_t y = 0; y <= 7; y++)
         for (int32_t x = 0; x <= 7; x++) {
           int32_t zHU = x + 2 * y;
 
           if (zHU == 0 || zHU == 2 || zHU == 4 || zHU == 6 || zHU == 8 ||
-              zHU == 10 || zHU == 12) {
-            cSL(x, y) = (P(-1, y + (x >> 1)) + P(-1, y + (x >> 1) + 1) + 1) >>
-                        1; // red8x8L[y * 8 + x]
-          } else if (zHU == 1 || zHU == 3 || zHU == 5 || zHU == 7 || zHU == 9 ||
-                     zHU == 11) {
+              zHU == 10 || zHU == 12)
+            cSL(x, y) =
+                (P(-1, y + (x >> 1)) + P(-1, y + (x >> 1) + 1) + 1) >> 1;
+          else if (zHU == 1 || zHU == 3 || zHU == 5 || zHU == 7 || zHU == 9 ||
+                   zHU == 11)
             cSL(x, y) = (P(-1, y + (x >> 1)) + 2 * P(-1, y + (x >> 1) + 1) +
                          P(-1, y + (x >> 1) + 2) + 2) >>
-                        2; // red8x8L[y * 8 + x]
-          } else if (zHU == 13) {
-            cSL(x, y) = (P(-1, 6) + 3 * P(-1, 7) + 2) >> 2; // red8x8L[y * 8 +
-                                                            // x]
-          } else                                            // if (zHU > 13)
-          {
-            cSL(x, y) = P(-1, 7); // red8x8L[y * 8 + x]
-          }
+                        2;
+          else if (zHU == 13)
+            cSL(x, y) = (P(-1, 6) + 3 * P(-1, 7) + 2) >> 2;
+          else
+            cSL(x, y) = P(-1, 7);
         }
-      }
-    }
-  } else {
-    printf("Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr(%d) must be [0,8]\n",
-           Intra8x8PredMode_luma8x8BlkIdx_of_CurrMbAddr);
   }
-
 #undef P
 #undef P1
 #undef cSL
-#undef IsMbAff
 
   return 0;
 }
@@ -1958,18 +1766,12 @@ int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
 // 8.3.4 Intra prediction process for chroma samples
 int PictureBase::Intra_chroma_sample_prediction(uint8_t *pic_buff_chroma_pred,
                                                 int32_t PicWidthInSamples) {
-  if (m_slice->slice_header->m_sps->ChromaArrayType ==
-      3) // CHROMA_FORMAT_IDC_444
-  {
+  if (m_slice->slice_header->m_sps->ChromaArrayType == 3)
     return Intra_chroma_sample_prediction_for_YUV444(pic_buff_chroma_pred,
                                                      PicWidthInSamples);
-  } else // if (m_slice->slice_header->m_sps->ChromaArrayType == 1 ||
-         // m_slice->slice_header->m_sps->ChromaArrayType == 2)
-         // //CHROMA_FORMAT_IDC_420 || CHROMA_FORMAT_IDC_422
-  {
+  else
     return Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
         pic_buff_chroma_pred, PicWidthInSamples);
-  }
 
   return 0;
 }
