@@ -853,7 +853,6 @@ int PictureBase::getIntra8x8PredMode(int32_t luma8x8BlkIdx,
     RET(neighbouring_locations_MBAFF(
         x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_type_A, mbAddrN_A,
         luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma));
-
     RET(neighbouring_locations_MBAFF(
         x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_type_B, mbAddrN_B,
         luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma));
@@ -877,7 +876,6 @@ int PictureBase::getIntra8x8PredMode(int32_t luma8x8BlkIdx,
     dcPredModePredictedFlag = true;
 
   int32_t intraMxMPredModeA = 0, intraMxMPredModeB = 0;
-
   if (dcPredModePredictedFlag ||
       (mbAddrN_A >= 0 && m_mbs[mbAddrN_A].m_mb_pred_mode != Intra_4x4 &&
        m_mbs[mbAddrN_A].m_mb_pred_mode != Intra_8x8))
@@ -977,24 +975,22 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
                                               2,  3,  4,  5,  6,  7};
   const int32_t neighbouring_samples_y[13] = {-1, 0,  1,  2,  3,  -1, -1,
                                               -1, -1, -1, -1, -1, -1};
-  int32_t xW = 0, yW = 0, maxW = 0, maxH = 0, mbAddrN = -1;
+  int32_t xW = 0, yW = 0, maxW = 16, maxH = 16, mbAddrN = -1;
+  if (isChroma) maxW = MbWidthC, maxH = MbHeightC;
   int32_t luma4x4BlkIdxN = 0, luma8x8BlkIdxN = 0;
   MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
 
   for (int32_t i = 0; i < 13; i++) {
     // 6.4.12 Derivation process for neighbouring locations
-    maxW = maxH = 16;
-    if (isChroma) maxW = MbWidthC, maxH = MbHeightC;
     const int32_t x = neighbouring_samples_x[i], y = neighbouring_samples_y[i];
     if (MbaffFrameFlag) {
       RET(neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
                                        mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
                                        luma8x8BlkIdxN, xW, yW, isChroma));
-    } else {
+    } else
       RET(neighbouring_locations_non_MBAFF(
           xO + x, yO + y, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN,
           luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma));
-    }
 
     // 当样本 p[ x, y ] = -1 时表示标记为“不适用于 Intra_4x4 预测”
     const MacroBlock &mb1 = m_mbs[mbAddrN];
@@ -1226,25 +1222,24 @@ int PictureBase::Intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
   const int32_t neighbouring_samples_y[25] = {
       -1, 0,  1,  2,  3,  4,  5,  6,  7,  -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
-  int32_t xW = 0, yW = 0, maxW = 0, maxH = 0, mbAddrN = -1;
+  int32_t xW = 0, yW = 0, maxW = 16, maxH = 16, mbAddrN = -1;
+  if (isChroma) maxW = MbWidthC, maxH = MbHeightC;
   int32_t luma4x4BlkIdxN = 0, luma8x8BlkIdxN = 0;
   MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
 
   for (int32_t i = 0; i < 25; i++) {
     // 6.4.12 Derivation process for neighbouring locations
-    maxW = maxH = 16;
-    if (isChroma) maxW = MbWidthC, maxH = MbHeightC;
 
     const int32_t x = neighbouring_samples_x[i], y = neighbouring_samples_y[i];
 
-    if (m_slice->slice_header->MbaffFrameFlag == 0) {
-      RET(neighbouring_locations_non_MBAFF(
-          xO + x, yO + y, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN,
-          luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma));
-    } else {
+    if (MbaffFrameFlag) {
       RET(neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
                                        mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
                                        luma8x8BlkIdxN, xW, yW, isChroma));
+    } else {
+      RET(neighbouring_locations_non_MBAFF(
+          xO + x, yO + y, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN,
+          luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma));
     }
 
     const MacroBlock &mb1 = m_mbs[mbAddrN];
@@ -1521,22 +1516,19 @@ int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
                                                int32_t PicWidthInSamples,
                                                int32_t isChroma,
                                                int32_t BitDepth) {
-  int ret = 0;
-  int32_t xO = 0;
-  int32_t yO = 0;
-  int32_t xW = 0;
-  int32_t yW = 0;
-  int32_t maxW = 0;
-  int32_t maxH = 0;
+  /* ------------------ 设置别名 ------------------ */
+  const MacroBlock &mb = m_mbs[CurrMbAddr];
+  const bool MbaffFrameFlag = m_slice->slice_header->MbaffFrameFlag;
+  const bool isMbAff = MbaffFrameFlag && mb.mb_field_decoding_flag;
+  /* ------------------  End ------------------ */
 
-  MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-  int32_t mbAddrN = -1;
-  int32_t luma4x4BlkIdxN = 0;
-  int32_t luma8x8BlkIdxN = 0;
+  int32_t xO = 0, yO = 0;
 
-  // The 33 neighbouring samples p[ x, y ] that are constructed luma samples
-  // prior to the deblocking filter process, with x = −1, y = −1..15 and with x
-  // = 0..15, y = −1,
+  // x范围[-1,15]，y范围[-1,15]，共17行17列，原点为pp[1][1]
+  int32_t p[17 * 17] = {0};
+  memset(p, -1, sizeof(p));
+#define P(x, y) p[((y) + 1) * 17 + ((x) + 1)]
+
   int32_t neighbouring_samples_x[33] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15};
@@ -1544,120 +1536,70 @@ int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
       -1, 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
-  int32_t p[17 * 17] = {
-      -1}; // x范围[-1,15]，y范围[-1,15]，共17行17列，原点为pp[1][1]
-#define P(x, y) p[((y) + 1) * 17 + ((x) + 1)]
-  // #define cSL(x, y)    pic_buff_luma_pred[(mb_y * 16 + (y)) * PicWidthInSamples
-  // + (mb_x * 16 + (x))]
-#define IsMbAff                                                                \
-  ((m_slice->slice_header->MbaffFrameFlag == 1 &&                              \
-    m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)                             \
-       ? 1                                                                     \
-       : 0)
-#define cSL(x, y)                                                              \
-  pic_buff_luma_pred[(m_mbs[CurrMbAddr].m_mb_position_y +                      \
-                      (y) * (1 + IsMbAff)) *                                   \
-                         PicWidthInSamples +                                   \
-                     (m_mbs[CurrMbAddr].m_mb_position_x + (x))]
-
-  //SliceHeader &slice_header = m_h264_slice_header;
+  int32_t xW = 0, yW = 0, maxW = 16, maxH = 16, mbAddrN = -1;
+  if (isChroma) maxW = MbWidthC, maxH = MbHeightC;
+  int32_t luma4x4BlkIdxN = 0, luma8x8BlkIdxN = 0;
+  MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
 
   for (int32_t i = 0; i < 33; i++) {
-    // 6.4.12 Derivation process for neighbouring locations
-    if (isChroma == 0) {
-      maxW = 16;
-      maxH = 16;
-    } else // if (isChroma == 1)
-    {
-      maxW = MbWidthC;
-      maxH = MbHeightC;
-    }
-
-    int32_t x = neighbouring_samples_x[i];
-    int32_t y = neighbouring_samples_y[i];
-
-    if (m_slice->slice_header->MbaffFrameFlag == 0) {
-      ret = neighbouring_locations_non_MBAFF(
+    const int32_t x = neighbouring_samples_x[i], y = neighbouring_samples_y[i];
+    if (MbaffFrameFlag) {
+      RET(neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
+                                       mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
+                                       luma8x8BlkIdxN, xW, yW, isChroma));
+    } else
+      RET(neighbouring_locations_non_MBAFF(
           xO + x, yO + y, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN,
-          luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma);
-      RETURN_IF_FAILED(ret != 0, ret);
-    } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification for
-           // neighbouring locations in MBAFF frames
-    {
-      ret = neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
-                                         mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                         luma8x8BlkIdxN, xW, yW, isChroma);
-      RETURN_IF_FAILED(ret != 0, ret);
-    }
+          luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma));
 
-    //----------------
-    if (mbAddrN < 0 // mbAddrN is not available
-        || (IS_INTER_Prediction_Mode(m_mbs[mbAddrN].m_mb_pred_mode) &&
-            m_mbs[mbAddrN].constrained_intra_pred_flag == 1) ||
-        (m_mbs[mbAddrN].m_name_of_mb_type == SI &&
-         m_mbs[mbAddrN].constrained_intra_pred_flag == 1)) {
-      P(x, y) = -1; // the sample p[ x, y ] is marked as "not available for
-                    // Intra_8x8 prediction"
-    } else {
-      int32_t xM = 0;
-      int32_t yM = 0;
-
-      // 6.4.1 Inverse macroblock scanning process
-      inverse_mb_scanning_process(
-          m_slice->slice_header->MbaffFrameFlag, mbAddrN,
-          m_mbs[mbAddrN].mb_field_decoding_flag, xM, yM);
-
-      //--------------------------
-      if (m_slice->slice_header->MbaffFrameFlag == 1 &&
-          m_mbs[mbAddrN].mb_field_decoding_flag ==
-              1) // If MbaffFrameFlag is equal to 1 and the macroblock mbAddrN
-                 // is a field macroblock,
-      {
-        P(x, y) = pic_buff_luma_pred[(yM + 2 * yW) * PicWidthInSamples +
-                                     (xM + xW)]; // cSL[ xM + xW, yM + 2 * yW ];
-      } else {
-        P(x, y) = pic_buff_luma_pred[(yM + yW) * PicWidthInSamples +
-                                     (xM + xW)]; // cSL[ xM + xW, yM + yW ];
-      }
+    const MacroBlock &mb1 = m_mbs[mbAddrN];
+    if (mbAddrN < 0)
+      P(x, y) = -1;
+    else if (IS_INTER_Prediction_Mode(mb1.m_mb_pred_mode) &&
+             mb1.constrained_intra_pred_flag)
+      P(x, y) = -1;
+    else if (mb1.m_name_of_mb_type == SI && mb1.constrained_intra_pred_flag)
+      P(x, y) = -1;
+    else {
+      int32_t xM = 0, yM = 0;
+      inverse_mb_scanning_process(MbaffFrameFlag, mbAddrN,
+                                  mb1.mb_field_decoding_flag, xM, yM);
+      int32_t y0 = (yM + 1 * yW);
+      if (MbaffFrameFlag && mb1.mb_field_decoding_flag) y0 = (yM + 2 * yW);
+      P(x, y) = pic_buff_luma_pred[y0 * PicWidthInSamples + (xM + xW)];
     }
   }
 
   //----------4种帧内16x16预测模式----------------
-  int32_t Intra16x16PredMode_of_CurrMbAddr =
-      m_mbs[CurrMbAddr].Intra16x16PredMode;
+  int32_t currMbAddrPredMode = m_mbs[CurrMbAddr].Intra16x16PredMode;
 
-  if (Intra16x16PredMode_of_CurrMbAddr ==
-      0) // 8.3.3.1 Specification of Intra_16x16_Vertical prediction mode
-  {
+#define cSL(x, y)                                                              \
+  pic_buff_luma_pred[(mb.m_mb_position_y + (y) * (1 + isMbAff)) *              \
+                         PicWidthInSamples +                                   \
+                     (mb.m_mb_position_x + (x))]
+  // 8.3.3.1 Specification of Intra_16x16_Vertical prediction mode
+  if (currMbAddrPredMode == 0) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0 &&
         P(8, -1) >= 0 && P(9, -1) >= 0 && P(10, -1) >= 0 && P(11, -1) >= 0 &&
-        P(12, -1) >= 0 && P(13, -1) >= 0 && P(14, -1) >= 0 && P(15, -1) >= 0) {
-      for (int32_t y = 0; y <= 15; y++) {
-        for (int32_t x = 0; x <= 15; x++) {
-          cSL(x, y) = P(x, -1); // pred16x16L[y * 16 + x ]
-        }
-      }
-    }
-  } else if (Intra16x16PredMode_of_CurrMbAddr ==
-             1) // 8.3.3.2 Specification of Intra_16x16_Horizontal prediction
-                // mode
-  {
+        P(12, -1) >= 0 && P(13, -1) >= 0 && P(14, -1) >= 0 && P(15, -1) >= 0)
+      for (int32_t y = 0; y <= 15; y++)
+        for (int32_t x = 0; x <= 15; x++)
+          cSL(x, y) = P(x, -1);
+  }
+  // 8.3.3.2 Specification of Intra_16x16_Horizontal prediction mode
+  else if (currMbAddrPredMode == 1) {
     if (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0 &&
         P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 && P(-1, 7) >= 0 &&
         P(-1, 8) >= 0 && P(-1, 9) >= 0 && P(-1, 10) >= 0 && P(-1, 11) >= 0 &&
-        P(-1, 12) >= 0 && P(-1, 13) >= 0 && P(-1, 14) >= 0 && P(-1, 15) >= 0) {
-      for (int32_t y = 0; y <= 15; y++) {
-        for (int32_t x = 0; x <= 15; x++) {
-          cSL(x, y) = P(-1, y); // pred16x16L[y * 16 + x ]
-        }
-      }
-    }
-  } else if (Intra16x16PredMode_of_CurrMbAddr ==
-             2) // 8.3.3.3 Specification of Intra_16x16_DC prediction mode
-  {
+        P(-1, 12) >= 0 && P(-1, 13) >= 0 && P(-1, 14) >= 0 && P(-1, 15) >= 0)
+      for (int32_t y = 0; y <= 15; y++)
+        for (int32_t x = 0; x <= 15; x++)
+          cSL(x, y) = P(-1, y);
+  }
+  // 8.3.3.3 Specification of Intra_16x16_DC prediction mode
+  else if (currMbAddrPredMode == 2) {
     int32_t mean_value = 0;
-
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0 &&
         P(8, -1) >= 0 && P(9, -1) >= 0 && P(10, -1) >= 0 && P(11, -1) >= 0 &&
@@ -1665,7 +1607,7 @@ int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
         P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0 &&
         P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 && P(-1, 7) >= 0 &&
         P(-1, 8) >= 0 && P(-1, 9) >= 0 && P(-1, 10) >= 0 && P(-1, 11) >= 0 &&
-        P(-1, 12) >= 0 && P(-1, 13) >= 0 && P(-1, 14) >= 0 && P(-1, 15) >= 0) {
+        P(-1, 12) >= 0 && P(-1, 13) >= 0 && P(-1, 14) >= 0 && P(-1, 15) >= 0)
       mean_value =
           (P(0, -1) + P(1, -1) + P(2, -1) + P(3, -1) + P(4, -1) + P(5, -1) +
            P(6, -1) + P(7, -1) + P(8, -1) + P(9, -1) + P(10, -1) + P(11, -1) +
@@ -1674,55 +1616,49 @@ int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
            P(-1, 8) + P(-1, 9) + P(-1, 10) + P(-1, 11) + P(-1, 12) + P(-1, 13) +
            P(-1, 14) + P(-1, 15) + 16) >>
           5;
-    } else if (!(P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 &&
-                 P(3, -1) >= 0 && P(4, -1) >= 0 && P(5, -1) >= 0 &&
-                 P(6, -1) >= 0 && P(7, -1) >= 0 && P(8, -1) >= 0 &&
-                 P(9, -1) >= 0 && P(10, -1) >= 0 && P(11, -1) >= 0 &&
-                 P(12, -1) >= 0 && P(13, -1) >= 0 && P(14, -1) >= 0 &&
-                 P(15, -1) >= 0) &&
-               (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
-                P(-1, 3) >= 0 && P(-1, 4) >= 0 && P(-1, 5) >= 0 &&
-                P(-1, 6) >= 0 && P(-1, 7) >= 0 && P(-1, 8) >= 0 &&
-                P(-1, 9) >= 0 && P(-1, 10) >= 0 && P(-1, 11) >= 0 &&
-                P(-1, 12) >= 0 && P(-1, 13) >= 0 && P(-1, 14) >= 0 &&
-                P(-1, 15) >= 0)) {
+    else if (!(P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 &&
+               P(3, -1) >= 0 && P(4, -1) >= 0 && P(5, -1) >= 0 &&
+               P(6, -1) >= 0 && P(7, -1) >= 0 && P(8, -1) >= 0 &&
+               P(9, -1) >= 0 && P(10, -1) >= 0 && P(11, -1) >= 0 &&
+               P(12, -1) >= 0 && P(13, -1) >= 0 && P(14, -1) >= 0 &&
+               P(15, -1) >= 0) &&
+             (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
+              P(-1, 3) >= 0 && P(-1, 4) >= 0 && P(-1, 5) >= 0 &&
+              P(-1, 6) >= 0 && P(-1, 7) >= 0 && P(-1, 8) >= 0 &&
+              P(-1, 9) >= 0 && P(-1, 10) >= 0 && P(-1, 11) >= 0 &&
+              P(-1, 12) >= 0 && P(-1, 13) >= 0 && P(-1, 14) >= 0 &&
+              P(-1, 15) >= 0))
       mean_value =
           (P(-1, 0) + P(-1, 1) + P(-1, 2) + P(-1, 3) + P(-1, 4) + P(-1, 5) +
            P(-1, 6) + P(-1, 7) + P(-1, 8) + P(-1, 9) + P(-1, 10) + P(-1, 11) +
            P(-1, 12) + P(-1, 13) + P(-1, 14) + P(-1, 15) + 8) >>
           4;
-    } else if ((P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 &&
-                P(3, -1) >= 0 && P(4, -1) >= 0 && P(5, -1) >= 0 &&
-                P(6, -1) >= 0 && P(7, -1) >= 0 && P(8, -1) >= 0 &&
-                P(9, -1) >= 0 && P(10, -1) >= 0 && P(11, -1) >= 0 &&
-                P(12, -1) >= 0 && P(13, -1) >= 0 && P(14, -1) >= 0 &&
-                P(15, -1) >= 0) &&
-               !(P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
-                 P(-1, 3) >= 0 && P(-1, 4) >= 0 && P(-1, 5) >= 0 &&
-                 P(-1, 6) >= 0 && P(-1, 7) >= 0 && P(-1, 8) >= 0 &&
-                 P(-1, 9) >= 0 && P(-1, 10) >= 0 && P(-1, 11) >= 0 &&
-                 P(-1, 12) >= 0 && P(-1, 13) >= 0 && P(-1, 14) >= 0 &&
-                 P(-1, 15) >= 0)) {
+    else if ((P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 &&
+              P(3, -1) >= 0 && P(4, -1) >= 0 && P(5, -1) >= 0 &&
+              P(6, -1) >= 0 && P(7, -1) >= 0 && P(8, -1) >= 0 &&
+              P(9, -1) >= 0 && P(10, -1) >= 0 && P(11, -1) >= 0 &&
+              P(12, -1) >= 0 && P(13, -1) >= 0 && P(14, -1) >= 0 &&
+              P(15, -1) >= 0) &&
+             !(P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
+               P(-1, 3) >= 0 && P(-1, 4) >= 0 && P(-1, 5) >= 0 &&
+               P(-1, 6) >= 0 && P(-1, 7) >= 0 && P(-1, 8) >= 0 &&
+               P(-1, 9) >= 0 && P(-1, 10) >= 0 && P(-1, 11) >= 0 &&
+               P(-1, 12) >= 0 && P(-1, 13) >= 0 && P(-1, 14) >= 0 &&
+               P(-1, 15) >= 0))
       mean_value =
           (P(0, -1) + P(1, -1) + P(2, -1) + P(3, -1) + P(4, -1) + P(5, -1) +
            P(6, -1) + P(7, -1) + P(8, -1) + P(9, -1) + P(10, -1) + P(11, -1) +
            P(12, -1) + P(13, -1) + P(14, -1) + P(15, -1) + 8) >>
           4;
-    } else // some of the neighbouring samples p[ x, −1 ], with x = 0..15, and
-    // some of the neighbouring samples p[ −1, y ], with y = 0..15, are
-    // marked as "not available for Intra_16x16 prediction"
-    {
-      mean_value = (1 << (BitDepth - 1)); // mean_value = 1 << (8 - 1) = 128;
-    }
+    else
+      mean_value = (1 << (BitDepth - 1));
 
-    for (int32_t y = 0; y <= 15; y++) {
-      for (int32_t x = 0; x <= 15; x++) {
-        cSL(x, y) = mean_value; // pred16x16L[y * 16 + x ]
-      }
-    }
-  } else if (Intra16x16PredMode_of_CurrMbAddr ==
-             3) // 8.3.3.4 Specification of Intra_16x16_Plane prediction mode
-  {
+    for (int32_t y = 0; y <= 15; y++)
+      for (int32_t x = 0; x <= 15; x++)
+        cSL(x, y) = mean_value;
+  }
+  // 8.3.3.4 Specification of Intra_16x16_Plane prediction mode
+  else if (currMbAddrPredMode == 3) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0 &&
         P(8, -1) >= 0 && P(9, -1) >= 0 && P(10, -1) >= 0 && P(11, -1) >= 0 &&
@@ -1731,38 +1667,25 @@ int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
         P(-1, 4) >= 0 && P(-1, 5) >= 0 && P(-1, 6) >= 0 && P(-1, 7) >= 0 &&
         P(-1, 8) >= 0 && P(-1, 9) >= 0 && P(-1, 10) >= 0 && P(-1, 11) >= 0 &&
         P(-1, 12) >= 0 && P(-1, 13) >= 0 && P(-1, 14) >= 0 && P(-1, 15) >= 0) {
-      int32_t H = 0;
-      int32_t V = 0;
+      int32_t H = 0, V = 0;
 
-      for (int32_t x = 0; x <= 7; x++) {
+      for (int32_t x = 0; x <= 7; x++)
         H += (x + 1) * (P(8 + x, -1) - P(6 - x, -1));
-      }
-
-      for (int32_t y = 0; y <= 7; y++) {
+      for (int32_t y = 0; y <= 7; y++)
         V += (y + 1) * (P(-1, 8 + y) - P(-1, 6 - y));
-      }
 
       int32_t a = 16 * (P(-1, 15) + P(15, -1));
       int32_t b = (5 * H + 32) >> 6;
       int32_t c = (5 * V + 32) >> 6;
 
-      for (int32_t y = 0; y <= 15; y++) {
-        for (int32_t x = 0; x <= 15; x++) {
+      for (int32_t y = 0; y <= 15; y++)
+        for (int32_t x = 0; x <= 15; x++)
           cSL(x, y) = CLIP3(0, (1 << BitDepth) - 1,
-                            (a + b * (x - 7) + c * (y - 7) + 16) >>
-                                5); // //pred16x16L[y * 16 + x ] = Clip1Y( x ) =
-                                    // Clip3( 0, ( 1 << BitDepthY ) − 1, x );
-        }
-      }
+                            (a + b * (x - 7) + c * (y - 7) + 16) >> 5);
     }
-  } else {
-    printf("Intra16x16PredMode_of_CurrMbAddr(%d) must be [0,3]\n",
-           Intra16x16PredMode_of_CurrMbAddr);
   }
-
 #undef P
 #undef cSL
-#undef IsMbAff
 
   return 0;
 }
