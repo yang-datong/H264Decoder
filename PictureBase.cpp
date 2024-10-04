@@ -732,138 +732,100 @@ int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
 int PictureBase::getIntra4x4PredMode(
     int32_t luma4x4BlkIdx,
     int32_t &Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr, int32_t isChroma) {
-  int ret = 0;
-  int32_t x = 0;
-  int32_t y = 0;
-  int32_t maxW = 0;
-  int32_t maxH = 0;
-  int32_t xW = 0;
-  int32_t yW = 0;
 
-  MB_ADDR_TYPE mbAddrN_type_A = MB_ADDR_TYPE_UNKOWN;
-  MB_ADDR_TYPE mbAddrN_type_B = MB_ADDR_TYPE_UNKOWN;
-  int32_t mbAddrN_A = -1;
-  int32_t mbAddrN_B = -1;
-  int32_t luma4x4BlkIdxN_A = 0;
-  int32_t luma4x4BlkIdxN_B = 0;
-  int32_t luma8x8BlkIdxN_A = 0;
-  int32_t luma8x8BlkIdxN_B = 0;
-
-  //SliceHeader &slice_header = m_h264_slice_header;
+  const bool constrained_flag =
+      m_slice->slice_header->m_pps->constrained_intra_pred_flag;
+  const bool MbaffFrameFlag = m_slice->slice_header->MbaffFrameFlag;
 
   // 6.4.11.4 Derivation process for neighbouring 4x4 luma blocks
 
   // 6.4.3 Inverse 4x4 luma block scanning process
-  // InverseRasterScan = (a % (d / b) ) * b;    if e == 0;
-  // InverseRasterScan = (a / (d / b) ) * c;    if e == 1;
-  x = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
-      InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
-  y = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
-      InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
+  int32_t x = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
+              InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
+  int32_t y = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
+              InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
 
   // 6.4.12 Derivation process for neighbouring locations
-  if (isChroma == 0) {
-    maxW = 16;
-    maxH = 16;
-  } else // if (isChroma == 1)
-  {
-    maxW = MbWidthC;
-    maxH = MbHeightC;
-  }
+  int32_t maxW = 16, maxH = 16;
+  if (isChroma) maxW = MbWidthC, maxH = MbHeightC;
 
-  if (m_slice->slice_header->MbaffFrameFlag == 0) {
-    ret = neighbouring_locations_non_MBAFF(
+  int32_t xW = 0, yW = 0;
+  int32_t mbAddrN_A = -1, mbAddrN_B = -1;
+  int32_t luma4x4BlkIdxN_A = 0, luma4x4BlkIdxN_B = 0, luma8x8BlkIdxN_A = 0,
+          luma8x8BlkIdxN_B = 0;
+  MB_ADDR_TYPE mbAddrN_type_A = MB_ADDR_TYPE_UNKOWN,
+               mbAddrN_type_B = MB_ADDR_TYPE_UNKOWN;
+  if (MbaffFrameFlag) {
+    RET(neighbouring_locations_MBAFF(
         x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_type_A, mbAddrN_A,
-        luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    ret = neighbouring_locations_non_MBAFF(
+        luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma));
+    RET(neighbouring_locations_MBAFF(
         x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_type_B, mbAddrN_B,
-        luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification for
-         // neighbouring locations in MBAFF frames
-  {
-    ret = neighbouring_locations_MBAFF(
-        x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_type_A, mbAddrN_A,
-        luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    ret = neighbouring_locations_MBAFF(
-        x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_type_B, mbAddrN_B,
-        luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
-  }
-
-  //----------------------------------------
-  int32_t dcPredModePredictedFlag = 0;
-
-  if (mbAddrN_A < 0 || mbAddrN_B < 0 ||
-      (mbAddrN_A >= 0 &&
-       IS_INTER_Prediction_Mode(m_mbs[mbAddrN_A].m_mb_pred_mode) &&
-       m_slice->slice_header->m_pps->constrained_intra_pred_flag == 1) ||
-      (mbAddrN_B >= 0 &&
-       IS_INTER_Prediction_Mode(m_mbs[mbAddrN_B].m_mb_pred_mode) &&
-       m_slice->slice_header->m_pps->constrained_intra_pred_flag == 1)) {
-    dcPredModePredictedFlag = 1;
+        luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma));
   } else {
-    dcPredModePredictedFlag = 0;
+    RET(neighbouring_locations_non_MBAFF(
+        x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_type_A, mbAddrN_A,
+        luma4x4BlkIdxN_A, luma8x8BlkIdxN_A, xW, yW, isChroma));
+    RET(neighbouring_locations_non_MBAFF(
+        x + 0, y - 1, maxW, maxH, CurrMbAddr, mbAddrN_type_B, mbAddrN_B,
+        luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma));
   }
 
-  //----------------------------------------
-  int32_t intraMxMPredModeA = 0;
-  int32_t intraMxMPredModeB = 0;
+  /* 变量 dcPredModePredictedFlag 的推导如下：
+   1. 地址为 mbAddrA 的宏块不可用 或 地址为 mbAddrB 的宏块不可用;
+   2. 地址为 mbAddrA 的宏块可用并以帧间宏块预测模式进行编码 或  地址为 mbAddrB 的宏块可用并以帧间宏块预测模式进行编码*/
+  bool dcPredModePredictedFlag = false;
+  if (mbAddrN_A < 0 || mbAddrN_B < 0)
+    dcPredModePredictedFlag = true;
+  else if (mbAddrN_A >= 0 && constrained_flag &&
+           IS_INTER_Prediction_Mode(m_mbs[mbAddrN_A].m_mb_pred_mode))
+    dcPredModePredictedFlag = true;
+  else if (mbAddrN_B >= 0 && constrained_flag &&
+           IS_INTER_Prediction_Mode(m_mbs[mbAddrN_B].m_mb_pred_mode))
+    dcPredModePredictedFlag = true;
 
-  if (dcPredModePredictedFlag == 1 ||
+  int32_t intraMxMPredModeA = 0, intraMxMPredModeB = 0;
+  if (dcPredModePredictedFlag ||
       (mbAddrN_A >= 0 && m_mbs[mbAddrN_A].m_mb_pred_mode != Intra_4x4 &&
-       m_mbs[mbAddrN_A].m_mb_pred_mode != Intra_8x8)) {
-    intraMxMPredModeA =
-        Prediction_Mode_Intra_4x4_DC; // Prediction_Mode_Intra_4x4_DC = 2;
-  } else {
-    if (mbAddrN_A >= 0 && m_mbs[mbAddrN_A].m_mb_pred_mode == Intra_4x4) {
+       m_mbs[mbAddrN_A].m_mb_pred_mode != Intra_8x8))
+    intraMxMPredModeA = Prediction_Mode_Intra_4x4_DC;
+  else {
+    if (mbAddrN_A >= 0 && m_mbs[mbAddrN_A].m_mb_pred_mode == Intra_4x4)
       intraMxMPredModeA = m_mbs[mbAddrN_A].Intra4x4PredMode[luma4x4BlkIdxN_A];
-    } else // if (mbAddrN_A >= 0 && m_mbs[mbAddrN_A].m_mb_pred_mode ==
-           // Intra_8x8)
-    {
+    else
       intraMxMPredModeA =
           m_mbs[mbAddrN_A].Intra8x8PredMode[luma4x4BlkIdxN_A >> 2];
-    }
   }
 
-  if (dcPredModePredictedFlag == 1 ||
+  if (dcPredModePredictedFlag ||
       (mbAddrN_B >= 0 && m_mbs[mbAddrN_B].m_mb_pred_mode != Intra_4x4 &&
-       m_mbs[mbAddrN_B].m_mb_pred_mode != Intra_8x8)) {
-    intraMxMPredModeB =
-        Prediction_Mode_Intra_4x4_DC; // Prediction_Mode_Intra_4x4_DC = 2;
-  } else {
-    if (mbAddrN_B >= 0 && m_mbs[mbAddrN_B].m_mb_pred_mode == Intra_4x4) {
+       m_mbs[mbAddrN_B].m_mb_pred_mode != Intra_8x8))
+    intraMxMPredModeB = Prediction_Mode_Intra_4x4_DC;
+  else {
+    if (mbAddrN_B >= 0 && m_mbs[mbAddrN_B].m_mb_pred_mode == Intra_4x4)
       intraMxMPredModeB = m_mbs[mbAddrN_B].Intra4x4PredMode[luma4x4BlkIdxN_B];
-    } else // if (mbAddrN_B >= 0 && m_mbs[mbAddrN_B].m_mb_pred_mode ==
-           // Intra_8x8)
-    {
+    else
       intraMxMPredModeB =
           m_mbs[mbAddrN_B].Intra8x8PredMode[luma4x4BlkIdxN_B >> 2];
-    }
   }
 
-  //-----------------------------
-  int32_t predIntra4x4PredMode =
-      MIN(intraMxMPredModeA, intraMxMPredModeB); // 取两个相邻宏块中的最小值
+  // 取两个相邻宏块中的最小值
+  int32_t predIntra4x4PredMode = MIN(intraMxMPredModeA, intraMxMPredModeB);
 
-  if (m_mbs[CurrMbAddr].prev_intra4x4_pred_mode_flag[luma4x4BlkIdx]) {
-    m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx] =
-        predIntra4x4PredMode; // 使用计算出来的值作为当前宏块的预测模式值
-  } else {
+  // 使用计算出来的值作为当前宏块的预测模式值
+  if (m_mbs[CurrMbAddr].prev_intra4x4_pred_mode_flag[luma4x4BlkIdx])
+    m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx] = predIntra4x4PredMode;
+  else {
+    // 使用视频编码器事先设置好的值作为当前宏块的预测模式值
     if (m_mbs[CurrMbAddr].rem_intra4x4_pred_mode[luma4x4BlkIdx] <
-        predIntra4x4PredMode) {
+        predIntra4x4PredMode)
       m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx] =
-          m_mbs[CurrMbAddr].rem_intra4x4_pred_mode
-              [luma4x4BlkIdx]; // 使用视频编码器事先设置好的值作为当前宏块的预测模式值
-    } else {
+          m_mbs[CurrMbAddr].rem_intra4x4_pred_mode[luma4x4BlkIdx];
+
+    // 使用视频编码器事先设置好的值作为当前宏块的预测模式值
+    else
       m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx] =
-          m_mbs[CurrMbAddr].rem_intra4x4_pred_mode[luma4x4BlkIdx] +
-          1; // 使用视频编码器事先设置好的值作为当前宏块的预测模式值
-    }
+          m_mbs[CurrMbAddr].rem_intra4x4_pred_mode[luma4x4BlkIdx] + 1;
   }
 
   Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr =
@@ -1019,127 +981,107 @@ int PictureBase::getIntra8x8PredMode(
   return 0;
 }
 
-// 8.3.1.2 Intra_4x4 sample prediction (8.3.1 Intra_4x4 prediction process for
-// luma samples)
+// 8.3.1 Intra_4x4 prediction process for luma samples
+// 8.3.1.2 Intra_4x4 sample prediction
 int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
                                              int32_t PicWidthInSamples,
                                              uint8_t *pic_buff_luma_pred,
                                              int32_t isChroma,
                                              int32_t BitDepth) {
-  int ret = 0;
-  int32_t xO = 0;
-  int32_t yO = 0;
-  int32_t xW = 0;
-  int32_t yW = 0;
-  int32_t maxW = 0;
-  int32_t maxH = 0;
 
-  MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-  int32_t mbAddrN = -1;
-  int32_t luma4x4BlkIdxN = 0;
-  int32_t luma8x8BlkIdxN = 0;
-
-  //SliceHeader &slice_header = m_h264_slice_header;
-
-  // The 13 neighbouring samples p[ x, y ] that are constructed luma samples
-  // prior to the deblocking filter process,
-  //  with x = -1, y = -1..3 and x = 0..7, y = -1
-  int32_t neighbouring_samples_x[13] = {-1, -1, -1, -1, -1, 0, 1,
-                                        2,  3,  4,  5,  6,  7};
-  int32_t neighbouring_samples_y[13] = {-1, 0,  1,  2,  3,  -1, -1,
-                                        -1, -1, -1, -1, -1, -1};
-
-  int32_t p[5 * 9] = {-1}; // x范围[-1,7]，y范围[-1,3]，共5行9列，原点为pp[1][1]
-  memset(p, -1, sizeof(int32_t) * 5 * 9);
-#define P(x, y) p[((y) + 1) * 9 + ((x) + 1)]
-// #define cSL(x, y)    pic_buff_luma_pred[(mb_y * 16 + (yO + (y))) *
-// PicWidthInSamples + (mb_x * 16 + (xO + (x)))]
-#define IsMbAff                                                                \
-  ((m_slice->slice_header->MbaffFrameFlag == 1 &&                              \
-    m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)                             \
-       ? 1                                                                     \
-       : 0)
-#define cSL(x, y)                                                              \
-  pic_buff_luma_pred[(m_mbs[CurrMbAddr].m_mb_position_y +                      \
-                      (yO + (y)) * (1 + IsMbAff)) *                            \
-                         PicWidthInSamples +                                   \
-                     (m_mbs[CurrMbAddr].m_mb_position_x + (xO + (x)))]
+  /* ------------------ 设置别名 ------------------ */
+  const MacroBlock &mb = m_mbs[CurrMbAddr];
+  const bool MbaffFrameFlag = m_slice->slice_header->MbaffFrameFlag;
+  const bool isMbAff = MbaffFrameFlag && mb.mb_field_decoding_flag;
+  /* ------------------  End ------------------ */
 
   // 6.4.11.4 Derivation process for neighbouring 4x4 luma blocks
 
-  // 6.4.3 Inverse 4x4 luma block scanning process
-  // InverseRasterScan = (a % (d / b) ) * b;    if e == 0;
-  // InverseRasterScan = (a / (d / b) ) * c;    if e == 1;
-  xO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
-       InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
-  yO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
-       InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
+  /* 1. 当前宏块内具有索引 luma4x4BlkIdx 的 4x4 亮度块的左上角样本的位置是通过调用第 6.4.3 节中的逆 4x4 亮度块扫描过程得出的，其中 luma4x4BlkIdx 作为输入，输出分配给 ( xO,yO ） */
+  int32_t xO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
+               InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
+  int32_t yO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
+               InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
+
+  /* 2. 导出 13 个相邻样本 p[ x, y ]，它们是在去块滤波过程之前构造的亮度样本，其中 x = -1, y = -1..3 和 x = 0..7, y = -1，共5行9列，原点为p[1][1]。
+   * 13 个相邻样本是指当前 4x4 块的上方和左侧的像素样本，它们用于预测当前块的像素值。对于13 个相邻样本的定义：
+    上方的 4 个样本：位于当前 4x4 块上方的 4 个样本，记为 A、B、C、D。
+    左侧的 4 个样本：位于当前 4x4 块左侧的 4 个样本，记为 I、J、K、L。
+    左上角的 1 个样本：位于当前 4x4 块左上角的 1 个样本，记为 X。
+    右上方的 4 个样本：位于当前 4x4 块右上方的 4 个样本，记为 E、F、G、H。
+
+              上4x4宏块       右上4x4宏块
+     +---++---+---+---+---++---+---+---+---+
+     | X || A | B | C | D || E | F | G | H |
+     +---++---+---+---+---++---+---+---+---+
+     +---++---+---+---+---+
+     | I ||               |
+ 左  +---++               +
+ 4x4 | J ||               |
+ 宏  +---++  待预测宏块   +
+ 块  | K ||               |
+     +---++               +
+     | L ||               |
+     +---++---+---+---+---+
+   * */
+  int32_t p[5 * 9] = {-1};
+#define P(x, y) p[((y) + 1) * 9 + ((x) + 1)]
+
+  const int32_t neighbouring_samples_x[13] = {-1, -1, -1, -1, -1, 0, 1,
+                                              2,  3,  4,  5,  6,  7};
+  const int32_t neighbouring_samples_y[13] = {-1, 0,  1,  2,  3,  -1, -1,
+                                              -1, -1, -1, -1, -1, -1};
+
+  int32_t xW = 0, yW = 0;
+  int32_t mbAddrN = -1;
+  MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
+  int32_t luma4x4BlkIdxN = 0, luma8x8BlkIdxN = 0;
+  int32_t maxW = 0, maxH = 0;
 
   for (int32_t i = 0; i < 13; i++) {
     // 6.4.12 Derivation process for neighbouring locations
-    if (isChroma == 0) {
-      maxW = 16;
-      maxH = 16;
-    } else // if (isChroma == 1)
-    {
-      maxW = MbWidthC;
-      maxH = MbHeightC;
-    }
+    if (isChroma == 0)
+      maxW = maxH = 16;
+    else
+      maxW = MbWidthC, maxH = MbHeightC;
 
-    int32_t x = neighbouring_samples_x[i];
-    int32_t y = neighbouring_samples_y[i];
+    const int32_t x = neighbouring_samples_x[i], y = neighbouring_samples_y[i];
 
-    if (m_slice->slice_header->MbaffFrameFlag == 0) {
-      ret = neighbouring_locations_non_MBAFF(
+    if (MbaffFrameFlag) {
+      RET(neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
+                                       mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
+                                       luma8x8BlkIdxN, xW, yW, isChroma));
+    } else {
+      RET(neighbouring_locations_non_MBAFF(
           xO + x, yO + y, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN,
-          luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma);
-      RETURN_IF_FAILED(ret != 0, ret);
-    } else // if (slice_header.MbaffFrameFlag == 1) //6.4.12.2 Specification for
-           // neighbouring locations in MBAFF frames
-    {
-      ret = neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
-                                         mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                         luma8x8BlkIdxN, xW, yW, isChroma);
-      RETURN_IF_FAILED(ret != 0, ret);
+          luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma));
     }
 
     //----------------
-    if (mbAddrN < 0 // mbAddrN is not available
-        || (IS_INTER_Prediction_Mode(m_mbs[mbAddrN].m_mb_pred_mode) &&
-            m_mbs[mbAddrN].constrained_intra_pred_flag == 1) ||
-        (m_mbs[mbAddrN].m_name_of_mb_type == SI &&
-         m_mbs[mbAddrN].constrained_intra_pred_flag == 1 &&
-         m_mbs[CurrMbAddr].m_name_of_mb_type != SI) ||
-        (x > 3 && (luma4x4BlkIdx == 3 || luma4x4BlkIdx == 11))) {
-      P(x, y) = -1; // the sample p[ x, y ] is marked as "not available for
-                    // Intra_4x4 prediction"
-    } else {
-      int32_t xM = 0;
-      int32_t yM = 0;
+    const MacroBlock &mb1 = m_mbs[mbAddrN];
 
+    if (mbAddrN < 0)
+      P(x, y) = -1;
+    else if (IS_INTER_Prediction_Mode(mb1.m_mb_pred_mode) &&
+             mb1.constrained_intra_pred_flag)
+      P(x, y) = -1;
+    else if (mb1.m_name_of_mb_type == SI && mb1.constrained_intra_pred_flag &&
+             mb.m_name_of_mb_type != SI)
+      P(x, y) = -1;
+    else if (x > 3 && (luma4x4BlkIdx == 3 || luma4x4BlkIdx == 11))
+      P(x, y) = -1;
+    else {
+      int32_t xM = 0, yM = 0;
       // 6.4.1 Inverse macroblock scanning process
-      inverse_mb_scanning_process(
-          m_slice->slice_header->MbaffFrameFlag, mbAddrN,
-          m_mbs[mbAddrN].mb_field_decoding_flag, xM, yM);
-
-      //--------------------------
-      if (m_slice->slice_header->MbaffFrameFlag == 1 &&
-          m_mbs[mbAddrN].mb_field_decoding_flag == 1) {
-        P(x, y) = pic_buff_luma_pred[(yM + 2 * yW) * PicWidthInSamples +
-                                     (xM + xW)]; // cSL[ xM + xW, yM + 2 * yW ];
-      } else {
-        P(x, y) = pic_buff_luma_pred[(yM + yW) * PicWidthInSamples +
-                                     (xM + xW)]; // cSL[ xM + xW, yM + yW ];
-      }
+      inverse_mb_scanning_process(MbaffFrameFlag, mbAddrN,
+                                  mb1.mb_field_decoding_flag, xM, yM);
+      int32_t y0 = (yM + 1 * yW);
+      if (MbaffFrameFlag && mb1.mb_field_decoding_flag) y0 = (yM + 2 * yW);
+      P(x, y) = pic_buff_luma_pred[y0 * PicWidthInSamples + (xM + xW)];
     }
   }
 
   //-----------------------------
-  // When samples p[ x, -1 ], with x = 4..7, are marked as "not available for
-  // Intra_4x4 prediction," and the sample p[ 3, -1 ] is marked as "available
-  // for Intra_4x4 prediction," the sample value of p[ 3, -1 ] is substituted
-  // for sample values p[ x, -1 ], with x = 4..7, and samples p[ x, -1 ], with x
-  // = 4..7, are marked as "available for Intra_4x4 prediction".
   if (P(4, -1) < 0 && P(5, -1) < 0 && P(6, -1) < 0 && P(7, -1) < 0 &&
       P(3, -1) >= 0) {
     P(4, -1) = P(3, -1);
@@ -1148,233 +1090,174 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
     P(7, -1) = P(3, -1);
   }
 
-  //----------9种帧内4x4预测模式----------------
+  /* 获取预测模式 */
   int32_t Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr = -1;
-  ret = getIntra4x4PredMode(
-      luma4x4BlkIdx, Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr, isChroma);
-  RETURN_IF_FAILED(ret != 0, ret);
+  RET(getIntra4x4PredMode(
+      luma4x4BlkIdx, Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr, isChroma));
 
-  if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr ==
-      0) // 8.3.1.2.1 Specification of Intra_4x4_Vertical prediction mode
-  {
-    if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0) {
-      for (int32_t y = 0; y <= 3; y++) {
-        for (int32_t x = 0; x <= 3; x++) {
-          cSL(x, y) = P(x, -1); // pred4x4L[y * 4 + x] = P(x, -1);
-        }
-      }
-    }
-  } else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr ==
-             1) // 8.3.1.2.2 Specification of Intra_4x4_Horizontal prediction
-                // mode
-  {
-    if (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0) {
-      for (int32_t y = 0; y <= 3; y++) {
-        for (int32_t x = 0; x <= 3; x++) {
-          cSL(x, y) = P(-1, y); // pred4x4L[y * 4 + x] = P(-1, y);
-        }
-      }
-    }
-  } else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr ==
-             2) // 8.3.1.2.3 Specification of Intra_4x4_DC prediction mode
-  {
+  //----------9种帧内4x4预测模式----------------
+#define cSL(x, y)                                                              \
+  pic_buff_luma_pred[(mb.m_mb_position_y + (yO + (y)) * (1 + isMbAff)) *       \
+                         PicWidthInSamples +                                   \
+                     (mb.m_mb_position_x + (xO + (x)))]
+
+  // 8.3.1.2.1 Specification of Intra_4x4_Vertical prediction mode
+  if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 0) {
+    if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0)
+      for (int32_t y = 0; y <= 3; y++)
+        for (int32_t x = 0; x <= 3; x++)
+          cSL(x, y) = P(x, -1);
+  }
+  // 8.3.1.2.2 Specification of Intra_4x4_Horizontal prediction mode
+  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 1) {
+    if (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0)
+      for (int32_t y = 0; y <= 3; y++)
+        for (int32_t x = 0; x <= 3; x++)
+          cSL(x, y) = P(-1, y);
+  }
+  // 8.3.1.2.3 Specification of Intra_4x4_DC prediction mode
+  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 2) {
     int32_t mean_value = 0;
 
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
-        P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0) {
+        P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0)
       mean_value = (P(0, -1) + P(1, -1) + P(2, -1) + P(3, -1) + P(-1, 0) +
                     P(-1, 1) + P(-1, 2) + P(-1, 3) + 4) >>
                    3;
-    } else if ((P(0, -1) < 0 || P(1, -1) < 0 || P(2, -1) < 0 || P(3, -1) < 0) &&
-               (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
-                P(-1, 3) >= 0)) {
+    else if ((P(0, -1) < 0 || P(1, -1) < 0 || P(2, -1) < 0 || P(3, -1) < 0) &&
+             (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0))
       mean_value = (P(-1, 0) + P(-1, 1) + P(-1, 2) + P(-1, 3) + 2) >> 2;
-    } else if ((P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 &&
-                P(3, -1) >= 0) &&
-               (P(-1, 0) < 0 || P(-1, 1) < 0 || P(-1, 2) < 0 || P(-1, 3) < 0)) {
+    else if ((P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 &&
+              P(3, -1) >= 0) &&
+             (P(-1, 0) < 0 || P(-1, 1) < 0 || P(-1, 2) < 0 || P(-1, 3) < 0))
       mean_value = (P(0, -1) + P(1, -1) + P(2, -1) + P(3, -1) + 2) >> 2;
-    } else // some samples p[ x, -1 ], with x = 0..3, and some samples p[ -1, y
-           // ], with y = 0..3, are marked as "not available for Intra_4x4
-           // prediction"
-    {
-      mean_value = 1 << (BitDepth - 1); // mean_value = 1 << (8 - 1) = 128;
-    }
+    else
+      mean_value = 1 << (BitDepth - 1);
 
     //-----------------------------------
-    for (int32_t y = 0; y <= 3; y++) {
-      for (int32_t x = 0; x <= 3; x++) {
-        cSL(x, y) = mean_value; // pred4x4L[y * 4 + x] = mean_value;
-      }
-    }
-  } else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr ==
-             3) // 8.3.1.2.4 Specification of Intra_4x4_Diagonal_Down_Left
-                // prediction mode
-  {
+    for (int32_t y = 0; y <= 3; y++)
+      for (int32_t x = 0; x <= 3; x++)
+        cSL(x, y) = mean_value;
+  }
+  // 8.3.1.2.4 Specification of Intra_4x4_Diagonal_Down_Left prediction mode
+  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 3) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
-        P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0) {
-      for (int32_t y = 0; y <= 3; y++) {
+        P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0)
+      for (int32_t y = 0; y <= 3; y++)
         for (int32_t x = 0; x <= 3; x++) {
-          if (x == 3 && y == 3) {
-            cSL(x, y) =
-                (P(6, -1) + 3 * P(7, -1) + 2) >> 2; // pred4x4L[y * 4 + x]
-          } else {
+          if (x == 3 && y == 3)
+            cSL(x, y) = (P(6, -1) + 3 * P(7, -1) + 2) >> 2;
+          else
             cSL(x, y) =
                 (P(x + y, -1) + 2 * P(x + y + 1, -1) + P(x + y + 2, -1) + 2) >>
-                2; // pred4x4L[y * 4 + x]
-          }
+                2;
         }
-      }
-    }
-  } else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr ==
-             4) // 8.3.1.2.5 Specification of Intra_4x4_Diagonal_Down_Right
-                // prediction mode
-  {
+  }
+  // 8.3.1.2.5 Specification of Intra_4x4_Diagonal_Down_Right prediction mode
+  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 4) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(-1, -1) >= 0 && P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
-        P(-1, 3) >= 0) {
-      for (int32_t y = 0; y <= 3; y++) {
+        P(-1, 3) >= 0)
+      for (int32_t y = 0; y <= 3; y++)
         for (int32_t x = 0; x <= 3; x++) {
-          if (x > y) {
+          if (x > y)
             cSL(x, y) =
                 (P(x - y - 2, -1) + 2 * P(x - y - 1, -1) + P(x - y, -1) + 2) >>
-                2; // pred4x4L[y * 4 + x]
-          } else if (x < y) {
+                2;
+          else if (x < y)
             cSL(x, y) =
                 (P(-1, y - x - 2) + 2 * P(-1, y - x - 1) + P(-1, y - x) + 2) >>
-                2; // pred4x4L[y * 4 + x]
-          } else   // if (x == y)
-          {
-            cSL(x, y) = (P(0, -1) + 2 * P(-1, -1) + P(-1, 0) + 2) >>
-                        2; // pred4x4L[y * 4 + x]
-          }
+                2;
+          else
+            cSL(x, y) = (P(0, -1) + 2 * P(-1, -1) + P(-1, 0) + 2) >> 2;
         }
-      }
-    }
-  } else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr ==
-             5) // 8.3.1.2.6 Specification of Intra_4x4_Vertical_Right
-                // prediction mode
-  {
+  }
+  // 8.3.1.2.6 Specification of Intra_4x4_Vertical_Right prediction mode
+  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 5) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(-1, -1) >= 0 && P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
-        P(-1, 3) >= 0) {
-      for (int32_t y = 0; y <= 3; y++) {
+        P(-1, 3) >= 0)
+      for (int32_t y = 0; y <= 3; y++)
         for (int32_t x = 0; x <= 3; x++) {
           int32_t zVR = 2 * x - y;
 
-          if (zVR == 0 || zVR == 2 || zVR == 4 || zVR == 6) {
-            cSL(x, y) = (P(x - (y >> 1) - 1, -1) + P(x - (y >> 1), -1) + 1) >>
-                        1; // pred4x4L[y * 4 + x]
-          } else if (zVR == 1 || zVR == 3 || zVR == 5) {
+          if (zVR == 0 || zVR == 2 || zVR == 4 || zVR == 6)
+            cSL(x, y) =
+                (P(x - (y >> 1) - 1, -1) + P(x - (y >> 1), -1) + 1) >> 1;
+          else if (zVR == 1 || zVR == 3 || zVR == 5)
             cSL(x, y) = (P(x - (y >> 1) - 2, -1) + 2 * P(x - (y >> 1) - 1, -1) +
                          P(x - (y >> 1), -1) + 2) >>
-                        2; // pred4x4L[y * 4 + x]
-          } else if (zVR == -1) {
-            cSL(x, y) = (P(-1, 0) + 2 * P(-1, -1) + P(0, -1) + 2) >>
-                        2; // pred4x4L[y * 4 + x]
-          } else           // if (zVR == -2 || zVR == -3)
-          {
-            cSL(x, y) = (P(-1, y - 1) + 2 * P(-1, y - 2) + P(-1, y - 3) + 2) >>
-                        2; // pred4x4L[y * 4 + x]
-          }
+                        2;
+          else if (zVR == -1)
+            cSL(x, y) = (P(-1, 0) + 2 * P(-1, -1) + P(0, -1) + 2) >> 2;
+          else
+            cSL(x, y) =
+                (P(-1, y - 1) + 2 * P(-1, y - 2) + P(-1, y - 3) + 2) >> 2;
         }
-      }
-    }
-  } else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr ==
-             6) // 8.3.1.2.7 Specification of Intra_4x4_Horizontal_Down
-                // prediction mode
-  {
+  }
+  // 8.3.1.2.7 Specification of Intra_4x4_Horizontal_Down prediction mode
+  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 6) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
         P(-1, -1) >= 0 && P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 &&
-        P(-1, 3) >= 0) {
-      for (int32_t y = 0; y <= 3; y++) {
+        P(-1, 3) >= 0)
+      for (int32_t y = 0; y <= 3; y++)
         for (int32_t x = 0; x <= 3; x++) {
           int32_t zHD = 2 * y - x;
 
-          if (zHD == 0 || zHD == 2 || zHD == 4 || zHD == 6) {
-            cSL(x, y) = (P(-1, y - (x >> 1) - 1) + P(-1, y - (x >> 1)) + 1) >>
-                        1; // pred4x4L[y * 4 + x]
-          } else if (zHD == 1 || zHD == 3 || zHD == 5) {
+          if (zHD == 0 || zHD == 2 || zHD == 4 || zHD == 6)
+            cSL(x, y) =
+                (P(-1, y - (x >> 1) - 1) + P(-1, y - (x >> 1)) + 1) >> 1;
+          else if (zHD == 1 || zHD == 3 || zHD == 5)
             cSL(x, y) = (P(-1, y - (x >> 1) - 2) + 2 * P(-1, y - (x >> 1) - 1) +
                          P(-1, y - (x >> 1)) + 2) >>
-                        2; // pred4x4L[y * 4 + x]
-          } else if (zHD == -1) {
-            cSL(x, y) = (P(-1, 0) + 2 * P(-1, -1) + P(0, -1) + 2) >>
-                        2; // pred4x4L[y * 4 + x]
-          } else           // if (zHD == -2 || zHD == -3)
-          {
-            cSL(x, y) = (P(x - 1, -1) + 2 * P(x - 2, -1) + P(x - 3, -1) + 2) >>
-                        2; // pred4x4L[y * 4 + x]
-          }
+                        2;
+          else if (zHD == -1)
+            cSL(x, y) = (P(-1, 0) + 2 * P(-1, -1) + P(0, -1) + 2) >> 2;
+          else
+            cSL(x, y) =
+                (P(x - 1, -1) + 2 * P(x - 2, -1) + P(x - 3, -1) + 2) >> 2;
         }
-      }
-    }
-  } else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr ==
-             7) // 8.3.1.2.8 Specification of Intra_4x4_Vertical_Left prediction
-                // mode
-  {
+  }
+  // 8.3.1.2.8 Specification of Intra_4x4_Vertical_Left prediction mode
+  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 7) {
     if (P(0, -1) >= 0 && P(1, -1) >= 0 && P(2, -1) >= 0 && P(3, -1) >= 0 &&
-        P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0) {
-      for (int32_t y = 0; y <= 3; y++) {
+        P(4, -1) >= 0 && P(5, -1) >= 0 && P(6, -1) >= 0 && P(7, -1) >= 0)
+      for (int32_t y = 0; y <= 3; y++)
         for (int32_t x = 0; x <= 3; x++) {
-          if (y == 0 || y == 2) {
-            cSL(x, y) = (P(x + (y >> 1), -1) + P(x + (y >> 1) + 1, -1) + 1) >>
-                        1; // pred4x4L[y * 4 + x]
-          } else           // if (y == 1 || y == 3)
-          {
+          if (y == 0 || y == 2)
+            cSL(x, y) =
+                (P(x + (y >> 1), -1) + P(x + (y >> 1) + 1, -1) + 1) >> 1;
+          else
             cSL(x, y) = (P(x + (y >> 1), -1) + 2 * P(x + (y >> 1) + 1, -1) +
                          P(x + (y >> 1) + 2, -1) + 2) >>
-                        2; // pred4x4L[y * 4 + x]
-          }
+                        2;
         }
-      }
-    }
-  } else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr ==
-             8) // 8.3.1.2.9 Specification of Intra_4x4_Horizontal_Up prediction
-                // mode
-  {
-    if (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0) {
-      for (int32_t y = 0; y <= 3; y++) {
+  }
+  // 8.3.1.2.9 Specification of Intra_4x4_Horizontal_Up prediction mode
+  else if (Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr == 8) {
+    if (P(-1, 0) >= 0 && P(-1, 1) >= 0 && P(-1, 2) >= 0 && P(-1, 3) >= 0)
+      for (int32_t y = 0; y <= 3; y++)
         for (int32_t x = 0; x <= 3; x++) {
           int32_t zHU = x + 2 * y;
 
-          if (zHU == 0 || zHU == 2 || zHU == 4) {
-            cSL(x, y) = (P(-1, y + (x >> 1)) + P(-1, y + (x >> 1) + 1) + 1) >>
-                        1; // pred4x4L[y * 4 + x]
-          } else if (zHU == 1 || zHU == 3) {
+          if (zHU == 0 || zHU == 2 || zHU == 4)
+            cSL(x, y) =
+                (P(-1, y + (x >> 1)) + P(-1, y + (x >> 1) + 1) + 1) >> 1;
+          else if (zHU == 1 || zHU == 3)
             cSL(x, y) = (P(-1, y + (x >> 1)) + 2 * P(-1, y + (x >> 1) + 1) +
                          P(-1, y + (x >> 1) + 2) + 2) >>
-                        2; // pred4x4L[y * 4 + x]
-          } else if (zHU == 5) {
-            cSL(x, y) =
-                (P(-1, 2) + 3 * P(-1, 3) + 2) >> 2; // pred4x4L[y * 4 + x]
-          } else                                    // if (zHU > 5)
-          {
-            cSL(x, y) = P(-1, 3); // pred4x4L[y * 4 + x]
-          }
+                        2;
+          else if (zHU == 5)
+            cSL(x, y) = (P(-1, 2) + 3 * P(-1, 3) + 2) >> 2;
+          else
+            cSL(x, y) = P(-1, 3);
         }
-      }
-    }
-  } else {
-    printf("Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr(%d) must be [0,8]\n",
-           Intra4x4PredMode_luma4x4BlkIdx_of_CurrMbAddr);
-  }
-
-  /*
-      printf("%s(%d): start:\n", __FUNCTION__, __LINE__);
-      for (int32_t y = 0; y <= 3; y++)
-      {
-          for (int32_t x = 0; x <= 3; x++)
-          {
-              printf(" 0x%02x(%d)", cSL(x, y), cSL(x, y));
-          }
-          printf("\n");
-      }
-      printf("end\n");
-  */
+  } else
+    std::cerr << "Intra4x4PredMode luma4x4BlkIdx must be [0,8] on "
+              << __FUNCTION__ << "():" << __LINE__ << std::endl;
 
 #undef P
 #undef cSL
-#undef IsMbAff
 
   return 0;
 }
@@ -1415,8 +1298,8 @@ int PictureBase::Intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
       0}; // x范围[-1,15]，y范围[-1,7]，共9行17列，原点为pp[1][1]
 #define P(x, y) p[((y) + 1) * 17 + ((x) + 1)]
 #define P1(x, y) p1[((y) + 1) * 17 + ((x) + 1)]
-// #define cSL(x, y)    pic_buff_luma_pred[(mb_y * 16 + (yO + y)) *
-// PicWidthInSamples + (mb_x * 16 + (xO + x))]
+  // #define cSL(x, y)    pic_buff_luma_pred[(mb_y * 16 + (yO + y)) *
+  // PicWidthInSamples + (mb_x * 16 + (xO + x))]
 #define IsMbAff                                                                \
   ((m_slice->slice_header->MbaffFrameFlag == 1 &&                              \
     m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)                             \
@@ -1852,8 +1735,8 @@ int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
   int32_t p[17 * 17] = {
       -1}; // x范围[-1,15]，y范围[-1,15]，共17行17列，原点为pp[1][1]
 #define P(x, y) p[((y) + 1) * 17 + ((x) + 1)]
-// #define cSL(x, y)    pic_buff_luma_pred[(mb_y * 16 + (y)) * PicWidthInSamples
-// + (mb_x * 16 + (x))]
+  // #define cSL(x, y)    pic_buff_luma_pred[(mb_y * 16 + (y)) * PicWidthInSamples
+  // + (mb_x * 16 + (x))]
 #define IsMbAff                                                                \
   ((m_slice->slice_header->MbaffFrameFlag == 1 &&                              \
     m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)                             \
@@ -2014,8 +1897,8 @@ int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
            P(12, -1) + P(13, -1) + P(14, -1) + P(15, -1) + 8) >>
           4;
     } else // some of the neighbouring samples p[ x, −1 ], with x = 0..15, and
-           // some of the neighbouring samples p[ −1, y ], with y = 0..15, are
-           // marked as "not available for Intra_16x16 prediction"
+    // some of the neighbouring samples p[ −1, y ], with y = 0..15, are
+    // marked as "not available for Intra_16x16 prediction"
     {
       mean_value = (1 << (BitDepth - 1)); // mean_value = 1 << (8 - 1) = 128;
     }
@@ -2156,8 +2039,8 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
   int32_t p[289]; // 81; 289=17*17;
   memset(p, -1, sizeof(int32_t) * (MbHeightC + 1) * (MbWidthC + 1));
 #define P(x, y) p[((y) + 1) * (MbHeightC + 1) + ((x) + 1)]
-// #define cSC(x, y)    pic_buff_chroma_pred[((mb_y) * MbHeightC + (y)) *
-// PicWidthInSamples + ((mb_x) * MbWidthC + x)]
+  // #define cSC(x, y)    pic_buff_chroma_pred[((mb_y) * MbHeightC + (y)) *
+  // PicWidthInSamples + ((mb_x) * MbWidthC + x)]
 #define IsMbAff                                                                \
   ((m_slice->slice_header->MbaffFrameFlag == 1 &&                              \
     m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)                             \
@@ -2269,8 +2152,8 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
                         P(3 + xO, -1) + 2) >>
                        2;
         } else // some samples p[ x + xO, −1 ], with x = 0..3, and some samples
-               // p[ −1, y +yO ], with y = 0..3, are marked as "not available
-               // for Intra chroma prediction"
+        // p[ −1, y +yO ], with y = 0..3, are marked as "not available
+        // for Intra chroma prediction"
         {
           mean_value = (1 << (m_slice->slice_header->m_sps->BitDepthC - 1));
         }
@@ -2286,8 +2169,8 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
                         P(-1, 3 + yO) + 2) >>
                        2;
         } else // some samples p[ x + xO, −1 ], with x = 0..3, and some samples
-               // p[ −1, y +yO ], with y = 0..3, are marked as "not available
-               // for Intra chroma prediction"
+        // p[ −1, y +yO ], with y = 0..3, are marked as "not available
+        // for Intra chroma prediction"
         {
           mean_value = (1 << (m_slice->slice_header->m_sps->BitDepthC - 1));
         }
@@ -2303,8 +2186,8 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
                         P(3 + xO, -1) + 2) >>
                        2;
         } else // some samples p[ x + xO, −1 ], with x = 0..3, and some samples
-               // p[ −1, y +yO ], with y = 0..3, are marked as "not available
-               // for Intra chroma prediction"
+        // p[ −1, y +yO ], with y = 0..3, are marked as "not available
+        // for Intra chroma prediction"
         {
           mean_value = (1 << (m_slice->slice_header->m_sps->BitDepthC - 1));
         }
@@ -2553,7 +2436,7 @@ int PictureBase::Sample_construction_process_for_I_PCM_macroblocks() {
 }
 
 // 6.4.1 Inverse macroblock scanning process
-/* 输入: 宏块地址mbAddr。  
+/* 输入: 宏块地址mbAddr。
  * 输出: 地址为 mbAddr 的宏块的左上角亮度样本相对于图片左上角样本的位置 ( x, y )。*/
 int PictureBase::inverse_mb_scanning_process(int32_t MbaffFrameFlag,
                                              int32_t mbAddr,
@@ -2590,11 +2473,11 @@ int PictureBase::Inverse_sub_macroblock_partition_scanning_process(
                                      mb.sub_mb_type[ mbPartIdx ],                               NumSubMbPart,
                                      SubMbPredMode, SubMbPartWidth,                               SubMbPartHeight);                               RETURN_IF_FAILED(ret !=
                                      0, ret);
-                              
+
                                      NumSubMbPart = mb.NumSubMbPart[mbPartIdx];
                                      int32_t partWidth = mb.SubMbPartWidth[mbPartIdx];
                                      int32_t partHeight = mb.SubMbPartHeight[mbPartIdx];
-                              
+
                                      x = InverseRasterScan( subMbPartIdx, SubMbPartWidth( sub_mb_type[
                                      mbPartIdx ] ),SubMbPartHeight( sub_mb_type[ mbPartIdx ] ), 8, 0 );                               y =
                                      InverseRasterScan( subMbPartIdx, SubMbPartWidth( sub_mb_type[ mbPartIdx ]
@@ -2859,8 +2742,8 @@ int PictureBase::Derivation_process_for_neighbouring_4x4_chroma_blocks(
 
 // 6.4.12 Derivation process for neighbouring locations
 /* 输入: 相对于当前宏块左上角表示的亮度或色度位置 ( xN, yN )
- * 输出： 
- * – mbAddrN：等于 CurrMbAddr 或等于包含 (xN, yN) 及其可用性状态的相邻宏块的地址， 
+ * 输出：
+ * – mbAddrN：等于 CurrMbAddr 或等于包含 (xN, yN) 及其可用性状态的相邻宏块的地址，
  * – ( xW, yW )：相对于当前宏块表示的位置 (xN, yN) mbAddrN 宏块的左上角（而不是相对于当前宏块的左上角）。
  * */
 int PictureBase::derivation_for_neighbouring_locations(
@@ -2920,21 +2803,21 @@ inline int PictureBase::derivation_of_availability_macroblock_addresses(
 }
 
 /* 6.4.9 Derivation process for neighbouring macroblock addresses and their availability */
-/* 该过程的输出为： 
- * – mbAddrA：当前宏块左侧宏块的地址和可用性状态， 
- * – mbAddrB：当前宏块上方宏块的地址和可用性状态， 
+/* 该过程的输出为：
+ * – mbAddrA：当前宏块左侧宏块的地址和可用性状态，
+ * – mbAddrB：当前宏块上方宏块的地址和可用性状态，
  * – mbAddrC：地址和可用性状态
  * – mbAddrD：当前宏块左上宏块的地址和可用状态。
-  
- Figure 6-12 – Neighbouring macroblocks for a given macroblock 
-    +-----+-----+-----+
-    |  D  |  B  |  C  |
-    +-----+-----+-----+
-    |  A  | Addr|     |
-    +-----+-----+-----+
-    |     |     |     |
-    +-----+-----+-----+
-*/
+
+ Figure 6-12 – Neighbouring macroblocks for a given macroblock
+ +-----+-----+-----+
+ |  D  |  B  |  C  |
+ +-----+-----+-----+
+ |  A  | Addr|     |
+ +-----+-----+-----+
+ |     |     |     |
+ +-----+-----+-----+
+ */
 int PictureBase::derivation_for_neighbouring_macroblock_addr_availability(
     int32_t xN, int32_t yN, int32_t maxW, int32_t maxH, int32_t CurrMbAddr,
     MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN) {
@@ -3013,7 +2896,7 @@ int PictureBase::neighbouring_locations_non_MBAFF(
   mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
   mbAddrN = -1;
 
-  /* 第 6.4.9 节中相邻宏块地址及其可用性的推导过程是通过 mbAddrA、mbAddrB、mbAddrC 和 mbAddrD 以及它们的可用性状态作为输出来调用的。 
+  /* 第 6.4.9 节中相邻宏块地址及其可用性的推导过程是通过 mbAddrA、mbAddrB、mbAddrC 和 mbAddrD 以及它们的可用性状态作为输出来调用的。
    * Table 6-3 specifies mbAddrN depending on ( xN, yN ). */
   derivation_for_neighbouring_macroblock_addr_availability(
       xN, yN, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN);
@@ -3042,22 +2925,22 @@ int PictureBase::neighbouring_locations_non_MBAFF(
 }
 
 /* 6.4.10 Derivation process for neighbouring macroblock addresses and their availability in MBAFF frames */
-/* 该过程的输出为： 
- * – mbAddrA：当前宏块对左侧宏块对顶部宏块的地址和可用性状态， 
- * – mbAddrB：当前宏块对上方宏块对顶部宏块的地址和可用性状态当前宏块对， 
- * – mbAddrC：当前宏块对右上方宏块对的顶部宏块的地址和可用性状态， 
+/* 该过程的输出为：
+ * – mbAddrA：当前宏块对左侧宏块对顶部宏块的地址和可用性状态，
+ * – mbAddrB：当前宏块对上方宏块对顶部宏块的地址和可用性状态当前宏块对，
+ * – mbAddrC：当前宏块对右上方宏块对的顶部宏块的地址和可用性状态，
  * – mbAddrD：当前宏块对左上方宏块对的顶部宏块的地址和可用性状态当前宏块对。
- 
-  Figure 6-13 – Neighbouring macroblocks for a given macroblock in MBAFF frames
-    +-----+-----+-----+
-    |  D  |  B  |  C  |
-    +-----+-----+-----+
-    |     |     |     |
-    +-----+-----+-----+
-    |  A  | Addr|     |
-    +-----+-----+-----+
-    |     | Addr|     |
-    +-----+-----+-----+
+
+ Figure 6-13 – Neighbouring macroblocks for a given macroblock in MBAFF frames
+ +-----+-----+-----+
+ |  D  |  B  |  C  |
+ +-----+-----+-----+
+ |     |     |     |
+ +-----+-----+-----+
+ |  A  | Addr|     |
+ +-----+-----+-----+
+ |     | Addr|     |
+ +-----+-----+-----+
  */
 int PictureBase::
     derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
@@ -3109,14 +2992,14 @@ int PictureBase::neighbouring_locations_MBAFF(
   derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
       mbAddrA, mbAddrB, mbAddrC, mbAddrD);
 
-  /* 变量 currMbFrameFlag 的推导如下： 
-   * – 如果地址为 CurrMbAddr 的宏块是帧宏块，则 currMbFrameFlag 设置为等于 1。 
+  /* 变量 currMbFrameFlag 的推导如下：
+   * – 如果地址为 CurrMbAddr 的宏块是帧宏块，则 currMbFrameFlag 设置为等于 1。
    * – 否则（地址为 CurrMbAddr 的宏块是场宏块），则 currMbFrameFlag 设置为等于 0 */
   int32_t currMbFrameFlag =
       m_mbs[CurrMbAddr].mb_field_decoding_flag == 0 ? 1 : 0;
 
-  /* 变量 mbIsTopMbFlag 的推导如下： 
-   * – 如果地址为 CurrMbAddr 的宏块是顶部宏块（即 CurrMbAddr % 2 等于 0），则 mbIsTopMbFlag 设置为等于 1。 
+  /* 变量 mbIsTopMbFlag 的推导如下：
+   * – 如果地址为 CurrMbAddr 的宏块是顶部宏块（即 CurrMbAddr % 2 等于 0），则 mbIsTopMbFlag 设置为等于 1。
    * – 否则（地址为 CurrMbAddr 的宏块是底部宏块） ，即 CurrMbAddr % 2 等于 1)，mbIsTopMbFlag 设置为等于 0。 */
   int32_t mbIsTopMbFlag = CurrMbAddr % 2 == 0 ? 1 : 0;
 
@@ -3381,32 +3264,29 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
           mb.LumaLevel4x4[luma4x4BlkIdx], c,
           mb.field_pic_flag | mb.mb_field_decoding_flag));
 
-      //2. 对单个 4x4 残差值宏块进行反量化、反整数变换
+      //2. 对单个 4x4 残差值宏块进行反量化、反整数变换（此处后得到一个完整的残差块）
       int32_t r[4][4] = {{0}};
       RET(scaling_and_transformation_process_for_residual_4x4_blocks(
           c, r, isChroma, isChromaCb));
 
-      //3. 当 TransformBypassModeFlag 等于 1，宏块预测模式等于 Intra_4x4，并且 Intra4x4PredMode[ luma4x4BlkIdx ] 等于 0 或 1 时，
-      //使用 nW 设置调用第 8.5.15 节中指定的帧内残差变换旁路解码过程。等于4，nH设置为等于4，horPredFlag设置为等于Intra4x4PredMode[luma4x4BlkIdx]，并且4x4数组r作为输入，并且输出是4x4数组r的修改版本。
+      //3. 当前为变换旁路模式，宏块预测模式 Intra_4x4，且 Intra4x4PredMode[ luma4x4BlkIdx ] 等于 0 或 1 时，
       if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_4x4 &&
           (mb.Intra4x4PredMode[luma4x4BlkIdx] & ~1) == 0)
-        // 8.5.15 Intra residual transform-bypass decoding process
         intra_residual_transform_bypass_decoding(
             4, 4, mb.Intra4x4PredMode[luma4x4BlkIdx], &r[0][0]);
 
-      // 帧内预测
+      //4. 帧内预测
       RET(Intra_4x4_sample_prediction(luma4x4BlkIdx, PicWidthInSamples,
                                       pic_buff, isChroma, BitDepth));
 
-      //4. 宏块内部具有索引 luma4x4BlkIdx 的 4x4 亮度块的左上角样本的位置是通过调用第 6.4.3 节中的逆 4x4 亮度块扫描过程来导出的，其中 luma4x4BlkIdx 作为输入，输出被分配给 ( xO ，yO ）
-      // 6.4.3 Inverse 4x4 luma block scanning process
-      /* 逆 4x4 亮度块扫描过程由下式指定: */
+      //5. 宏块内部具有索引 luma4x4BlkIdx 的 4x4 亮度块的左上角样本的位置是通过调用第 6.4.3 节中的逆 4x4 亮度块扫描过程来导出的，其中 luma4x4BlkIdx 作为输入，输出被分配给 ( xO ，yO ）
+      // 6.4.3 Inverse 4x4 luma block scanning process，逆 4x4 亮度块扫描过程由下式指定:
       int32_t xO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
                    InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
       int32_t yO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
                    InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
 
-      // 5.4x4 数组 u 的元素为 uij，i, j = 0..3 的推导如下：
+      //6. 4x4 数组 u 的元素为 u_{ij}，i, j = 0..3 的推导如下：
       int32_t u[16] = {0};
       for (int32_t i = 0; i < 4; i++)
         for (int32_t j = 0; j < 4; j++) {
@@ -3426,8 +3306,8 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
 }
 
 //8.5.15 Intra residual transform-bypass decoding process( 帧内残差变换-旁路解码过程)
-/* 当TransformBypassModeFlag等于1，宏块预测模式等于Intra_4x4、Intra_8x8或Intra_16x16，并且适用的帧内预测模式等于垂直或水平模式时，调用该过程。 Cb 和 Cr 分量的处理方式与亮度（L 或 Y）分量的处理方式相同。  
- * 输入： – 两个变量 nW 和 nH， – 变量 horPredFlag， – 带有元素 rij 的 (nW)x(nH) 数组 r，它是与亮度分量的残差变换旁路块相关的数组，或者与 Cb 和 Cr 分量的残差变换旁路块相关的数组。  
+/* 当TransformBypassModeFlag等于1，宏块预测模式等于Intra_4x4、Intra_8x8或Intra_16x16，并且适用的帧内预测模式等于垂直或水平模式时，调用该过程。 Cb 和 Cr 分量的处理方式与亮度（L 或 Y）分量的处理方式相同。
+ * 输入： – 两个变量 nW 和 nH， – 变量 horPredFlag， – 带有元素 rij 的 (nW)x(nH) 数组 r，它是与亮度分量的残差变换旁路块相关的数组，或者与 Cb 和 Cr 分量的残差变换旁路块相关的数组。
  * 输出: (nW)x(nH) 数组 r 的修改版本，其中元素 rij 包含帧内残差变换旁路解码过程的结果。 */
 /* TODO YangJing 这个函数未测试过，可能有问题 <24-10-03 19:22:29> */
 int PictureBase::intra_residual_transform_bypass_decoding(int32_t nW,
@@ -3440,22 +3320,20 @@ int PictureBase::intra_residual_transform_bypass_decoding(int32_t nW,
   for (int i = 0; i < nH; i++)
     f[i] = new int32_t[nW];
 
-  for (int32_t i = 0; i <= nH - 1; i++)
-    for (int32_t j = 0; j <= nW - 1; j++)
+  for (int32_t i = 0; i < nH; i++)
+    for (int32_t j = 0; j < nW; j++)
       f[i][j] = r[i * nW + j];
 
-  /* 根据 horPredFlag，以下情况适用： 
-   * – 如果 horPredFlag 等于 0，则修改后的数组 r 通过以下方式导出： */
   if (horPredFlag == 0) {
-    for (int32_t i = 0; i <= nH - 1; i++)
-      for (int32_t j = 0; j <= nW - 1; j++) {
+    for (int32_t i = 0; i < nH; i++)
+      for (int32_t j = 0; j < nW; j++) {
         r[i * nH + j] = 0;
         for (int32_t k = 0; k <= i; k++)
           r[i * nW + j] += f[k][j];
       }
   } else {
-    for (int32_t i = 0; i <= nH - 1; i++)
-      for (int32_t j = 0; j <= nW - 1; j++) {
+    for (int32_t i = 0; i < nH; i++)
+      for (int32_t j = 0; j < nW; j++) {
         r[i * nW + j] = 0;
         for (int32_t k = 0; k <= j; k++)
           r[i * nW + j] += f[i][k];
@@ -3488,16 +3366,16 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
   RET(scaling_and_transformation_for_DC_coeff_for_I16x16(BitDepth, QP1, c,
                                                          dcY));
 
-  /* 分块Zigzag扫描，它按照从左到右、从上到下的顺序依次访问每个2x2子块中的元素，然后再移动到下一个2x2子块: 
-   +-----+-----+-----+-----+
-   |  0  |  1  |  4  |  5  |
-   +-----+-----+-----+-----+
-   |  2  |  3  |  6  |  7  |
-   +-----+-----+-----+-----+
-   |  8  |  9  | 12  | 13  |
-   +-----+-----+-----+-----+
-   | 10  | 11  | 14  | 15  |
-   +-----+-----+-----+-----+ */
+  /* 分块Zigzag扫描，它按照从左到右、从上到下的顺序依次访问每个2x2子块中的元素，然后再移动到下一个2x2子块:
+     +-----+-----+-----+-----+
+     |  0  |  1  |  4  |  5  |
+     +-----+-----+-----+-----+
+     |  2  |  3  |  6  |  7  |
+     +-----+-----+-----+-----+
+     |  8  |  9  | 12  | 13  |
+     +-----+-----+-----+-----+
+     | 10  | 11  | 14  | 15  |
+     +-----+-----+-----+-----+ */
   int32_t dcY_to_luma_index[16] = {
       dcY[0][0], dcY[0][1], dcY[1][0], dcY[1][1], dcY[0][2], dcY[0][3],
       dcY[1][2], dcY[1][3], dcY[2][0], dcY[2][1], dcY[3][0], dcY[3][1],
@@ -3617,7 +3495,7 @@ int PictureBase::transform_decoding_for_chroma_samples(
       m_slice->slice_header->MbaffFrameFlag && mb.mb_field_decoding_flag;
   /* ------------------  End ------------------ */
 
-  /* 根据 ChromaArrayType，以下情况适用： 
+  /* 根据 ChromaArrayType，以下情况适用：
    * — 如果 ChromaArrayType 等于 3，则调用第8.5.5节中指定的 ChromaArrayType 等于 3 的色度样本的变换解码过程。*/
   if (ChromaArrayType == 3)
     // 8.5.5 Specification of transform decoding process for chroma samples with ChromaArrayType equal to 3
@@ -3630,10 +3508,10 @@ int PictureBase::transform_decoding_for_chroma_samples(
     bool iCbCr = (isChromaCb != 1);
     int32_t numChroma4x4Blks = (MbWidthC / 4) * (MbHeightC / 4);
 
-    /* 对于每个色度分量，变换解码按照以下有序步骤单独进行： 
-     * 1. 按照以下有序步骤指定，对由宏块的 iCbCr 索引的分量的 4x4 色度块的 numChroma4x4Blks 色度 DC 变换系数进行解码： 
-       * – 如果 ChromaArrayType 等于 1，则使用应用于 ChromaDCLevel 的逆光栅扫描过程导出 2x2 数组 c，如下所示: 
-       * – 否则（ChromaArrayType 等于 2），将使用应用于 ChromaDCLevel 的逆光栅扫描过程导出 2x4 数组 c，如下所示：
+    /* 对于每个色度分量，变换解码按照以下有序步骤单独进行：
+     * 1. 按照以下有序步骤指定，对由宏块的 iCbCr 索引的分量的 4x4 色度块的 numChroma4x4Blks 色度 DC 变换系数进行解码：
+     * – 如果 ChromaArrayType 等于 1，则使用应用于 ChromaDCLevel 的逆光栅扫描过程导出 2x2 数组 c，如下所示:
+     * – 否则（ChromaArrayType 等于 2），将使用应用于 ChromaDCLevel 的逆光栅扫描过程导出 2x4 数组 c，如下所示：
      * 使用 c 作为输入和 dcC 作为输出来调用第 8.5.11 节中指定的色度 DC 变换系数的缩放和变换过程。*/
     int32_t dcC[4][2] = {{0}};
 
@@ -3752,8 +3630,8 @@ int PictureBase::transform_decoding_for_chroma_samples_with_YUV444(
     int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
 
   /* 根据宏块预测模式和 Transform_size_8x8_flag，适用以下内容：
-   * – 如果宏块预测模式等于 Intra_16x16，则当用 Cb 或 Cr 代替亮度、用 CbIntra16x16DCLevel 或 CrIntra16x16DCLevel 代替 Intra16x16ACLevel 时，Cb 或 Cr 残余块的变换解码过程应与第 8.5.2 节中描述的过程相同用 CbIntra16x16ACLevel 或 CrIntra16x16ACLevel，并将 predL 替换为 predCb 或 predCr，将 luma4x4BlkIdx 替换为 cb4x4BlkIdx 或 cr4x4BlkIdx，将 lumaList 替换为 CbList 或 CrList，将 BitDepthY 替换为 BitDepthC，将 QP'Y 替换为 QP'C，以及 sub将Clip1Y与Clip1C组合。在第 8.5.12.1 节中指定的 4x4 块变换系数级别缩放期间（作为第 8.5.2 节中指定的过程的一部分调用），输入 4x4 数组 c 被视为与使用Intra_16x16 宏块预测模式。  
-   * – 否则，如果transform_size_8x8_flag等于1，则8x8 Cb或8x8 Cr残差块的变换解码过程应与第8.5.3节中描述的过程相同，即用Cb或Cr替换亮度、用CbLevel8x8或CrLevel8x8替换LumaLevel8x8、替换将 predL 替换为 predCb 或 predCr，将 luma8x8BlkIdx 替换为 cb8x8BlkIdx 或 cr8x8BlkIdx，并将 Clip1Y 替换为 Clip1C。  
+   * – 如果宏块预测模式等于 Intra_16x16，则当用 Cb 或 Cr 代替亮度、用 CbIntra16x16DCLevel 或 CrIntra16x16DCLevel 代替 Intra16x16ACLevel 时，Cb 或 Cr 残余块的变换解码过程应与第 8.5.2 节中描述的过程相同用 CbIntra16x16ACLevel 或 CrIntra16x16ACLevel，并将 predL 替换为 predCb 或 predCr，将 luma4x4BlkIdx 替换为 cb4x4BlkIdx 或 cr4x4BlkIdx，将 lumaList 替换为 CbList 或 CrList，将 BitDepthY 替换为 BitDepthC，将 QP'Y 替换为 QP'C，以及 sub将Clip1Y与Clip1C组合。在第 8.5.12.1 节中指定的 4x4 块变换系数级别缩放期间（作为第 8.5.2 节中指定的过程的一部分调用），输入 4x4 数组 c 被视为与使用Intra_16x16 宏块预测模式。
+   * – 否则，如果transform_size_8x8_flag等于1，则8x8 Cb或8x8 Cr残差块的变换解码过程应与第8.5.3节中描述的过程相同，即用Cb或Cr替换亮度、用CbLevel8x8或CrLevel8x8替换LumaLevel8x8、替换将 predL 替换为 predCb 或 predCr，将 luma8x8BlkIdx 替换为 cb8x8BlkIdx 或 cr8x8BlkIdx，并将 Clip1Y 替换为 Clip1C。
    * – 否则（宏块预测模式不等于Intra_16x16且transform_size_8x8_flag等于0），当用Cb或4x4 Cb或4x4 Cr替换亮度时，4x4 Cb或4x4 Cr残差块的变换解码过程应与第8.5.1节中描述的过程相同Cr，用CbLevel4x4或CrLevel4x4替代LumaLevel4x4，用predCb或predCr替代predL，用cb4x4BlkIdx或cr4x4BlkIdx替代luma4x4BlkIdx，以及用Clip1C替代Clip1Y。在第 8.5.12.1 节中指定的 4x4 块变换系数级别缩放期间（作为第 8.5.1 节中指定的过程的一部分调用），输入 4x4 数组 c 被视为与未使用以下方式编码的亮度残差块相关： Intra_16x16 宏块预测模式。*/
 
   const int32_t isChroma = 1;
@@ -3920,7 +3798,7 @@ int PictureBase::
 }
 
 // 8.5.12 Scaling and transformation process for residual 4x4 blocks
-/* 输入: 具有元素cij的4x4数组c，cij是与亮度分量的残差块相关的数组或与色度分量的残差块相关的数组。  
+/* 输入: 具有元素cij的4x4数组c，cij是与亮度分量的残差块相关的数组或与色度分量的残差块相关的数组。
  * 输出: 剩余样本值，为 4x4 数组 r，元素为 rij。*/
 /* 该函数包括了反量化、反整数变换（类IDCT变换）操作 */
 int PictureBase::scaling_and_transformation_process_for_residual_4x4_blocks(
@@ -3938,11 +3816,6 @@ int PictureBase::scaling_and_transformation_process_for_residual_4x4_blocks(
   /* 为色差块计算量化参数 */
   RET(derivation_chroma_quantisation_parameters(isChromaCb));
 
-  /* 变量 qP(量化) 的推导如下： 
-   * – 如果输入数组 c 与亮度残差块相关且 sMbFlag 等于 0，
-   * – 否则，如果输入数组 c 与亮度残差块相关且 sMbFlag 等于 1，
-   * – 否则，如果输入数组 c 与色度残差块相关且 sMbFlag 等于 0，
-   * – 否则（输入数组 c 与色度残差块相关且 sMbFlag 等于 1），*/
   int32_t qP = 0;
   //对于亮度块，根据是否为场景切换，使用对应的量化值
   if (isChroma == 0 && sMbFlag == false)
@@ -3974,9 +3847,9 @@ int PictureBase::scaling_and_transformation_process_for_residual_4x4_blocks(
 }
 
 //8.5.12.1 Scaling process for residual 4x4 blocks
-/* 输入： 
-   * – 变量 bitDepth 和 qP 
-   * – 具有元素 cij 的 4x4 数组 c，它是与亮度分量的残差块相关的数组或与色度分量的残差块相关的数组。  
+/* 输入：
+ * – 变量 bitDepth 和 qP
+ * – 具有元素 cij 的 4x4 数组 c，它是与亮度分量的残差块相关的数组或与色度分量的残差块相关的数组。
  * 输出: 缩放变换系数 d 的 4x4 数组，其中元素为 dij。 */
 // 对残差宏块进行反量化操作
 int PictureBase::scaling_for_residual_4x4_blocks(
@@ -4178,8 +4051,8 @@ int PictureBase::Scaling_and_transformation_process_for_residual_8x8_blocks(
 }
 
 // 8.5.14 Picture construction process prior to deblocking filter process (去块过滤过程之前的图片构造过程)
-/* 输入： 
- * – 包含元素 uij 的样本数组 u，它是 16x16 亮度块或 (MbWidthC)x(MbHeightC) 色度块或 4x4 亮度块或 4x4 色度块或 8x8 亮度块，或者，当 ChromaArrayType等于 3，8x8 色度块， 
+/* 输入：
+ * – 包含元素 uij 的样本数组 u，它是 16x16 亮度块或 (MbWidthC)x(MbHeightC) 色度块或 4x4 亮度块或 4x4 色度块或 8x8 亮度块，或者，当 ChromaArrayType等于 3，8x8 色度块，
  * – 当 u 不是 16x16 亮度块或 (MbWidthC)x(MbHeightC) 色度块时，块索引 luma4x4BlkIdx 或 chroma4x4BlkIdx 或 luma8x8BlkIdx 或 cb4x4BlkIdx 或 cr4x4BlkIdx 或 cb8x8BlkIdx 或idx。*/
 int PictureBase::picture_construction_process_prior_to_deblocking_filter(
     int32_t *u, int32_t nW, int32_t nH, int32_t BlkIdx, int32_t isChroma,
@@ -4202,8 +4075,8 @@ int PictureBase::picture_construction_process_prior_to_deblocking_filter(
                               mb_field_decoding_flag, xP, yP);
 
   /* 当 u 是亮度块时，对于亮度块的每个样本 uij，指定以下有序步骤：
-   * 1. 根据块 u 的大小，适用以下规则： 
-   * – 如果 u 是 16x16 亮度块，则宏块内 16x16 亮度块的左上角样本的位置 ( xO, yO ) 设置为等于 ( 0, 0 ) 且变量 nE 设置为等于 16。 
+   * 1. 根据块 u 的大小，适用以下规则：
+   * – 如果 u 是 16x16 亮度块，则宏块内 16x16 亮度块的左上角样本的位置 ( xO, yO ) 设置为等于 ( 0, 0 ) 且变量 nE 设置为等于 16。
    * – 否则，如果 u 是 4x4 亮度块，则通过调用逆函数导出宏块内索引为 luma4x4BlkIdx 的 4x4 亮度块左上角样本的位置第 6.4.3 节中的 4x4 亮度块扫描过程，以 luma4x4BlkIdx 作为输入，输出分配给 ( xO, yO )，变量 nE 设置为等于 4。
    * – 否则（u 是 8x8 亮度块），位置宏块内部具有索引 luma8x8BlkIdx 的 8x8 亮度块的左上角样本是通过调用第 6.4.5 节中的逆 8x8 亮度块扫描过程而导出的，其中 luma8x8BlkIdx 作为输入，输出分配给 ( xO, yO )，并且变量 nE 设置为等于 8。*/
   if (isChroma == 0) {
@@ -4224,8 +4097,8 @@ int PictureBase::picture_construction_process_prior_to_deblocking_filter(
       nE = 8;
     }
 
-    /* 2. 根据变量 MbaffFrameFlag 和当前宏块，以下情况适用： 
-     * – 如果 MbaffFrameFlag 等于 1 并且当前宏块是场宏块，则 S′L[ xP + xO + j, yP + 2 * ( yO + i ) ] = uij 其中 i, j = 0..nE − 1 
+    /* 2. 根据变量 MbaffFrameFlag 和当前宏块，以下情况适用：
+     * – 如果 MbaffFrameFlag 等于 1 并且当前宏块是场宏块，则 S′L[ xP + xO + j, yP + 2 * ( yO + i ) ] = uij 其中 i, j = 0..nE − 1
      * – 否则（MbaffFrameFlag 等于 0 或当前宏块是帧宏块），S′L[ xP + xO + j, yP + yO + i ] = uij 其中 i, j = 0..nE − 1 */
     if (MbaffFrameFlag && mb_field_decoding_flag) {
       for (int32_t i = 0; i <= nE - 1; i++)
@@ -4244,13 +4117,13 @@ int PictureBase::picture_construction_process_prior_to_deblocking_filter(
     }
   }
 
-  /* 当 u 是色度块时，对于色度块的每个样本 uij，指定以下有序步骤： 
+  /* 当 u 是色度块时，对于色度块的每个样本 uij，指定以下有序步骤：
    * 1. 对于 Cb 色度分量，将变量 S'C 中的下标 C 替换为 Cb;
    *    对于 Cr 色度分量，将变量 S'C 中的下标 C 替换为 Cr成分。
-   * 2. 根据块 u 的大小，适用以下规则： 
-   *    – 如果 u 是 (MbWidthC)x(MbHeightC) Cb 或 Cr 块，则变量 nW 设置为等于 MbWidthC，变量 nH 设置为等于 MbHeightC，并且宏块内的(nW)x(nH) Cb或Cr块的左上角样本的位置(xO,yO)被设置为等于(0,0)。  
+   * 2. 根据块 u 的大小，适用以下规则：
+   *    – 如果 u 是 (MbWidthC)x(MbHeightC) Cb 或 Cr 块，则变量 nW 设置为等于 MbWidthC，变量 nH 设置为等于 MbHeightC，并且宏块内的(nW)x(nH) Cb或Cr块的左上角样本的位置(xO,yO)被设置为等于(0,0)。
    *    – 否则，如果 u 是 4x4 Cb 或 Cr 块，则变量 nW 和 nH 设置为等于 4，并且根据变量 ChromaArrayType，内部具有索引 chroma4x4BlkIdx 的 4x4 Cb 或 Cr 块的左上角样本的位置宏块的推导如下：
-   *         – 如果 ChromaArrayType 等于 1 或 2，则宏块内索引为 chroma4x4BlkIdx 的 4x4 色度块左上角样本的位置是通过调用第 6.4.7 节中的逆 4x4 色度块扫描过程（以 chroma4x4BlkIdx 作为输入）得出的并将输出分配给 ( xO, yO )。  
+   *         – 如果 ChromaArrayType 等于 1 或 2，则宏块内索引为 chroma4x4BlkIdx 的 4x4 色度块左上角样本的位置是通过调用第 6.4.7 节中的逆 4x4 色度块扫描过程（以 chroma4x4BlkIdx 作为输入）得出的并将输出分配给 ( xO, yO )。
    *         – 否则（ChromaArrayType 等于 3），宏块内索引为 cb4x4BlkIdx 的 4x4 Cb 块或索引为 cr4x4BlkIdx 的 4x4 Cr 块的左上角样本的位置是通过调用逆 4x4 Cb 或 Cr 块扫描过程得出的在第 6.4.4 节中，以 cb4x4BlkIdx 或 cr4x4BlkIdx 作为输入，并将输出分配给 ( xO, yO )。
    *    – 否则（当 ChromaArrayType 等于 3 时，u 是 8x8 Cb 或 Cr 块），变量 nW 和 nH 设置为等于 8，并且索引为 cb8x8BlkIdx 的 8x8 Cb 块或带有索引的 Cr 块的左上角样本的位置宏块内的索引 cr8x8BlkIdx 是通过调用第 6.4.6 节中的逆 8x8 Cb 或 Cr 块扫描过程来导出的，其中 cb8x8BlkIdx 或 cr8x8BlkIdx 作为输入，输出分配给 ( xO, yO )。*/
   else if (isChroma) {
@@ -4275,7 +4148,7 @@ int PictureBase::picture_construction_process_prior_to_deblocking_filter(
       yO = InverseRasterScan(BlkIdx, 8, 8, 16, 1);
     }
 
-    /* 3. 根据变量 MbaffFrameFlag 和当前宏块，以下情况适用： 
+    /* 3. 根据变量 MbaffFrameFlag 和当前宏块，以下情况适用：
      * – 如果 MbaffFrameFlag 等于 1 并且当前宏块是场宏块
      * – 否则（MbaffFrameFlag等于0或当前宏块是帧宏块）*/
     if (MbaffFrameFlag && mb_field_decoding_flag) {
@@ -4498,7 +4371,7 @@ int PictureBase::inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
 }
 
 // 8.5.8 Derivation process for chroma quantisation parameters (色度量化参数的推导过程)
-/* 输出： – QPC：每个色度分量 Cb 和 Cr 的色度量化参数， 
+/* 输出： – QPC：每个色度分量 Cb 和 Cr 的色度量化参数，
  * – QSC：解码 SP 和 SI 切片所需的每个色度分量 Cb 和 Cr 的附加色度量化参数（如果适用）*/
 /* TODO YangJing 记得看 <24-10-03 21:02:25> */
 int PictureBase::derivation_chroma_quantisation_parameters(int32_t isChromaCb) {
@@ -4593,8 +4466,8 @@ int PictureBase::get_chroma_quantisation_parameters2(int32_t QPY,
 }
 
 // 8.5.9 Derivation process for scaling functions
-/*  输出为： 
- *  – LevelScale4x4：4x4 块变换亮度或色度系数级别的缩放因子; 
+/*  输出为：
+ *  – LevelScale4x4：4x4 块变换亮度或色度系数级别的缩放因子;
  *  – LevelScale8x8：8x8 块变换亮度或色度系数级别的缩放因子; */
 int PictureBase::scaling_functions(int32_t isChroma, int32_t isChromaCb) {
 
