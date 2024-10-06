@@ -194,19 +194,19 @@ class PictureBase {
   int getIntra8x8PredMode(int32_t luma8x8BlkIdx, int32_t &currMbAddrPredMode,
                           int32_t isChroma);
   //----------------- 帧内预测算法(Luma) ------------------------
-  int Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
+  int intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
                                   int32_t PicWidthInSamples,
                                   uint8_t *pic_buff_luma_pred, int32_t isChroma,
                                   int32_t BitDepth);
-  int Intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
+  int intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
                                   int32_t PicWidthInSamples,
                                   uint8_t *pic_buff_luma_pred, int32_t isChroma,
                                   int32_t BitDepth);
-  int Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
+  int intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
                                     int32_t PicWidthInSamples, int32_t isChroma,
                                     int32_t BitDepth);
   //----------------- 帧内预测算法(Chroma) ------------------------
-  int Intra_chroma_sample_prediction(uint8_t *pic_buff_chroma_pred,
+  int intra_chroma_sample_prediction(uint8_t *pic_buff_chroma_pred,
                                      int32_t PicWidthInSamples);
   int Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
       uint8_t *pic_buff_chroma_pred, int32_t PicWidthInSamples);

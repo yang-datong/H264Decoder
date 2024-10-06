@@ -141,11 +141,10 @@ int PictureBase::transform_decoding_for_8x8_luma_residual_blocks_inter(
     int32_t c[8][8] = {{0}};
     int32_t r[8][8] = {{0}};
 
-    ret =
-        inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
-            Level8x8[luma8x8BlkIdx], c,
-            m_mbs[CurrMbAddr].field_pic_flag |
-                m_mbs[CurrMbAddr].mb_field_decoding_flag);
+    ret = inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
+        Level8x8[luma8x8BlkIdx], c,
+        m_mbs[CurrMbAddr].field_pic_flag |
+            m_mbs[CurrMbAddr].mb_field_decoding_flag);
     RETURN_IF_FAILED(ret != 0, ret);
 
     ret = Scaling_and_transformation_process_for_residual_8x8_blocks(
@@ -413,16 +412,14 @@ int PictureBase::transform_decoding_for_chroma_samples_inter(
 // This process is invoked when decoding P and B macroblock types.
 /* 该过程的输出是当前宏块的帧间预测样本，它们是亮度样本的 16x16 数组 predL，并且当 ChromaArrayType 不等于 0 时，是色度样本的两个 (MbWidthC)x(MbHeightC) 数组 predCb 和 predCr，每个数组对应一个色度分量 Cb 和 Cr。*/
 int PictureBase::inter_prediction_process() {
-  const SliceHeader *header = m_slice->slice_header;
-  const uint32_t ChromaArrayType =
-      m_slice->slice_header->m_sps->ChromaArrayType;
-  const int32_t SubHeightC = m_slice->slice_header->m_sps->SubHeightC;
-  const int32_t SubWidthC = m_slice->slice_header->m_sps->SubWidthC;
   MacroBlock &mb = m_mbs[CurrMbAddr];
+  const SliceHeader *header = m_slice->slice_header;
+  const uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
+  const int32_t SubHeightC = header->m_sps->SubHeightC;
+  const int32_t SubWidthC = header->m_sps->SubWidthC;
 
   /* 宏块部分数量，指示当前宏块被划分成的部分数量 */
   int32_t NumMbPart = 0, NumSubMbPart = 0;
-  int ret;
 
   /* 宏块的划分由mb_type指定。每个宏块分区由 mbPartIdx 引用。当宏块划分由等于子宏块的分区组成时，每个子宏块可以进一步划分为由sub_mb_type[mbPartIdx]指定的子宏块分区。每个子宏块分区由 subMbPartIdx 引用。当宏块划分不由子宏块组成时，subMbPartIdx设置为等于0。 */
 
@@ -431,8 +428,8 @@ int PictureBase::inter_prediction_process() {
    * – 否则（mb_type 不等于 B_Skip 或 B_Direct_16x16），mbPartIdx 将继续执行值 0..NumMbPart( mb_type ) − 1。*/
   if (mb.m_name_of_mb_type == B_Skip || mb.m_name_of_mb_type == B_Direct_16x16)
     NumMbPart = 4;
+  /* mb.m_NumMbPart已经在macroblock_mb_skip(对于B、P帧）或macroblock_layer(对于I、SI帧）函数计算过 */
   else
-    /* mb.m_NumMbPart已经在macroblock_mb_skip(对于B、P帧）或macroblock_layer(对于I、SI帧）函数计算过 */
     NumMbPart = mb.m_NumMbPart;
 
   /* NOTE:大部分情况来说NumMbPart取值 1,4：
@@ -448,10 +445,9 @@ int PictureBase::inter_prediction_process() {
     /* 注意，如果宏块没有被划分为子宏块，同样也是在这里处理 */
 
     /* 据宏块类型和其他参数，设置宏块的预测模式。这一步决定了如何对宏块进行预测和解码 */
-    ret = MacroBlock::SubMbPredMode(
-        header->slice_type, mb.sub_mb_type[mbPartIdx], NumSubMbPart,
-        SubMbPredMode, SubMbPartWidth, SubMbPartHeight);
-    RET(ret);
+    RET(MacroBlock::SubMbPredMode(header->slice_type, mb.sub_mb_type[mbPartIdx],
+                                  NumSubMbPart, SubMbPredMode, SubMbPartWidth,
+                                  SubMbPartHeight));
 
     /* NOTE: 这里设计到了一个直接模式：没有显式编码运动矢量，通过周围块的信息来推导运动矢量。 */
 
@@ -525,10 +521,9 @@ int PictureBase::inter_prediction_process() {
 
       //1. 调用第8.4.1节中指定的运动矢量分量和参考索引的推导过程。
       //8.4.1 Derivation process for motion vector components and reference indices
-      ret = derivation_motion_vector_components_and_reference_indices(
+      RET(derivation_motion_vector_components_and_reference_indices(
           mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, mvCL0, mvCL1,
-          subMvCnt, predFlagL0, predFlagL1, refPicL0, refPicL1);
-      RETURN_IF_FAILED(ret != 0, ret);
+          subMvCnt, predFlagL0, predFlagL1, refPicL0, refPicL1));
 
       //2. 变量MvCnt 增加subMvCnt。
       //TODO 为什么不加？ <24-09-04 14:28:25, YangJing>
@@ -548,11 +543,10 @@ int PictureBase::inter_prediction_process() {
         // 8.4.3 Derivation process for prediction weights
         /* 输入  参考索引 refIdxL0 和 refIdxL1 ,预测列表利用标志 predFlagL0 和 predFlagL1 */
         /* 输出: 加权预测logWDC、w0C、w1C、o0C、o1C的变量，其中C被L替换，并且当ChromaArrayType不等于0时，是Cb和Cr。*/
-        ret = derivation_prediction_weights(
-            refIdxL0, refIdxL1, predFlagL0, predFlagL1, logWDL, w0L, w1L, o0L,
-            o1L, logWDCb, w0Cb, w1Cb, o0Cb, o1Cb, logWDCr, w0Cr, w1Cr, o0Cr,
-            o1Cr);
-        RET(ret);
+        RET(derivation_prediction_weights(refIdxL0, refIdxL1, predFlagL0,
+                                          predFlagL1, logWDL, w0L, w1L, o0L,
+                                          o1L, logWDCb, w0Cb, w1Cb, o0Cb, o1Cb,
+                                          logWDCr, w0Cr, w1Cr, o0Cr, o1Cr));
       }
 
       /* 宏块分区的左上样本相对于宏块的左上样本的位置是通过调用第 6.4.2.1 节中描述的逆宏块分区扫描过程来导出的，其中 mbPartIdx 作为输入和 ( xP, yP )作为输出*/
@@ -575,18 +569,17 @@ int PictureBase::inter_prediction_process() {
       uint8_t predPartCb[16 * 16] = {0};
       uint8_t predPartCr[16 * 16] = {0};
 
-      if (header->MbaffFrameFlag == 1 && mb.mb_field_decoding_flag == 1)
+      if (header->MbaffFrameFlag && mb.mb_field_decoding_flag)
         yAL = (mb.m_mb_position_y / 2 + (yP + yS));
 
       // 8.4.2 Decoding process for Inter prediction samples
       //* 输出：帧间预测样本predPart，它们是预测亮度样本的(partWidth)x(partHeight)数组predPartL，并且当ChromaArrayType不等于0时，预测的两个(partWidthC)x(partHeightC)数组predPartCb、predPartCr色度样本，每个色度分量 Cb 和 Cr 各一个。 */
-      ret = decoding_Inter_prediction_samples(
+      RET(decoding_Inter_prediction_samples(
           mbPartIdx, subMbPartIdx, partWidth, partHeight, partWidthC,
           partHeightC, xAL, yAL, mvL0, mvL1, mvCL0, mvCL1, refPicL0, refPicL1,
           predFlagL0, predFlagL1, logWDL, w0L, w1L, o0L, o1L, logWDCb, w0Cb,
           w1Cb, o0Cb, o1Cb, logWDCr, w0Cr, w1Cr, o0Cr, o1Cr, predPartL,
-          predPartCb, predPartCr);
-      RET(ret);
+          predPartCb, predPartCr));
 
       /* 为了在解码过程中稍后调用的变量的导出过程中使用，进行以下分配： */
       mb.m_MvL0[mbPartIdx][subMbPartIdx][0] = mvL0[0];

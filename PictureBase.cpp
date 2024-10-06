@@ -5,7 +5,6 @@
 #include "SliceHeader.hpp"
 #include "Type.hpp"
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <cstring>
 
@@ -926,7 +925,7 @@ int PictureBase::getIntra8x8PredMode(int32_t luma8x8BlkIdx,
 
 // 8.3.1 Intra_4x4 prediction process for luma samples
 // 8.3.1.2 Intra_4x4 sample prediction
-int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
+int PictureBase::intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
                                              int32_t PicWidthInSamples,
                                              uint8_t *pic_buff_luma_pred,
                                              int32_t isChroma,
@@ -1192,7 +1191,7 @@ int PictureBase::Intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
 }
 
 // 8.3.2.2 Intra_8x8 sample prediction (8.3.2 Intra_8x8 prediction process for luma sampless)
-int PictureBase::Intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
+int PictureBase::intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
                                              int32_t PicWidthInSamples,
                                              uint8_t *pic_buff_luma_pred,
                                              int32_t isChroma,
@@ -1512,7 +1511,7 @@ int PictureBase::Intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
 }
 
 // 8.3.3 Intra_16x16 prediction process for luma samples
-int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
+int PictureBase::intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
                                                int32_t PicWidthInSamples,
                                                int32_t isChroma,
                                                int32_t BitDepth) {
@@ -1691,7 +1690,7 @@ int PictureBase::Intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
 }
 
 // 8.3.4 Intra prediction process for chroma samples
-int PictureBase::Intra_chroma_sample_prediction(uint8_t *pic_buff_chroma_pred,
+int PictureBase::intra_chroma_sample_prediction(uint8_t *pic_buff_chroma_pred,
                                                 int32_t PicWidthInSamples) {
   if (m_slice->slice_header->m_sps->ChromaArrayType == 3)
     return Intra_chroma_sample_prediction_for_YUV444(pic_buff_chroma_pred,
@@ -2067,7 +2066,7 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV444(
     // pred4x4Cr, and substituting BitDepthY with BitDepthC.
     for (int32_t chroma4x4BlkIdx = 0; chroma4x4BlkIdx < 16; chroma4x4BlkIdx++) {
       ret =
-          Intra_4x4_sample_prediction(chroma4x4BlkIdx, PicWidthInSamples,
+          intra_4x4_sample_prediction(chroma4x4BlkIdx, PicWidthInSamples,
                                       pic_buff_chroma_pred, isChroma, BitDepth);
       RETURN_IF_FAILED(ret != 0, ret);
     }
@@ -2088,7 +2087,7 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV444(
 
     for (int32_t chroma4x4BlkIdx = 0; chroma4x4BlkIdx < 4; chroma4x4BlkIdx++) {
       ret =
-          Intra_8x8_sample_prediction(chroma4x4BlkIdx, PicWidthInSamples,
+          intra_8x8_sample_prediction(chroma4x4BlkIdx, PicWidthInSamples,
                                       pic_buff_chroma_pred, isChroma, BitDepth);
       RETURN_IF_FAILED(ret != 0, ret);
     }
@@ -2098,7 +2097,7 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV444(
     // substituting predL with predCb or predCr, and substituting BitDepthY with
     // BitDepthC.
 
-    ret = Intra_16x16_sample_prediction(pic_buff_chroma_pred, PicWidthInSamples,
+    ret = intra_16x16_sample_prediction(pic_buff_chroma_pred, PicWidthInSamples,
                                         isChroma, BitDepth);
     RETURN_IF_FAILED(ret != 0, ret);
   } else {
@@ -2114,50 +2113,35 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV444(
 // 8.3.5 Sample construction process for I_PCM macroblocks
 // This process is invoked when mb_type is equal to I_PCM.
 int PictureBase::Sample_construction_process_for_I_PCM_macroblocks() {
-  int32_t i = 0;
-  int32_t dy = 0;
+  /* ------------------ 设置别名 ------------------ */
+  const MacroBlock &mb = m_mbs[CurrMbAddr];
+  const SliceHeader *header = m_slice->slice_header;
 
-  if (m_slice->slice_header->MbaffFrameFlag == 1 &&
-      m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
-    dy = 2;
-  else // MbaffFrameFlag is equal to 0 or the current macroblock is a frame macroblock
-    dy = 1;
+  bool MbaffFrameFlag = header->MbaffFrameFlag;
+  bool isMbAff = MbaffFrameFlag && mb.mb_field_decoding_flag;
 
-  int32_t xP = 0;
-  int32_t yP = 0;
+  int32_t SubWidthC = header->m_sps->SubWidthC;
+  int32_t SubHeightC = header->m_sps->SubHeightC;
+  uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
+  /* ------------------  End ------------------ */
 
   // 6.4.1 Inverse macroblock scanning processy
-  inverse_mb_scanning_process(m_slice->slice_header->MbaffFrameFlag, CurrMbAddr,
-                              m_mbs[CurrMbAddr].mb_field_decoding_flag, xP, yP);
+  int32_t xP = 0, yP = 0;
+  inverse_mb_scanning_process(MbaffFrameFlag, CurrMbAddr,
+                              mb.mb_field_decoding_flag, xP, yP);
 
-  //--------------------------------------
-  for (i = 0; i < 256; ++i) {
-    // S′L[ xP + ( i % 16 ), yP + dy * ( i / 16 ) ) ] = pcm_sample_luma[ i ];
+  int32_t dy = (isMbAff) ? 2 : 1;
+  for (int i = 0; i < 256; ++i)
     m_pic_buff_luma[(yP + dy * (i / 16)) * PicWidthInSamplesL +
-                    (xP + (i % 16))] = m_mbs[CurrMbAddr].pcm_sample_luma[i];
-  }
+                    (xP + (i % 16))] = mb.pcm_sample_luma[i];
 
-  if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-    int32_t &SubWidthC = m_slice->slice_header->m_sps->SubWidthC;
-    int32_t &SubHeightC = m_slice->slice_header->m_sps->SubHeightC;
-
-    for (i = 0; i < (int32_t)(MbWidthC * MbHeightC); ++i) {
-      // S′Cb[ ( xP / SubWidthC ) + ( i % MbWidthC ), ( ( yP + SubHeightC − 1 )
-      // / SubHeightC ) + dy * ( i / MbWidthC ) ] = pcm_sample_chroma[ i ]
-      m_pic_buff_cb[(((yP + SubHeightC - 1) / SubHeightC) +
-                     dy * (i / MbWidthC)) *
-                        PicWidthInSamplesC +
-                    ((xP / SubWidthC) + (i % MbWidthC))] =
-          m_mbs[CurrMbAddr].pcm_sample_chroma[i];
-
-      // S′Cr[ ( xP / SubWidthC ) + ( i % MbWidthC ), ( ( yP + SubHeightC − 1 )
-      // / SubHeightC ) + dy * ( i / MbWidthC ) ] = pcm_sample_chroma[ i +
-      // MbWidthC * MbHeightC ]
-      m_pic_buff_cr[(((yP + SubHeightC - 1) / SubHeightC) +
-                     dy * (i / MbWidthC)) *
-                        PicWidthInSamplesC +
-                    ((xP / SubWidthC) + (i % MbWidthC))] =
-          m_mbs[CurrMbAddr].pcm_sample_chroma[i + MbWidthC * MbHeightC];
+  if (ChromaArrayType != 0) {
+    for (int32_t i = 0; i < (int32_t)(MbWidthC * MbHeightC); ++i) {
+      int32_t y = (yP + SubHeightC - 1) / SubHeightC + dy * (i / MbWidthC);
+      int32_t x = xP / SubWidthC + (i % MbWidthC);
+      m_pic_buff_cb[y * PicWidthInSamplesC + x] = mb.pcm_sample_chroma[i];
+      m_pic_buff_cr[y * PicWidthInSamplesC + x] =
+          mb.pcm_sample_chroma[i + MbWidthC * MbHeightC];
     }
   }
 
@@ -3005,7 +2989,7 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
             4, 4, mb.Intra4x4PredMode[luma4x4BlkIdx], &r[0][0]);
 
       //4. 帧内预测
-      RET(Intra_4x4_sample_prediction(luma4x4BlkIdx, PicWidthInSamples,
+      RET(intra_4x4_sample_prediction(luma4x4BlkIdx, PicWidthInSamples,
                                       pic_buff, isChroma, BitDepth));
 
       //5. 宏块内部具有索引 luma4x4BlkIdx 的 4x4 亮度块的左上角样本的位置是通过调用第 6.4.3 节中的逆 4x4 亮度块扫描过程来导出的，其中 luma4x4BlkIdx 作为输入，输出被分配给 ( xO ，yO ）
@@ -3140,7 +3124,7 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
     intra_residual_transform_bypass_decoding(16, 16, mb.Intra16x16PredMode,
                                              &rMb[0][0]);
 
-  RET(Intra_16x16_sample_prediction(pic_buff, PicWidthInSamples, isChroma,
+  RET(intra_16x16_sample_prediction(pic_buff, PicWidthInSamples, isChroma,
                                     BitDepth));
 
   int32_t u[16 * 16] = {0};
@@ -3188,7 +3172,7 @@ int PictureBase::transform_decoding_for_8x8_luma_residual_blocks(
       intra_residual_transform_bypass_decoding(
           8, 8, mb.Intra8x8PredMode[luma8x8BlkIdx], &r[0][0]);
 
-    RET(Intra_8x8_sample_prediction(luma8x8BlkIdx, PicWidthInSamples, pic_buff,
+    RET(intra_8x8_sample_prediction(luma8x8BlkIdx, PicWidthInSamples, pic_buff,
                                     isChroma, BitDepth));
 
     int32_t xO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 0);
@@ -3327,7 +3311,7 @@ int PictureBase::transform_decoding_for_chroma_samples(
     }
 
     //帧内预测
-    ret = Intra_chroma_sample_prediction(pic_buff, PicWidthInSamples);
+    ret = intra_chroma_sample_prediction(pic_buff, PicWidthInSamples);
     RETURN_IF_FAILED(ret != 0, ret);
 
     /* 4. 对于 i = 0..MbHeightC − 1 和 j = 0..MbWidthC − 1，元素 uij 的 (MbWidthC)x(MbHeightC) 数组 u 的推导如下： */
