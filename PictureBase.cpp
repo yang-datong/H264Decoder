@@ -2893,6 +2893,7 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
 
   /* 当当前宏块预测模式不等于Intra_16x16时，变量LumaLevel4x4包含亮度变换系数的级别。对于由 luma4x4BlkIdx = 0..15 索引的 4x4 亮度块，指定以下有序步骤： */
   if (mb.m_mb_pred_mode != Intra_16x16) {
+    /* 初始化缩放举证因子 */
     RET(scaling_functions(isChroma, isChromaCb));
 
     // 以4x4宏块为单位，遍历亮度块
@@ -3043,18 +3044,18 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
   bool isMbAff =
       m_slice->slice_header->MbaffFrameFlag && mb.mb_field_decoding_flag;
   /* ------------------  End ------------------ */
-
   RET(scaling_functions(isChroma, 0));
 
-  //1. 使用 Intra16x16DCLevel 作为输入和二维数组 c 作为输出来调用第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程(Zigzag scan)。
+  // -------------------- 单独处理DC系数矩阵的第二层量化、变换 --------------------
+
+  // 按Zigzag扫描顺序，将单个 4x4 DC残差值宏块(一维数组）放入二维数组c中，注意这里是DC系数矩阵
   int32_t c[4][4] = {{0}};
   RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
       Intra16x16DCLevel, c, mb.field_pic_flag | mb.mb_field_decoding_flag));
 
-  //2. 使用 BitDepth、QP' 和 c 作为输入以及 dcY 作为输出来调用第 8.5.10 节中指定的 Intra_16x16 宏块类型的亮度 DC 变换系数的缩放和变换过程
+  // 对单个 4x4 DC残差值宏块进行逆整数变换、反量化（这里的顺序相反，此处后得到一个完整的残差块），第二层的量化、变换
   int32_t dcY[4][4] = {{0}};
-  RET(scaling_and_transformation_for_DC_coeff_for_I16x16(BitDepth, QP1, c,
-                                                         dcY));
+  RET(scaling_and_transform_for_DC_Intra16x16(BitDepth, QP1, c, dcY));
 
   /* 分块Zigzag扫描，它按照从左到右、从上到下的顺序依次访问每个2x2子块中的元素，然后再移动到下一个2x2子块:
      +-----+-----+-----+-----+
@@ -3074,12 +3075,16 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
 
   //------------------ 下面与transform_decoding_for_4x4_luma_residual_blocks()是一样的逻辑 ------------------
   int32_t rMb[16][16] = {{0}};
-  for (int32_t _4x4BlkIdx = 0; _4x4BlkIdx < 16; _4x4BlkIdx++) {
+  for (int32_t luma4x4BlkIdx = 0; luma4x4BlkIdx < 16; luma4x4BlkIdx++) {
+    /* 合并DC、AC分量：将DC分量放到4x4块的首个样本中（此时DC系数已经得到完整的残差值，不需要进行反量化、逆变换，将剩余的15个AC分量同样放到4x4块中 */
     int32_t lumaList[16] = {0};
-    lumaList[0] = dcY_to_luma_index[_4x4BlkIdx];
-    for (int32_t k = 1; k < 16; k++)
-      lumaList[k] = Intra16x16ACLevel[_4x4BlkIdx][k - 1];
+    lumaList[0] = dcY_to_luma_index[luma4x4BlkIdx];
 
+    //跳过首个样本，由于分开存储DC，AC这里的DC实际上是0
+    for (int32_t k = 1; k < 16; k++)
+      lumaList[k] = Intra16x16ACLevel[luma4x4BlkIdx][k - 1];
+
+    // 以4x4宏块为单位，遍历亮度块
     int32_t c[4][4] = {{0}};
     RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
         lumaList, c, mb.field_pic_flag | mb.mb_field_decoding_flag));
@@ -3087,10 +3092,10 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
     int32_t r[4][4] = {{0}};
     RET(scaling_and_transform_for_residual_4x4_blocks(c, r, 0, 0));
 
-    int32_t xO = InverseRasterScan(_4x4BlkIdx / 4, 8, 8, 16, 0) +
-                 InverseRasterScan(_4x4BlkIdx % 4, 4, 4, 8, 0);
-    int32_t yO = InverseRasterScan(_4x4BlkIdx / 4, 8, 8, 16, 1) +
-                 InverseRasterScan(_4x4BlkIdx % 4, 4, 4, 8, 1);
+    int32_t xO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
+                 InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
+    int32_t yO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
+                 InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
 
     for (int32_t i = 0; i < 4; i++)
       for (int32_t j = 0; j < 4; j++)
@@ -3125,20 +3130,19 @@ int PictureBase::transform_decoding_for_chroma_samples(
     int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
   /* ------------------ 设置别名 ------------------ */
   const MacroBlock &mb = m_mbs[CurrMbAddr];
-  const uint32_t ChromaArrayType =
-      m_slice->slice_header->m_sps->ChromaArrayType;
-  bool isMbAff =
-      m_slice->slice_header->MbaffFrameFlag && mb.mb_field_decoding_flag;
+  const SliceHeader *header = m_slice->slice_header;
+  const uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
+  bool isMbAff = header->MbaffFrameFlag && mb.mb_field_decoding_flag;
+  uint32_t BitDepthC = header->m_sps->BitDepthC;
   /* ------------------  End ------------------ */
 
-  /* 根据 ChromaArrayType，以下情况适用：
-   * — 如果 ChromaArrayType 等于 3，则调用第8.5.5节中指定的 ChromaArrayType 等于 3 的色度样本的变换解码过程。*/
+  /* YUV444 */
   if (ChromaArrayType == 3) {
     // 8.5.5 Specification of transform decoding process for chroma samples with ChromaArrayType equal to 3
     RET(transform_decoding_for_chroma_samples_with_YUV444(
         isChromaCb, PicWidthInSamples, pic_buff));
 
-    /* – 否则（ChromaArrayType不等于3），以下文本指定色度样本的变换解码过程：*/
+    /* YUV420,YUV422 */
   } else {
     //对于每个色度分量，变量 ChromaDCLevel[ iCbCr ] 和 ChromaACLevel[ iCbCr ]（其中 Cb 的 iCbCr 设置为 0，Cr 的 iCbCr 设置为 1）包含色度变换系数的两个分量的级别。  将变量 numChroma4x4Blks 设置为等于 (MbWidthC / 4) * (MbHeightC / 4)。
     bool iCbCr = (isChromaCb != 1);
@@ -3151,28 +3155,22 @@ int PictureBase::transform_decoding_for_chroma_samples(
      * 使用 c 作为输入和 dcC 作为输出来调用第 8.5.11 节中指定的色度 DC 变换系数的缩放和变换过程。*/
     int32_t dcC[4][2] = {{0}};
 
-    int32_t w = 0, h = 0;
-    int32_t c[4][2] = {{0}};
-    /* NOTE:对于YUV420，会浪费c[2][2]的内存空间 */
-    if (ChromaArrayType == 1) {
-      // YUV420
-      w = 2, h = 2;
-      c[0][0] = mb.ChromaDCLevel[iCbCr][0];
-      c[0][1] = mb.ChromaDCLevel[iCbCr][1];
-      c[1][0] = mb.ChromaDCLevel[iCbCr][2];
-      c[1][1] = mb.ChromaDCLevel[iCbCr][3];
-    } else if (ChromaArrayType == 2) {
-      // YUV422
-      w = 2, h = 4;
-      c[0][0] = mb.ChromaDCLevel[iCbCr][0];
-      c[0][1] = mb.ChromaDCLevel[iCbCr][1];
-      c[1][0] = mb.ChromaDCLevel[iCbCr][2];
-      c[1][1] = mb.ChromaDCLevel[iCbCr][3];
+    // YUV420
+    int32_t w = 2, h = 2, c[4][2] = {{0}};
+    c[0][0] = mb.ChromaDCLevel[iCbCr][0];
+    c[0][1] = mb.ChromaDCLevel[iCbCr][1];
+    c[1][0] = mb.ChromaDCLevel[iCbCr][2];
+    c[1][1] = mb.ChromaDCLevel[iCbCr][3];
+
+    // YUV422
+    if (ChromaArrayType == 2) {
+      h = 4;
       c[2][0] = mb.ChromaDCLevel[iCbCr][4];
       c[2][1] = mb.ChromaDCLevel[iCbCr][5];
       c[3][0] = mb.ChromaDCLevel[iCbCr][6];
       c[3][1] = mb.ChromaDCLevel[iCbCr][7];
     }
+
     // 8.5.11 Scaling and transformation process for chroma DC transform
     RET(scaling_and_transform_for_chroma_DC_transform_coefficients(
         isChromaCb, c, w, h, dcC));
@@ -3241,8 +3239,7 @@ int PictureBase::transform_decoding_for_chroma_samples(
                     (mb.m_mb_position_y % 2) + i * (1 + isMbAff);
         int32_t x = (mb.m_mb_position_x >> 4) * MbWidthC + j;
         u[i * MbHeightC + j] =
-            Clip1C(pic_buff[y * PicWidthInSamples + x] + rMb[i][j],
-                   m_slice->slice_header->m_sps->BitDepthC);
+            Clip1C(pic_buff[y * PicWidthInSamples + x] + rMb[i][j], BitDepthC);
       }
     }
 
@@ -3474,6 +3471,55 @@ int PictureBase::scaling_and_transform_for_residual_4x4_blocks(
   return 0;
 }
 
+// 8.5.10 Scaling and transformation process for DC transform coefficients for Intra_16x16 macroblock type
+int PictureBase::scaling_and_transform_for_DC_Intra16x16(int32_t bitDepth,
+                                                         int32_t qP,
+                                                         int32_t c[4][4],
+                                                         int32_t (&dcY)[4][4]) {
+
+  if (m_mbs[CurrMbAddr].TransformBypassModeFlag) {
+    for (int32_t i = 0; i < 4; i++)
+      for (int32_t j = 0; j < 4; j++)
+        dcY[i][j] = c[i][j];
+  } else {
+    // The inverse transform for the 4x4 luma DC transform coefficients
+    // 4x4 luma亮度直流系数反变换
+    //            | 1   1   1   1 |   | c00 c01 c02 c03 |   | 1   1   1   1 |
+    //  f[4][4] = | 1   1  -1  -1 | * | c10 c11 c12 c13 | * | 1   1  -1  -1 |
+    //            | 1  -1  -1   1 |   | c20 c21 c22 c23 |   | 1  -1  -1   1 |
+    //            | 1  -1   1  -1 |   | c30 c31 c32 c33 |   | 1  -1   1  -1 |
+
+    int32_t f[4][4] = {{0}}, g[4][4] = {{0}};
+    /* 行变换 */
+    for (int32_t i = 0; i < 4; ++i) {
+      g[0][i] = c[0][i] + c[1][i] + c[2][i] + c[3][i];
+      g[1][i] = c[0][i] + c[1][i] - c[2][i] - c[3][i];
+      g[2][i] = c[0][i] - c[1][i] - c[2][i] + c[3][i];
+      g[3][i] = c[0][i] - c[1][i] + c[2][i] - c[3][i];
+    }
+
+    /* 列变换：同理行变换 */
+    for (int32_t j = 0; j < 4; ++j) {
+      f[j][0] = g[j][0] + g[j][1] + g[j][2] + g[j][3];
+      f[j][1] = g[j][0] + g[j][1] - g[j][2] - g[j][3];
+      f[j][2] = g[j][0] - g[j][1] - g[j][2] + g[j][3];
+      f[j][3] = g[j][0] - g[j][1] + g[j][2] - g[j][3];
+    }
+
+    for (int32_t i = 0; i < 4; i++)
+      for (int32_t j = 0; j < 4; j++) {
+        if (qP >= 36)
+          dcY[i][j] = (f[i][j] * LevelScale4x4[qP % 6][0][0]) << (qP / 6 - 6);
+        else
+          dcY[i][j] =
+              (f[i][j] * LevelScale4x4[qP % 6][0][0] + (1 << (5 - qP / 6))) >>
+              (6 - qP / 6);
+      }
+  }
+
+  return 0;
+}
+
 //8.5.12.1 Scaling process for residual 4x4 blocks
 /* 输入：
  * – 变量 bitDepth 和 qP
@@ -3485,19 +3531,13 @@ int PictureBase::scaling_for_residual_4x4_blocks(
     const H264_MB_PART_PRED_MODE &m_mb_pred_mode, int32_t qP) {
 
   /* 比特流不应包含导致 c 的任何元素 cij 的数据，其中 i, j = 0..3 超出从 −2(7 + bitDepth) 到 2(7 + bitDepth) − 1（含）的整数值范围。 */
-  for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 4; j++) {
-      //对于Intra_16x16模式下的亮度残差块，色度残差块的4x4残差块的首个样本（DC系数）直接进行复制
-      //TODO 这里还有点疑问，DC系数在这种情况下不是单独存放在4x4矩阵吗？为什么在这里是每个4x4的首个系数？<24-10-03 21:31:23, YangJing>
-      //TODO 在什么情况下，DC系数不需要进行量化处理？ <24-10-08 23:08:46, YangJing>
+  for (int32_t i = 0; i < 4; i++) {
+    for (int32_t j = 0; j < 4; j++) {
+      //对于Intra_16x16模式下的亮度残差块（DC系数已经经过了反量化处理），色度残差块的4x4残差块的首个样本（DC系数已经经过了反量化处理）直接进行复制
       if (i == 0 && j == 0 &&
           ((isChroma == 0 && m_mb_pred_mode == Intra_16x16) || isChroma))
         d[0][0] = c[0][0];
       else {
-        /* 	\begin{cases}
-              d_{ij} = ( c_{ij} \cdot Scale_{ij} ) << (Qp - 4)  ,              & Qp \geqslant 4 \\
-              d_{ij} = ( c_{ij} \cdot Scale_{ij} + 2^{3 - Qp} ) >> (4 - Qp)  , & Qp < 4         \\
-           	\end{cases} */
         if (qP >= 24)
           d[i][j] = (c[i][j] * LevelScale4x4[qP % 6][i][j]) << (qP / 6 - 4);
         else
@@ -3518,6 +3558,7 @@ int PictureBase::scaling_for_residual_4x4_blocks(
 int PictureBase::transformation_for_residual_4x4_blocks(int32_t d[4][4],
                                                         int32_t (&r)[4][4]) {
   int32_t f[4][4] = {{0}}, h[4][4] = {{0}};
+  /* 行变换 */
   for (int32_t i = 0; i < 4; i++) {
     /* 1. 通过结合系数值，重新组合低频信息*/
     int32_t ei0 = d[i][0] + d[i][2];
@@ -4147,81 +4188,6 @@ int PictureBase::scaling_functions(int32_t isChroma, int32_t isChromaCb) {
         else
           LevelScale8x8[m][i][j] = weightScale8x8[i][j] * v8x8[m][5];
       }
-
-  return 0;
-}
-
-// 8.5.10 Scaling and transformation process for DC transform coefficients for Intra_16x16 macroblock type
-int PictureBase::scaling_and_transformation_for_DC_coeff_for_I16x16(
-    int32_t bitDepth, int32_t qP, int32_t c[4][4], int32_t (&dcY)[4][4]) {
-
-  if (m_mbs[CurrMbAddr].TransformBypassModeFlag) {
-    for (int32_t i = 0; i <= 3; i++)
-      for (int32_t j = 0; j <= 3; j++)
-        dcY[i][j] = c[i][j];
-  } else {
-    // The inverse transform for the 4x4 luma DC transform coefficients
-    // 4x4 luma亮度直流系数反变换
-    //            | 1   1   1   1 |   | c00 c01 c02 c03 |   | 1   1   1   1 |
-    //  f[4][4] = | 1   1  -1  -1 | * | c10 c11 c12 c13 | * | 1   1  -1  -1 |
-    //            | 1  -1  -1   1 |   | c20 c21 c22 c23 |   | 1  -1  -1   1 |
-    //            | 1  -1   1  -1 |   | c30 c31 c32 c33 |   | 1  -1   1  -1 |
-
-    int32_t f[4][4] = {{0}}, g[4][4] = {{0}};
-    // 先行变换
-    g[0][0] = c[0][0] + c[1][0] + c[2][0] + c[3][0];
-    g[0][1] = c[0][1] + c[1][1] + c[2][1] + c[3][1];
-    g[0][2] = c[0][2] + c[1][2] + c[2][2] + c[3][2];
-    g[0][3] = c[0][3] + c[1][3] + c[2][3] + c[3][3];
-
-    g[1][0] = c[0][0] + c[1][0] - c[2][0] - c[3][0];
-    g[1][1] = c[0][1] + c[1][1] - c[2][1] - c[3][1];
-    g[1][2] = c[0][2] + c[1][2] - c[2][2] - c[3][2];
-    g[1][3] = c[0][3] + c[1][3] - c[2][3] - c[3][3];
-
-    g[2][0] = c[0][0] - c[1][0] - c[2][0] + c[3][0];
-    g[2][1] = c[0][1] - c[1][1] - c[2][1] + c[3][1];
-    g[2][2] = c[0][2] - c[1][2] - c[2][2] + c[3][2];
-    g[2][3] = c[0][3] - c[1][3] - c[2][3] + c[3][3];
-
-    g[3][0] = c[0][0] - c[1][0] + c[2][0] - c[3][0];
-    g[3][1] = c[0][1] - c[1][1] + c[2][1] - c[3][1];
-    g[3][2] = c[0][2] - c[1][2] + c[2][2] - c[3][2];
-    g[3][3] = c[0][3] - c[1][3] + c[2][3] - c[3][3];
-
-    // 再列变换
-    f[0][0] = g[0][0] + g[0][1] + g[0][2] + g[0][3];
-    f[0][1] = g[0][0] + g[0][1] - g[0][2] - g[0][3];
-    f[0][2] = g[0][0] - g[0][1] - g[0][2] + g[0][3];
-    f[0][3] = g[0][0] - g[0][1] + g[0][2] - g[0][3];
-
-    f[1][0] = g[1][0] + g[1][1] + g[1][2] + g[1][3];
-    f[1][1] = g[1][0] + g[1][1] - g[1][2] - g[1][3];
-    f[1][2] = g[1][0] - g[1][1] - g[1][2] + g[1][3];
-    f[1][3] = g[1][0] - g[1][1] + g[1][2] - g[1][3];
-
-    f[2][0] = g[2][0] + g[2][1] + g[2][2] + g[2][3];
-    f[2][1] = g[2][0] + g[2][1] - g[2][2] - g[2][3];
-    f[2][2] = g[2][0] - g[2][1] - g[2][2] + g[2][3];
-    f[2][3] = g[2][0] - g[2][1] + g[2][2] - g[2][3];
-
-    f[3][0] = g[3][0] + g[3][1] + g[3][2] + g[3][3];
-    f[3][1] = g[3][0] + g[3][1] - g[3][2] - g[3][3];
-    f[3][2] = g[3][0] - g[3][1] - g[3][2] + g[3][3];
-    f[3][3] = g[3][0] - g[3][1] + g[3][2] - g[3][3];
-
-    if (qP >= 36) {
-      for (int32_t i = 0; i <= 3; i++)
-        for (int32_t j = 0; j <= 3; j++)
-          dcY[i][j] = (f[i][j] * LevelScale4x4[qP % 6][0][0]) << (qP / 6 - 6);
-    } else {
-      for (int32_t i = 0; i <= 3; i++)
-        for (int32_t j = 0; j <= 3; j++)
-          dcY[i][j] =
-              (f[i][j] * LevelScale4x4[qP % 6][0][0] + (1 << (5 - qP / 6))) >>
-              (6 - qP / 6);
-    }
-  }
 
   return 0;
 }

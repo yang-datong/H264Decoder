@@ -295,7 +295,7 @@ class PictureBase {
   int get_chroma_quantisation_parameters2(int32_t QPY, int32_t isChromaCb,
                                           int32_t &QPC);
   int scaling_functions(int32_t isChroma, int32_t isChromaCb);
-  int scaling_and_transformation_for_DC_coeff_for_I16x16(int32_t bitDepth,
+  int scaling_and_transform_for_DC_Intra16x16(int32_t bitDepth,
                                                          int32_t qP,
                                                          int32_t c[4][4],
                                                          int32_t (&dcY)[4][4]);
