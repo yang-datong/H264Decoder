@@ -920,6 +920,7 @@ int PictureBase::getIntra8x8PredMode(int32_t luma8x8BlkIdx,
 
 // 8.3.1 Intra_4x4 prediction process for luma samples
 // 8.3.1.2 Intra_4x4 sample prediction
+// NOTE:帧内预测是基于已解码的样本进行预测，后续再通过残差值之和得到原始像素值
 int PictureBase::intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
                                              int32_t PicWidthInSamples,
                                              uint8_t *pic_buff_luma_pred,
@@ -1006,7 +1007,6 @@ int PictureBase::intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
   // 获取当前使用的帧间预测模式，将从下面9个预测模式中进行挑选
   int32_t currMbAddrPredMode = -1;
 
-  //const bool constrained_flag =
   RET(getIntra4x4PredMode(luma4x4BlkIdx, currMbAddrPredMode, isChroma));
 
   //----------9种帧内4x4预测模式----------------
@@ -1092,7 +1092,6 @@ int PictureBase::intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
       for (int32_t y = 0; y <= 3; y++)
         for (int32_t x = 0; x <= 3; x++) {
           int32_t zVR = 2 * x - y;
-
           if (zVR == 0 || zVR == 2 || zVR == 4 || zVR == 6)
             cSL(x, y) =
                 (P(x - (y >> 1) - 1, -1) + P(x - (y >> 1), -1) + 1) >> 1;
@@ -1115,7 +1114,6 @@ int PictureBase::intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
       for (int32_t y = 0; y <= 3; y++)
         for (int32_t x = 0; x <= 3; x++) {
           int32_t zHD = 2 * y - x;
-
           if (zHD == 0 || zHD == 2 || zHD == 4 || zHD == 6)
             cSL(x, y) =
                 (P(-1, y - (x >> 1) - 1) + P(-1, y - (x >> 1)) + 1) >> 1;
@@ -1151,7 +1149,6 @@ int PictureBase::intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
       for (int32_t y = 0; y <= 3; y++)
         for (int32_t x = 0; x <= 3; x++) {
           int32_t zHU = x + 2 * y;
-
           if (zHU == 0 || zHU == 2 || zHU == 4)
             cSL(x, y) =
                 (P(-1, y + (x >> 1)) + P(-1, y + (x >> 1) + 1) + 1) >> 1;
@@ -2906,7 +2903,7 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
           mb.LumaLevel4x4[luma4x4BlkIdx], c,
           mb.field_pic_flag | mb.mb_field_decoding_flag));
 
-      //2. 对单个 4x4 残差值宏块进行反量化、反整数变换（此处后得到一个完整的残差块）
+      //2. 对单个 4x4 残差值宏块进行反量化、逆整数变换（此处后得到一个完整的残差块）
       int32_t r[4][4] = {{0}};
       RET(scaling_and_transform_for_residual_4x4_blocks(c, r, isChroma,
                                                         isChromaCb));
@@ -2921,14 +2918,12 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
       RET(intra_4x4_sample_prediction(luma4x4BlkIdx, PicWidthInSamples,
                                       pic_buff, isChroma, BitDepth));
 
-      //5. 宏块内部具有索引 luma4x4BlkIdx 的 4x4 亮度块的左上角样本的位置是通过调用第 6.4.3 节中的逆 4x4 亮度块扫描过程来导出的，其中 luma4x4BlkIdx 作为输入，输出被分配给 ( xO ，yO ）
-      // 6.4.3 Inverse 4x4 luma block scanning process，逆 4x4 亮度块扫描过程由下式指定:
       int32_t xO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
                    InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
       int32_t yO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
                    InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
 
-      //6. 4x4 数组 u 的元素为 u_{ij}，i, j = 0..3 的推导如下：
+      //5. 原始像素值 = 值残差值 + 预测值
       int32_t u[16] = {0};
       for (int32_t i = 0; i < 4; i++)
         for (int32_t j = 0; j < 4; j++) {
@@ -2938,7 +2933,7 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
               Clip1C(pic_buff[y * PicWidthInSamples + x] + r[i][j], BitDepth);
         }
 
-      //6. 使用 u 和 luma4x4BlkIdx 作为输入来调用第 8.5.14 节中的去块滤波器过程之前的图像构造过程。
+      //6. 重建图像数据，写入最终数据到pic_buff，主要针对帧、场编码的不同情况
       RET(picture_construction_process_prior_to_deblocking_filter(
           u, 4, 4, luma4x4BlkIdx, isChroma, PicWidthInSamples, pic_buff));
     }
@@ -3128,10 +3123,8 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
 /* 当 ChromaArrayType 不等于 0 时，针对每个色度分量 Cb 和 Cr 分别调用此过程。*/
 int PictureBase::transform_decoding_for_chroma_samples(
     int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
-  int ret = 0;
-
   /* ------------------ 设置别名 ------------------ */
-  MacroBlock &mb = m_mbs[CurrMbAddr];
+  const MacroBlock &mb = m_mbs[CurrMbAddr];
   const uint32_t ChromaArrayType =
       m_slice->slice_header->m_sps->ChromaArrayType;
   bool isMbAff =
@@ -3140,13 +3133,13 @@ int PictureBase::transform_decoding_for_chroma_samples(
 
   /* 根据 ChromaArrayType，以下情况适用：
    * — 如果 ChromaArrayType 等于 3，则调用第8.5.5节中指定的 ChromaArrayType 等于 3 的色度样本的变换解码过程。*/
-  if (ChromaArrayType == 3)
+  if (ChromaArrayType == 3) {
     // 8.5.5 Specification of transform decoding process for chroma samples with ChromaArrayType equal to 3
-    ret = transform_decoding_for_chroma_samples_with_YUV444(
-        isChromaCb, PicWidthInSamples, pic_buff);
+    RET(transform_decoding_for_chroma_samples_with_YUV444(
+        isChromaCb, PicWidthInSamples, pic_buff));
 
-  /* – 否则（ChromaArrayType不等于3），以下文本指定色度样本的变换解码过程：*/
-  else {
+    /* – 否则（ChromaArrayType不等于3），以下文本指定色度样本的变换解码过程：*/
+  } else {
     //对于每个色度分量，变量 ChromaDCLevel[ iCbCr ] 和 ChromaACLevel[ iCbCr ]（其中 Cb 的 iCbCr 设置为 0，Cr 的 iCbCr 设置为 1）包含色度变换系数的两个分量的级别。  将变量 numChroma4x4Blks 设置为等于 (MbWidthC / 4) * (MbHeightC / 4)。
     bool iCbCr = (isChromaCb != 1);
     int32_t numChroma4x4Blks = (MbWidthC / 4) * (MbHeightC / 4);
@@ -3181,9 +3174,8 @@ int PictureBase::transform_decoding_for_chroma_samples(
       c[3][1] = mb.ChromaDCLevel[iCbCr][7];
     }
     // 8.5.11 Scaling and transformation process for chroma DC transform
-    ret = scaling_and_transform_for_chroma_DC_transform_coefficients(
-        isChromaCb, c, w, h, dcC);
-    RET(ret);
+    RET(scaling_and_transform_for_chroma_DC_transform_coefficients(
+        isChromaCb, c, w, h, dcC));
 
     /* 2. (MbWidthC)x(MbHeightC) 数组 rMb 是通过处理由 iCbCr 索引的分量的 chroma4x4BlkIdx = 0..numChroma4x4Blks − 1 索引的 4x4 色度块导出的，并且对于每个 4x4 色度块，指定以下有序步骤: */
     const int32_t dcC_to_chroma_index[8] = {
@@ -3204,17 +3196,15 @@ int PictureBase::transform_decoding_for_chroma_samples(
 
       //* b. 使用 chromaList 作为输入和二维数组 c 作为输出来调用第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程。
       int32_t c[4][4] = {{0}};
-      ret = inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
-          chromaList, c, mb.field_pic_flag | mb.mb_field_decoding_flag);
-      RET(ret);
+      RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
+          chromaList, c, mb.field_pic_flag | mb.mb_field_decoding_flag));
 
       //* c. 使用 c 作为输入和 r 作为输出来调用第 8.5.12 节中指定的残差 4x4 块的缩放和变换过程。
       int32_t isChroma = 1;
       int32_t r[4][4] = {{0}};
       // 8.5.12 Scaling and transformation process for residual 4x4 blocks (反量化、反整数变换)
-      ret = scaling_and_transform_for_residual_4x4_blocks(c, r, isChroma,
-                                                          isChromaCb);
-      RET(ret);
+      RET(scaling_and_transform_for_residual_4x4_blocks(c, r, isChroma,
+                                                        isChromaCb));
 
       //* d. 当前宏块内索引为 chroma4x4BlkIdx 的 4x4 色度块左上角样本的位置是通过调用第 6.4.7 节中指定的逆 4x4 色度块扫描过程来导出的，其中 chroma4x4BlkIdx 作为输入，输出分配给 ( xO，yO）。
       // 6.4.7 Inverse 4x4 chroma block scanning process
@@ -3241,8 +3231,7 @@ int PictureBase::transform_decoding_for_chroma_samples(
     }
 
     //帧内预测
-    ret = intra_chroma_sample_prediction(pic_buff, PicWidthInSamples);
-    RETURN_IF_FAILED(ret != 0, ret);
+    RET(intra_chroma_sample_prediction(pic_buff, PicWidthInSamples));
 
     /* 4. 对于 i = 0..MbHeightC − 1 和 j = 0..MbWidthC − 1，元素 uij 的 (MbWidthC)x(MbHeightC) 数组 u 的推导如下： */
     int32_t u[16 * 16] = {0};
@@ -3258,12 +3247,9 @@ int PictureBase::transform_decoding_for_chroma_samples(
     }
 
     /* 5.使用u作为输入来调用第8.5.14节中的去块滤波器过程之前的图像构建过程。 */
-    int32_t BlkIdx = 0;
-    int32_t isChroma = 1;
-    ret = picture_construction_process_prior_to_deblocking_filter(
-        u, MbWidthC, MbHeightC, BlkIdx, isChroma, PicWidthInSamples, pic_buff);
+    RET(picture_construction_process_prior_to_deblocking_filter(
+        u, MbWidthC, MbHeightC, 0, 1, PicWidthInSamples, pic_buff));
   }
-  RET(ret);
 
   return 0;
 }
@@ -3706,39 +3692,34 @@ int PictureBase::Scaling_and_transformation_process_for_residual_8x8_blocks(
 }
 
 // 8.5.14 Picture construction process prior to deblocking filter process (去块过滤过程之前的图片构造过程)
-/* 输入：
- * – 包含元素 uij 的样本数组 u，它是 16x16 亮度块或 (MbWidthC)x(MbHeightC) 色度块或 4x4 亮度块或 4x4 色度块或 8x8 亮度块，或者，当 ChromaArrayType等于 3，8x8 色度块，
+// 重建图像数据，写入最终数据到pic_buff，主要针对帧、场编码的不同情况
+/* 输入：– 包含元素 uij 的样本数组 u，它是 16x16 亮度块或 (MbWidthC)x(MbHeightC) 色度块或 4x4 亮度块或 4x4 色度块或 8x8 亮度块，或者，当 ChromaArrayType等于 3，8x8 色度块，
  * – 当 u 不是 16x16 亮度块或 (MbWidthC)x(MbHeightC) 色度块时，块索引 luma4x4BlkIdx 或 chroma4x4BlkIdx 或 luma8x8BlkIdx 或 cb4x4BlkIdx 或 cr4x4BlkIdx 或 cb8x8BlkIdx 或idx。*/
 int PictureBase::picture_construction_process_prior_to_deblocking_filter(
     int32_t *u, int32_t nW, int32_t nH, int32_t BlkIdx, int32_t isChroma,
     int32_t PicWidthInSamples, uint8_t *pic_buff) {
 
   /* ------------------ 设置别名 ------------------ */
-  const bool MbaffFrameFlag = m_slice->slice_header->MbaffFrameFlag;
   const int32_t mb_field_decoding_flag =
       m_mbs[CurrMbAddr].mb_field_decoding_flag;
-  const uint32_t ChromaArrayType =
-      m_slice->slice_header->m_sps->ChromaArrayType;
-  const int32_t SubWidthC = m_slice->slice_header->m_sps->SubWidthC;
-  const int32_t SubHeightC = m_slice->slice_header->m_sps->SubHeightC;
+
+  const SliceHeader *header = m_slice->slice_header;
+  const bool MbaffFrameFlag = header->MbaffFrameFlag;
+  const uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
+  const int32_t SubWidthC = header->m_sps->SubWidthC;
+  const int32_t SubHeightC = header->m_sps->SubHeightC;
+  bool isMbAff = header->MbaffFrameFlag && mb_field_decoding_flag;
   /* ------------------  End ------------------ */
 
-  /* 当前宏块的左上角亮度样本的位置是通过调用第 6.4.1 节中的逆宏块扫描过程来导出的，其中 CurrMbAddr 作为输入，输出被分配给 ( xP, yP )。 */
   int32_t xP = 0, yP = 0;
-  // 6.4.1 Inverse macroblock scanning process
   inverse_mb_scanning_process(MbaffFrameFlag, CurrMbAddr,
                               mb_field_decoding_flag, xP, yP);
 
-  /* 当 u 是亮度块时，对于亮度块的每个样本 uij，指定以下有序步骤：
-   * 1. 根据块 u 的大小，适用以下规则：
-   * – 如果 u 是 16x16 亮度块，则宏块内 16x16 亮度块的左上角样本的位置 ( xO, yO ) 设置为等于 ( 0, 0 ) 且变量 nE 设置为等于 16。
-   * – 否则，如果 u 是 4x4 亮度块，则通过调用逆函数导出宏块内索引为 luma4x4BlkIdx 的 4x4 亮度块左上角样本的位置第 6.4.3 节中的 4x4 亮度块扫描过程，以 luma4x4BlkIdx 作为输入，输出分配给 ( xO, yO )，变量 nE 设置为等于 4。
-   * – 否则（u 是 8x8 亮度块），位置宏块内部具有索引 luma8x8BlkIdx 的 8x8 亮度块的左上角样本是通过调用第 6.4.5 节中的逆 8x8 亮度块扫描过程而导出的，其中 luma8x8BlkIdx 作为输入，输出分配给 ( xO, yO )，并且变量 nE 设置为等于 8。*/
+  /* 当 u 是亮度块时，对于亮度块的每个样本 uij，指定以下有序步骤：*/
   if (isChroma == 0) {
-    int32_t xO, yO, nE;
-    if (nW == 16 && nH == 16)
-      xO = 0, yO = 0, nE = 16;
-    else if (nW == 4 && nH == 4) {
+    int32_t xO = 0, yO = 0, nE = 16;
+    if (nW == 16 && nH == 16) {
+    } else if (nW == 4 && nH == 4) {
       // 6.4.3 Inverse 4x4 luma block scanning process luma4x4BlkIdx
       xO = InverseRasterScan(BlkIdx / 4, 8, 8, 16, 0) +
            InverseRasterScan(BlkIdx % 4, 4, 4, 8, 0);
@@ -3752,39 +3733,19 @@ int PictureBase::picture_construction_process_prior_to_deblocking_filter(
       nE = 8;
     }
 
-    /* 2. 根据变量 MbaffFrameFlag 和当前宏块，以下情况适用：
-     * – 如果 MbaffFrameFlag 等于 1 并且当前宏块是场宏块，则 S′L[ xP + xO + j, yP + 2 * ( yO + i ) ] = uij 其中 i, j = 0..nE − 1
-     * – 否则（MbaffFrameFlag 等于 0 或当前宏块是帧宏块），S′L[ xP + xO + j, yP + yO + i ] = uij 其中 i, j = 0..nE − 1 */
-    if (MbaffFrameFlag && mb_field_decoding_flag) {
-      for (int32_t i = 0; i <= nE - 1; i++)
-        for (int32_t j = 0; j <= nE - 1; j++) {
-          int32_t y = yP + 2 * (yO + i);
-          int32_t x = xP + xO + j;
-          pic_buff[y * PicWidthInSamples + x] = u[i * nE + j];
-        }
-    } else {
-      for (int32_t i = 0; i <= nE - 1; i++)
-        for (int32_t j = 0; j <= nE - 1; j++) {
-          int32_t y = yP + yO + i;
-          int32_t x = xP + xO + j;
-          pic_buff[y * PicWidthInSamples + x] = u[i * nE + j];
-        }
-    }
+    int32_t n = (isMbAff) ? 2 : 1;
+    for (int32_t i = 0; i < nE; i++)
+      for (int32_t j = 0; j < nE; j++) {
+        int32_t y = yP + n * (yO + i);
+        int32_t x = xP + xO + j;
+        pic_buff[y * PicWidthInSamples + x] = u[i * nE + j];
+      }
   }
 
-  /* 当 u 是色度块时，对于色度块的每个样本 uij，指定以下有序步骤：
-   * 1. 对于 Cb 色度分量，将变量 S'C 中的下标 C 替换为 Cb;
-   *    对于 Cr 色度分量，将变量 S'C 中的下标 C 替换为 Cr成分。
-   * 2. 根据块 u 的大小，适用以下规则：
-   *    – 如果 u 是 (MbWidthC)x(MbHeightC) Cb 或 Cr 块，则变量 nW 设置为等于 MbWidthC，变量 nH 设置为等于 MbHeightC，并且宏块内的(nW)x(nH) Cb或Cr块的左上角样本的位置(xO,yO)被设置为等于(0,0)。
-   *    – 否则，如果 u 是 4x4 Cb 或 Cr 块，则变量 nW 和 nH 设置为等于 4，并且根据变量 ChromaArrayType，内部具有索引 chroma4x4BlkIdx 的 4x4 Cb 或 Cr 块的左上角样本的位置宏块的推导如下：
-   *         – 如果 ChromaArrayType 等于 1 或 2，则宏块内索引为 chroma4x4BlkIdx 的 4x4 色度块左上角样本的位置是通过调用第 6.4.7 节中的逆 4x4 色度块扫描过程（以 chroma4x4BlkIdx 作为输入）得出的并将输出分配给 ( xO, yO )。
-   *         – 否则（ChromaArrayType 等于 3），宏块内索引为 cb4x4BlkIdx 的 4x4 Cb 块或索引为 cr4x4BlkIdx 的 4x4 Cr 块的左上角样本的位置是通过调用逆 4x4 Cb 或 Cr 块扫描过程得出的在第 6.4.4 节中，以 cb4x4BlkIdx 或 cr4x4BlkIdx 作为输入，并将输出分配给 ( xO, yO )。
-   *    – 否则（当 ChromaArrayType 等于 3 时，u 是 8x8 Cb 或 Cr 块），变量 nW 和 nH 设置为等于 8，并且索引为 cb8x8BlkIdx 的 8x8 Cb 块或带有索引的 Cr 块的左上角样本的位置宏块内的索引 cr8x8BlkIdx 是通过调用第 6.4.6 节中的逆 8x8 Cb 或 Cr 块扫描过程来导出的，其中 cb8x8BlkIdx 或 cr8x8BlkIdx 作为输入，输出分配给 ( xO, yO )。*/
+  /* 当 u 是色度块时，对于色度块的每个样本 uij，指定以下有序步骤：*/
   else if (isChroma) {
-    int32_t xO, yO;
+    int32_t xO = 0, yO = 0;
     if (nW == MbWidthC && nH == MbHeightC) {
-      xO = 0, yO = 0;
     } else if (nW == 4 && nH == 4) {
       if (ChromaArrayType == 1 || ChromaArrayType == 2) {
         // 6.4.7 Inverse 4x4 chroma block scanning process chroma4x4BlkIdx
@@ -3803,24 +3764,18 @@ int PictureBase::picture_construction_process_prior_to_deblocking_filter(
       yO = InverseRasterScan(BlkIdx, 8, 8, 16, 1);
     }
 
-    /* 3. 根据变量 MbaffFrameFlag 和当前宏块，以下情况适用：
-     * – 如果 MbaffFrameFlag 等于 1 并且当前宏块是场宏块
-     * – 否则（MbaffFrameFlag等于0或当前宏块是帧宏块）*/
-    if (MbaffFrameFlag && mb_field_decoding_flag) {
-      for (int32_t i = 0; i <= nH - 1; i++)
-        for (int32_t j = 0; j <= nW - 1; j++) {
-          int32_t x = (xP / SubWidthC) + xO + j;
-          int32_t y = ((yP + SubHeightC - 1) / SubHeightC) + 2 * (yO + i);
-          pic_buff[y * PicWidthInSamples + x] = u[i * nW + j];
-        }
-    } else {
-      for (int32_t i = 0; i <= nH - 1; i++)
-        for (int32_t j = 0; j <= nW - 1; j++) {
-          int32_t x = ((xP / SubWidthC) + xO + j);
-          int32_t y = ((yP / SubHeightC) + yO + i);
-          pic_buff[y * PicWidthInSamples + x] = u[i * nW + j];
-        }
-    }
+    for (int32_t i = 0; i < nH; i++)
+      for (int32_t j = 0; j < nW; j++) {
+        int32_t x = (xP / SubWidthC) + xO + j;
+
+        int32_t y;
+        if (isMbAff)
+          y = ((yP + SubHeightC - 1) / SubHeightC) + 2 * (yO + i);
+        else
+          y = (yP / SubHeightC) + yO + i;
+
+        pic_buff[y * PicWidthInSamples + x] = u[i * nW + j];
+      }
   }
 
   return 0;
