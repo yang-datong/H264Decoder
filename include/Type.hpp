@@ -337,8 +337,7 @@ typedef enum _MB_RESIDUAL_LEVEL_ {
 #define MB_HEIGHT 16
 
 //--------------------------
-// Table 8-2 – Specification of Intra4x4PredMode[ luma4x4BlkIdx ] and associated
-// names
+// Table 8-2 – Specification of Intra4x4PredMode[ luma4x4BlkIdx ] and associated names
 #define Prediction_Mode_Intra_4x4_Vertical 0
 #define Prediction_Mode_Intra_4x4_Horizontal 1
 #define Prediction_Mode_Intra_4x4_DC 2
@@ -350,8 +349,7 @@ typedef enum _MB_RESIDUAL_LEVEL_ {
 #define Prediction_Mode_Intra_4x4_Horizontal_Up 8
 
 //--------------------------
-// Table 8-3 – Specification of Intra8x8PredMode[ luma8x8BlkIdx ] and associated
-// names
+// Table 8-3 – Specification of Intra8x8PredMode[ luma8x8BlkIdx ] and associated names
 #define Prediction_Mode_Intra_8x8_Vertical 0
 #define Prediction_Mode_Intra_8x8_Horizontal 1
 #define Prediction_Mode_Intra_8x8_DC 2

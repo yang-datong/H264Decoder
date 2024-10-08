@@ -276,12 +276,13 @@ class PictureBase {
   //----------------- 量化 ------------------------
   int inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
       const int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag);
-  int scaling_and_transformation_for_chroma_DC_transform_coefficients(
+  int scaling_and_transform_for_chroma_DC_transform_coefficients(
       int32_t isChromaCb, int32_t c[4][2], int32_t nW, int32_t nH,
       int32_t (&dcC)[4][2]);
-  int scaling_and_transformation_process_for_residual_4x4_blocks(
-      int32_t c[4][4], int32_t (&r)[4][4], int32_t isChroma,
-      int32_t isChromaCb);
+  int scaling_and_transform_for_residual_4x4_blocks(int32_t c[4][4],
+                                                    int32_t (&r)[4][4],
+                                                    int32_t isChroma,
+                                                    int32_t isChromaCb);
   int scaling_for_residual_4x4_blocks(
       int32_t d[4][4], int32_t c[4][4], int32_t isChroma,
       const H264_MB_PART_PRED_MODE &m_mb_pred_mode, int32_t qP);

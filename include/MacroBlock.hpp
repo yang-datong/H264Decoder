@@ -45,7 +45,7 @@ class MacroBlock {
   // mb_pred
   /* 前一个4x4帧内预测模式标志 */
   int32_t prev_intra4x4_pred_mode_flag[16] = {0};
-  /* 剩余的4x4帧内预测模式 */
+  /* 剩余的4x4帧内预测模式（由编码器提供，通过解码得到） */
   int32_t rem_intra4x4_pred_mode[16] = {0};
   /* 前一个8x8帧内预测模式标志 */
   int32_t prev_intra8x8_pred_mode_flag[4] = {0};
@@ -175,7 +175,7 @@ class MacroBlock {
   /* 滤波器偏移A,B，用于去块效应滤波器的参数 */
   int32_t FilterOffsetA;
   int32_t FilterOffsetB;
-  //受限帧内预测标志，这个标志决定了是否可以在帧内预测中使用非帧内编码的宏块
+  //是否允许使用邻近样本作为当前样本预测
   int32_t constrained_intra_pred_flag;
 
   /* 宏块部分宽、高度，指示宏块部分的宽度 */
