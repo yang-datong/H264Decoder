@@ -188,6 +188,8 @@ class PictureBase {
       int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff);
   int transformation_for_residual_4x4_blocks(int32_t d[4][4],
                                              int32_t (&r)[4][4]);
+  int transformation_for_residual_8x8_blocks(int32_t d[8][8],
+                                             int32_t (&r)[8][8]);
   //----------------- 获取当前使用的帧内预测模式 ------------------------
   int getIntra4x4PredMode(int32_t luma4x4BlkIdx, int32_t &currMbAddrPredMode,
                           int32_t isChroma);
@@ -286,19 +288,22 @@ class PictureBase {
   int scaling_for_residual_4x4_blocks(
       int32_t d[4][4], int32_t c[4][4], int32_t isChroma,
       const H264_MB_PART_PRED_MODE &m_mb_pred_mode, int32_t qP);
-  int Scaling_and_transformation_process_for_residual_8x8_blocks(
-      int32_t c[8][8], int32_t (&r)[8][8], int32_t isChroma,
-      int32_t isChromaCb);
+  int scaling_for_residual_8x8_blocks(
+      int32_t d[8][8], int32_t c[8][8], int32_t isChroma,
+      const H264_MB_PART_PRED_MODE &m_mb_pred_mode, int32_t qP);
+  int scaling_and_transform_process_for_residual_8x8_blocks(int32_t c[8][8],
+                                                            int32_t (&r)[8][8],
+                                                            int32_t isChroma,
+                                                            int32_t isChromaCb);
   int inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
       int32_t values[64], int32_t (&c)[8][8], int32_t field_scan_flag);
   int derivation_chroma_quantisation_parameters(int32_t isChromaCb);
   int get_chroma_quantisation_parameters2(int32_t QPY, int32_t isChromaCb,
                                           int32_t &QPC);
   int scaling_functions(int32_t isChroma, int32_t isChromaCb);
-  int scaling_and_transform_for_DC_Intra16x16(int32_t bitDepth,
-                                                         int32_t qP,
-                                                         int32_t c[4][4],
-                                                         int32_t (&dcY)[4][4]);
+  int scaling_and_transform_for_DC_Intra16x16(int32_t bitDepth, int32_t qP,
+                                              int32_t c[4][4],
+                                              int32_t (&dcY)[4][4]);
 
   //--------------帧间预测------------------------
   int inter_prediction_process();

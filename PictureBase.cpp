@@ -1170,6 +1170,7 @@ int PictureBase::intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
 }
 
 // 8.3.2.2 Intra_8x8 sample prediction (8.3.2 Intra_8x8 prediction process for luma sampless)
+// TODO 做到这里来了，有点头晕，先停一下？ 学习时间：20:00 - 02:00(6小时) , 03:00 - 07:30(4小时)  <24-10-09 07:28:10, YangJing>
 int PictureBase::intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
                                              int32_t PicWidthInSamples,
                                              uint8_t *pic_buff_luma_pred,
@@ -1207,7 +1208,6 @@ int PictureBase::intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
 
   for (int32_t i = 0; i < 25; i++) {
     // 6.4.12 Derivation process for neighbouring locations
-
     const int32_t x = neighbouring_samples_x[i], y = neighbouring_samples_y[i];
 
     if (MbaffFrameFlag) {
@@ -1531,11 +1531,13 @@ int PictureBase::intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
           luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma));
 
     const MacroBlock &mb1 = m_mbs[mbAddrN];
-    if (mbAddrN < 0)
-      P(x, y) = -1;
+    //当前没有可用的作为预测的相邻块
+    if (mbAddrN < 0) P(x, y) = -1;
+    //邻近块为帧内预测，但不允许使用相邻预测
     else if (IS_INTER_Prediction_Mode(mb1.m_mb_pred_mode) &&
              mb1.constrained_intra_pred_flag)
       P(x, y) = -1;
+    //邻近块为切换Slice块，但不允许使用相邻预测
     else if (mb1.m_name_of_mb_type == SI && mb1.constrained_intra_pred_flag)
       P(x, y) = -1;
     else {
@@ -2958,27 +2960,32 @@ int PictureBase::transform_decoding_for_8x8_luma_residual_blocks(
 
   RET(scaling_functions(isChroma, isChromaCb));
 
+  /* 16x16拆分为4个8x8块处理 */
   for (int32_t luma8x8BlkIdx = 0; luma8x8BlkIdx < 4; luma8x8BlkIdx++) {
+    // 以8x8宏块为单位，遍历亮度块
     int32_t c[8][8] = {{0}};
     RET(inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
         Level8x8[luma8x8BlkIdx], c,
         mb.field_pic_flag | mb.mb_field_decoding_flag));
 
+    // 对单个 8x8 残差值宏块进行反量化、逆整数变换（此处后得到一个完整的残差块）
     int32_t r[8][8] = {{0}};
-    RET(Scaling_and_transformation_process_for_residual_8x8_blocks(
-        c, r, isChroma, isChromaCb));
+    RET(scaling_and_transform_process_for_residual_8x8_blocks(c, r, isChroma,
+                                                              isChromaCb));
 
     if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_8x8 &&
         (mb.Intra8x8PredMode[luma8x8BlkIdx] & ~1) == 0)
       intra_residual_transform_bypass_decoding(
           8, 8, mb.Intra8x8PredMode[luma8x8BlkIdx], &r[0][0]);
 
+    // 以8x8宏块为单位，帧内预测
     RET(intra_8x8_sample_prediction(luma8x8BlkIdx, PicWidthInSamples, pic_buff,
                                     isChroma, BitDepth));
 
     int32_t xO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 0);
     int32_t yO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 1);
 
+    // 原始像素值 = 值残差值 + 预测值
     int32_t u[64] = {0};
     for (int32_t i = 0; i < 8; i++)
       for (int32_t j = 0; j < 8; j++) {
@@ -3075,12 +3082,13 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
 
   //------------------ 下面与transform_decoding_for_4x4_luma_residual_blocks()是一样的逻辑 ------------------
   int32_t rMb[16][16] = {{0}};
+  /* 16x16拆分为16个4x4块处理（只处理量化、变换部分，之后还是16x16整块预测） */
   for (int32_t luma4x4BlkIdx = 0; luma4x4BlkIdx < 16; luma4x4BlkIdx++) {
     /* 合并DC、AC分量：将DC分量放到4x4块的首个样本中（此时DC系数已经得到完整的残差值，不需要进行反量化、逆变换，将剩余的15个AC分量同样放到4x4块中 */
     int32_t lumaList[16] = {0};
     lumaList[0] = dcY_to_luma_index[luma4x4BlkIdx];
 
-    //跳过首个样本，由于分开存储DC，AC这里的DC实际上是0
+    // 跳过首个样本，由于分开存储DC，AC这里的DC实际上是0
     for (int32_t k = 1; k < 16; k++)
       lumaList[k] = Intra16x16ACLevel[luma4x4BlkIdx][k - 1];
 
@@ -3089,6 +3097,7 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
     RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
         lumaList, c, mb.field_pic_flag | mb.mb_field_decoding_flag));
 
+    // 以4x4宏块为单位，反量化，逆变换
     int32_t r[4][4] = {{0}};
     RET(scaling_and_transform_for_residual_4x4_blocks(c, r, 0, 0));
 
@@ -3106,9 +3115,11 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
     intra_residual_transform_bypass_decoding(16, 16, mb.Intra16x16PredMode,
                                              &rMb[0][0]);
 
+  // 以16x16宏块为单位，帧内预测
   RET(intra_16x16_sample_prediction(pic_buff, PicWidthInSamples, isChroma,
                                     BitDepth));
 
+  // 原始像素值 = 值残差值 + 预测值
   int32_t u[16 * 16] = {0};
   for (int32_t i = 0; i < 16; i++)
     for (int32_t j = 0; j < 16; j++) {
@@ -3472,6 +3483,7 @@ int PictureBase::scaling_and_transform_for_residual_4x4_blocks(
 }
 
 // 8.5.10 Scaling and transformation process for DC transform coefficients for Intra_16x16 macroblock type
+// 对于DC系数矩阵需要进行第二层的逆变换、反量化
 int PictureBase::scaling_and_transform_for_DC_Intra16x16(int32_t bitDepth,
                                                          int32_t qP,
                                                          int32_t c[4][4],
@@ -3482,13 +3494,6 @@ int PictureBase::scaling_and_transform_for_DC_Intra16x16(int32_t bitDepth,
       for (int32_t j = 0; j < 4; j++)
         dcY[i][j] = c[i][j];
   } else {
-    // The inverse transform for the 4x4 luma DC transform coefficients
-    // 4x4 luma亮度直流系数反变换
-    //            | 1   1   1   1 |   | c00 c01 c02 c03 |   | 1   1   1   1 |
-    //  f[4][4] = | 1   1  -1  -1 | * | c10 c11 c12 c13 | * | 1   1  -1  -1 |
-    //            | 1  -1  -1   1 |   | c20 c21 c22 c23 |   | 1  -1  -1   1 |
-    //            | 1  -1   1  -1 |   | c30 c31 c32 c33 |   | 1  -1   1  -1 |
-
     int32_t f[4][4] = {{0}}, g[4][4] = {{0}};
     /* 行变换 */
     for (int32_t i = 0; i < 4; ++i) {
@@ -3506,6 +3511,7 @@ int PictureBase::scaling_and_transform_for_DC_Intra16x16(int32_t bitDepth,
       f[j][3] = g[j][0] - g[j][1] + g[j][2] - g[j][3];
     }
 
+    /* 反量化 */
     for (int32_t i = 0; i < 4; i++)
       for (int32_t j = 0; j < 4; j++) {
         if (qP >= 36)
@@ -3545,6 +3551,22 @@ int PictureBase::scaling_for_residual_4x4_blocks(
                      h264_power2(3 - qP / 6)) >>
                     (4 - qP / 6);
       }
+    }
+  }
+  return 0;
+}
+
+int PictureBase::scaling_for_residual_8x8_blocks(
+    int32_t d[8][8], int32_t c[8][8], int32_t isChroma,
+    const H264_MB_PART_PRED_MODE &m_mb_pred_mode, int32_t qP) {
+  for (int32_t i = 0; i < 8; i++) {
+    for (int32_t j = 0; j < 8; j++) {
+      if (qP >= 36)
+        d[i][j] = (c[i][j] * LevelScale8x8[qP % 6][i][j]) << (qP / 6 - 6);
+      else
+        d[i][j] =
+            (c[i][j] * LevelScale8x8[qP % 6][i][j] + h264_power2(5 - qP / 6)) >>
+            (6 - qP / 6);
     }
   }
   return 0;
@@ -3610,123 +3632,106 @@ int PictureBase::transformation_for_residual_4x4_blocks(int32_t d[4][4],
   return 0;
 }
 
-// 8.5.13 Scaling and transformation process for residual 8x8 blocks
-int PictureBase::Scaling_and_transformation_process_for_residual_8x8_blocks(
-    int32_t c[8][8], int32_t (&r)[8][8], int32_t isChroma, int32_t isChromaCb) {
+int PictureBase::transformation_for_residual_8x8_blocks(int32_t d[8][8],
+                                                        int32_t (&r)[8][8]) {
+  int32_t g[8][8] = {{0}}, m[8][8] = {{0}};
 
-  int32_t qP = 0;
+  /* 行变换 */
+  for (int32_t i = 0; i < 8; i++) {
+    int32_t ei0 = d[i][0] + d[i][4];
+    int32_t ei1 = -d[i][3] + d[i][5] - d[i][7] - (d[i][7] >> 1);
+    int32_t ei2 = d[i][0] - d[i][4];
+    int32_t ei3 = d[i][1] + d[i][7] - d[i][3] - (d[i][3] >> 1);
+    int32_t ei4 = (d[i][2] >> 1) - d[i][6];
+    int32_t ei5 = -d[i][1] + d[i][7] + d[i][5] + (d[i][5] >> 1);
+    int32_t ei6 = d[i][2] + (d[i][6] >> 1);
+    int32_t ei7 = d[i][3] + d[i][5] + d[i][1] + (d[i][1] >> 1);
 
-  if (isChroma == 0) // If the input array c relates to a luma residual block
-  {
-    // bitDepth = m_slice->slice_header->m_sps->BitDepthY;
-    qP = m_mbs[CurrMbAddr].QP1Y;
-  } else // if (isChroma == 1) //the input array c relates to a chroma residual
-         // block
-  {
-    // bitDepth = m_slice->slice_header->m_sps->BitDepthC;
-    if (isChromaCb == 1) {
-      qP = m_mbs[CurrMbAddr].QP1Cb;
-    } else if (isChromaCb == 0) {
-      qP = m_mbs[CurrMbAddr].QP1Cr;
-    }
+    int32_t fi0 = ei0 + ei6;
+    int32_t fi1 = ei1 + (ei7 >> 2);
+    int32_t fi2 = ei2 + ei4;
+    int32_t fi3 = ei3 + (ei5 >> 2);
+    int32_t fi4 = ei2 - ei4;
+    int32_t fi5 = (ei3 >> 2) - ei5;
+    int32_t fi6 = ei0 - ei6;
+    int32_t fi7 = ei7 - (ei1 >> 2);
+
+    g[i][0] = fi0 + fi7;
+    g[i][1] = fi2 + fi5;
+    g[i][2] = fi4 + fi3;
+    g[i][3] = fi6 + fi1;
+    g[i][4] = fi6 - fi1;
+    g[i][5] = fi4 - fi3;
+    g[i][6] = fi2 - fi5;
+    g[i][7] = fi0 - fi7;
   }
 
-  //---------------------
-  if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1) {
-    for (int32_t i = 0; i <= 7; i++) {
-      for (int32_t j = 0; j <= 7; j++) {
-        r[i][j] = c[i][j];
-      }
-    }
-  } else {
-    // 8.5.13.1 Scaling process for residual 8x8 blocks
-    int32_t d[8][8] = {{0}};
+  /* 列变换：同理行变换 */
+  for (int32_t j = 0; j < 8; j++) {
+    int32_t h0j = g[0][j] + g[4][j];
+    int32_t h1j = -g[3][j] + g[5][j] - g[7][j] - (g[7][j] >> 1);
+    int32_t h2j = g[0][j] - g[4][j];
+    int32_t h3j = g[1][j] + g[7][j] - g[3][j] - (g[3][j] >> 1);
+    int32_t h4j = (g[2][j] >> 1) - g[6][j];
+    int32_t h5j = -g[1][j] + g[7][j] + g[5][j] + (g[5][j] >> 1);
+    int32_t h6j = g[2][j] + (g[6][j] >> 1);
+    int32_t h7j = g[3][j] + g[5][j] + g[1][j] + (g[1][j] >> 1);
 
-    for (int32_t i = 0; i <= 7; i++) {
-      for (int32_t j = 0; j <= 7; j++) {
-        if (qP >= 36) {
-          d[i][j] = (c[i][j] * LevelScale8x8[qP % 6][i][j]) << (qP / 6 - 6);
-        } else // if (qP < 36)
-        {
-          d[i][j] = (c[i][j] * LevelScale8x8[qP % 6][i][j] +
-                     h264_power2(5 - qP / 6)) >>
-                    (6 - qP / 6);
-        }
-      }
-    }
+    int32_t k0j = h0j + h6j;
+    int32_t k1j = h1j + (h7j >> 2);
+    int32_t k2j = h2j + h4j;
+    int32_t k3j = h3j + (h5j >> 2);
+    int32_t k4j = h2j - h4j;
+    int32_t k5j = (h3j >> 2) - h5j;
+    int32_t k6j = h0j - h6j;
+    int32_t k7j = h7j - (h1j >> 2);
+
+    m[0][j] = k0j + k7j;
+    m[1][j] = k2j + k5j;
+    m[2][j] = k4j + k3j;
+    m[3][j] = k6j + k1j;
+    m[4][j] = k6j - k1j;
+    m[5][j] = k4j - k3j;
+    m[6][j] = k2j - k5j;
+    m[7][j] = k0j - k7j;
+  }
+
+  for (int32_t i = 0; i < 8; i++)
+    for (int32_t j = 0; j < 8; j++)
+      r[i][j] = (m[i][j] + 32) >> 6;
+
+  return 0;
+}
+
+// 8.5.13 Scaling and transformation process for residual 8x8 blocks
+int PictureBase::scaling_and_transform_process_for_residual_8x8_blocks(
+    int32_t c[8][8], int32_t (&r)[8][8], int32_t isChroma, int32_t isChromaCb) {
+
+  const MacroBlock &mb = m_mbs[CurrMbAddr];
+
+  //对于亮度块，使用对应的量化值
+  int32_t qP = 0;
+  if (isChroma == 0) qP = mb.QP1Y;
+  //对于色度块，使用对应的量化值
+  else {
+    if (isChromaCb == 1)
+      qP = mb.QP1Cb;
+    else if (isChromaCb == 0)
+      qP = mb.QP1Cr;
+  }
+
+  //变换旁路模式，即不进行任何变换或缩放处理
+  if (mb.TransformBypassModeFlag) {
+    for (int32_t i = 0; i < 8; i++)
+      for (int32_t j = 0; j < 8; j++)
+        r[i][j] = c[i][j];
+  } else {
+    // 8.5.13.1 Scaling process for residual 8x8 blocks (反量化)
+    int32_t d[8][8] = {{0}};
+    scaling_for_residual_8x8_blocks(d, c, isChroma, mb.m_mb_pred_mode, qP);
 
     // 8.5.13.2 Transformation process for residual 8x8 blocks
-    // 类似4x4 IDC离散余弦反变换蝶形运算
-
-    int32_t g[8][8];
-    int32_t m[8][8];
-
-    for (int32_t i = 0; i <= 7; i++) // 先行变换
-    {
-      int32_t ei0 = d[i][0] + d[i][4];
-      int32_t ei1 = -d[i][3] + d[i][5] - d[i][7] - (d[i][7] >> 1);
-      int32_t ei2 = d[i][0] - d[i][4];
-      int32_t ei3 = d[i][1] + d[i][7] - d[i][3] - (d[i][3] >> 1);
-      int32_t ei4 = (d[i][2] >> 1) - d[i][6];
-      int32_t ei5 = -d[i][1] + d[i][7] + d[i][5] + (d[i][5] >> 1);
-      int32_t ei6 = d[i][2] + (d[i][6] >> 1);
-      int32_t ei7 = d[i][3] + d[i][5] + d[i][1] + (d[i][1] >> 1);
-
-      int32_t fi0 = ei0 + ei6;
-      int32_t fi1 = ei1 + (ei7 >> 2);
-      int32_t fi2 = ei2 + ei4;
-      int32_t fi3 = ei3 + (ei5 >> 2);
-      int32_t fi4 = ei2 - ei4;
-      int32_t fi5 = (ei3 >> 2) - ei5;
-      int32_t fi6 = ei0 - ei6;
-      int32_t fi7 = ei7 - (ei1 >> 2);
-
-      g[i][0] = fi0 + fi7;
-      g[i][1] = fi2 + fi5;
-      g[i][2] = fi4 + fi3;
-      g[i][3] = fi6 + fi1;
-      g[i][4] = fi6 - fi1;
-      g[i][5] = fi4 - fi3;
-      g[i][6] = fi2 - fi5;
-      g[i][7] = fi0 - fi7;
-    }
-
-    for (int32_t j = 0; j <= 7; j++) // 再列变换
-    {
-      int32_t h0j = g[0][j] + g[4][j];
-      int32_t h1j = -g[3][j] + g[5][j] - g[7][j] - (g[7][j] >> 1);
-      int32_t h2j = g[0][j] - g[4][j];
-      int32_t h3j = g[1][j] + g[7][j] - g[3][j] - (g[3][j] >> 1);
-      int32_t h4j = (g[2][j] >> 1) - g[6][j];
-      int32_t h5j = -g[1][j] + g[7][j] + g[5][j] + (g[5][j] >> 1);
-      int32_t h6j = g[2][j] + (g[6][j] >> 1);
-      int32_t h7j = g[3][j] + g[5][j] + g[1][j] + (g[1][j] >> 1);
-
-      int32_t k0j = h0j + h6j;
-      int32_t k1j = h1j + (h7j >> 2);
-      int32_t k2j = h2j + h4j;
-      int32_t k3j = h3j + (h5j >> 2);
-      int32_t k4j = h2j - h4j;
-      int32_t k5j = (h3j >> 2) - h5j;
-      int32_t k6j = h0j - h6j;
-      int32_t k7j = h7j - (h1j >> 2);
-
-      m[0][j] = k0j + k7j;
-      m[1][j] = k2j + k5j;
-      m[2][j] = k4j + k3j;
-      m[3][j] = k6j + k1j;
-      m[4][j] = k6j - k1j;
-      m[5][j] = k4j - k3j;
-      m[6][j] = k2j - k5j;
-      m[7][j] = k0j - k7j;
-    }
-
-    //------------------------------------
-    for (int32_t i = 0; i <= 7; i++) {
-      for (int32_t j = 0; j <= 7; j++) {
-        r[i][j] = (m[i][j] + 32) >> 6;
-      }
-    }
+    transformation_for_residual_8x8_blocks(d, r);
   }
 
   return 0;

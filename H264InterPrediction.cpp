@@ -147,7 +147,7 @@ int PictureBase::transform_decoding_for_8x8_luma_residual_blocks_inter(
             m_mbs[CurrMbAddr].mb_field_decoding_flag);
     RETURN_IF_FAILED(ret != 0, ret);
 
-    ret = Scaling_and_transformation_process_for_residual_8x8_blocks(
+    ret = scaling_and_transform_process_for_residual_8x8_blocks(
         c, r, isChroma, isChromaCb);
     RETURN_IF_FAILED(ret != 0, ret);
 
