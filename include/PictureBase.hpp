@@ -291,7 +291,7 @@ class PictureBase {
   int scaling_for_residual_8x8_blocks(
       int32_t d[8][8], int32_t c[8][8], int32_t isChroma,
       const H264_MB_PART_PRED_MODE &m_mb_pred_mode, int32_t qP);
-  int scaling_and_transform_process_for_residual_8x8_blocks(int32_t c[8][8],
+  int scaling_and_transform_for_residual_8x8_blocks(int32_t c[8][8],
                                                             int32_t (&r)[8][8],
                                                             int32_t isChroma,
                                                             int32_t isChromaCb);

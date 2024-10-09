@@ -824,7 +824,7 @@ int PictureBase::getIntra4x4PredMode(int32_t luma4x4BlkIdx,
 }
 
 // 8.3.2.1 Derivation process for Intra8x8PredMode (8.3.2 Intra_8x8 prediction process for luma samples)
-// 与getIntra4x4PredMode()逻辑一样
+// NOTE:与getIntra4x4PredMode()逻辑一样
 int PictureBase::getIntra8x8PredMode(int32_t luma8x8BlkIdx,
                                      int32_t &currMbAddrPredMode,
                                      int32_t isChroma) {
@@ -833,7 +833,10 @@ int PictureBase::getIntra8x8PredMode(int32_t luma8x8BlkIdx,
   const bool constrained_flag =
       m_slice->slice_header->m_pps->constrained_intra_pred_flag;
   const bool MbaffFrameFlag = m_slice->slice_header->MbaffFrameFlag;
+  MacroBlock &mb = m_mbs[CurrMbAddr];
   /* ------------------  End ------------------ */
+
+  int32_t x = (luma8x8BlkIdx % 2) * 8, y = (luma8x8BlkIdx / 2) * 8;
 
   int32_t maxW = 16, maxH = 16;
   if (isChroma) maxW = MbWidthC, maxH = MbHeightC;
@@ -842,7 +845,8 @@ int PictureBase::getIntra8x8PredMode(int32_t luma8x8BlkIdx,
           luma8x8BlkIdxN_B = 0;
   MB_ADDR_TYPE mbAddrN_type_A = MB_ADDR_TYPE_UNKOWN,
                mbAddrN_type_B = MB_ADDR_TYPE_UNKOWN;
-  int32_t x = (luma8x8BlkIdx % 2) * 8, y = (luma8x8BlkIdx / 2) * 8;
+
+  /* 计算相邻位置 (x-1, y 和 x, y-1) 来确定当前块的左侧和上方相邻块 */
   if (MbaffFrameFlag) {
     RET(neighbouring_locations_MBAFF(
         x - 1, y + 0, maxW, maxH, CurrMbAddr, mbAddrN_type_A, mbAddrN_A,
@@ -859,62 +863,64 @@ int PictureBase::getIntra8x8PredMode(int32_t luma8x8BlkIdx,
         luma4x4BlkIdxN_B, luma8x8BlkIdxN_B, xW, yW, isChroma));
   }
 
+  /* 相邻位置的块不存在（即索引为负）或者是帧间预测模式，将默认使用直流预测模式（DC Prediction），因为可能没有有效的参考数据 */
+  const MacroBlock &mb1 = m_mbs[mbAddrN_A];
+  const MacroBlock &mb2 = m_mbs[mbAddrN_B];
+
   bool dcPredModePredictedFlag = false;
   if (mbAddrN_A < 0 || mbAddrN_B < 0)
     dcPredModePredictedFlag = true;
   else if (mbAddrN_A >= 0 && constrained_flag &&
-           IS_INTER_Prediction_Mode(m_mbs[mbAddrN_A].m_mb_pred_mode))
+           IS_INTER_Prediction_Mode(mb1.m_mb_pred_mode))
     dcPredModePredictedFlag = true;
   else if (mbAddrN_B >= 0 && constrained_flag &&
-           IS_INTER_Prediction_Mode(m_mbs[mbAddrN_B].m_mb_pred_mode))
+           IS_INTER_Prediction_Mode(mb2.m_mb_pred_mode))
     dcPredModePredictedFlag = true;
 
+  /* 如果相邻块是帧内编码模式（Intra_4x4 或 Intra_8x8），则会从相邻块继承相应的预测模式 */
   int32_t intraMxMPredModeA = 0, intraMxMPredModeB = 0;
   if (dcPredModePredictedFlag ||
-      (mbAddrN_A >= 0 && m_mbs[mbAddrN_A].m_mb_pred_mode != Intra_4x4 &&
-       m_mbs[mbAddrN_A].m_mb_pred_mode != Intra_8x8))
+      (mbAddrN_A >= 0 && mb1.m_mb_pred_mode != Intra_4x4 &&
+       mb1.m_mb_pred_mode != Intra_8x8))
     intraMxMPredModeA = Prediction_Mode_Intra_8x8_DC;
   else {
-    if (mbAddrN_A >= 0 && m_mbs[mbAddrN_A].m_mb_pred_mode == Intra_8x8)
-      intraMxMPredModeA = m_mbs[mbAddrN_A].Intra8x8PredMode[luma8x8BlkIdxN_A];
+    if (mbAddrN_A >= 0 && mb1.m_mb_pred_mode == Intra_8x8)
+      intraMxMPredModeA = mb1.Intra8x8PredMode[luma8x8BlkIdxN_A];
     else {
-      int32_t n = 1;
-      if (MbaffFrameFlag && m_mbs[CurrMbAddr].field_pic_flag == 0 &&
-          m_mbs[mbAddrN_A].field_pic_flag && luma8x8BlkIdx == 2)
-        n = 3;
-      intraMxMPredModeA =
-          m_mbs[mbAddrN_A].Intra4x4PredMode[luma8x8BlkIdxN_A * 4 + n];
+      int32_t n = (MbaffFrameFlag && mb.field_pic_flag == 0 &&
+                   mb1.field_pic_flag && luma8x8BlkIdx == 2)
+                      ? 3
+                      : 1;
+      intraMxMPredModeA = mb1.Intra4x4PredMode[luma8x8BlkIdxN_A * 4 + n];
     }
   }
 
   if (dcPredModePredictedFlag ||
-      (mbAddrN_B >= 0 && m_mbs[mbAddrN_B].m_mb_pred_mode != Intra_4x4 &&
-       m_mbs[mbAddrN_B].m_mb_pred_mode != Intra_8x8))
+      (mbAddrN_B >= 0 && mb2.m_mb_pred_mode != Intra_4x4 &&
+       mb2.m_mb_pred_mode != Intra_8x8))
     intraMxMPredModeB = Prediction_Mode_Intra_8x8_DC;
   else {
-    if (mbAddrN_B >= 0 && m_mbs[mbAddrN_B].m_mb_pred_mode == Intra_8x8)
-      intraMxMPredModeB = m_mbs[mbAddrN_B].Intra8x8PredMode[luma8x8BlkIdxN_B];
+    if (mbAddrN_B >= 0 && mb2.m_mb_pred_mode == Intra_8x8)
+      intraMxMPredModeB = mb2.Intra8x8PredMode[luma8x8BlkIdxN_B];
     else
-      intraMxMPredModeB =
-          m_mbs[mbAddrN_B].Intra4x4PredMode[luma8x8BlkIdxN_B * 4 + 2];
+      intraMxMPredModeB = mb2.Intra4x4PredMode[luma8x8BlkIdxN_B * 4 + 2];
   }
 
+  /* 对于每个8x8块，选择最小的预测模式值（intraMxMPredModeA 和 intraMxMPredModeB）作为最终预测模式。这种选择通常基于实现最小编码残差的原则*/
   int32_t predIntra8x8PredMode = MIN(intraMxMPredModeA, intraMxMPredModeB);
 
-  if (m_mbs[CurrMbAddr].prev_intra8x8_pred_mode_flag[luma8x8BlkIdx])
-    m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx] = predIntra8x8PredMode;
+  /* 表明之前计算或推断的预测模式是有效的，可以直接将其应用于当前的8x8块 */
+  if (mb.prev_intra8x8_pred_mode_flag[luma8x8BlkIdx])
+    currMbAddrPredMode = predIntra8x8PredMode;
   else {
-    if (m_mbs[CurrMbAddr].rem_intra8x8_pred_mode[luma8x8BlkIdx] <
-        predIntra8x8PredMode)
-      m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx] =
-          m_mbs[CurrMbAddr].rem_intra8x8_pred_mode[luma8x8BlkIdx];
+    /* 使用编码器提供的预测模式 */
+    if (mb.rem_intra8x8_pred_mode[luma8x8BlkIdx] < predIntra8x8PredMode)
+      currMbAddrPredMode = mb.rem_intra8x8_pred_mode[luma8x8BlkIdx];
     else
-      m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx] =
-          m_mbs[CurrMbAddr].rem_intra8x8_pred_mode[luma8x8BlkIdx] + 1;
+      currMbAddrPredMode = mb.rem_intra8x8_pred_mode[luma8x8BlkIdx] + 1;
   }
 
-  currMbAddrPredMode = m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx];
-
+  mb.Intra8x8PredMode[luma8x8BlkIdx] = currMbAddrPredMode;
   return 0;
 }
 
@@ -1170,7 +1176,6 @@ int PictureBase::intra_4x4_sample_prediction(int32_t luma4x4BlkIdx,
 }
 
 // 8.3.2.2 Intra_8x8 sample prediction (8.3.2 Intra_8x8 prediction process for luma sampless)
-// TODO 做到这里来了，有点头晕，先停一下？ 学习时间：20:00 - 02:00(6小时) , 03:00 - 07:30(4小时)  <24-10-09 07:28:10, YangJing>
 int PictureBase::intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
                                              int32_t PicWidthInSamples,
                                              uint8_t *pic_buff_luma_pred,
@@ -1214,11 +1219,10 @@ int PictureBase::intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
       RET(neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
                                        mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
                                        luma8x8BlkIdxN, xW, yW, isChroma));
-    } else {
+    } else
       RET(neighbouring_locations_non_MBAFF(
           xO + x, yO + y, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN,
           luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma));
-    }
 
     const MacroBlock &mb1 = m_mbs[mbAddrN];
     if (mbAddrN < 0 || (IS_INTER_Prediction_Mode(mb1.m_mb_pred_mode) &&
@@ -1287,7 +1291,7 @@ int PictureBase::intra_8x8_sample_prediction(int32_t luma8x8BlkIdx,
     P1(-1, 7) = (P(-1, 6) + 3 * P(-1, 7) + 2) >> 2;
   }
 
-  memcpy(p, p1, sizeof(int32_t) * 9 * 17);
+  memcpy(p, p1, sizeof(p1));
 
   //----------9种帧内8x8预测模式----------------
   int32_t currMbAddrPredMode = -1;
@@ -2970,8 +2974,8 @@ int PictureBase::transform_decoding_for_8x8_luma_residual_blocks(
 
     // 对单个 8x8 残差值宏块进行反量化、逆整数变换（此处后得到一个完整的残差块）
     int32_t r[8][8] = {{0}};
-    RET(scaling_and_transform_process_for_residual_8x8_blocks(c, r, isChroma,
-                                                              isChromaCb));
+    RET(scaling_and_transform_for_residual_8x8_blocks(c, r, isChroma,
+                                                      isChromaCb));
 
     if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_8x8 &&
         (mb.Intra8x8PredMode[luma8x8BlkIdx] & ~1) == 0)
@@ -3704,7 +3708,7 @@ int PictureBase::transformation_for_residual_8x8_blocks(int32_t d[8][8],
 }
 
 // 8.5.13 Scaling and transformation process for residual 8x8 blocks
-int PictureBase::scaling_and_transform_process_for_residual_8x8_blocks(
+int PictureBase::scaling_and_transform_for_residual_8x8_blocks(
     int32_t c[8][8], int32_t (&r)[8][8], int32_t isChroma, int32_t isChromaCb) {
 
   const MacroBlock &mb = m_mbs[CurrMbAddr];
@@ -3951,8 +3955,7 @@ int PictureBase::inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
     c[6][7] = values[61];
     c[7][6] = values[62];
     c[7][7] = values[63];
-  } else // if (field_scan_flag == 1)
-  {
+  } else {
     // 8x8 field scan
     c[0][0] = values[0];
     c[1][0] = values[1];
