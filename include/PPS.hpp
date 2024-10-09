@@ -24,16 +24,16 @@ class PPS {
   /* 指定默认激活的 L0 参考索引数量减 1 */
   uint32_t num_ref_idx_l0_default_active_minus1 = 0;
   uint32_t num_ref_idx_l1_default_active_minus1 = 0;
-  /* 指定色度量化参数索引偏移 */
+  /* 指定第一个色度量化参数索引偏移(Cb) */
   int32_t chroma_qp_index_offset = 0;
+  /* 指定第二个色度量化参数索引偏移(Cr) */
+  int32_t second_chroma_qp_index_offset = 0;
   /* 指示是否存在约束的帧内预测 */
   bool constrained_intra_pred_flag = 0;
   /* 指示是否存在 8x8 变换模式 */
   bool transform_8x8_mode_flag = 0;
   /* 指定图像缩放列表的最大数量 */
   uint32_t maxPICScalingList = 0;
-  /* 指定第二个色度量化参数索引偏移 */
-  int32_t second_chroma_qp_index_offset = 0;
 
   /* 指示是否存在冗余图像计数：主要用于错误恢复，I帧的备份 */
   bool redundant_pic_cnt_present_flag = 0;

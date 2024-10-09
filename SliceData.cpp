@@ -470,7 +470,7 @@ int SliceData::decoding_process() {
     goto eof;
   }
 
-  /* 帧内预测：当存在色度采样时，即YUV420,YUV422,YUV444进行色度解码; 反之，如果是YUV400，则不进行色度解码 */
+  /* 帧内预测：当存在色度采样时，即YUV420,YUV422,YUV444进行色度解码; 反之，则不进行色度解码 */
   if (m_sps->ChromaArrayType) {
     pic->transform_decoding_for_chroma_samples(1, picWidthInSamplesC,
                                                pic_buff_cb);

@@ -3107,9 +3107,7 @@ int PictureBase::transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
   int32_t dcC[4][2] = {{0}};
   RET(scaling_and_transform_for_chroma_DC(isChromaCb, c, w, h, dcC));
 
-  /* 2. (MbWidthC)x(MbHeightC) 数组 rMb 是通过处理由 iCbCr 索引的分量的 chroma4x4BlkIdx = 0..numChroma4x4Blks − 1 索引的 4x4 色度块导出的，并且对于每个 4x4 色度块，指定以下有序步骤: */
-
-  /* 分块Zigzag扫描，它按照从左到右、从上到下的顺序依次访问每个2x2子块中的元素，然后再移动到下一个2x2子块:
+  /* 分块Zigzag扫描，它按照从上到下、从左到右的顺序依次访问每个2x2子块中的元素，然后再移动到下一个2x2子块:
      +-----+-----+
      |  0  |  1  |
      +-----+-----+
@@ -3197,48 +3195,30 @@ int PictureBase::scaling_and_transform_for_chroma_DC(int32_t isChromaCb,
       for (int32_t j = 0; j < MbHeightC / 4; j++)
         dcC[i][j] = c[i][j];
   } else {
-    // 8.5.11.1 Transformation process for chroma DC transform coefficients
-    if (nW == 2 && nH == 2) { //YUV420
-      // the inverse transform for the 2x2 chroma DC transform coefficients
-      // 2x2色度直流系数反变换
-      //            | 1  1 |   | c00 c01 |   | 1  1 |   | c00 + c10    c01 + c11
-      //            |   | 1  1 |
-      //  f[2][2] = |      | * |         | * |      | = | | * |      |
-      //            | 1 -1 |   | c10 c11 |   | 1 -1 |   | c00 - c10    c01 - c11
-      //            |   | 1 -1 |
-
+    //YUV420 的逆变换与反量化
+    if (nW == 2 && nH == 2) {
+      // 8.5.11.1 Transformation process for chroma DC transform coefficients
       int32_t f[2][2] = {{0}};
-
       int32_t e00 = c[0][0] + c[1][0];
       int32_t e01 = c[0][1] + c[1][1];
       int32_t e10 = c[0][0] - c[1][0];
       int32_t e11 = c[0][1] - c[1][1];
-
       f[0][0] = e00 + e01;
       f[0][1] = e00 - e01;
       f[1][0] = e10 + e11;
       f[1][1] = e10 - e11;
 
-      //--------------------------
-      // 8.5.11.2 Scaling process for chroma DC transform coefficients
+      // 8.5.11.2 Scaling process for chroma DC transform coefficientsu
       for (int32_t i = 0; i < 2; i++)
         for (int32_t j = 0; j < 2; j++)
           dcC[i][j] =
               ((f[i][j] * LevelScale4x4[qP % 6][0][0]) << (qP / 6)) >> 5;
-    } else if (nW == 2 && nH == 4) { //YUV422
-      // the inverse transform for the 2x2 chroma DC transform coefficients
-      // 2x2色度直流系数反变换
-      //            | 1  1  1  1 |   | c00 c01 |   | 1  1 |   | c00 + c10 + c20
-      //            + c30    c01 + c11 + c21 + c31 |   | 1  1 |
-      //  f[4][2] = | 1  1 -1 -1 | * | c10 c11 | * |      | = | c00 + c10 - c20
-      //  - c30    c01 + c11 - c21 - c31 | * |      |
-      //            | 1 -1 -1  1 |   | c20 c21 |   | 1 -1 |   | c00 - c10 - c20
-      //            + c30    c01 - c11 - c21 + c31 |   | 1 -1 | | 1 -1  1 -1 |
-      //            | c30 c31 |              | c00 - c10 + c20 - c30    c01 -
-      //            c11 + c21 - c31 |
+    }
 
+    //YUV422 的逆变换与反量化
+    else if (nW == 2 && nH == 4) {
+      // 8.5.11.1 Transformation process for chroma DC transform coefficients
       int32_t f[4][2] = {{0}};
-
       int32_t e00 = c[0][0] + c[1][0] + c[2][0] + c[3][0];
       int32_t e01 = c[0][1] + c[1][1] + c[2][1] + c[3][1];
       int32_t e10 = c[0][0] + c[1][0] - c[2][0] - c[3][0];
@@ -3247,7 +3227,6 @@ int PictureBase::scaling_and_transform_for_chroma_DC(int32_t isChromaCb,
       int32_t e21 = c[0][1] - c[1][1] - c[2][1] + c[3][1];
       int32_t e30 = c[0][0] - c[1][0] + c[2][0] - c[3][0];
       int32_t e31 = c[0][1] - c[1][1] + c[2][1] - c[3][1];
-
       f[0][0] = e00 + e01;
       f[0][1] = e00 - e01;
       f[1][0] = e10 + e11;
@@ -3257,22 +3236,17 @@ int PictureBase::scaling_and_transform_for_chroma_DC(int32_t isChromaCb,
       f[3][0] = e30 + e31;
       f[3][1] = e30 - e31;
 
-      //--------------------------
       // 8.5.11.2 Scaling process for chroma DC transform coefficients
-      int32_t qPDC = qP + 3;
-
-      if (qPDC >= 36) {
-        for (int32_t i = 0; i < 4; i++)
-          for (int32_t j = 0; j < 2; j++)
-            dcC[i][j] = (f[i][j] * LevelScale4x4[qPDC % 6][0][0])
-                        << (qPDC / 6 - 6);
-      } else {
-        for (int32_t i = 0; i < 4; i++)
-          for (int32_t j = 0; j < 2; j++)
-            dcC[i][j] = (f[i][j] * LevelScale4x4[qPDC % 6][0][0] +
-                         h264_power2(5 - qPDC / 6)) >>
+      int32_t qP_DC = qP + 3;
+      for (int32_t i = 0; i < 4; i++)
+        for (int32_t j = 0; j < 2; j++)
+          if (qP_DC >= 36)
+            dcC[i][j] = (f[i][j] * LevelScale4x4[qP_DC % 6][0][0])
+                        << (qP_DC / 6 - 6);
+          else
+            dcC[i][j] = (f[i][j] * LevelScale4x4[qP_DC % 6][0][0] +
+                         h264_power2(5 - qP_DC / 6)) >>
                         (6 - qP / 6);
-      }
     }
   }
 
@@ -3876,55 +3850,37 @@ int PictureBase::inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
  * – QSC：解码 SP 和 SI 切片所需的每个色度分量 Cb 和 Cr 的附加色度量化参数（如果适用）*/
 /* TODO YangJing 记得看 <24-10-03 21:02:25> */
 int PictureBase::derivation_chroma_quantisation_parameters(int32_t isChromaCb) {
-  int32_t qPOffset = 0;
-  if (isChromaCb == 1)
-    qPOffset = m_slice->slice_header->m_pps->chroma_qp_index_offset;
-  else
-    qPOffset = m_slice->slice_header->m_pps->second_chroma_qp_index_offset;
+  const SliceHeader *header = m_slice->slice_header;
+  MacroBlock &mb = m_mbs[CurrMbAddr];
 
-  int32_t qPI = CLIP3(-(int32_t)m_slice->slice_header->m_sps->QpBdOffsetC, 51,
-                      m_mbs[CurrMbAddr].QPY + qPOffset);
+  int32_t qPOffset = header->m_pps->second_chroma_qp_index_offset;
+  if (isChromaCb == 1) qPOffset = header->m_pps->chroma_qp_index_offset;
+
+  int32_t qPI =
+      CLIP3(-((int32_t)header->m_sps->QpBdOffsetC), 51, mb.QPY + qPOffset);
 
   // Table 8-15 – Specification of QPC as a function of qPI
-  int32_t QPC = 0;
-  if (qPI < 30)
-    QPC = qPI;
-  else {
-    // int32_t qPIs[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-    // 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
-    int32_t QPCs[] = {29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36,
-                      36, 37, 37, 37, 38, 38, 38, 39, 39, 39, 39};
-
+  int32_t QPC = qPI;
+  if (qPI >= 30) {
+    const int32_t QPCs[] = {29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36,
+                            36, 37, 37, 37, 38, 38, 38, 39, 39, 39, 39};
     int32_t index = qPI - 30;
     QPC = QPCs[index];
   }
 
-  int32_t QP1C = QPC + m_slice->slice_header->m_sps->QpBdOffsetC;
+  int32_t QP1C = QPC + header->m_sps->QpBdOffsetC;
+  if (isChromaCb == 1)
+    mb.QPCb = QPC, mb.QP1Cb = QP1C;
+  else
+    mb.QPCr = QPC, mb.QP1Cr = QP1C;
 
-  if (isChromaCb == 1) {
-    m_mbs[CurrMbAddr].QPCb = QPC;
-    m_mbs[CurrMbAddr].QP1Cb = QP1C;
-  } else // the chroma component is the Cr component
-  {
-    m_mbs[CurrMbAddr].QPCr = QPC;
-    m_mbs[CurrMbAddr].QP1Cr = QP1C;
-  }
-
-  // When the current slice is an SP or SI slice, QSC is derived using the above process, substituting QPY with QSY and QPC with QSC.
-  if (m_slice->slice_header->slice_type == SLICE_SP ||
-      m_slice->slice_header->slice_type == SLICE_SI ||
-      m_slice->slice_header->slice_type == SLICE_SP2 ||
-      m_slice->slice_header->slice_type == SLICE_SI2) {
-    m_mbs[CurrMbAddr].QSY = m_mbs[CurrMbAddr].QPY;
-
-    if (isChromaCb == 1) {
-      m_mbs[CurrMbAddr].QSCb = m_mbs[CurrMbAddr].QPCb;
-      m_mbs[CurrMbAddr].QS1Cb = m_mbs[CurrMbAddr].QP1Cb;
-    } else // the chroma component is the Cr component
-    {
-      m_mbs[CurrMbAddr].QSCr = m_mbs[CurrMbAddr].QPCr;
-      m_mbs[CurrMbAddr].QS1Cr = m_mbs[CurrMbAddr].QP1Cr;
-    }
+  if (header->slice_type == SLICE_SP || header->slice_type == SLICE_SI ||
+      header->slice_type == SLICE_SP2 || header->slice_type == SLICE_SI2) {
+    mb.QSY = mb.QPY;
+    if (isChromaCb == 1)
+      mb.QSCb = mb.QPCb, mb.QS1Cb = mb.QP1Cb;
+    else
+      mb.QSCr = mb.QPCr, mb.QS1Cr = mb.QP1Cr;
   }
 
   return 0;
