@@ -108,8 +108,13 @@ class SPS {
   /* 等于 1 指定缩放列表 i 的语法结构存在于序列参数集中。 seq_scaling_list_present_flag[ i ] 等于 0 指定缩放列表 i 的语法结构不存在于序列参数集中，并且表 7-2 中指定的缩放列表回退规则集 A 将用于推断序列级缩放索引 i 的列表。 */
   bool seq_scaling_list_present_flag[12] = {false};
 
-  uint32_t MbWidthC = 0;          // 色度宏块宽度
-  uint32_t MbHeightC = 0;         // 色度宏块高度
+  /*  色度宏块宽，高：
+      - YUV444: 16x16像素;
+      - YUV422: 8x16像素，即宽度是亮度的一半，高度相同;
+      - YUV420: 8x8像素，即水平和垂直采样率都是亮度分量的一半;*/
+  uint32_t MbWidthC = 0;
+  uint32_t MbHeightC = 0;
+
   int32_t pcm_sample_chroma[256]; // 3 u(v)
 
   /* 用于计算非参考帧帧顺序计数偏移量的值 */
@@ -281,10 +286,10 @@ const Chroma_format_idc chroma_format_idcs[5] = {
 // Table 7-3 – Specification of default scaling lists Default_4x4_Intra and Default_4x4_Inter
 /* For 4x4帧内预测 */
 const uint32_t Default_4x4_Intra[16] = {6,  13, 13, 20, 20, 20, 28, 28,
-                                       28, 28, 32, 32, 32, 37, 37, 42};
+                                        28, 28, 32, 32, 32, 37, 37, 42};
 /* For 4x4帧间预测 */
 const uint32_t Default_4x4_Inter[16] = {10, 14, 14, 20, 20, 20, 24, 24,
-                                       24, 24, 27, 27, 27, 30, 30, 34};
+                                        24, 24, 27, 27, 27, 30, 30, 34};
 
 /* For 8x8帧内预测 */
 const uint32_t Default_8x8_Intra[64] = {

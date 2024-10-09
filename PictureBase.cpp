@@ -1507,7 +1507,7 @@ int PictureBase::intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
   int32_t xO = 0, yO = 0;
 
   // x范围[-1,15]，y范围[-1,15]，共17行17列，原点为pp[1][1]
-  int32_t p[17 * 17] = {0};
+  int32_t p[17 * 17] = {-1};
   memset(p, -1, sizeof(p));
 #define P(x, y) p[((y) + 1) * 17 + ((x) + 1)]
 
@@ -1678,68 +1678,61 @@ int PictureBase::intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
 int PictureBase::intra_chroma_sample_prediction(uint8_t *pic_buff_chroma_pred,
                                                 int32_t PicWidthInSamples) {
   if (m_slice->slice_header->m_sps->ChromaArrayType == 3)
-    return Intra_chroma_sample_prediction_for_YUV444(pic_buff_chroma_pred,
+    return intra_chroma_sample_prediction_for_YUV444(pic_buff_chroma_pred,
                                                      PicWidthInSamples);
   else
-    return Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
+    return intra_chroma_sample_prediction_for_YUV420_or_YUV422(
         pic_buff_chroma_pred, PicWidthInSamples);
 
   return 0;
 }
 
 // 8.3.4 Intra prediction process for chroma samples
-int PictureBase::Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
+// NOTE: 与intra_16x16_sample_prediction()一样的逻辑，预测模式不一样
+int PictureBase::intra_chroma_sample_prediction_for_YUV420_or_YUV422(
     uint8_t *pic_buff_chroma_pred, int32_t PicWidthInSamples) {
 
   /* ------------------ 设置别名 ------------------ */
   const MacroBlock &mb = m_mbs[CurrMbAddr];
   const bool MbaffFrameFlag = m_slice->slice_header->MbaffFrameFlag;
   const bool isMbAff = MbaffFrameFlag && mb.mb_field_decoding_flag;
+  const uint32_t ChromaArrayType =
+      m_slice->slice_header->m_sps->ChromaArrayType;
   /* ------------------  End ------------------ */
 
   int32_t xO = 0, yO = 0;
-  int32_t xW = 0, yW = 0;
-  int32_t maxW = 0, maxH = 0;
-  const int32_t isChroma = 1;
 
-  int32_t mbAddrN = -1;
-  int32_t luma4x4BlkIdxN = 0, luma8x8BlkIdxN = 0;
-  MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
+  /* TODO YangJing  <24-10-09 18:12:15> */
+  // x范围[-1,15]，y范围[-1,15]，共17行17列，原点为pp[1][1]
+  //int32_t p[17 * 17] = {-1};
 
-  int32_t neighbouring_samples_count = (MbHeightC + 1) + MbWidthC;
+  // x范围[-1,7]，y范围[-1,15]，共9行17列，原点为pp[1][1]
+  int32_t p[9 * 17] = {-1};
+  memset(p, -1, sizeof(p));
+#define P(x, y) p[((y) + 1) * (MbHeightC + 1) + ((x) + 1)]
 
-  int32_t neighbouring_samples_x[33] = {0};
-  // neighbouring_samples_count=17;此处在栈上按最大的尺寸申请,
-  // MbHeightC=16; MbWidthC=16; 33=16+1+16;
-  int32_t neighbouring_samples_y[33] = {0};
-
+  /* 对色度进行子采样则：
+      - YUV422: 8x16像素，即宽度是亮度的一半，高度相同;
+      - YUV420: 8x8像素，即水平和垂直采样率都是亮度分量的一半;
+    故按最大的尺寸申请 MbHeightC=16; MbWidthC=8; 25 = 16 + 8 + 1; */
+  int32_t neighbouring_samples_x[25] = {-1}, neighbouring_samples_y[25] = {-1};
   memset(neighbouring_samples_x, -1, sizeof(neighbouring_samples_x));
   memset(neighbouring_samples_y, -1, sizeof(neighbouring_samples_y));
-
-  for (int32_t i = -1; i < (int32_t)MbHeightC; i++) {
-    neighbouring_samples_x[i + 1] = -1;
+  for (int i = -1; i < (int32_t)MbHeightC; i++)
     neighbouring_samples_y[i + 1] = i;
-  }
-
-  for (int32_t i = 0; i < (int32_t)MbWidthC; i++) {
+  for (int i = 0; i < (int32_t)MbWidthC; i++)
     neighbouring_samples_x[MbHeightC + 1 + i] = i;
-    neighbouring_samples_y[MbHeightC + 1 + i] = -1;
-  }
 
-  //x范围[-1,15]，y范围[-1,15]，共17行17列，原点为pp[1][1]
-  int32_t p[289]; // 81; 289=17*17;
-  memset(p, -1, sizeof(int32_t) * (MbHeightC + 1) * (MbWidthC + 1));
-#define P(x, y) p[((y) + 1) * (MbHeightC + 1) + ((x) + 1)]
-#define cSC(x, y)                                                              \
-  pic_buff_chroma_pred[(((mb.m_mb_position_y >> 4) * MbHeightC) +              \
-                        (mb.m_mb_position_y % 2) + (y) * (1 + isMbAff)) *      \
-                           PicWidthInSamples +                                 \
-                       ((mb.m_mb_position_x >> 4) * MbWidthC + (x))]
+  int32_t xW = 0, yW = 0, maxW = 0, maxH = 0, mbAddrN = -1;
+  const int32_t isChroma = 1;
+  maxW = MbWidthC, maxH = MbHeightC;
+  int32_t luma4x4BlkIdxN = 0, luma8x8BlkIdxN = 0;
+  MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
+  int32_t neighbouring_samples_count = MbHeightC + MbWidthC + 1;
 
   for (int32_t i = 0; i < neighbouring_samples_count; i++) {
     // 6.4.12 Derivation process for neighbouring locations
-    maxW = MbWidthC, maxH = MbHeightC;
-    int32_t x = neighbouring_samples_x[i], y = neighbouring_samples_y[i];
+    const int32_t x = neighbouring_samples_x[i], y = neighbouring_samples_y[i];
     if (MbaffFrameFlag) {
       RET(neighbouring_locations_MBAFF(xO + x, yO + y, maxW, maxH, CurrMbAddr,
                                        mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
@@ -1749,222 +1742,160 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
           xO + x, yO + y, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN,
           luma4x4BlkIdxN, luma8x8BlkIdxN, xW, yW, isChroma));
 
-    if (mbAddrN < 0)
+    const MacroBlock &mb1 = m_mbs[mbAddrN];
+    //当前没有可用的作为预测的相邻块
+    if (mbAddrN < 0) P(x, y) = -1;
+    //邻近块为帧内预测，但不允许使用相邻预测
+    else if (IS_INTER_Prediction_Mode(mb1.m_mb_pred_mode) &&
+             mb1.constrained_intra_pred_flag)
       P(x, y) = -1;
-    else if (IS_INTER_Prediction_Mode(m_mbs[mbAddrN].m_mb_pred_mode) &&
-             m_mbs[mbAddrN].constrained_intra_pred_flag)
-      P(x, y) = -1;
-    else if (m_mbs[mbAddrN].m_name_of_mb_type == SI &&
-             m_mbs[mbAddrN].constrained_intra_pred_flag &&
+    //邻近块为切换Slice块，当前块不为切换Slice块，但不允许使用相邻预测
+    else if (mb1.m_name_of_mb_type == SI && mb1.constrained_intra_pred_flag &&
              m_mbs[CurrMbAddr].m_name_of_mb_type != SI)
       P(x, y) = -1;
     else {
       int32_t xL = 0, yL = 0;
-
-      // 6.4.1 Inverse macroblock scanning process
       inverse_mb_scanning_process(MbaffFrameFlag, mbAddrN,
-                                  m_mbs[mbAddrN].mb_field_decoding_flag, xL,
-                                  yL);
-
+                                  mb1.mb_field_decoding_flag, xL, yL);
       int32_t xM = (xL >> 4) * MbWidthC;
       int32_t yM = ((yL >> 4) * MbHeightC) + (yL % 2);
 
-      int y0 = yM + 1 * yW;
-      if (MbaffFrameFlag && m_mbs[mbAddrN].mb_field_decoding_flag)
-        y0 = yM + 2 * yW;
+      int32_t y0 = (yM + 1 * yW);
+      if (MbaffFrameFlag && mb1.mb_field_decoding_flag) y0 = (yM + 2 * yW);
       P(x, y) = pic_buff_chroma_pred[y0 * PicWidthInSamples + (xM + xW)];
     }
   }
 
-  //----------4种帧内chroma预测模式----------------
-  int32_t IntraChromaPredMode_of_CurrMbAddr =
-      m_mbs[CurrMbAddr].intra_chroma_pred_mode;
+  //----------4种帧内Chroma预测模式----------------
+  int32_t currMbAddrPredMode = m_mbs[CurrMbAddr].intra_chroma_pred_mode;
 
-  if (IntraChromaPredMode_of_CurrMbAddr ==
-      0) // 8.3.4.1 Specification of Intra_Chroma_DC prediction mode
-  {
-    for (int32_t chroma4x4BlkIdx = 0;
-         chroma4x4BlkIdx <=
-         (1 << (m_slice->slice_header->m_sps->ChromaArrayType + 1)) - 1;
-         chroma4x4BlkIdx++) {
-      // 6.4.7 Inverse 4x4 chroma block scanning process
-      xO = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 0);
-      yO = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 1);
-
+#define cSC(x, y)                                                              \
+  pic_buff_chroma_pred[(((mb.m_mb_position_y >> 4) * MbHeightC) +              \
+                        (mb.m_mb_position_y % 2) + (y) * (1 + isMbAff)) *      \
+                           PicWidthInSamples +                                 \
+                       ((mb.m_mb_position_x >> 4) * MbWidthC + (x))]
+  // 8.3.4.1 Specification of Intra_Chroma_DC prediction mode
+  if (currMbAddrPredMode == 0) {
+    for (int32_t BlkIdx = 0; BlkIdx < (1 << (ChromaArrayType + 1)); BlkIdx++) {
+      xO = InverseRasterScan(BlkIdx, 4, 4, 8, 0);
+      yO = InverseRasterScan(BlkIdx, 4, 4, 8, 1);
       int32_t mean_value = 0;
-
       if ((xO == 0 && yO == 0) || (xO > 0 && yO > 0)) {
         if (P(0 + xO, -1) > 0 && P(1 + xO, -1) > 0 && P(2 + xO, -1) > 0 &&
             P(3 + xO, -1) > 0 && P(-1, 0 + yO) > 0 && P(-1, 1 + yO) > 0 &&
-            P(-1, 2 + yO) > 0 && P(-1, 3 + yO) > 0) {
+            P(-1, 2 + yO) > 0 && P(-1, 3 + yO) > 0)
           mean_value = (P(0 + xO, -1) + P(1 + xO, -1) + P(2 + xO, -1) +
                         P(3 + xO, -1) + P(-1, 0 + yO) + P(-1, 1 + yO) +
                         P(-1, 2 + yO) + P(-1, 3 + yO) + 4) >>
                        3;
-        } else if (!(P(0 + xO, -1) > 0 && P(1 + xO, -1) > 0 &&
-                     P(2 + xO, -1) > 0 && P(3 + xO, -1) > 0) &&
-                   (P(-1, 0 + yO) > 0 && P(-1, 1 + yO) > 0 &&
-                    P(-1, 2 + yO) > 0 && P(-1, 3 + yO) > 0)) {
+        else if (!(P(0 + xO, -1) > 0 && P(1 + xO, -1) > 0 &&
+                   P(2 + xO, -1) > 0 && P(3 + xO, -1) > 0) &&
+                 (P(-1, 0 + yO) > 0 && P(-1, 1 + yO) > 0 && P(-1, 2 + yO) > 0 &&
+                  P(-1, 3 + yO) > 0))
           mean_value = (P(-1, 0 + yO) + P(-1, 1 + yO) + P(-1, 2 + yO) +
                         P(-1, 3 + yO) + 2) >>
                        2;
-        } else if ((P(0 + xO, -1) > 0 && P(1 + xO, -1) > 0 &&
-                    P(2 + xO, -1) > 0 && P(3 + xO, -1) > 0) &&
-                   !(P(-1, 0 + yO) > 0 && P(-1, 1 + yO) > 0 &&
-                     P(-1, 2 + yO) > 0 && P(-1, 3 + yO) > 0)) {
+        else if ((P(0 + xO, -1) > 0 && P(1 + xO, -1) > 0 && P(2 + xO, -1) > 0 &&
+                  P(3 + xO, -1) > 0) &&
+                 !(P(-1, 0 + yO) > 0 && P(-1, 1 + yO) > 0 &&
+                   P(-1, 2 + yO) > 0 && P(-1, 3 + yO) > 0))
           mean_value = (P(0 + xO, -1) + P(1 + xO, -1) + P(2 + xO, -1) +
                         P(3 + xO, -1) + 2) >>
                        2;
-        } else // some samples p[ x + xO, −1 ], with x = 0..3, and some samples
-        // p[ −1, y +yO ], with y = 0..3, are marked as "not available
-        // for Intra chroma prediction"
-        {
+        else
           mean_value = (1 << (m_slice->slice_header->m_sps->BitDepthC - 1));
-        }
       } else if (xO > 0 && yO == 0) {
         if (P(0 + xO, -1) > 0 && P(1 + xO, -1) > 0 && P(2 + xO, -1) > 0 &&
-            P(3 + xO, -1) > 0) {
+            P(3 + xO, -1) > 0)
           mean_value = (P(0 + xO, -1) + P(1 + xO, -1) + P(2 + xO, -1) +
                         P(3 + xO, -1) + 2) >>
                        2;
-        } else if (P(-1, 0 + yO) > 0 && P(-1, 1 + yO) > 0 &&
-                   P(-1, 2 + yO) > 0 && P(-1, 3 + yO) > 0) {
+        else if (P(-1, 0 + yO) > 0 && P(-1, 1 + yO) > 0 && P(-1, 2 + yO) > 0 &&
+                 P(-1, 3 + yO) > 0)
           mean_value = (P(-1, 0 + yO) + P(-1, 1 + yO) + P(-1, 2 + yO) +
                         P(-1, 3 + yO) + 2) >>
                        2;
-        } else // some samples p[ x + xO, −1 ], with x = 0..3, and some samples
-        // p[ −1, y +yO ], with y = 0..3, are marked as "not available
-        // for Intra chroma prediction"
-        {
+        else
           mean_value = (1 << (m_slice->slice_header->m_sps->BitDepthC - 1));
-        }
       } else if (xO == 0 && yO > 0) {
         if (P(-1, 0 + yO) > 0 && P(-1, 1 + yO) > 0 && P(-1, 2 + yO) > 0 &&
-            P(-1, 3 + yO) > 0) {
+            P(-1, 3 + yO) > 0)
           mean_value = (P(-1, 0 + yO) + P(-1, 1 + yO) + P(-1, 2 + yO) +
                         P(-1, 3 + yO) + 2) >>
                        2;
-        } else if (P(0 + xO, -1) > 0 && P(1 + xO, -1) > 0 &&
-                   P(2 + xO, -1) > 0 && P(3 + xO, -1) > 0) {
+        else if (P(0 + xO, -1) > 0 && P(1 + xO, -1) > 0 && P(2 + xO, -1) > 0 &&
+                 P(3 + xO, -1) > 0)
           mean_value = (P(0 + xO, -1) + P(1 + xO, -1) + P(2 + xO, -1) +
                         P(3 + xO, -1) + 2) >>
                        2;
-        } else // some samples p[ x + xO, −1 ], with x = 0..3, and some samples
-        // p[ −1, y +yO ], with y = 0..3, are marked as "not available
-        // for Intra chroma prediction"
-        {
+        else
           mean_value = (1 << (m_slice->slice_header->m_sps->BitDepthC - 1));
-        }
       }
 
-      for (int32_t y = 0; y <= 3; y++) {
-        for (int32_t x = 0; x <= 3; x++) {
-          cSC(x + xO, y + yO) =
-              mean_value; // predC[(y + yO) * MbWidthC + (x + xO)]
-        }
-      }
+      for (int32_t y = 0; y < 4; y++)
+        for (int32_t x = 0; x < 4; x++)
+          cSC(x + xO, y + yO) = mean_value;
     }
-  } else if (IntraChromaPredMode_of_CurrMbAddr ==
-             1) // 8.3.4.2 Specification of Intra_Chroma_Horizontal prediction
-                // mode
-  {
-    int flag = 0;
-    for (int32_t y = 0; y <= (int32_t)MbHeightC - 1; y++) {
+  }
+  // 8.3.4.2 Specification of Intra_Chroma_Horizontal prediction mode
+  else if (currMbAddrPredMode == 1) {
+    bool flag = false;
+    for (int32_t y = 0; y < (int32_t)MbHeightC; y++)
       if (P(-1, y) < 0) {
-        flag = 1;
+        flag = true;
         break;
       }
-    }
 
-    // This mode shall be used only when the samples p[ −1, y ] with y =
-    // 0..MbHeightC − 1 are marked as "available for Intra chroma prediction".
-    if (flag == 0) {
-      for (int32_t y = 0; y <= (int32_t)MbHeightC - 1; y++) {
-        for (int32_t x = 0; x <= (int32_t)MbWidthC - 1; x++) {
-          cSC(x, y) = P(-1, y); // predC[y * MbWidthC + x]
-        }
-      }
-    }
-  } else if (IntraChromaPredMode_of_CurrMbAddr ==
-             2) // 8.3.4.3 Specification of Intra_Chroma_Vertical prediction
-                // mode
-  {
-    int flag = 0;
-    for (int32_t x = 0; x <= (int32_t)MbWidthC - 1; x++) {
+    if (flag == false)
+      for (int32_t y = 0; y <= (int32_t)MbHeightC - 1; y++)
+        for (int32_t x = 0; x <= (int32_t)MbWidthC - 1; x++)
+          cSC(x, y) = P(-1, y);
+  }
+  // 8.3.4.3 Specification of Intra_Chroma_Vertical prediction mode
+  else if (currMbAddrPredMode == 2) {
+    bool flag = false;
+    for (int32_t x = 0; x < (int32_t)MbWidthC; x++)
       if (P(x, -1) < 0) {
-        flag = 1;
+        flag = true;
         break;
       }
-    }
 
-    // This mode shall be used only when the samples p[ x, −1 ] with x =
-    // 0..MbWidthC − 1 are marked as "available for Intra chroma prediction".
-    if (flag == 0) {
-      for (int32_t y = 0; y <= (int32_t)MbHeightC - 1; y++) {
-        for (int32_t x = 0; x <= (int32_t)MbWidthC - 1; x++) {
-          cSC(x, y) = P(x, -1); // predC[y * MbWidthC + x]
-        }
-      }
-    }
-  } else if (IntraChromaPredMode_of_CurrMbAddr ==
-             3) // 8.3.4.4 Specification of Intra_Chroma_Plane prediction mode
-  {
-    int flag = 0;
-    for (int32_t x = 0; x <= (int32_t)MbWidthC - 1; x++) {
+    if (flag == false)
+      for (int32_t y = 0; y <= (int32_t)MbHeightC - 1; y++)
+        for (int32_t x = 0; x <= (int32_t)MbWidthC - 1; x++)
+          cSC(x, y) = P(x, -1);
+  }
+  // 8.3.4.4 Specification of Intra_Chroma_Plane prediction mode
+  else if (currMbAddrPredMode == 3) {
+    bool flag = false;
+    for (int32_t x = 0; x < (int32_t)MbWidthC; x++)
       if (P(x, -1) < 0) {
-        flag = 1;
+        flag = true;
         break;
       }
-    }
-
-    for (int32_t y = -1; y <= (int32_t)MbHeightC - 1; y++) {
+    for (int32_t y = -1; y < (int32_t)MbHeightC; y++)
       if (P(-1, y) < 0) {
-        flag = 1;
+        flag = true;
         break;
       }
-    }
+    if (flag == false) {
+      int32_t H = 0, V = 0, xCF = ((ChromaArrayType == 3) ? 4 : 0),
+              yCF = ((ChromaArrayType != 1) ? 4 : 0);
 
-    // This mode shall be used only when the samples p[ x, −1 ], with x =
-    // 0..MbWidthC − 1 and p[ −1, y ], with y = −1..MbHeightC − 1 are marked as
-    // "available for Intra chroma prediction".
-    if (flag == 0) {
-      int32_t xCF =
-          ((m_slice->slice_header->m_sps->ChromaArrayType == 3) ? 4 : 0);
-      int32_t yCF =
-          ((m_slice->slice_header->m_sps->ChromaArrayType != 1) ? 4 : 0);
-
-      int32_t H = 0;
-      int32_t V = 0;
-
-      for (int32_t x1 = 0; x1 <= 3 + xCF; x1++) {
+      for (int32_t x1 = 0; x1 < 4 + xCF; x1++)
         H += (x1 + 1) * (P(4 + xCF + x1, -1) - P(2 + xCF - x1, -1));
-      }
-
-      for (int32_t y1 = 0; y1 <= 3 + yCF; y1++) {
+      for (int32_t y1 = 0; y1 < 4 + yCF; y1++)
         V += (y1 + 1) * (P(-1, 4 + yCF + y1) - P(-1, 2 + yCF - y1));
-      }
 
       int32_t a = 16 * (P(-1, MbHeightC - 1) + P(MbWidthC - 1, -1));
-      int32_t b =
-          ((34 - 29 * (m_slice->slice_header->m_sps->ChromaArrayType == 3)) *
-               H +
-           32) >>
-          6;
-      int32_t c =
-          ((34 - 29 * (m_slice->slice_header->m_sps->ChromaArrayType != 1)) *
-               V +
-           32) >>
-          6;
+      int32_t b = ((34 - 29 * (ChromaArrayType == 3)) * H + 32) >> 6;
+      int32_t c = ((34 - 29 * (ChromaArrayType != 1)) * V + 32) >> 6;
 
-      for (int32_t y = 0; y <= (int32_t)MbHeightC - 1; y++) {
-        for (int32_t x = 0; x <= (int32_t)MbWidthC - 1; x++) {
-          // predC[y * MbWidthC + x] = Clip1C( ( a + b * ( x - 3 - xCF ) + c * (
-          // y - 3 - yCF ) + 16 ) >> 5 );
+      for (int32_t y = 0; y <= (int32_t)MbHeightC - 1; y++)
+        for (int32_t x = 0; x <= (int32_t)MbWidthC - 1; x++)
           cSC(x, y) =
-              CLIP3(0, (1 << m_slice->slice_header->m_sps->BitDepthC) - 1,
-                    (a + b * (x - 3 - xCF) + c * (y - 3 - yCF) + 16) >> 5);
-        }
-      }
+              Clip1C((a + b * (x - 3 - xCF) + c * (y - 3 - yCF) + 16) >> 5,
+                     m_slice->slice_header->m_sps->BitDepthC);
     }
   }
 
@@ -1976,69 +1907,28 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
 
 // 8.3.4 Intra prediction process for chroma samples
 // 8.3.4.5 Intra prediction for chroma samples with ChromaArrayType equal to 3
-int PictureBase::Intra_chroma_sample_prediction_for_YUV444(
+[[deprecated]]
+int PictureBase::intra_chroma_sample_prediction_for_YUV444(
     uint8_t *pic_buff_chroma_pred, int32_t PicWidthInSamples) {
-  int ret = 0;
-  int32_t isChroma = 1;
+  const int32_t isChroma = 1;
   int32_t BitDepth = m_slice->slice_header->m_sps->BitDepthC;
 
-  if (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_4x4) {
-    // The same process described in clause 8.3.1 is also applied to Cb or Cr
-    // samples, substituting luma with Cb or Cr, substituting luma4x4BlkIdx with
-    // cb4x4BlkIdx or cr4x4BlkIdx, substituting pred4x4L with pred4x4Cb or
-    // pred4x4Cr, and substituting BitDepthY with BitDepthC.
-
-    // The output variable Intra4x4PredMode[luma4x4BlkIdx] from the process
-    // described in clause 8.3.1.1 is also used for the 4x4 Cb or 4x4 Cr blocks
-    // with index luma4x4BlkIdx equal to index cb4x4BlkIdx or cr4x4BlkIdx.
-
-    // The process to derive prediction Cb or Cr samples is identical to the
-    // process described in clause 8.3.1.2 and its subsequent subclauses when
-    // substituting luma with Cb or Cr, substituting pred4x4L with pred4x4Cb or
-    // pred4x4Cr, and substituting BitDepthY with BitDepthC.
+  if (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_4x4)
     for (int32_t chroma4x4BlkIdx = 0; chroma4x4BlkIdx < 16; chroma4x4BlkIdx++) {
-      ret =
-          intra_4x4_sample_prediction(chroma4x4BlkIdx, PicWidthInSamples,
-                                      pic_buff_chroma_pred, isChroma, BitDepth);
-      RETURN_IF_FAILED(ret != 0, ret);
+      RET(intra_4x4_sample_prediction(chroma4x4BlkIdx, PicWidthInSamples,
+                                      pic_buff_chroma_pred, isChroma,
+                                      BitDepth));
     }
-  } else if (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_8x8) {
-    // The same process described in clause 8.3.2 is also applied to Cb or Cr
-    // samples, substituting luma with Cb or Cr, substituting luma8x8BlkIdx with
-    // cb8x8BlkIdx or cr8x8BlkIdx, substituting pred8x8L with pred8x8Cb or
-    // pred8x8Cr, and substituting BitDepthY with BitDepthC.
-
-    // The output variable Intra8x8PredMode[luma8x8BlkIdx] from the process
-    // described in clause 8.3.2.1 is used for the 8x8 Cb or 8x8 Cr blocks with
-    // index luma8x8BlkIdx equal to index cb8x8BlkIdx or cr8x8BlkIdx.
-
-    // The process to derive prediction Cb or Cr samples is identical to the
-    // process described in clause 8.3.2.2 and its subsequent subclauses when
-    // substituting luma with Cb or Cr, substituting pred8x8L with pred8x8Cb or
-    // pred8x8Cr, and substituting BitDepthY with BitDepthC.
-
+  else if (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_8x8)
     for (int32_t chroma4x4BlkIdx = 0; chroma4x4BlkIdx < 4; chroma4x4BlkIdx++) {
-      ret =
-          intra_8x8_sample_prediction(chroma4x4BlkIdx, PicWidthInSamples,
-                                      pic_buff_chroma_pred, isChroma, BitDepth);
-      RETURN_IF_FAILED(ret != 0, ret);
+      RET(intra_8x8_sample_prediction(chroma4x4BlkIdx, PicWidthInSamples,
+                                      pic_buff_chroma_pred, isChroma,
+                                      BitDepth));
     }
-  } else if (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_16x16) {
-    // the same process described in clause 8.3.3 and its subsequent subclauses
-    // is also applied to Cb or Cr samples, substituting luma with Cb or Cr,
-    // substituting predL with predCb or predCr, and substituting BitDepthY with
-    // BitDepthC.
 
-    ret = intra_16x16_sample_prediction(pic_buff_chroma_pred, PicWidthInSamples,
-                                        isChroma, BitDepth);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else {
-    printf("m_mbs[CurrMbAddr].m_mb_pred_mode = (%d) must be Intra_4x4(%d), "
-           "Intra_8x8(%d) or Intra_16x16(%d).\n",
-           m_mbs[CurrMbAddr].m_mb_pred_mode, Intra_4x4, Intra_8x8, Intra_16x16);
-    return -1;
-  }
-
+  else if (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_16x16)
+    RET(intra_16x16_sample_prediction(pic_buff_chroma_pred, PicWidthInSamples,
+                                      isChroma, BitDepth));
   return 0;
 }
 
@@ -3195,16 +3085,7 @@ int PictureBase::transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
   /* ------------------  End ------------------ */
 
   // Cb 的 iCbCr 设置为 0，Cr 的 iCbCr 设置为 1
-  bool iCbCr = (isChromaCb != 1);
-  // 色度大小降采样
-  int32_t numChroma4x4Blks = (MbWidthC / 4) * (MbHeightC / 4);
-
-  /* 对于每个色度分量，变换解码按照以下有序步骤单独进行：
-     * 1. 按照以下有序步骤指定，对由宏块的 iCbCr 索引的分量的 4x4 色度块的 numChroma4x4Blks 色度 DC 变换系数进行解码：
-     * – 如果 ChromaArrayType 等于 1，则使用应用于 ChromaDCLevel 的逆光栅扫描过程导出 2x2 数组 c，如下所示:
-     * – 否则（ChromaArrayType 等于 2），将使用应用于 ChromaDCLevel 的逆光栅扫描过程导出 2x4 数组 c，如下所示：
-     * 使用 c 作为输入和 dcC 作为输出来调用第 8.5.11 节中指定的色度 DC 变换系数的缩放和变换过程。*/
-  int32_t dcC[4][2] = {{0}};
+  bool iCbCr = (isChromaCb == 0);
 
   // YUV420
   int32_t w = 2, h = 2, c[4][2] = {{0}};
@@ -3223,67 +3104,69 @@ int PictureBase::transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
   }
 
   // 8.5.11 Scaling and transformation process for chroma DC transform
+  int32_t dcC[4][2] = {{0}};
   RET(scaling_and_transform_for_chroma_DC(isChromaCb, c, w, h, dcC));
 
   /* 2. (MbWidthC)x(MbHeightC) 数组 rMb 是通过处理由 iCbCr 索引的分量的 chroma4x4BlkIdx = 0..numChroma4x4Blks − 1 索引的 4x4 色度块导出的，并且对于每个 4x4 色度块，指定以下有序步骤: */
+
+  /* 分块Zigzag扫描，它按照从左到右、从上到下的顺序依次访问每个2x2子块中的元素，然后再移动到下一个2x2子块:
+     +-----+-----+
+     |  0  |  1  |
+     +-----+-----+
+     |  2  |  3  |
+     +-----+-----+
+     |  4  |  5  |
+     +-----+-----+
+     |  6  |  7  |
+     +-----+-----+  */
   const int32_t dcC_to_chroma_index[8] = {
       dcC[0][0], dcC[0][1], dcC[1][0], dcC[1][1],
       dcC[2][0], dcC[2][1], dcC[3][0], dcC[3][1],
   };
+
+  //------------------ 下面与transform_decoding_for_luma_samples_of_16x16()是一样的逻辑 ------------------
   int32_t rMb[16][16] = {{0}};
+  int32_t numChroma4x4Blks = (MbWidthC / 4) * (MbHeightC / 4);
+  /* 拆分为单个4x4块处理 */
   for (int chroma4x4BlkIdx = 0; chroma4x4BlkIdx < numChroma4x4Blks;
        chroma4x4BlkIdx++) {
-    //* a. 导出变量 chromaList，它是一个包含 16 个条目的列表。 chromaList 的第一个条目是数组 dcC 中的相应值。图 8-7 显示了数组 dcC 的索引到 chroma4x4BlkIdx 的分配。小方块中的两个数字指的是 dcCij 中的索引 i 和 j，大方块中的数字指的是 chroma4x4BlkIdx。
+    /* 合并DC、AC分量：将DC分量放到4x4块的首个样本中（此时DC系数已经得到完整的残差值，不需要进行反量化、逆变换，将剩余的15个AC分量同样放到4x4块中 */
     int32_t chromaList[16] = {0};
-
-    //DC 系数
     chromaList[0] = dcC_to_chroma_index[chroma4x4BlkIdx];
-    //AC 系数
+    // 跳过首个样本，由于分开存储DC，AC这里的DC实际上是0
     for (int k = 1; k <= 15; k++)
       chromaList[k] = mb.ChromaACLevel[iCbCr][chroma4x4BlkIdx][k - 1];
 
-    //* b. 使用 chromaList 作为输入和二维数组 c 作为输出来调用第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程。
+    // 以4x4宏块为单位，遍历色度块
     int32_t c[4][4] = {{0}};
     RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
         chromaList, c, mb.field_pic_flag | mb.mb_field_decoding_flag));
 
-    //* c. 使用 c 作为输入和 r 作为输出来调用第 8.5.12 节中指定的残差 4x4 块的缩放和变换过程。
-    int32_t isChroma = 1;
+    // 以4x4宏块为单位，反量化，逆变换
     int32_t r[4][4] = {{0}};
-    // 8.5.12 Scaling and transformation process for residual 4x4 blocks (反量化、反整数变换)
-    RET(scaling_and_transform_for_residual_4x4_blocks(c, r, isChroma,
-                                                      isChromaCb));
+    RET(scaling_and_transform_for_residual_4x4_blocks(c, r, 1, isChromaCb));
 
-    //* d. 当前宏块内索引为 chroma4x4BlkIdx 的 4x4 色度块左上角样本的位置是通过调用第 6.4.7 节中指定的逆 4x4 色度块扫描过程来导出的，其中 chroma4x4BlkIdx 作为输入，输出分配给 ( xO，yO）。
-    // 6.4.7 Inverse 4x4 chroma block scanning process
     int32_t xO = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 0);
     int32_t yO = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 1);
 
-    //* e. (MbWidthC)x(MbHeightC) 数组 rMb 的元素 rMb[ x, y ]（其中 x = xO..xO + 3 且 y = yO..yO + 3）通过以下公式导出：
     for (int32_t i = 0; i < 4; i++)
       for (int32_t j = 0; j < 4; j++)
         rMb[yO + i][xO + j] = r[i][j];
   }
 
-  /* 3.当TransformBypassModeFlag等于1，宏块预测模式等于Intra_4x4、Intra_8x8或Intra_16x16，并且intra_chroma_pred_mode等于1或2时，调用第8.5.15节中指定的帧内残差变换旁路解码过程：
-     * nW 设置等于 MbWidthC，nH 设置等于 MbHeightC，horPredFlag 设置等于 (2 − intra_chroma_pred_mode)，并且 (MbWidthC)x(MbHeightC) 数组 rMb 作为输入，输出是 (MbWidthC)x 的修改版本(MbHeightC) 数组 rMb。 */
-  if (mb.TransformBypassModeFlag &&
-      (mb.m_mb_pred_mode == Intra_4x4 || mb.m_mb_pred_mode == Intra_8x8 ||
-       ((mb.m_mb_pred_mode == Intra_16x16 && mb.intra_chroma_pred_mode == 1) ||
-        mb.intra_chroma_pred_mode == 2))) {
-    int32_t horPredFlag = 2 - mb.intra_chroma_pred_mode;
-    // 8.5.15 Intra residual transform-bypass decoding process
-    intra_residual_transform_bypass_decoding(MbWidthC, MbHeightC, horPredFlag,
-                                             &rMb[0][0]);
-  }
+  if (mb.TransformBypassModeFlag)
+    if (mb.m_mb_pred_mode == Intra_4x4 || mb.m_mb_pred_mode == Intra_8x8 ||
+        ((mb.m_mb_pred_mode == Intra_16x16 && mb.intra_chroma_pred_mode == 1) ||
+         mb.intra_chroma_pred_mode == 2))
+      intra_residual_transform_bypass_decoding(
+          MbWidthC, MbHeightC, 2 - mb.intra_chroma_pred_mode, &rMb[0][0]);
 
   //帧内预测
   RET(intra_chroma_sample_prediction(pic_buff, PicWidthInSamples));
 
-  /* 4. 对于 i = 0..MbHeightC − 1 和 j = 0..MbWidthC − 1，元素 uij 的 (MbWidthC)x(MbHeightC) 数组 u 的推导如下： */
   int32_t u[16 * 16] = {0};
-  for (int32_t i = 0; i <= MbHeightC - 1; i++) {
-    for (int32_t j = 0; j <= MbWidthC - 1; j++) {
+  for (int32_t i = 0; i < MbHeightC; i++) {
+    for (int32_t j = 0; j < MbWidthC; j++) {
       int32_t y = ((mb.m_mb_position_y >> 4) * MbHeightC) +
                   (mb.m_mb_position_y % 2) + i * (1 + isMbAff);
       int32_t x = (mb.m_mb_position_x >> 4) * MbWidthC + j;
@@ -3304,30 +3187,18 @@ int PictureBase::scaling_and_transform_for_chroma_DC(int32_t isChromaCb,
                                                      int32_t c[4][2],
                                                      int32_t nW, int32_t nH,
                                                      int32_t (&dcC)[4][2]) {
-  int ret = 0;
-  // SliceHeader &slice_header = m_h264_slice_header;
-
   // 8.5.8 Derivation process for chroma quantisation parameters
-  ret = derivation_chroma_quantisation_parameters(isChromaCb);
-  RETURN_IF_FAILED(ret != 0, ret);
-
-  // int32_t bitDepth = m_slice->slice_header->m_sps->BitDepthC;
+  RET(derivation_chroma_quantisation_parameters(isChromaCb));
   int32_t qP =
       (isChromaCb == 1) ? m_mbs[CurrMbAddr].QP1Cb : m_mbs[CurrMbAddr].QP1Cr;
 
-  if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1) {
-    for (int32_t i = 0; i <= (MbWidthC / 4) - 1; i++) {
-      for (int32_t j = 0; j <= (MbHeightC / 4) - 1; j++) {
+  if (m_mbs[CurrMbAddr].TransformBypassModeFlag) {
+    for (int32_t i = 0; i < MbWidthC / 4; i++)
+      for (int32_t j = 0; j < MbHeightC / 4; j++)
         dcC[i][j] = c[i][j];
-      }
-    }
-  } else // if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 0)
-  {
+  } else {
     // 8.5.11.1 Transformation process for chroma DC transform coefficients
-    if (nW == 2 &&
-        nH ==
-            2) // if (m_slice->slice_header->m_sps->ChromaArrayType == 1) //YUV420
-    {
+    if (nW == 2 && nH == 2) { //YUV420
       // the inverse transform for the 2x2 chroma DC transform coefficients
       // 2x2色度直流系数反变换
       //            | 1  1 |   | c00 c01 |   | 1  1 |   | c00 + c10    c01 + c11
@@ -3350,19 +3221,11 @@ int PictureBase::scaling_and_transform_for_chroma_DC(int32_t isChromaCb,
 
       //--------------------------
       // 8.5.11.2 Scaling process for chroma DC transform coefficients
-      for (int32_t i = 0; i <= 1; i++) {
-        for (int32_t j = 0; j <= 1; j++) {
-          // dcCij = ( ( fij * LevelScale4x4(qP % 6, 0, 0 ) ) << ( qP/ 6) ) >>
-          // 5;
+      for (int32_t i = 0; i < 2; i++)
+        for (int32_t j = 0; j < 2; j++)
           dcC[i][j] =
               ((f[i][j] * LevelScale4x4[qP % 6][0][0]) << (qP / 6)) >> 5;
-        }
-      }
-    } else if (
-        nW == 2 &&
-        nH ==
-            4) // if (m_slice->slice_header->m_sps->ChromaArrayType == 2) //YUV422
-    {
+    } else if (nW == 2 && nH == 4) { //YUV422
       // the inverse transform for the 2x2 chroma DC transform coefficients
       // 2x2色度直流系数反变换
       //            | 1  1  1  1 |   | c00 c01 |   | 1  1 |   | c00 + c10 + c20
@@ -3399,25 +3262,16 @@ int PictureBase::scaling_and_transform_for_chroma_DC(int32_t isChromaCb,
       int32_t qPDC = qP + 3;
 
       if (qPDC >= 36) {
-        for (int32_t i = 0; i <= 3; i++) {
-          for (int32_t j = 0; j <= 1; j++) {
-            // dcCij = ( fij *LevelScale4x4( qPDC %6, 0, 0 ) ) << ( qPDC / 6 - 6
-            // );
+        for (int32_t i = 0; i < 4; i++)
+          for (int32_t j = 0; j < 2; j++)
             dcC[i][j] = (f[i][j] * LevelScale4x4[qPDC % 6][0][0])
                         << (qPDC / 6 - 6);
-          }
-        }
-      } else // if (qPDC < 36)
-      {
-        for (int32_t i = 0; i <= 3; i++) {
-          for (int32_t j = 0; j <= 1; j++) {
-            // dcCij = ( fij * LevelScale4x4( qPDC % 6, 0, 0 ) + 2^(5 - qPDC /
-            // 6) ) >> ( 6 - qPDC / 6 );
+      } else {
+        for (int32_t i = 0; i < 4; i++)
+          for (int32_t j = 0; j < 2; j++)
             dcC[i][j] = (f[i][j] * LevelScale4x4[qPDC % 6][0][0] +
                          h264_power2(5 - qPDC / 6)) >>
                         (6 - qP / 6);
-          }
-        }
       }
     }
   }

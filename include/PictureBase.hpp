@@ -212,9 +212,9 @@ class PictureBase {
   //----------------- 帧内预测算法(Chroma) ------------------------
   int intra_chroma_sample_prediction(uint8_t *pic_buff_chroma_pred,
                                      int32_t PicWidthInSamples);
-  int Intra_chroma_sample_prediction_for_YUV420_or_YUV422(
+  int intra_chroma_sample_prediction_for_YUV420_or_YUV422(
       uint8_t *pic_buff_chroma_pred, int32_t PicWidthInSamples);
-  int Intra_chroma_sample_prediction_for_YUV444(uint8_t *pic_buff_chroma_pred,
+  int intra_chroma_sample_prediction_for_YUV444(uint8_t *pic_buff_chroma_pred,
                                                 int32_t PicWidthInSamples);
   int sample_construction_for_I_PCM();
 
