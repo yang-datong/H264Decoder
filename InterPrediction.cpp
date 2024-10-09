@@ -12,71 +12,61 @@
 // This process is invoked when decoding P and B macroblock types.
 /* 该过程的输出是当前宏块的帧间预测样本，它们是亮度样本的 16x16 数组 predL，并且当 ChromaArrayType 不等于 0 时，是色度样本的两个 (MbWidthC)x(MbHeightC) 数组 predCb 和 predCr，每个数组对应一个色度分量 Cb 和 Cr。*/
 int PictureBase::inter_prediction_process() {
-  MacroBlock &mb = m_mbs[CurrMbAddr];
+  /* ------------------ 设置别名 ------------------ */
   const SliceHeader *header = m_slice->slice_header;
-  const uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
+  MacroBlock &mb = m_mbs[CurrMbAddr];
+  const H264_MB_TYPE &mb_type = mb.m_name_of_mb_type;
   const int32_t SubHeightC = header->m_sps->SubHeightC;
   const int32_t SubWidthC = header->m_sps->SubWidthC;
+  const uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
+  const uint32_t slice_type = header->slice_type % 5;
+  const uint32_t weighted_bipred_idc = header->m_pps->weighted_bipred_idc;
+  const bool weighted_pred_flag = header->m_pps->weighted_pred_flag;
+  bool isMbAff = header->MbaffFrameFlag && mb.mb_field_decoding_flag;
+  /* ------------------  End ------------------ */
 
-  /* 宏块部分数量，指示当前宏块被划分成的部分数量 */
-  // mb.m_NumMbPart已经在macroblock_mb_skip(对于B、P帧）或macroblock_layer(对于I、SI帧）函数计算过
-  int32_t NumMbPart = mb.m_NumMbPart, NumSubMbPart = 0;
+  // 宏块分区数量，指示当前宏块被划分成的分区数量，mb.m_NumMbPart已经在macroblock_mb_skip(对于B、P帧）或macroblock_layer(对于I、SI帧）函数计算过，比如P_Skip和P/B_16x16 -> 分区为1，P/B_8x16,P/B_16x8 -> 分区为2, P/B_8x8 -> 分区为4, 注意，对于帧间预测，并不存在16个分区的I_4x4
+  // B_Skip 和 B_Direct_16x16 类型的宏块不需要显式地传输运动矢量和参考索引，通过将宏块分为 4 个 8x8 的子宏块，可以直接使用相邻宏块的运动信息进行预测，而不需要额外的运动矢量计算。
+  int32_t NumMbPart =
+      (mb_type == B_Skip || mb_type == B_Direct_16x16) ? 4 : mb.m_NumMbPart;
 
-  /* 宏块的划分由mb_type指定。每个宏块分区由 mbPartIdx 引用。当宏块划分由等于子宏块的分区组成时，每个子宏块可以进一步划分为由sub_mb_type[mbPartIdx]指定的子宏块分区。每个子宏块分区由 subMbPartIdx 引用。当宏块划分不由子宏块组成时，subMbPartIdx设置为等于0。 */
-
-  /* 宏块分区索引 mbPartIdx 的范围推导如下： 
-   * – 如果 mb_type 等于 B_Skip 或 B_Direct_16x16，则 mbPartIdx 继续值 0..3。  
-   * – 否则（mb_type 不等于 B_Skip 或 B_Direct_16x16），mbPartIdx 将继续执行值 0..NumMbPart( mb_type ) − 1。*/
-  if (mb.m_name_of_mb_type == B_Skip || mb.m_name_of_mb_type == B_Direct_16x16)
-    NumMbPart = 4;
-
-  /* NOTE:大部分情况来说NumMbPart取值 1,4：
-   * - 取值为1则说明不再需要对划分为子宏块
-   * - 取值为4说明将16x16划分为4个4x4的子宏块 */
-  int32_t partWidth = 0, partHeight = 0, SubMbPartWidth = 0,
-          SubMbPartHeight = 0;
+  int32_t NumSubMbPart = 0;
+  int32_t SubMbPartWidth = 0, SubMbPartHeight = 0;
   H264_MB_PART_PRED_MODE SubMbPredMode = MB_PRED_MODE_NA;
 
-  /* 为每个宏块分区或每个子宏块分区指定以下步骤。  描述宏块分区和子宏块分区的宽度和高度的函数MbPartWidth()、MbPartHeight()、SubMbPartWidth()和SubMbPartHeight()在表7-13、7-14、7-17和7-中指定。 18.*/
+  // 遍历每个宏块分区，宏块分区索引 mbPartIdx
   for (int mbPartIdx = 0; mbPartIdx < NumMbPart; mbPartIdx++) {
-    /* 注意，如果宏块没有被划分为子宏块，同样也是在这里处理 */
-
-    /* 据宏块类型和其他参数，设置宏块的预测模式。这一步决定了如何对宏块进行预测和解码 */
+    /* 1. 根据"宏块"类型，进行查表并设置"子宏块"的预测模式：
+     * 比如，当前宏块为P_skip时，宏块分区数量为1, 当宏块分区数量为1时，会当作一个子宏块处理，即子宏块分区数量为1, 子宏块大小为8x8  */
     RET(MacroBlock::SubMbPredMode(header->slice_type, mb.sub_mb_type[mbPartIdx],
                                   NumSubMbPart, SubMbPredMode, SubMbPartWidth,
                                   SubMbPartHeight));
 
-    /* NOTE: 这里设计到了一个直接模式：没有显式编码运动矢量，通过周围块的信息来推导运动矢量。 */
+    /* 2. 对于每个宏块分区或子宏块分区的变量partWidth和partHeight推导如下：*/
+    int32_t partWidth = 0, partHeight = 0;
 
-    /* 对于mbPartIdx的每个值，宏块中每个宏块分区或子宏块分区的变量partWidth和partHeight推导如下：*/
-    if (mb.m_name_of_mb_type == P_8x8 || mb.m_name_of_mb_type == P_8x8ref0 ||
-        (mb.m_name_of_mb_type == B_8x8 &&
+    // 对于P/B宏块，意味着整个宏块被划分为 4 个 8x8 的子宏块，但这些子宏块可能进一步划分为更小的分区（如 4x4 或 4x8）所以对于这种情况，需要暂时先将宏块信息设为子宏块的信息，方便进一步划分或直接操作子宏块解码
+    if (mb_type == P_8x8 || mb_type == P_8x8ref0 ||
+        (mb_type == B_8x8 &&
          mb.m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8)) {
-      /* 如果宏块类型是 P_8x8 或 P_8x8ref0（即拿到的宏块已经就是4个 8x8的宏块其中一个，还没有分为子宏块的流程，比如拿到的是YUV420的色度块，那么此时就是一个4x4的宏块），或者宏块类型是 B_8x8 且子宏块类型（mb.m_name_of_sub_mb_type[mbPartIdx]）不是 B_Direct_8x8，则使用子宏块的分区信息 */
-
-      /* 对于P帧，意味着整个宏块被划分为 4 个 8x8 的子宏块
-       * 对于B帧，意味着宏块被划分为 8x8 的子宏块，但这些子宏块可能进一步划分为更小的分区（如 4x4 或 4x8）
-       * 所以对于这种情况，需要暂时先将宏块信息设为子宏块的信息，方便进一步划分或直接操作子宏块解码*/
-      /* 适合复杂、动态的场景，提供更细粒度的运动估计 */
       NumSubMbPart = mb.NumSubMbPart[mbPartIdx];
       partWidth = mb.SubMbPartWidth[mbPartIdx];
       partHeight = mb.SubMbPartHeight[mbPartIdx];
-    } else if (mb.m_name_of_mb_type == B_Skip ||
-               mb.m_name_of_mb_type == B_Direct_16x16 ||
-               (mb.m_name_of_mb_type == B_8x8 &&
-                mb.m_name_of_sub_mb_type[mbPartIdx] == B_Direct_8x8)) {
-      /* 如果宏块类型是 B_Skip 或 B_Direct_16x16，或者宏块类型是 B_8x8 且子宏块类型是 B_Direct_8x8，则直接将分区设置为 4x4 的大小，表示为表示 4 个 4x4 的分区 */
-      /* 直接模式：只是为了进行更细粒度的运动补偿 */
-
-      /* 适合简单、重复的运动场景，或者运动矢量可以直接推导。 */
-      NumSubMbPart = partWidth = partHeight = 4;
-    } else {
-      /* 表示没有进一步的分区，直接对该宏块进行解码，比如16x16的宏块直接解码，一般这种就是局部画面为静态画面 */
-      NumSubMbPart = 1;
-      partWidth = mb.MbPartWidth;
-      partHeight = mb.MbPartHeight;
     }
 
+    // 如果宏块类型是 B_Skip 或 B_Direct_16x16，或者宏块类型是 B_8x8 且子宏块类型是 B_Direct_8x8，则直接将分区设置为 4x4 的大小，表示为对子宏块分区为 4 个 4x4 块
+    else if (mb_type == B_Skip || mb_type == B_Direct_16x16 ||
+             (mb_type == B_8x8 &&
+              mb.m_name_of_sub_mb_type[mbPartIdx] == B_Direct_8x8))
+      NumSubMbPart = partWidth = partHeight = 4;
+
+    // 表示没有划分为子宏块(但存在宏块分区)，比如P/B_16x16,P/B_8x16,P/B_16x8的宏块
+    else {
+      partWidth = mb.MbPartWidth, partHeight = mb.MbPartHeight;
+      NumSubMbPart = 1;
+    }
+
+    /* 色度块宽高：YUV420则为8x8,YUV422则为8x16(宽x高) */
     int32_t partWidthC = 0, partHeightC = 0;
     if (ChromaArrayType != 0)
       partWidthC = partWidth / SubWidthC, partHeightC = partHeight / SubHeightC;
@@ -86,67 +76,52 @@ int PictureBase::inter_prediction_process() {
     int32_t yP =
         InverseRasterScan(mbPartIdx, mb.MbPartWidth, mb.MbPartHeight, 16, 1);
 
-    /* 在对宏块调用第 8.4.1 节之前，将变量 MvCnt 初始设置为 0 */
-
-    /* 宏块分区mbPartIdx和子宏块分区subMbPartIdx的帧间预测过程由以下有序步骤组成： 
-     * 1. 调用第8.4.1节中指定的运动矢量分量和参考索引的推导过程。  
-     * 2. 变量MvCnt 增加subMvCnt。
-     * 3. 当(weighted_pred_flag等于1且(slice_type % 5)等于0或3)或(weighted_bipred_idc大于0且(slice_type % 5)等于1)时，预测权重的推导过程如第8.4节中指定.3 被调用。
-     * 4.调用第8.4.2节中指定的帧间预测样本的解码过程。*/
-
-    /* 该过程的输入是： 
-   * – 宏块分区 mbPartIdx， 
-   * – 子宏块分区 subMbPartIdx。  */
-
-    /* 该过程的输出为： */
-    /* – 亮度运动矢量 mvL0 和 mvL1，
-       - 色度运动矢量 mvCL0 和 mvCL1(ChromaArrayType 不等于 0 时)*/
+    // 亮度运动矢量 mvL0, mvL1，色度运动矢量 mvCL0, mvCL1
     int32_t mvL0[2] = {0}, mvL1[2] = {0}, mvCL0[2] = {0}, mvCL1[2] = {0};
-    /* – 参考索引 refIdxL0 和 refIdxL1 */
+    // 参考索引 refIdxL0, refIdxL1
     int32_t refIdxL0 = -1, refIdxL1 = -1;
-    /* – 预测列表利用标志 predFlagL0 和 predFlagL1 */
+    // 预测列表利用标志 predFlagL0, predFlagL1
     int32_t predFlagL0 = 0, predFlagL1 = 0;
-    /* – 子宏块分区运动向量计数 subMvCnt。*/
-    int32_t subMvCnt = 0;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+    // 宏块、子宏块分区运动向量计数 subMvCnt
+    int32_t MvCnt = 0, subMvCnt = 0;
+#pragma GCC diagnostic pop
 
+    /* 每个宏块分区由 mbPartIdx 引用。每个子宏块分区由 subMbPartIdx 引用：
+     * a. 当宏块划分由等于子宏块的分区组成时，每个子宏块可以进一步划分为由sub_mb_type[mbPartIdx]指定的子宏块分区。
+     * b. 当宏块划分不由子宏块组成时，subMbPartIdx设置为等于0 */
+
+    // 遍历每个子宏块分区，宏块分区索引 subMbPartIdx
     for (int subMbPartIdx = 0; subMbPartIdx < NumSubMbPart; subMbPartIdx++) {
       /* 给出两个参考帧指针 */
       PictureBase *refPicL0 = nullptr, *refPicL1 = nullptr;
 
-      //1. 调用第8.4.1节中指定的运动矢量分量和参考索引的推导过程。
-      //8.4.1 Derivation process for motion vector components and reference indices
+      //1. 推导运动矢量分量和参考索引
       RET(derivation_motion_vector_components_and_reference_indices(
           mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, mvCL0, mvCL1,
           subMvCnt, predFlagL0, predFlagL1, refPicL0, refPicL1));
 
       //2. 变量MvCnt 增加subMvCnt。
-      //TODO 为什么不加？ <24-09-04 14:28:25, YangJing>
-      //MvCnt += subMvCnt;
-
-      uint32_t slice_type = header->slice_type % 5;
+      MvCnt += subMvCnt;
 
       int32_t logWDL = 0, w0L = 1, w1L = 1, o0L = 0, o1L = 0;
       int32_t logWDCb = 0, w0Cb = 1, w1Cb = 1, o0Cb = 0, o1Cb = 0;
       int32_t logWDCr = 0, w0Cr = 1, w1Cr = 1, o0Cr = 0, o1Cr = 0;
-      // 3. 当(weighted_pred_flag等于1且(slice_type % 5)等于0或3)或(weighted_bipred_idc大于0且(slice_type % 5)等于1)时，预测权重的推导过程如第8.4.3节中指定被调用。
-      if ((header->m_pps->weighted_pred_flag &&
+
+      // 3. 当P Slice存在加权预测 或 B Slice使用加权双向预测时
+      if ((weighted_pred_flag &&
            (slice_type == SLICE_P || slice_type == SLICE_SP)) ||
-          (header->m_pps->weighted_bipred_idc > 0 && slice_type == SLICE_B)) {
-        /* 加权预测 */
-        // 8.4.3 Derivation process for prediction weights
-        /* 输入  参考索引 refIdxL0 和 refIdxL1 ,预测列表利用标志 predFlagL0 和 predFlagL1 */
-        /* 输出: 加权预测logWDC、w0C、w1C、o0C、o1C的变量，其中C被L替换，并且当ChromaArrayType不等于0时，是Cb和Cr。*/
+          (weighted_bipred_idc > 0 && slice_type == SLICE_B))
+        //推导预测权重
         RET(derivation_prediction_weights(refIdxL0, refIdxL1, predFlagL0,
                                           predFlagL1, logWDL, w0L, w1L, o0L,
                                           o1L, logWDCb, w0Cb, w1Cb, o0Cb, o1Cb,
                                           logWDCr, w0Cr, w1Cr, o0Cr, o1Cr));
-      }
 
-      /* 宏块分区的左上样本相对于宏块的左上样本的位置是通过调用第 6.4.2.1 节中描述的逆宏块分区扫描过程来导出的，其中 mbPartIdx 作为输入和 ( xP, yP )作为输出*/
-      /* 子宏块分区的左上样本相对于宏块分区的左上样本的位置是通过调用第 6.4.2.2 节中描述的逆子宏块分区扫描过程来导出的，其中 subMbPartIdx 作为输入，并且( xS, yS ) 作为输出。 */
+      // 宏块分区、子宏块分区的左上样本相对于宏块的左上样本的位置
       int32_t xS = 0, yS = 0;
-      if (mb.m_name_of_mb_type == P_8x8 || mb.m_name_of_mb_type == P_8x8ref0 ||
-          mb.m_name_of_mb_type == B_8x8) {
+      if (mb_type == P_8x8 || mb_type == P_8x8ref0 || mb_type == B_8x8) {
         xS = InverseRasterScan(subMbPartIdx, partWidth, partHeight, 8, 0);
         yS = InverseRasterScan(subMbPartIdx, partWidth, partHeight, 8, 1);
       } else {
@@ -154,19 +129,12 @@ int PictureBase::inter_prediction_process() {
         yS = InverseRasterScan(subMbPartIdx, 4, 4, 8, 1);
       }
 
-      /* 4.调用第8.4.2节中指定的帧间预测样本的解码过程。 */
+      // 4. 计算帧间预测样本
       int32_t xAL = mb.m_mb_position_x + xP + xS;
-      int32_t yAL = mb.m_mb_position_y + yP + yS;
-
-      uint8_t predPartL[16 * 16] = {0};
-      uint8_t predPartCb[16 * 16] = {0};
-      uint8_t predPartCr[16 * 16] = {0};
-
-      if (header->MbaffFrameFlag && mb.mb_field_decoding_flag)
-        yAL = (mb.m_mb_position_y / 2 + (yP + yS));
-
-      // 8.4.2 Decoding process for Inter prediction samples
-      //* 输出：帧间预测样本predPart，它们是预测亮度样本的(partWidth)x(partHeight)数组predPartL，并且当ChromaArrayType不等于0时，预测的两个(partWidthC)x(partHeightC)数组predPartCb、predPartCr色度样本，每个色度分量 Cb 和 Cr 各一个。 */
+      int32_t yAL = (isMbAff) ? mb.m_mb_position_y / 2 + yP + yS
+                              : mb.m_mb_position_y + yP + yS;
+      uint8_t predPartL[256] = {0}, predPartCb[256] = {0},
+              predPartCr[256] = {0};
       RET(decoding_Inter_prediction_samples(
           mbPartIdx, subMbPartIdx, partWidth, partHeight, partWidthC,
           partHeightC, xAL, yAL, mvL0, mvL1, mvCL0, mvCL1, refPicL0, refPicL1,
@@ -187,190 +155,48 @@ int PictureBase::inter_prediction_process() {
       mb.m_PredFlagL0[mbPartIdx] = predFlagL0;
       mb.m_PredFlagL1[mbPartIdx] = predFlagL1;
 
-      /* 通过将宏块或子宏块分区预测样本放置在它们在宏块中的正确相对位置来形成宏块预测，如下所示：
-       * 变量 predL[ xP + xS + x, yP + yS + y ]（其中 x = 0..partWidth − 1, y = 0..partHeight − 1）的推导如下：
-       * predL[ xP + xS + x, yP + yS + y ] = predPartL[ x, y ]
-       * */
-      if (mb.mb_field_decoding_flag == 0) {
-        for (int i = 0; i < partHeight; i++)
-          for (int j = 0; j < partWidth; j++) {
-            int32_t y = mb_y * MbHeightL + yP + yS + i;
-            int32_t x = mb_x * MbWidthL + xP + xS + j;
-            m_pic_buff_luma[y * PicWidthInSamplesL + x] =
-                predPartL[i * partWidth + j];
-          }
+      // 5. 通过将宏块或子宏块分区预测样本放置在它们在宏块中的正确相对位置来形成宏块预测
+      // 默认为帧宏块
+      int32_t y_offset = mb_y * MbHeightL + yP + yS;
+      int32_t chroma_y_offset =
+          mb_y * MbHeightC + yP / SubHeightC + yS / SubHeightC;
 
-        /* 当 ChromaArrayType 不等于 0 时，变量 predC 的 x = 0..partWidthC − 1，y = 0..partHeightC − 1，并且 predC 和 predPartC 中的 C 被 Cb 或 Cr 替换，推导如下： */
-        if (ChromaArrayType != 0) {
-          for (int i = 0; i < partHeightC; i++)
-            for (int j = 0; j < partWidthC; j++) {
-              int32_t y =
-                  mb_y * MbHeightC + yP / SubHeightC + yS / SubHeightC + i;
-              int32_t x = mb_x * MbWidthC + xP / SubWidthC + xS / SubWidthC + j;
-              m_pic_buff_cb[y * PicWidthInSamplesC + x] =
-                  predPartCb[i * partWidthC + j];
-              m_pic_buff_cr[y * PicWidthInSamplesC + x] =
-                  predPartCr[i * partWidthC + j];
-            }
+      // 当为场宏块时
+      if (mb.mb_field_decoding_flag) {
+        y_offset = (mb_y % 2) * PicWidthInSamplesL +
+                   ((mb_y / 2) * MbHeightL + yP + yS) * 2;
+        chroma_y_offset =
+            (mb_y % 2) * PicWidthInSamplesC +
+            ((mb_y / 2) * MbHeightC + yP / SubHeightC + yS / SubHeightC) * 2;
+      }
+
+      for (int i = 0; i < partHeight; i++)
+        for (int j = 0; j < partWidth; j++) {
+          int32_t y = y_offset + i;
+          int32_t x = mb_x * MbWidthL + xP + xS + j;
+          m_pic_buff_luma[y * PicWidthInSamplesL + x] =
+              predPartL[i * partWidth + j];
         }
-      } else {
-        /* 同上帧宏块，只不过需要对顶、底同时处理 */
-        for (int i = 0; i < partHeight; i++)
-          for (int j = 0; j < partWidth; j++) {
-            int32_t y =
-                (mb_y % 2) * PicWidthInSamplesL +
-                ((mb_y / 2) * MbHeightL + yP + yS + i) * PicWidthInSamplesL * 2;
-            int32_t x = mb_x * MbWidthL + xP + xS + j;
-            m_pic_buff_luma[y + x] = predPartL[i * partWidth + j];
+
+      if (ChromaArrayType != 0) {
+        for (int i = 0; i < partHeightC; i++)
+          for (int j = 0; j < partWidthC; j++) {
+            int32_t y = chroma_y_offset + i;
+            int32_t x = mb_x * MbWidthC + xP / SubWidthC + xS / SubWidthC + j;
+            m_pic_buff_cb[y * PicWidthInSamplesC + x] =
+                predPartCb[i * partWidthC + j];
+            m_pic_buff_cr[y * PicWidthInSamplesC + x] =
+                predPartCr[i * partWidthC + j];
           }
-
-        if (ChromaArrayType != 0) {
-          for (int i = 0; i < partHeightC; i++)
-            for (int j = 0; j < partWidthC; j++) {
-              int32_t y = (mb_y % 2) * PicWidthInSamplesC +
-                          ((mb_y / 2) * MbHeightC + yP / SubHeightC +
-                           yS / SubHeightC + i) *
-                              PicWidthInSamplesC * 2;
-              int32_t x = mb_x * MbWidthC + xP / SubWidthC + xS / SubWidthC + j;
-
-              m_pic_buff_cb[y + x] = predPartCb[i * partWidthC + j];
-              m_pic_buff_cr[y + x] = predPartCr[i * partWidthC + j];
-            }
-        }
       }
 
       /* 完成该宏块解码 */
-      mb.m_isDecoded[mbPartIdx][subMbPartIdx] = 1; // 标记为已解码
+      mb.m_isDecoded[mbPartIdx][subMbPartIdx] = 1;
     }
   }
 
   return 0;
 }
-
-// 8.5.1 Specification of transform decoding process for 4x4 luma residual blocks
-// NOTE: 跟帧内预测中transform_decoding_for_4x4_luma_residual_blocks()几乎一样的逻辑
-//int PictureBase::transform_decoding_for_4x4_luma_residual_blocks_inter(
-//    int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
-//    int32_t PicWidthInSamples, uint8_t *pic_buff) {
-//
-//  /* ------------------ 设置别名 ------------------ */
-//  const MacroBlock &mb = m_mbs[CurrMbAddr];
-//  bool isMbAff =
-//      m_slice->slice_header->MbaffFrameFlag && mb.mb_field_decoding_flag;
-//  /* ------------------  End ------------------ */
-//
-//  if (mb.m_mb_pred_mode != Intra_16x16) {
-//    RET(scaling_functions(isChroma, isChromaCb));
-//
-//    for (int32_t luma4x4BlkIdx = 0; luma4x4BlkIdx < 16; luma4x4BlkIdx++) {
-//      int32_t c[4][4] = {{0}};
-//      // 8.5.6 Inverse scanning process for 4x4 transform coefficients and scaling lists
-//      RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
-//          mb.LumaLevel4x4[luma4x4BlkIdx], c,
-//          mb.field_pic_flag | mb.mb_field_decoding_flag));
-//
-//      int32_t r[4][4] = {{0}};
-//      RET(scaling_and_transform_for_residual_4x4_blocks(c, r, isChroma,
-//                                                        isChromaCb));
-//
-//      if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_4x4 &&
-//          (mb.Intra4x4PredMode[luma4x4BlkIdx] & -1) == 0)
-//        intra_residual_transform_bypass_decoding(
-//            4, 4, mb.Intra4x4PredMode[luma4x4BlkIdx], &r[0][0]);
-//
-//      int32_t xO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
-//                   InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
-//      int32_t yO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
-//                   InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
-//
-//      //--------帧内预测------------
-//      //RET(Intra_4x4_sample_prediction(luma4x4BlkIdx, pic_buff, isChroma, BitDepth);
-//
-//      // 原始像素值 = 值残差值 + 预测值
-//      int32_t u[16] = {0};
-//      for (int32_t i = 0; i < 4; i++)
-//        for (int32_t j = 0; j < 4; j++) {
-//          int32_t y = mb.m_mb_position_y + (yO + i) * (1 + isMbAff);
-//          int32_t x = mb.m_mb_position_x + (xO + j);
-//          u[i * 4 + j] =
-//              Clip1C(pic_buff[y * PicWidthInSamples + x] + r[i][j], BitDepth);
-//        }
-//
-//      RET(picture_construction_process_prior_to_deblocking_filter(
-//          u, 4, 4, luma4x4BlkIdx, isChroma, PicWidthInSamples, pic_buff));
-//    }
-//  }
-//
-//  return 0;
-//}
-
-// 8.5.3 Specification of transform decoding process for 8x8 luma residual blocks
-// This specification applies when transform_size_8x8_flag is equal to 1.
-// NOTE: 跟帧内预测中transform_decoding_for_8x8_luma_residual_blocks()几乎一样的逻辑
-//int PictureBase::transform_decoding_for_8x8_luma_residual_blocks_inter(
-//    int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
-//    int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff) {
-//
-//  /* ------------------ 设置别名 ------------------ */
-//  const MacroBlock &mb = m_mbs[CurrMbAddr];
-//  bool isMbAff =
-//      m_slice->slice_header->MbaffFrameFlag && mb.mb_field_decoding_flag;
-//  /* ------------------  End ------------------ */
-//
-//  RET(scaling_functions(isChroma, isChromaCb));
-//
-//  for (int32_t luma8x8BlkIdx = 0; luma8x8BlkIdx < 4; luma8x8BlkIdx++) {
-//    int32_t c[8][8] = {{0}};
-//    RET(inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
-//        Level8x8[luma8x8BlkIdx], c,
-//        mb.field_pic_flag | mb.mb_field_decoding_flag));
-//
-//    int32_t r[8][8] = {{0}};
-//    RET(scaling_and_transform_for_residual_8x8_blocks(c, r, isChroma,
-//                                                      isChromaCb));
-//
-//    if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_8x8 &&
-//        (mb.Intra8x8PredMode[luma8x8BlkIdx] & -1) == 0)
-//      intra_residual_transform_bypass_decoding(
-//          8, 8, mb.Intra8x8PredMode[luma8x8BlkIdx], &r[0][0]);
-//
-//    int32_t xO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 0);
-//    int32_t yO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 1);
-//
-//    //--------帧内预测------------
-//    //RET(Intra_8x8_sample_prediction(luma8x8BlkIdx, pic_buff, isChroma, BitDepth));
-//
-//    int32_t u[64] = {0};
-//
-//    for (int32_t i = 0; i < 8; i++)
-//      for (int32_t j = 0; j < 8; j++) {
-//        int32_t y = mb.m_mb_position_y + (yO + i) * (1 + isMbAff);
-//        int32_t x = mb.m_mb_position_x + (xO + j);
-//        u[i * 8 + j] =
-//            Clip1C(pic_buff[y * PicWidthInSamples + x] + r[i][j], BitDepth);
-//      }
-//
-//    RET(picture_construction_process_prior_to_deblocking_filter(
-//        u, 8, 8, luma8x8BlkIdx, isChroma, PicWidthInSamples, pic_buff));
-//  }
-//
-//  return 0;
-//}
-
-// 8.5.4 Specification of transform decoding process for chroma samples
-// This process is invoked for each chroma component Cb and Cr separately when ChromaArrayType is not equal to 0.
-//int PictureBase::transform_decoding_for_chroma_samples_inter(
-//    int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
-//  // 8.5.5 Specification of transform decoding process for chroma samples with ChromaArrayType equal to 3
-//  if (m_slice->slice_header->m_sps->ChromaArrayType == 3)
-//    return transform_decoding_for_chroma_samples_with_YUV444(
-//        isChromaCb, PicWidthInSamples, pic_buff);
-//  else
-//    return transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
-//        isChromaCb, PicWidthInSamples, pic_buff, false);
-//
-//  return 0;
-//}
 
 // 8.4.1 Derivation process for motion vector components and reference indices(运动矢量分量和参考索引的推导过程)
 /* 该过程的输入是： 

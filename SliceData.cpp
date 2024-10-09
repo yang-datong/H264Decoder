@@ -474,7 +474,7 @@ int SliceData::decoding_process() {
         0, picWidthInSamplesC, pic_buff_cr, isNeedIntraPrediction);
   }
 
-  /* 至此原始数据完成全部解码工作，输出的pic_buff_luma,pic_buff_cb,pic_buff_cr即为解码的原始数据 */
+  /* 至此该宏块的原始数据完成全部解码工作，输出的pic_buff_luma,pic_buff_cb,pic_buff_cr即为解码的原始数据 */
 eof:
   return 0;
 }

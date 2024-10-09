@@ -39,7 +39,10 @@ class PPS {
   bool redundant_pic_cnt_present_flag = 0;
   /* 指示是否存在加权预测 */
   bool weighted_pred_flag = 0;
-  /* 指定加权双向预测类型 */
+  /* 指定加权双向预测类型：
+   * 0: 表示不使用加权双向预测。
+   * 1: 表示使用加权双向预测。
+   * 2: 表示使用加权双向预测，但权重是隐式计算的。 */
   uint32_t weighted_bipred_idc = 0;
   /* 指示是否存在去块滤波器控制信息 */
   bool deblocking_filter_control_present_flag = 0;

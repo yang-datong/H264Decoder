@@ -1020,7 +1020,6 @@ struct SUB_MB_TYPE_P_MBS_T
 
 //Table 7-17 – Sub-macroblock types in P macroblocks
 const SUB_MB_TYPE_P_MBS_T sub_mb_type_P_mbs_define[4] = {
-    //    { inferred,    NA,         NA,   NA,         NA,   NA },
     {0, P_L0_8x8, 1, Pred_L0, 8, 8},
     {1, P_L0_8x4, 2, Pred_L0, 8, 4},
     {2, P_L0_4x8, 2, Pred_L0, 4, 8},
@@ -1042,7 +1041,6 @@ struct SUB_MB_TYPE_B_MBS_T
 };
 */
 const SUB_MB_TYPE_B_MBS_T sub_mb_type_B_mbs_define[13] = {
-    //    { inferred,    mb_type,    4,    Direct,    4,    4 },
     {0, B_Direct_8x8, 4, Direct, 4, 4}, {1, B_L0_8x8, 1, Pred_L0, 8, 8},
     {2, B_L1_8x8, 1, Pred_L1, 8, 8},    {3, B_Bi_8x8, 1, BiPred, 8, 8},
     {4, B_L0_8x4, 2, Pred_L0, 8, 4},    {5, B_L0_4x8, 2, Pred_L0, 4, 8},
