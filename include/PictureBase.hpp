@@ -188,9 +188,9 @@ class PictureBase {
       int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff);
   int transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
       int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff);
-  int transformation_for_residual_4x4_blocks(int32_t d[4][4],
+  int transform_decoding_for_residual_4x4_blocks(int32_t d[4][4],
                                              int32_t (&r)[4][4]);
-  int transformation_for_residual_8x8_blocks(int32_t d[8][8],
+  int transform_decoding_for_residual_8x8_blocks(int32_t d[8][8],
                                              int32_t (&r)[8][8]);
   //----------------- 获取当前使用的帧内预测模式 ------------------------
   int getIntra4x4PredMode(int32_t luma4x4BlkIdx, int32_t &currMbAddrPredMode,
@@ -209,6 +209,8 @@ class PictureBase {
   int intra_16x16_sample_prediction(uint8_t *pic_buff_luma_pred,
                                     int32_t PicWidthInSamples, int32_t isChroma,
                                     int32_t BitDepth);
+  int intra_residual_transform_bypass_decoding(int32_t nW, int32_t nH,
+                                               int32_t horPredFlag, int32_t *r);
   //----------------- 帧内预测算法(Chroma) ------------------------
   int intra_chroma_sample_prediction(uint8_t *pic_buff_chroma_pred,
                                      int32_t PicWidthInSamples);
@@ -222,7 +224,7 @@ class PictureBase {
   int inverse_mb_scanning_process(int32_t MbaffFrameFlag, int32_t mbAddr,
                                   int32_t mb_field_decoding_flag, int32_t &x,
                                   int32_t &y);
-  int Inverse_sub_macroblock_partition_scanning_process(
+  int inverse_sub_macroblock_partition_scanning_process(
       H264_MB_TYPE m_name_of_mb_type, int32_t mbPartIdx, int32_t subMbPartIdx,
       int32_t &x, int32_t &y);
 
@@ -275,14 +277,13 @@ class PictureBase {
                                                       uint8_t &chroma4x4BlkIdx);
   int Derivation_process_for_8x8_luma_block_indices(uint8_t xP, uint8_t yP,
                                                     uint8_t &luma8x8BlkIdx);
-  int Decoding_process_for_P_macroblocks_in_SP_slices_or_SI_macroblocks();
 
   //----------------- 量化 ------------------------
   int inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
       const int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag);
-  int scaling_and_transform_for_chroma_DC(
-      int32_t isChromaCb, int32_t c[4][2], int32_t nW, int32_t nH,
-      int32_t (&dcC)[4][2]);
+  int scaling_and_transform_for_chroma_DC(int32_t isChromaCb, int32_t c[4][2],
+                                          int32_t nW, int32_t nH,
+                                          int32_t (&dcC)[4][2]);
   int scaling_and_transform_for_residual_4x4_blocks(int32_t c[4][4],
                                                     int32_t (&r)[4][4],
                                                     int32_t isChroma,
@@ -318,8 +319,6 @@ class PictureBase {
   int transform_decoding_for_chroma_samples_inter(int32_t isChromaCb,
                                                   int32_t PicWidthInSamples,
                                                   uint8_t *pic_buff);
-  int intra_residual_transform_bypass_decoding(int32_t nW, int32_t nH,
-                                               int32_t horPredFlag, int32_t *r);
   int derivation_motion_vector_components_and_reference_indices(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
       int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],

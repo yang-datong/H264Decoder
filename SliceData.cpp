@@ -455,12 +455,12 @@ int SliceData::decoding_process() {
   else {
     pic->inter_prediction_process();
     /* 选择 4x4 或 8x8 的残差块解码函数来处理亮度残差块 */
-    if (mb.transform_size_8x8_flag == 0)
-      pic->transform_decoding_for_4x4_luma_residual_blocks_inter(
-          0, 0, BitDepth, picWidthInSamplesL, pic_buff_luma);
-    else
+    if (mb.transform_size_8x8_flag)
       pic->transform_decoding_for_8x8_luma_residual_blocks_inter(
           0, 0, BitDepth, picWidthInSamplesL, mb.LumaLevel8x8, pic_buff_luma);
+    else
+      pic->transform_decoding_for_4x4_luma_residual_blocks_inter(
+          0, 0, BitDepth, picWidthInSamplesL, pic_buff_luma);
 
     /* 调用色度残差块的解码函数(Cb,Cr) */
     pic->transform_decoding_for_chroma_samples_inter(1, picWidthInSamplesC,

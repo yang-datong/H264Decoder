@@ -8,8 +8,7 @@
 #define FRM 1
 #define AFRM 2
 
-// 8.5.1 Specification of transform decoding process for 4x4 luma residual
-// blocks This specification applies when transform_size_8x8_flag is equal to 0.
+// 8.5.1 Specification of transform decoding process for 4x4 luma residual blocks
 int PictureBase::transform_decoding_for_4x4_luma_residual_blocks_inter(
     int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
     int32_t PicWidthInSamples, uint8_t *pic_buff) {
@@ -39,8 +38,8 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks_inter(
               m_mbs[CurrMbAddr].mb_field_decoding_flag);
       RETURN_IF_FAILED(ret != 0, ret);
 
-      ret = scaling_and_transform_for_residual_4x4_blocks(
-          c, r, isChroma, isChromaCb);
+      ret = scaling_and_transform_for_residual_4x4_blocks(c, r, isChroma,
+                                                          isChromaCb);
       RETURN_IF_FAILED(ret != 0, ret);
 
       if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1 &&
@@ -147,8 +146,8 @@ int PictureBase::transform_decoding_for_8x8_luma_residual_blocks_inter(
             m_mbs[CurrMbAddr].mb_field_decoding_flag);
     RETURN_IF_FAILED(ret != 0, ret);
 
-    ret = scaling_and_transform_for_residual_8x8_blocks(
-        c, r, isChroma, isChromaCb);
+    ret = scaling_and_transform_for_residual_8x8_blocks(c, r, isChroma,
+                                                        isChromaCb);
     RETURN_IF_FAILED(ret != 0, ret);
 
     if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1 &&
@@ -259,8 +258,7 @@ int PictureBase::transform_decoding_for_chroma_samples_inter(
       c[1][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][2];
       c[1][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][3];
 
-      ret = scaling_and_transform_for_chroma_DC(
-          isChromaCb, c, 2, 2, dcC);
+      ret = scaling_and_transform_for_chroma_DC(isChromaCb, c, 2, 2, dcC);
       RETURN_IF_FAILED(ret != 0, ret);
     } else if (m_slice->slice_header->m_sps->ChromaArrayType == 2) // YUV422
     {
@@ -274,8 +272,7 @@ int PictureBase::transform_decoding_for_chroma_samples_inter(
       c[3][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][6];
       c[3][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][7];
 
-      ret = scaling_and_transform_for_chroma_DC(
-          isChromaCb, c, 2, 4, dcC);
+      ret = scaling_and_transform_for_chroma_DC(isChromaCb, c, 2, 4, dcC);
       RETURN_IF_FAILED(ret != 0, ret);
     }
 
@@ -317,8 +314,8 @@ int PictureBase::transform_decoding_for_chroma_samples_inter(
       RETURN_IF_FAILED(ret != 0, ret);
 
       int32_t isChroma = 1;
-      ret = scaling_and_transform_for_residual_4x4_blocks(
-          c, r, isChroma, isChromaCb);
+      ret = scaling_and_transform_for_residual_4x4_blocks(c, r, isChroma,
+                                                          isChromaCb);
       RETURN_IF_FAILED(ret != 0, ret);
 
       // 6.4.7 Inverse 4x4 chroma block scanning process
