@@ -259,7 +259,7 @@ int PictureBase::transform_decoding_for_chroma_samples_inter(
       c[1][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][2];
       c[1][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][3];
 
-      ret = scaling_and_transform_for_chroma_DC_transform_coefficients(
+      ret = scaling_and_transform_for_chroma_DC(
           isChromaCb, c, 2, 2, dcC);
       RETURN_IF_FAILED(ret != 0, ret);
     } else if (m_slice->slice_header->m_sps->ChromaArrayType == 2) // YUV422
@@ -274,7 +274,7 @@ int PictureBase::transform_decoding_for_chroma_samples_inter(
       c[3][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][6];
       c[3][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][7];
 
-      ret = scaling_and_transform_for_chroma_DC_transform_coefficients(
+      ret = scaling_and_transform_for_chroma_DC(
           isChromaCb, c, 2, 4, dcC);
       RETURN_IF_FAILED(ret != 0, ret);
     }

@@ -2043,11 +2043,10 @@ int PictureBase::Intra_chroma_sample_prediction_for_YUV444(
 }
 
 // 8.3.5 Sample construction process for I_PCM macroblocks
-// This process is invoked when mb_type is equal to I_PCM.
-int PictureBase::Sample_construction_process_for_I_PCM_macroblocks() {
+int PictureBase::sample_construction_for_I_PCM() {
   /* ------------------ 设置别名 ------------------ */
-  const MacroBlock &mb = m_mbs[CurrMbAddr];
   const SliceHeader *header = m_slice->slice_header;
+  const MacroBlock &mb = m_mbs[CurrMbAddr];
 
   bool MbaffFrameFlag = header->MbaffFrameFlag;
   bool isMbAff = MbaffFrameFlag && mb.mb_field_decoding_flag;
@@ -2057,23 +2056,28 @@ int PictureBase::Sample_construction_process_for_I_PCM_macroblocks() {
   uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
   /* ------------------  End ------------------ */
 
-  // 6.4.1 Inverse macroblock scanning processy
   int32_t xP = 0, yP = 0;
   inverse_mb_scanning_process(MbaffFrameFlag, CurrMbAddr,
                               mb.mb_field_decoding_flag, xP, yP);
 
-  int32_t dy = (isMbAff) ? 2 : 1;
-  for (int i = 0; i < 256; ++i)
-    m_pic_buff_luma[(yP + dy * (i / 16)) * PicWidthInSamplesL +
-                    (xP + (i % 16))] = mb.pcm_sample_luma[i];
+  /* 亮度样本复制 */
+  int LumaSize = 16 * 16;
+  for (int i = 0; i < LumaSize; ++i) {
+    int y = yP + (1 + isMbAff) * (i / 16);
+    int x = xP + (i % 16);
+    m_pic_buff_luma[y * PicWidthInSamplesL + x] = mb.pcm_sample_luma[i];
+  }
 
+  /* 存在色度样本，则复制 */
   if (ChromaArrayType != 0) {
-    for (int32_t i = 0; i < (int32_t)(MbWidthC * MbHeightC); ++i) {
-      int32_t y = (yP + SubHeightC - 1) / SubHeightC + dy * (i / MbWidthC);
-      int32_t x = xP / SubWidthC + (i % MbWidthC);
+    int ChromaSize = MbWidthC * MbHeightC;
+    for (int32_t i = 0; i < ChromaSize; ++i) {
+      int y =
+          (yP + SubHeightC - 1) / SubHeightC + (1 + isMbAff) * (i / MbWidthC);
+      int x = xP / SubWidthC + (i % MbWidthC);
       m_pic_buff_cb[y * PicWidthInSamplesC + x] = mb.pcm_sample_chroma[i];
       m_pic_buff_cr[y * PicWidthInSamplesC + x] =
-          mb.pcm_sample_chroma[i + MbWidthC * MbHeightC];
+          mb.pcm_sample_chroma[i + ChromaSize];
     }
   }
 
@@ -3045,7 +3049,7 @@ int PictureBase::intra_residual_transform_bypass_decoding(int32_t nW,
 }
 
 // 8.5.2 Specification of transform decoding process for luma samples of Intra_16x16 macroblock prediction mode
-int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
+int PictureBase::transform_decoding_for_luma_samples_of_16x16(
     int32_t isChroma, int32_t BitDepth, int32_t QP1, int32_t PicWidthInSamples,
     int32_t Intra16x16DCLevel[16], int32_t Intra16x16ACLevel[16][16],
     uint8_t *pic_buff) {
@@ -3143,179 +3147,163 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16_mb_prediction(
 /* 当 ChromaArrayType 不等于 0 时，针对每个色度分量 Cb 和 Cr 分别调用此过程。*/
 int PictureBase::transform_decoding_for_chroma_samples(
     int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
-  /* ------------------ 设置别名 ------------------ */
-  const MacroBlock &mb = m_mbs[CurrMbAddr];
-  const SliceHeader *header = m_slice->slice_header;
-  const uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
-  bool isMbAff = header->MbaffFrameFlag && mb.mb_field_decoding_flag;
-  uint32_t BitDepthC = header->m_sps->BitDepthC;
-  /* ------------------  End ------------------ */
-
-  /* YUV444 */
-  if (ChromaArrayType == 3) {
-    // 8.5.5 Specification of transform decoding process for chroma samples with ChromaArrayType equal to 3
-    RET(transform_decoding_for_chroma_samples_with_YUV444(
-        isChromaCb, PicWidthInSamples, pic_buff));
-
-    /* YUV420,YUV422 */
-  } else {
-    //对于每个色度分量，变量 ChromaDCLevel[ iCbCr ] 和 ChromaACLevel[ iCbCr ]（其中 Cb 的 iCbCr 设置为 0，Cr 的 iCbCr 设置为 1）包含色度变换系数的两个分量的级别。  将变量 numChroma4x4Blks 设置为等于 (MbWidthC / 4) * (MbHeightC / 4)。
-    bool iCbCr = (isChromaCb != 1);
-    int32_t numChroma4x4Blks = (MbWidthC / 4) * (MbHeightC / 4);
-
-    /* 对于每个色度分量，变换解码按照以下有序步骤单独进行：
-     * 1. 按照以下有序步骤指定，对由宏块的 iCbCr 索引的分量的 4x4 色度块的 numChroma4x4Blks 色度 DC 变换系数进行解码：
-     * – 如果 ChromaArrayType 等于 1，则使用应用于 ChromaDCLevel 的逆光栅扫描过程导出 2x2 数组 c，如下所示:
-     * – 否则（ChromaArrayType 等于 2），将使用应用于 ChromaDCLevel 的逆光栅扫描过程导出 2x4 数组 c，如下所示：
-     * 使用 c 作为输入和 dcC 作为输出来调用第 8.5.11 节中指定的色度 DC 变换系数的缩放和变换过程。*/
-    int32_t dcC[4][2] = {{0}};
-
-    // YUV420
-    int32_t w = 2, h = 2, c[4][2] = {{0}};
-    c[0][0] = mb.ChromaDCLevel[iCbCr][0];
-    c[0][1] = mb.ChromaDCLevel[iCbCr][1];
-    c[1][0] = mb.ChromaDCLevel[iCbCr][2];
-    c[1][1] = mb.ChromaDCLevel[iCbCr][3];
-
-    // YUV422
-    if (ChromaArrayType == 2) {
-      h = 4;
-      c[2][0] = mb.ChromaDCLevel[iCbCr][4];
-      c[2][1] = mb.ChromaDCLevel[iCbCr][5];
-      c[3][0] = mb.ChromaDCLevel[iCbCr][6];
-      c[3][1] = mb.ChromaDCLevel[iCbCr][7];
-    }
-
-    // 8.5.11 Scaling and transformation process for chroma DC transform
-    RET(scaling_and_transform_for_chroma_DC_transform_coefficients(
-        isChromaCb, c, w, h, dcC));
-
-    /* 2. (MbWidthC)x(MbHeightC) 数组 rMb 是通过处理由 iCbCr 索引的分量的 chroma4x4BlkIdx = 0..numChroma4x4Blks − 1 索引的 4x4 色度块导出的，并且对于每个 4x4 色度块，指定以下有序步骤: */
-    const int32_t dcC_to_chroma_index[8] = {
-        dcC[0][0], dcC[0][1], dcC[1][0], dcC[1][1],
-        dcC[2][0], dcC[2][1], dcC[3][0], dcC[3][1],
-    };
-    int32_t rMb[16][16] = {{0}};
-    for (int chroma4x4BlkIdx = 0; chroma4x4BlkIdx < numChroma4x4Blks;
-         chroma4x4BlkIdx++) {
-      //* a. 导出变量 chromaList，它是一个包含 16 个条目的列表。 chromaList 的第一个条目是数组 dcC 中的相应值。图 8-7 显示了数组 dcC 的索引到 chroma4x4BlkIdx 的分配。小方块中的两个数字指的是 dcCij 中的索引 i 和 j，大方块中的数字指的是 chroma4x4BlkIdx。
-      int32_t chromaList[16] = {0};
-
-      //DC 系数
-      chromaList[0] = dcC_to_chroma_index[chroma4x4BlkIdx];
-      //AC 系数
-      for (int k = 1; k <= 15; k++)
-        chromaList[k] = mb.ChromaACLevel[iCbCr][chroma4x4BlkIdx][k - 1];
-
-      //* b. 使用 chromaList 作为输入和二维数组 c 作为输出来调用第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程。
-      int32_t c[4][4] = {{0}};
-      RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
-          chromaList, c, mb.field_pic_flag | mb.mb_field_decoding_flag));
-
-      //* c. 使用 c 作为输入和 r 作为输出来调用第 8.5.12 节中指定的残差 4x4 块的缩放和变换过程。
-      int32_t isChroma = 1;
-      int32_t r[4][4] = {{0}};
-      // 8.5.12 Scaling and transformation process for residual 4x4 blocks (反量化、反整数变换)
-      RET(scaling_and_transform_for_residual_4x4_blocks(c, r, isChroma,
-                                                        isChromaCb));
-
-      //* d. 当前宏块内索引为 chroma4x4BlkIdx 的 4x4 色度块左上角样本的位置是通过调用第 6.4.7 节中指定的逆 4x4 色度块扫描过程来导出的，其中 chroma4x4BlkIdx 作为输入，输出分配给 ( xO，yO）。
-      // 6.4.7 Inverse 4x4 chroma block scanning process
-      int32_t xO = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 0);
-      int32_t yO = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 1);
-
-      //* e. (MbWidthC)x(MbHeightC) 数组 rMb 的元素 rMb[ x, y ]（其中 x = xO..xO + 3 且 y = yO..yO + 3）通过以下公式导出：
-      for (int32_t i = 0; i <= 3; i++)
-        for (int32_t j = 0; j <= 3; j++)
-          rMb[yO + i][xO + j] = r[i][j];
-    }
-
-    /* 3.当TransformBypassModeFlag等于1，宏块预测模式等于Intra_4x4、Intra_8x8或Intra_16x16，并且intra_chroma_pred_mode等于1或2时，调用第8.5.15节中指定的帧内残差变换旁路解码过程：
-     * nW 设置等于 MbWidthC，nH 设置等于 MbHeightC，horPredFlag 设置等于 (2 − intra_chroma_pred_mode)，并且 (MbWidthC)x(MbHeightC) 数组 rMb 作为输入，输出是 (MbWidthC)x 的修改版本(MbHeightC) 数组 rMb。 */
-    if (mb.TransformBypassModeFlag &&
-        (mb.m_mb_pred_mode == Intra_4x4 || mb.m_mb_pred_mode == Intra_8x8 ||
-         ((mb.m_mb_pred_mode == Intra_16x16 &&
-           mb.intra_chroma_pred_mode == 1) ||
-          mb.intra_chroma_pred_mode == 2))) {
-      int32_t horPredFlag = 2 - mb.intra_chroma_pred_mode;
-      // 8.5.15 Intra residual transform-bypass decoding process
-      intra_residual_transform_bypass_decoding(MbWidthC, MbHeightC, horPredFlag,
-                                               &rMb[0][0]);
-    }
-
-    //帧内预测
-    RET(intra_chroma_sample_prediction(pic_buff, PicWidthInSamples));
-
-    /* 4. 对于 i = 0..MbHeightC − 1 和 j = 0..MbWidthC − 1，元素 uij 的 (MbWidthC)x(MbHeightC) 数组 u 的推导如下： */
-    int32_t u[16 * 16] = {0};
-    for (int32_t i = 0; i <= MbHeightC - 1; i++) {
-      for (int32_t j = 0; j <= MbWidthC - 1; j++) {
-        int32_t y = ((mb.m_mb_position_y >> 4) * MbHeightC) +
-                    (mb.m_mb_position_y % 2) + i * (1 + isMbAff);
-        int32_t x = (mb.m_mb_position_x >> 4) * MbWidthC + j;
-        u[i * MbHeightC + j] =
-            Clip1C(pic_buff[y * PicWidthInSamples + x] + rMb[i][j], BitDepthC);
-      }
-    }
-
-    /* 5.使用u作为输入来调用第8.5.14节中的去块滤波器过程之前的图像构建过程。 */
-    RET(picture_construction_process_prior_to_deblocking_filter(
-        u, MbWidthC, MbHeightC, 0, 1, PicWidthInSamples, pic_buff));
-  }
-
-  return 0;
+  // YUV444: 8.5.5 Specification of transform decoding process for chroma samples with ChromaArrayType equal to 3
+  if (m_slice->slice_header->m_sps->ChromaArrayType == 3)
+    return transform_decoding_for_chroma_samples_with_YUV444(
+        isChromaCb, PicWidthInSamples, pic_buff);
+  // YUV420,YUV422: 8.5.4 Specification of transform decoding process for chroma samples
+  else
+    return transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
+        isChromaCb, PicWidthInSamples, pic_buff);
 }
 
 // 8.5.5 Specification of transform decoding process for chroma samples with ChromaArrayType equal to 3
+// TODO 未测试 <24-10-09 15:56:49, YangJing>
 int PictureBase::transform_decoding_for_chroma_samples_with_YUV444(
     int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
-
-  /* 根据宏块预测模式和 Transform_size_8x8_flag，适用以下内容：
-   * – 如果宏块预测模式等于 Intra_16x16，则当用 Cb 或 Cr 代替亮度、用 CbIntra16x16DCLevel 或 CrIntra16x16DCLevel 代替 Intra16x16ACLevel 时，Cb 或 Cr 残余块的变换解码过程应与第 8.5.2 节中描述的过程相同用 CbIntra16x16ACLevel 或 CrIntra16x16ACLevel，并将 predL 替换为 predCb 或 predCr，将 luma4x4BlkIdx 替换为 cb4x4BlkIdx 或 cr4x4BlkIdx，将 lumaList 替换为 CbList 或 CrList，将 BitDepthY 替换为 BitDepthC，将 QP'Y 替换为 QP'C，以及 sub将Clip1Y与Clip1C组合。在第 8.5.12.1 节中指定的 4x4 块变换系数级别缩放期间（作为第 8.5.2 节中指定的过程的一部分调用），输入 4x4 数组 c 被视为与使用Intra_16x16 宏块预测模式。
-   * – 否则，如果transform_size_8x8_flag等于1，则8x8 Cb或8x8 Cr残差块的变换解码过程应与第8.5.3节中描述的过程相同，即用Cb或Cr替换亮度、用CbLevel8x8或CrLevel8x8替换LumaLevel8x8、替换将 predL 替换为 predCb 或 predCr，将 luma8x8BlkIdx 替换为 cb8x8BlkIdx 或 cr8x8BlkIdx，并将 Clip1Y 替换为 Clip1C。
-   * – 否则（宏块预测模式不等于Intra_16x16且transform_size_8x8_flag等于0），当用Cb或4x4 Cb或4x4 Cr替换亮度时，4x4 Cb或4x4 Cr残差块的变换解码过程应与第8.5.1节中描述的过程相同Cr，用CbLevel4x4或CrLevel4x4替代LumaLevel4x4，用predCb或predCr替代predL，用cb4x4BlkIdx或cr4x4BlkIdx替代luma4x4BlkIdx，以及用Clip1C替代Clip1Y。在第 8.5.12.1 节中指定的 4x4 块变换系数级别缩放期间（作为第 8.5.1 节中指定的过程的一部分调用），输入 4x4 数组 c 被视为与未使用以下方式编码的亮度残差块相关： Intra_16x16 宏块预测模式。*/
-
   const int32_t isChroma = 1;
   const int32_t BitDepth = m_slice->slice_header->m_sps->BitDepthC;
   MacroBlock &mb = m_mbs[CurrMbAddr];
 
   int ret = 0;
-  if (mb.m_mb_pred_mode == Intra_16x16) {
-    if (isChromaCb)
-      ret = transform_decoding_for_luma_samples_of_16x16_mb_prediction(
-          isChroma, BitDepth, mb.QP1Cb, PicWidthInSamples,
-          mb.CbIntra16x16DCLevel, mb.CbIntra16x16ACLevel, pic_buff);
-    else
-      ret = transform_decoding_for_luma_samples_of_16x16_mb_prediction(
-          isChroma, BitDepth, mb.QP1Cr, PicWidthInSamples,
-          mb.CrIntra16x16DCLevel, mb.CrIntra16x16ACLevel, pic_buff);
-  } else if (mb.transform_size_8x8_flag) {
-    if (isChromaCb)
-      ret = transform_decoding_for_8x8_luma_residual_blocks(
-          isChroma, isChromaCb, BitDepth, PicWidthInSamples, mb.CbLevel8x8,
-          pic_buff);
-    else
-      ret = transform_decoding_for_8x8_luma_residual_blocks(
-          isChroma, isChromaCb, BitDepth, PicWidthInSamples, mb.CbLevel8x8,
-          pic_buff);
-  } else {
-    if (isChromaCb == 1)
-      ret = transform_decoding_for_4x4_luma_residual_blocks(
-          isChroma, isChromaCb, BitDepth, PicWidthInSamples, pic_buff);
-    else
-      ret = transform_decoding_for_4x4_luma_residual_blocks(
-          isChroma, isChromaCb, BitDepth, PicWidthInSamples, pic_buff);
+  /* 同Luma样本一样处理 */
+  if (mb.m_mb_pred_mode == Intra_16x16)
+    ret = transform_decoding_for_luma_samples_of_16x16(
+        isChroma, BitDepth, isChromaCb ? mb.QP1Cb : mb.QP1Cr, PicWidthInSamples,
+        mb.CbIntra16x16DCLevel, mb.CbIntra16x16ACLevel, pic_buff);
+  else if (mb.transform_size_8x8_flag)
+    ret = transform_decoding_for_8x8_luma_residual_blocks(
+        isChroma, isChromaCb, BitDepth, PicWidthInSamples,
+        isChromaCb ? mb.CbLevel8x8 : mb.CrLevel8x8, pic_buff);
+  else
+    ret = transform_decoding_for_4x4_luma_residual_blocks(
+        isChroma, isChromaCb, BitDepth, PicWidthInSamples, pic_buff);
+
+  return ret;
+}
+
+// 8.5.4 Specification of transform decoding process for chroma samples
+int PictureBase::transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
+    int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
+
+  /* ------------------ 设置别名 ------------------ */
+  const SliceHeader *header = m_slice->slice_header;
+  const uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
+  const MacroBlock &mb = m_mbs[CurrMbAddr];
+  bool isMbAff = header->MbaffFrameFlag && mb.mb_field_decoding_flag;
+  uint32_t BitDepthC = header->m_sps->BitDepthC;
+  /* ------------------  End ------------------ */
+
+  // Cb 的 iCbCr 设置为 0，Cr 的 iCbCr 设置为 1
+  bool iCbCr = (isChromaCb != 1);
+  // 色度大小降采样
+  int32_t numChroma4x4Blks = (MbWidthC / 4) * (MbHeightC / 4);
+
+  /* 对于每个色度分量，变换解码按照以下有序步骤单独进行：
+     * 1. 按照以下有序步骤指定，对由宏块的 iCbCr 索引的分量的 4x4 色度块的 numChroma4x4Blks 色度 DC 变换系数进行解码：
+     * – 如果 ChromaArrayType 等于 1，则使用应用于 ChromaDCLevel 的逆光栅扫描过程导出 2x2 数组 c，如下所示:
+     * – 否则（ChromaArrayType 等于 2），将使用应用于 ChromaDCLevel 的逆光栅扫描过程导出 2x4 数组 c，如下所示：
+     * 使用 c 作为输入和 dcC 作为输出来调用第 8.5.11 节中指定的色度 DC 变换系数的缩放和变换过程。*/
+  int32_t dcC[4][2] = {{0}};
+
+  // YUV420
+  int32_t w = 2, h = 2, c[4][2] = {{0}};
+  c[0][0] = mb.ChromaDCLevel[iCbCr][0];
+  c[0][1] = mb.ChromaDCLevel[iCbCr][1];
+  c[1][0] = mb.ChromaDCLevel[iCbCr][2];
+  c[1][1] = mb.ChromaDCLevel[iCbCr][3];
+
+  // YUV422
+  if (ChromaArrayType == 2) {
+    h = 4;
+    c[2][0] = mb.ChromaDCLevel[iCbCr][4];
+    c[2][1] = mb.ChromaDCLevel[iCbCr][5];
+    c[3][0] = mb.ChromaDCLevel[iCbCr][6];
+    c[3][1] = mb.ChromaDCLevel[iCbCr][7];
   }
-  RET(ret);
+
+  // 8.5.11 Scaling and transformation process for chroma DC transform
+  RET(scaling_and_transform_for_chroma_DC(isChromaCb, c, w, h, dcC));
+
+  /* 2. (MbWidthC)x(MbHeightC) 数组 rMb 是通过处理由 iCbCr 索引的分量的 chroma4x4BlkIdx = 0..numChroma4x4Blks − 1 索引的 4x4 色度块导出的，并且对于每个 4x4 色度块，指定以下有序步骤: */
+  const int32_t dcC_to_chroma_index[8] = {
+      dcC[0][0], dcC[0][1], dcC[1][0], dcC[1][1],
+      dcC[2][0], dcC[2][1], dcC[3][0], dcC[3][1],
+  };
+  int32_t rMb[16][16] = {{0}};
+  for (int chroma4x4BlkIdx = 0; chroma4x4BlkIdx < numChroma4x4Blks;
+       chroma4x4BlkIdx++) {
+    //* a. 导出变量 chromaList，它是一个包含 16 个条目的列表。 chromaList 的第一个条目是数组 dcC 中的相应值。图 8-7 显示了数组 dcC 的索引到 chroma4x4BlkIdx 的分配。小方块中的两个数字指的是 dcCij 中的索引 i 和 j，大方块中的数字指的是 chroma4x4BlkIdx。
+    int32_t chromaList[16] = {0};
+
+    //DC 系数
+    chromaList[0] = dcC_to_chroma_index[chroma4x4BlkIdx];
+    //AC 系数
+    for (int k = 1; k <= 15; k++)
+      chromaList[k] = mb.ChromaACLevel[iCbCr][chroma4x4BlkIdx][k - 1];
+
+    //* b. 使用 chromaList 作为输入和二维数组 c 作为输出来调用第 8.5.6 节中指定的 4x4 变换系数和缩放列表的逆扫描过程。
+    int32_t c[4][4] = {{0}};
+    RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
+        chromaList, c, mb.field_pic_flag | mb.mb_field_decoding_flag));
+
+    //* c. 使用 c 作为输入和 r 作为输出来调用第 8.5.12 节中指定的残差 4x4 块的缩放和变换过程。
+    int32_t isChroma = 1;
+    int32_t r[4][4] = {{0}};
+    // 8.5.12 Scaling and transformation process for residual 4x4 blocks (反量化、反整数变换)
+    RET(scaling_and_transform_for_residual_4x4_blocks(c, r, isChroma,
+                                                      isChromaCb));
+
+    //* d. 当前宏块内索引为 chroma4x4BlkIdx 的 4x4 色度块左上角样本的位置是通过调用第 6.4.7 节中指定的逆 4x4 色度块扫描过程来导出的，其中 chroma4x4BlkIdx 作为输入，输出分配给 ( xO，yO）。
+    // 6.4.7 Inverse 4x4 chroma block scanning process
+    int32_t xO = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 0);
+    int32_t yO = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 1);
+
+    //* e. (MbWidthC)x(MbHeightC) 数组 rMb 的元素 rMb[ x, y ]（其中 x = xO..xO + 3 且 y = yO..yO + 3）通过以下公式导出：
+    for (int32_t i = 0; i < 4; i++)
+      for (int32_t j = 0; j < 4; j++)
+        rMb[yO + i][xO + j] = r[i][j];
+  }
+
+  /* 3.当TransformBypassModeFlag等于1，宏块预测模式等于Intra_4x4、Intra_8x8或Intra_16x16，并且intra_chroma_pred_mode等于1或2时，调用第8.5.15节中指定的帧内残差变换旁路解码过程：
+     * nW 设置等于 MbWidthC，nH 设置等于 MbHeightC，horPredFlag 设置等于 (2 − intra_chroma_pred_mode)，并且 (MbWidthC)x(MbHeightC) 数组 rMb 作为输入，输出是 (MbWidthC)x 的修改版本(MbHeightC) 数组 rMb。 */
+  if (mb.TransformBypassModeFlag &&
+      (mb.m_mb_pred_mode == Intra_4x4 || mb.m_mb_pred_mode == Intra_8x8 ||
+       ((mb.m_mb_pred_mode == Intra_16x16 && mb.intra_chroma_pred_mode == 1) ||
+        mb.intra_chroma_pred_mode == 2))) {
+    int32_t horPredFlag = 2 - mb.intra_chroma_pred_mode;
+    // 8.5.15 Intra residual transform-bypass decoding process
+    intra_residual_transform_bypass_decoding(MbWidthC, MbHeightC, horPredFlag,
+                                             &rMb[0][0]);
+  }
+
+  //帧内预测
+  RET(intra_chroma_sample_prediction(pic_buff, PicWidthInSamples));
+
+  /* 4. 对于 i = 0..MbHeightC − 1 和 j = 0..MbWidthC − 1，元素 uij 的 (MbWidthC)x(MbHeightC) 数组 u 的推导如下： */
+  int32_t u[16 * 16] = {0};
+  for (int32_t i = 0; i <= MbHeightC - 1; i++) {
+    for (int32_t j = 0; j <= MbWidthC - 1; j++) {
+      int32_t y = ((mb.m_mb_position_y >> 4) * MbHeightC) +
+                  (mb.m_mb_position_y % 2) + i * (1 + isMbAff);
+      int32_t x = (mb.m_mb_position_x >> 4) * MbWidthC + j;
+      u[i * MbHeightC + j] =
+          Clip1C(pic_buff[y * PicWidthInSamples + x] + rMb[i][j], BitDepthC);
+    }
+  }
+
+  /* 5.使用u作为输入来调用第8.5.14节中的去块滤波器过程之前的图像构建过程。 */
+  RET(picture_construction_process_prior_to_deblocking_filter(
+      u, MbWidthC, MbHeightC, 0, 1, PicWidthInSamples, pic_buff));
 
   return 0;
 }
 
-// 8.5.11 Scaling and transformation process for chroma DC transform
-// coefficients c[2][2] or c[4][2], dcC[nH][nW]
-int PictureBase::scaling_and_transform_for_chroma_DC_transform_coefficients(
-    int32_t isChromaCb, int32_t c[4][2], int32_t nW, int32_t nH,
-    int32_t (&dcC)[4][2]) {
+// 8.5.11 Scaling and transformation process for chroma DC transform coefficients
+int PictureBase::scaling_and_transform_for_chroma_DC(int32_t isChromaCb,
+                                                     int32_t c[4][2],
+                                                     int32_t nW, int32_t nH,
+                                                     int32_t (&dcC)[4][2]) {
   int ret = 0;
   // SliceHeader &slice_header = m_h264_slice_header;
 

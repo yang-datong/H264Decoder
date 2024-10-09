@@ -177,7 +177,7 @@ class PictureBase {
   int transform_decoding_for_8x8_luma_residual_blocks(
       int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
       int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff);
-  int transform_decoding_for_luma_samples_of_16x16_mb_prediction(
+  int transform_decoding_for_luma_samples_of_16x16(
       int32_t isChroma, int32_t BitDepth, int32_t QP1,
       int32_t PicWidthInSamples, int32_t Intra16x16DCLevel[16],
       int32_t Intra16x16ACLevel[16][16], uint8_t *pic_buff);
@@ -185,6 +185,8 @@ class PictureBase {
                                             int32_t PicWidthInSamples,
                                             uint8_t *pic_buff);
   int transform_decoding_for_chroma_samples_with_YUV444(
+      int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff);
+  int transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
       int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff);
   int transformation_for_residual_4x4_blocks(int32_t d[4][4],
                                              int32_t (&r)[4][4]);
@@ -214,7 +216,7 @@ class PictureBase {
       uint8_t *pic_buff_chroma_pred, int32_t PicWidthInSamples);
   int Intra_chroma_sample_prediction_for_YUV444(uint8_t *pic_buff_chroma_pred,
                                                 int32_t PicWidthInSamples);
-  int Sample_construction_process_for_I_PCM_macroblocks();
+  int sample_construction_for_I_PCM();
 
   //----------------- 宏块扫描 左上角位置 ------------------------
   int inverse_mb_scanning_process(int32_t MbaffFrameFlag, int32_t mbAddr,
@@ -278,7 +280,7 @@ class PictureBase {
   //----------------- 量化 ------------------------
   int inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
       const int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag);
-  int scaling_and_transform_for_chroma_DC_transform_coefficients(
+  int scaling_and_transform_for_chroma_DC(
       int32_t isChromaCb, int32_t c[4][2], int32_t nW, int32_t nH,
       int32_t (&dcC)[4][2]);
   int scaling_and_transform_for_residual_4x4_blocks(int32_t c[4][4],
@@ -292,9 +294,9 @@ class PictureBase {
       int32_t d[8][8], int32_t c[8][8], int32_t isChroma,
       const H264_MB_PART_PRED_MODE &m_mb_pred_mode, int32_t qP);
   int scaling_and_transform_for_residual_8x8_blocks(int32_t c[8][8],
-                                                            int32_t (&r)[8][8],
-                                                            int32_t isChroma,
-                                                            int32_t isChromaCb);
+                                                    int32_t (&r)[8][8],
+                                                    int32_t isChroma,
+                                                    int32_t isChromaCb);
   int inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
       int32_t values[64], int32_t (&c)[8][8], int32_t field_scan_flag);
   int derivation_chroma_quantisation_parameters(int32_t isChromaCb);

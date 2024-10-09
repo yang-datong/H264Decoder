@@ -443,12 +443,12 @@ int SliceData::decoding_process() {
     pic->transform_decoding_for_8x8_luma_residual_blocks(
         0, 0, BitDepth, picWidthInSamplesL, mb.LumaLevel8x8, pic_buff_luma);
   else if (mb.m_mb_pred_mode == Intra_16x16) //整块预测，处理较为简单的区域
-    pic->transform_decoding_for_luma_samples_of_16x16_mb_prediction(
+    pic->transform_decoding_for_luma_samples_of_16x16(
         0, BitDepth, mb.QP1Y, picWidthInSamplesL, mb.Intra16x16DCLevel,
         mb.Intra16x16ACLevel, pic_buff_luma);
   //----------------------------------- 原始数据 -----------------------------------
   else if (mb.m_name_of_mb_type == I_PCM) {
-    pic->Sample_construction_process_for_I_PCM_macroblocks();
+    pic->sample_construction_for_I_PCM();
     goto eof;
   }
   //----------------------------------- 帧间预测 -----------------------------------
