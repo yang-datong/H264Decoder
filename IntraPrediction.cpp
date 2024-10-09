@@ -239,7 +239,7 @@ int PictureBase::intra_residual_transform_bypass_decoding(int32_t nW,
 // 8.5.1 Specification of transform decoding process for 4x4 luma residual
 int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
     int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
-    int32_t PicWidthInSamples, uint8_t *pic_buff) {
+    int32_t PicWidthInSamples, uint8_t *pic_buff, bool isNeedIntraPrediction) {
 
   /* ------------------ 设置别名 ------------------ */
   MacroBlock &mb = m_mbs[CurrMbAddr];
@@ -272,8 +272,9 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
             4, 4, mb.Intra4x4PredMode[luma4x4BlkIdx], &r[0][0]);
 
       //4. 帧内预测
-      RET(intra_4x4_sample_prediction(luma4x4BlkIdx, PicWidthInSamples,
-                                      pic_buff, isChroma, BitDepth));
+      if (isNeedIntraPrediction)
+        RET(intra_4x4_sample_prediction(luma4x4BlkIdx, PicWidthInSamples,
+                                        pic_buff, isChroma, BitDepth));
 
       int32_t xO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
                    InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
@@ -304,7 +305,8 @@ int PictureBase::transform_decoding_for_4x4_luma_residual_blocks(
 // NOTE:与transform_decoding_for_4x4_luma_residual_blocks()逻辑一致
 int PictureBase::transform_decoding_for_8x8_luma_residual_blocks(
     int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
-    int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff) {
+    int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff,
+    bool isNeedIntraPrediction) {
 
   /* ------------------ 设置别名 ------------------ */
   MacroBlock &mb = m_mbs[CurrMbAddr];
@@ -333,8 +335,9 @@ int PictureBase::transform_decoding_for_8x8_luma_residual_blocks(
           8, 8, mb.Intra8x8PredMode[luma8x8BlkIdx], &r[0][0]);
 
     // 以8x8宏块为单位，帧内预测
-    RET(intra_8x8_sample_prediction(luma8x8BlkIdx, PicWidthInSamples, pic_buff,
-                                    isChroma, BitDepth));
+    if (isNeedIntraPrediction)
+      RET(intra_8x8_sample_prediction(luma8x8BlkIdx, PicWidthInSamples,
+                                      pic_buff, isChroma, BitDepth));
 
     int32_t xO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 0);
     int32_t yO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 1);
@@ -454,7 +457,8 @@ int PictureBase::transform_decoding_for_luma_samples_of_16x16(
 // 8.5.4 Specification of transform decoding process for chroma samples
 /* 当 ChromaArrayType 不等于 0 时，针对每个色度分量 Cb 和 Cr 分别调用此过程。*/
 int PictureBase::transform_decoding_for_chroma_samples(
-    int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
+    int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff,
+    bool isNeedIntraPrediction) {
   // YUV444: 8.5.5 Specification of transform decoding process for chroma samples with ChromaArrayType equal to 3
   if (m_slice->slice_header->m_sps->ChromaArrayType == 3)
     return transform_decoding_for_chroma_samples_with_YUV444(
@@ -462,7 +466,7 @@ int PictureBase::transform_decoding_for_chroma_samples(
   // YUV420,YUV422: 8.5.4 Specification of transform decoding process for chroma samples
   else
     return transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
-        isChromaCb, PicWidthInSamples, pic_buff);
+        isChromaCb, PicWidthInSamples, pic_buff, isNeedIntraPrediction);
 }
 
 // 8.5.5 Specification of transform decoding process for chroma samples with ChromaArrayType equal to 3
@@ -492,7 +496,8 @@ int PictureBase::transform_decoding_for_chroma_samples_with_YUV444(
 
 // 8.5.4 Specification of transform decoding process for chroma samples
 int PictureBase::transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
-    int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
+    int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff,
+    bool isNeedIntraPrediction) {
 
   /* ------------------ 设置别名 ------------------ */
   const SliceHeader *header = m_slice->slice_header;
@@ -578,7 +583,8 @@ int PictureBase::transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
           MbWidthC, MbHeightC, 2 - mb.intra_chroma_pred_mode, &rMb[0][0]);
 
   //帧内预测
-  RET(intra_chroma_sample_prediction(pic_buff, PicWidthInSamples));
+  if (isNeedIntraPrediction)
+    RET(intra_chroma_sample_prediction(pic_buff, PicWidthInSamples));
 
   int32_t u[16 * 16] = {0};
   for (int32_t i = 0; i < MbHeightC; i++) {

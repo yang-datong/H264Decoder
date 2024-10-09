@@ -435,6 +435,7 @@ int SliceData::decoding_process() {
   /* ------------------  End ------------------ */
 
   //8.5 Transform coefficient decoding process and picture construction process prior to deblocking filter process（根据不同类型的预测模式，进行去块滤波处理之前的变换系数解码处理和图片构造处理 ）
+  bool isNeedIntraPrediction = true;
   //----------------------------------- 帧内预测 -----------------------------------
   if (mb.m_mb_pred_mode == Intra_4x4) //分区预测，处理最为复杂的高纹理区域
     pic->transform_decoding_for_4x4_luma_residual_blocks(
@@ -453,29 +454,24 @@ int SliceData::decoding_process() {
   }
   //----------------------------------- 帧间预测 -----------------------------------
   else {
+    isNeedIntraPrediction = false;
     pic->inter_prediction_process();
     /* 选择 4x4 或 8x8 的残差块解码函数来处理亮度残差块 */
     if (mb.transform_size_8x8_flag)
-      pic->transform_decoding_for_8x8_luma_residual_blocks_inter(
-          0, 0, BitDepth, picWidthInSamplesL, mb.LumaLevel8x8, pic_buff_luma);
+      pic->transform_decoding_for_8x8_luma_residual_blocks(
+          0, 0, BitDepth, picWidthInSamplesL, mb.LumaLevel8x8, pic_buff_luma,
+          false);
     else
-      pic->transform_decoding_for_4x4_luma_residual_blocks_inter(
-          0, 0, BitDepth, picWidthInSamplesL, pic_buff_luma);
-
-    /* 调用色度残差块的解码函数(Cb,Cr) */
-    pic->transform_decoding_for_chroma_samples_inter(1, picWidthInSamplesC,
-                                                     pic_buff_cb);
-    pic->transform_decoding_for_chroma_samples_inter(0, picWidthInSamplesC,
-                                                     pic_buff_cr);
-    goto eof;
+      pic->transform_decoding_for_4x4_luma_residual_blocks(
+          0, 0, BitDepth, picWidthInSamplesL, pic_buff_luma, false);
   }
 
-  /* 帧内预测：当存在色度采样时，即YUV420,YUV422,YUV444进行色度解码; 反之，则不进行色度解码 */
+  /* 帧内、帧间预测都调用，当存在色度采样时，即YUV420,YUV422,YUV444进行色度解码; 反之，则不进行色度解码 */
   if (m_sps->ChromaArrayType) {
-    pic->transform_decoding_for_chroma_samples(1, picWidthInSamplesC,
-                                               pic_buff_cb);
-    pic->transform_decoding_for_chroma_samples(0, picWidthInSamplesC,
-                                               pic_buff_cr);
+    pic->transform_decoding_for_chroma_samples(
+        1, picWidthInSamplesC, pic_buff_cb, isNeedIntraPrediction);
+    pic->transform_decoding_for_chroma_samples(
+        0, picWidthInSamplesC, pic_buff_cr, isNeedIntraPrediction);
   }
 
   /* 至此原始数据完成全部解码工作，输出的pic_buff_luma,pic_buff_cb,pic_buff_cr即为解码的原始数据 */

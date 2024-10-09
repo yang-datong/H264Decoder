@@ -8,403 +8,6 @@
 #define FRM 1
 #define AFRM 2
 
-// 8.5.1 Specification of transform decoding process for 4x4 luma residual blocks
-int PictureBase::transform_decoding_for_4x4_luma_residual_blocks_inter(
-    int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
-    int32_t PicWidthInSamples, uint8_t *pic_buff) {
-  int ret = 0;
-
-  if (m_mbs[CurrMbAddr].m_mb_pred_mode != Intra_16x16) {
-    ret = scaling_functions(isChroma, isChromaCb);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    int32_t isMbAff = (m_slice->slice_header->MbaffFrameFlag == 1 &&
-                       m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
-                          ? 1
-                          : 0;
-
-    for (int32_t luma4x4BlkIdx = 0; luma4x4BlkIdx <= 15;
-         luma4x4BlkIdx++) // or CbLevel4x4 or CrLevel4x4
-    {
-      // 8.5.6 Inverse scanning process for 4x4 transform coefficients and
-      // scaling lists
-
-      int32_t c[4][4] = {{0}};
-      int32_t r[4][4] = {{0}};
-
-      ret = inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
-          m_mbs[CurrMbAddr].LumaLevel4x4[luma4x4BlkIdx], c,
-          m_mbs[CurrMbAddr].field_pic_flag |
-              m_mbs[CurrMbAddr].mb_field_decoding_flag);
-      RETURN_IF_FAILED(ret != 0, ret);
-
-      ret = scaling_and_transform_for_residual_4x4_blocks(c, r, isChroma,
-                                                          isChromaCb);
-      RETURN_IF_FAILED(ret != 0, ret);
-
-      if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1 &&
-          m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_4x4 &&
-          (m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx] == 0 ||
-           m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx] == 1)) {
-        // 8.5.15 Intra residual transform-bypass decoding process
-        int32_t nW = 4;
-        int32_t nH = 4;
-        int32_t horPredFlag = m_mbs[CurrMbAddr].Intra4x4PredMode[luma4x4BlkIdx];
-
-        int32_t f[4][4] = {{0}};
-        for (int32_t i = 0; i <= nH - 1; i++) {
-          for (int32_t j = 0; j <= nW - 1; j++) {
-            f[i][j] = r[i][j];
-          }
-        }
-
-        if (horPredFlag == 0) {
-          for (int32_t i = 0; i <= nH - 1; i++) {
-            for (int32_t j = 0; j <= nW - 1; j++) {
-              r[i][j] = 0;
-              for (int32_t k = 0; k <= i; k++) {
-                r[i][j] += f[k][j];
-              }
-            }
-          }
-        } else // if (horPredFlag == 1)
-        {
-          for (int32_t i = 0; i <= nH - 1; i++) {
-            for (int32_t j = 0; j <= nW - 1; j++) {
-              r[i][j] = 0;
-              for (int32_t k = 0; k <= j; k++) {
-                r[i][j] += f[i][k];
-              }
-            }
-          }
-        }
-      }
-
-      //------------------------------------------------------
-      // 6.4.3 Inverse 4x4 luma block scanning process
-      // InverseRasterScan = (a % (d / b) ) * b;    if e == 0;
-      // InverseRasterScan = (a / (d / b) ) * c;    if e == 1;
-      int32_t xO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
-                   InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
-      int32_t yO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
-                   InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
-
-      //--------帧内预测------------
-      //            ret = Intra_4x4_sample_prediction(luma4x4BlkIdx, pic_buff,
-      //            isChroma, BitDepth); RETURN_IF_FAILED(ret != 0, ret);
-
-      int32_t u[16] = {0};
-
-      for (int32_t i = 0; i <= 3; i++) {
-        for (int32_t j = 0; j <= 3; j++) {
-          // uij = Clip1Y( predL[ xO + j, yO + i ] + rij ) = Clip3( 0, ( 1 <<
-          // BitDepthY ) − 1, x ); u[i * 4 + j] = CLIP3( 0, ( 1 << BitDepth ) -
-          // 1,  pic_buff[(mb_y * 16 + (yO + i)) * PicWidthInSamples + (mb_x *
-          // 16 + (xO + j))] + r[i][j] );
-          u[i * 4 + j] =
-              CLIP3(0, (1 << BitDepth) - 1,
-                    pic_buff[(m_mbs[CurrMbAddr].m_mb_position_y +
-                              (yO + (i)) * (1 + isMbAff)) *
-                                 PicWidthInSamples +
-                             (m_mbs[CurrMbAddr].m_mb_position_x + (xO + (j)))] +
-                        r[i][j]);
-        }
-      }
-
-      ret = picture_construction_process_prior_to_deblocking_filter(
-          u, 4, 4, luma4x4BlkIdx, isChroma, PicWidthInSamples, pic_buff);
-      RETURN_IF_FAILED(ret != 0, ret);
-    }
-  }
-
-  return 0;
-}
-
-// 8.5.3 Specification of transform decoding process for 8x8 luma residual
-// blocks This specification applies when transform_size_8x8_flag is equal to 1.
-int PictureBase::transform_decoding_for_8x8_luma_residual_blocks_inter(
-    int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
-    int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff) {
-  int ret = 0;
-
-  ret = scaling_functions(isChroma, isChromaCb);
-
-  int32_t isMbAff = (m_slice->slice_header->MbaffFrameFlag == 1 &&
-                     m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
-                        ? 1
-                        : 0;
-
-  for (int32_t luma8x8BlkIdx = 0; luma8x8BlkIdx <= 3;
-       luma8x8BlkIdx++) // or cb8x8BlkIdx or cr8x8BlkIdx
-  {
-    int32_t c[8][8] = {{0}};
-    int32_t r[8][8] = {{0}};
-
-    ret = inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
-        Level8x8[luma8x8BlkIdx], c,
-        m_mbs[CurrMbAddr].field_pic_flag |
-            m_mbs[CurrMbAddr].mb_field_decoding_flag);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    ret = scaling_and_transform_for_residual_8x8_blocks(c, r, isChroma,
-                                                        isChromaCb);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1 &&
-        m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_8x8 &&
-        (m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx] == 0 ||
-         m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx] == 1)) {
-      // 8.5.15 Intra residual transform-bypass decoding process
-      int32_t nW = 8;
-      int32_t nH = 8;
-      int32_t horPredFlag = m_mbs[CurrMbAddr].Intra8x8PredMode[luma8x8BlkIdx];
-
-      int32_t f[8][8];
-      for (int32_t i = 0; i <= nH - 1; i++) {
-        for (int32_t j = 0; j <= nW - 1; j++) {
-          f[i][j] = r[i][j];
-        }
-      }
-
-      if (horPredFlag == 0) {
-        for (int32_t i = 0; i <= nH - 1; i++) {
-          for (int32_t j = 0; j <= nW - 1; j++) {
-            r[i][j] = 0;
-            for (int32_t k = 0; k <= i; k++) {
-              r[i][j] += f[k][j];
-            }
-          }
-        }
-      } else // if (horPredFlag == 1)
-      {
-        for (int32_t i = 0; i <= nH - 1; i++) {
-          for (int32_t j = 0; j <= nW - 1; j++) {
-            r[i][j] = 0;
-            for (int32_t k = 0; k <= j; k++) {
-              r[i][j] += f[i][k];
-            }
-          }
-        }
-      }
-    }
-
-    // 6.4.5 Inverse 8x8 luma block scanning process
-    // InverseRasterScan = (a % (d / b) ) * b;    if e == 0;
-    // InverseRasterScan = (a / (d / b) ) * c;    if e == 1;
-    int32_t xO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 0);
-    int32_t yO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 1);
-
-    //--------帧内预测------------
-    //        ret = Intra_8x8_sample_prediction(luma8x8BlkIdx, pic_buff,
-    //        isChroma, BitDepth); RETURN_IF_FAILED(ret != 0, ret);
-
-    int32_t u[64] = {0};
-
-    for (int32_t i = 0; i <= 7; i++) {
-      for (int32_t j = 0; j <= 7; j++) {
-        // uij = Clip1Y( predL[ xO + j, yO + i ] + rij ) = Clip3( 0, ( 1 <<
-        // BitDepthY ) − 1, x ); u[i * 8 + j] = CLIP3(0, (1 << BitDepth) - 1,
-        // pic_buff[(mb_y * 16 + (yO + i)) * PicWidthInSamples + (mb_x * 16 +
-        // (xO + j))] + r[i][j]);
-        u[i * 8 + j] =
-            CLIP3(0, (1 << BitDepth) - 1,
-                  pic_buff[(m_mbs[CurrMbAddr].m_mb_position_y +
-                            (yO + (i)) * (1 + isMbAff)) *
-                               PicWidthInSamples +
-                           (m_mbs[CurrMbAddr].m_mb_position_x + (xO + (j)))] +
-                      r[i][j]);
-      }
-    }
-
-    ret = picture_construction_process_prior_to_deblocking_filter(
-        u, 8, 8, luma8x8BlkIdx, isChroma, PicWidthInSamples, pic_buff);
-    RETURN_IF_FAILED(ret != 0, ret);
-  }
-
-  return 0;
-}
-
-// 8.5.4 Specification of transform decoding process for chroma samples
-// This process is invoked for each chroma component Cb and Cr separately when
-// ChromaArrayType is not equal to 0.
-int PictureBase::transform_decoding_for_chroma_samples_inter(
-    int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
-  int ret = 0;
-
-  if (m_slice->slice_header->m_sps->ChromaArrayType == 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return -1;
-  }
-
-  if (m_slice->slice_header->m_sps->ChromaArrayType == 3) {
-    // 8.5.5 Specification of transform decoding process for chroma samples with
-    // ChromaArrayType equal to 3
-    ret = transform_decoding_for_chroma_samples_with_YUV444(
-        isChromaCb, PicWidthInSamples, pic_buff);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else // if (m_slice->slice_header->m_sps->ChromaArrayType != 3)
-  {
-    int32_t iCbCr = (isChromaCb == 1) ? 0 : 1;
-    int32_t dcC[4][2] = {{0}};
-
-    int32_t numChroma4x4Blks = (MbWidthC / 4) * (MbHeightC / 4);
-
-    if (m_slice->slice_header->m_sps->ChromaArrayType == 1) // YUV420
-    {
-      int32_t c[2][2] = {{0}};
-      c[0][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][0];
-      c[0][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][1];
-      c[1][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][2];
-      c[1][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][3];
-
-      ret = scaling_and_transform_for_chroma_DC(isChromaCb, c, 2, 2, dcC);
-      RETURN_IF_FAILED(ret != 0, ret);
-    } else if (m_slice->slice_header->m_sps->ChromaArrayType == 2) // YUV422
-    {
-      int32_t c[4][2] = {{0}};
-      c[0][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][0];
-      c[0][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][1];
-      c[1][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][2];
-      c[1][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][3];
-      c[2][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][4];
-      c[2][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][5];
-      c[3][0] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][6];
-      c[3][1] = m_mbs[CurrMbAddr].ChromaDCLevel[iCbCr][7];
-
-      ret = scaling_and_transform_for_chroma_DC(isChromaCb, c, 2, 4, dcC);
-      RETURN_IF_FAILED(ret != 0, ret);
-    }
-
-    //---------------------------------
-    // raster scan
-    int32_t dcC_to_chroma_index[8] = {
-        dcC[0][0], dcC[0][1], dcC[1][0], dcC[1][1],
-        dcC[2][0], dcC[2][1], dcC[3][0], dcC[3][1],
-    };
-
-    int32_t rMb[16][16] = {{0}}; // 本应该是rMb[MbHeightC][MbWidthC],
-                                 // 此处按最大的16x16尺寸来申请数组
-
-    int32_t isMbAff = (m_slice->slice_header->MbaffFrameFlag == 1 &&
-                       m_mbs[CurrMbAddr].mb_field_decoding_flag == 1)
-                          ? 1
-                          : 0;
-
-    for (int32_t chroma4x4BlkIdx = 0; chroma4x4BlkIdx <= numChroma4x4Blks - 1;
-         chroma4x4BlkIdx++) {
-      int32_t chromaList[16] = {0};
-
-      chromaList[0] =
-          dcC_to_chroma_index[chroma4x4BlkIdx]; // 注意：这是直流系数
-
-      for (int32_t k = 1; k <= 15; k++) {
-        chromaList[k] =
-            m_mbs[CurrMbAddr].ChromaACLevel[iCbCr][chroma4x4BlkIdx][k - 1];
-      }
-
-      //-----------------
-      int32_t c[4][4] = {{0}};
-      int32_t r[4][4] = {{0}};
-
-      ret = inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
-          chromaList, c,
-          m_mbs[CurrMbAddr].field_pic_flag |
-              m_mbs[CurrMbAddr].mb_field_decoding_flag);
-      RETURN_IF_FAILED(ret != 0, ret);
-
-      int32_t isChroma = 1;
-      ret = scaling_and_transform_for_residual_4x4_blocks(c, r, isChroma,
-                                                          isChromaCb);
-      RETURN_IF_FAILED(ret != 0, ret);
-
-      // 6.4.7 Inverse 4x4 chroma block scanning process
-      int32_t xO = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 0);
-      int32_t yO = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 1);
-
-      for (int32_t i = 0; i <= 3; i++) {
-        for (int32_t j = 0; j <= 3; j++) {
-          rMb[yO + i][xO + j] = r[i][j];
-        }
-      }
-    }
-
-    //--------------------------------------------------
-    if (m_mbs[CurrMbAddr].TransformBypassModeFlag == 1 &&
-        (m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_4x4 ||
-         m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_8x8 ||
-         ((m_mbs[CurrMbAddr].m_mb_pred_mode == Intra_16x16 &&
-           m_mbs[CurrMbAddr].intra_chroma_pred_mode == 1) ||
-          m_mbs[CurrMbAddr].intra_chroma_pred_mode == 2))) {
-      // 8.5.15 Intra residual transform-bypass decoding process
-      int32_t nW = MbWidthC;
-      int32_t nH = MbHeightC;
-      int32_t horPredFlag = 2 - m_mbs[CurrMbAddr].intra_chroma_pred_mode;
-
-      int32_t f[16][16] = {{0}};
-      for (int32_t i = 0; i <= nH - 1; i++) {
-        for (int32_t j = 0; j <= nW - 1; j++) {
-          f[i][j] = rMb[i][j];
-        }
-      }
-
-      if (horPredFlag == 0) {
-        for (int32_t i = 0; i <= nH - 1; i++) {
-          for (int32_t j = 0; j <= nW - 1; j++) {
-            rMb[i][j] = 0;
-            for (int32_t k = 0; k <= i; k++) {
-              rMb[i][j] += f[k][j];
-            }
-          }
-        }
-      } else // if (horPredFlag == 1)
-      {
-        for (int32_t i = 0; i <= nH - 1; i++) {
-          for (int32_t j = 0; j <= nW - 1; j++) {
-            rMb[i][j] = 0;
-            for (int32_t k = 0; k <= j; k++) {
-              rMb[i][j] += f[i][k];
-            }
-          }
-        }
-      }
-    }
-
-    //--------------------------------------
-    //--------帧内预测------------
-    //        ret = Intra_chroma_sample_prediction(pic_buff);
-    //        RETURN_IF_FAILED(ret != 0, ret);
-
-    int32_t u[16 * 16] = {0};
-
-    for (int32_t i = 0; i <= MbHeightC - 1; i++) {
-      for (int32_t j = 0; j <= MbWidthC - 1; j++) {
-        // uij = Clip1C( predC[ j, i ] + rMb[ j, i ] );
-        // u[i * MbHeightC + j] = CLIP3(0, (1 <<
-        // m_h264_m_slice->slice_header->m_sps->BitDepthC) - 1, pic_buff[(mb_y * MbHeightC
-        // + i) * PicWidthInSamples + (mb_x * MbWidthC + j)] + rMb[i][j]);
-        u[i * MbHeightC + j] = CLIP3(
-            0, (1 << m_slice->slice_header->m_sps->BitDepthC) - 1,
-            pic_buff[(((m_mbs[CurrMbAddr].m_mb_position_y >> 4) * MbHeightC) +
-                      (m_mbs[CurrMbAddr].m_mb_position_y % 2) +
-                      (i) * (1 + isMbAff)) *
-                         PicWidthInSamples +
-                     ((m_mbs[CurrMbAddr].m_mb_position_x >> 4) * MbWidthC +
-                      (j))] +
-                rMb[i][j]);
-      }
-    }
-
-    int32_t BlkIdx = 0;
-    int32_t isChroma = 1;
-    ret = picture_construction_process_prior_to_deblocking_filter(
-        u, MbWidthC, MbHeightC, BlkIdx, isChroma, PicWidthInSamples, pic_buff);
-    RETURN_IF_FAILED(ret != 0, ret);
-  }
-
-  return 0;
-}
-
 // 8.4 Inter prediction process
 // This process is invoked when decoding P and B macroblock types.
 /* 该过程的输出是当前宏块的帧间预测样本，它们是亮度样本的 16x16 数组 predL，并且当 ChromaArrayType 不等于 0 时，是色度样本的两个 (MbWidthC)x(MbHeightC) 数组 predCb 和 predCr，每个数组对应一个色度分量 Cb 和 Cr。*/
@@ -416,7 +19,8 @@ int PictureBase::inter_prediction_process() {
   const int32_t SubWidthC = header->m_sps->SubWidthC;
 
   /* 宏块部分数量，指示当前宏块被划分成的部分数量 */
-  int32_t NumMbPart = 0, NumSubMbPart = 0;
+  // mb.m_NumMbPart已经在macroblock_mb_skip(对于B、P帧）或macroblock_layer(对于I、SI帧）函数计算过
+  int32_t NumMbPart = mb.m_NumMbPart, NumSubMbPart = 0;
 
   /* 宏块的划分由mb_type指定。每个宏块分区由 mbPartIdx 引用。当宏块划分由等于子宏块的分区组成时，每个子宏块可以进一步划分为由sub_mb_type[mbPartIdx]指定的子宏块分区。每个子宏块分区由 subMbPartIdx 引用。当宏块划分不由子宏块组成时，subMbPartIdx设置为等于0。 */
 
@@ -425,14 +29,10 @@ int PictureBase::inter_prediction_process() {
    * – 否则（mb_type 不等于 B_Skip 或 B_Direct_16x16），mbPartIdx 将继续执行值 0..NumMbPart( mb_type ) − 1。*/
   if (mb.m_name_of_mb_type == B_Skip || mb.m_name_of_mb_type == B_Direct_16x16)
     NumMbPart = 4;
-  /* mb.m_NumMbPart已经在macroblock_mb_skip(对于B、P帧）或macroblock_layer(对于I、SI帧）函数计算过 */
-  else
-    NumMbPart = mb.m_NumMbPart;
 
   /* NOTE:大部分情况来说NumMbPart取值 1,4：
    * - 取值为1则说明不再需要对划分为子宏块
    * - 取值为4说明将16x16划分为4个4x4的子宏块 */
-
   int32_t partWidth = 0, partHeight = 0, SubMbPartWidth = 0,
           SubMbPartHeight = 0;
   H264_MB_PART_PRED_MODE SubMbPredMode = MB_PRED_MODE_NA;
@@ -478,11 +78,8 @@ int PictureBase::inter_prediction_process() {
     }
 
     int32_t partWidthC = 0, partHeightC = 0;
-    /* 当ChromaArrayType不等于0时，变量partWidthC和partHeightC导出为：*/
-    if (ChromaArrayType != 0) {
-      partWidthC = partWidth / SubWidthC;
-      partHeightC = partHeight / SubHeightC;
-    }
+    if (ChromaArrayType != 0)
+      partWidthC = partWidth / SubWidthC, partHeightC = partHeight / SubHeightC;
 
     int32_t xP =
         InverseRasterScan(mbPartIdx, mb.MbPartWidth, mb.MbPartHeight, 16, 0);
@@ -532,10 +129,9 @@ int PictureBase::inter_prediction_process() {
       int32_t logWDCb = 0, w0Cb = 1, w1Cb = 1, o0Cb = 0, o1Cb = 0;
       int32_t logWDCr = 0, w0Cr = 1, w1Cr = 1, o0Cr = 0, o1Cr = 0;
       // 3. 当(weighted_pred_flag等于1且(slice_type % 5)等于0或3)或(weighted_bipred_idc大于0且(slice_type % 5)等于1)时，预测权重的推导过程如第8.4.3节中指定被调用。
-      if ((m_slice->slice_header->m_pps->weighted_pred_flag &&
+      if ((header->m_pps->weighted_pred_flag &&
            (slice_type == SLICE_P || slice_type == SLICE_SP)) ||
-          (m_slice->slice_header->m_pps->weighted_bipred_idc > 0 &&
-           slice_type == SLICE_B)) {
+          (header->m_pps->weighted_bipred_idc > 0 && slice_type == SLICE_B)) {
         /* 加权预测 */
         // 8.4.3 Derivation process for prediction weights
         /* 输入  参考索引 refIdxL0 和 refIdxL1 ,预测列表利用标志 predFlagL0 和 predFlagL1 */
@@ -596,8 +192,8 @@ int PictureBase::inter_prediction_process() {
        * predL[ xP + xS + x, yP + yS + y ] = predPartL[ x, y ]
        * */
       if (mb.mb_field_decoding_flag == 0) {
-        for (int i = 0; i <= partHeight - 1; i++)
-          for (int j = 0; j <= partWidth - 1; j++) {
+        for (int i = 0; i < partHeight; i++)
+          for (int j = 0; j < partWidth; j++) {
             int32_t y = mb_y * MbHeightL + yP + yS + i;
             int32_t x = mb_x * MbWidthL + xP + xS + j;
             m_pic_buff_luma[y * PicWidthInSamplesL + x] =
@@ -606,20 +202,21 @@ int PictureBase::inter_prediction_process() {
 
         /* 当 ChromaArrayType 不等于 0 时，变量 predC 的 x = 0..partWidthC − 1，y = 0..partHeightC − 1，并且 predC 和 predPartC 中的 C 被 Cb 或 Cr 替换，推导如下： */
         if (ChromaArrayType != 0) {
-          for (int i = 0; i <= partHeightC - 1; i++)
-            for (int j = 0; j <= partWidthC - 1; j++) {
+          for (int i = 0; i < partHeightC; i++)
+            for (int j = 0; j < partWidthC; j++) {
               int32_t y =
                   mb_y * MbHeightC + yP / SubHeightC + yS / SubHeightC + i;
               int32_t x = mb_x * MbWidthC + xP / SubWidthC + xS / SubWidthC + j;
-              uint32_t index = y * PicWidthInSamplesC + x;
-              m_pic_buff_cb[index] = predPartCb[i * partWidthC + j];
-              m_pic_buff_cr[index] = predPartCr[i * partWidthC + j];
+              m_pic_buff_cb[y * PicWidthInSamplesC + x] =
+                  predPartCb[i * partWidthC + j];
+              m_pic_buff_cr[y * PicWidthInSamplesC + x] =
+                  predPartCr[i * partWidthC + j];
             }
         }
       } else {
         /* 同上帧宏块，只不过需要对顶、底同时处理 */
-        for (int i = 0; i <= partHeight - 1; i++)
-          for (int j = 0; j <= partWidth - 1; j++) {
+        for (int i = 0; i < partHeight; i++)
+          for (int j = 0; j < partWidth; j++) {
             int32_t y =
                 (mb_y % 2) * PicWidthInSamplesL +
                 ((mb_y / 2) * MbHeightL + yP + yS + i) * PicWidthInSamplesL * 2;
@@ -628,8 +225,8 @@ int PictureBase::inter_prediction_process() {
           }
 
         if (ChromaArrayType != 0) {
-          for (int i = 0; i <= partHeightC - 1; i++)
-            for (int j = 0; j <= partWidthC - 1; j++) {
+          for (int i = 0; i < partHeightC; i++)
+            for (int j = 0; j < partWidthC; j++) {
               int32_t y = (mb_y % 2) * PicWidthInSamplesC +
                           ((mb_y / 2) * MbHeightC + yP / SubHeightC +
                            yS / SubHeightC + i) *
@@ -649,6 +246,131 @@ int PictureBase::inter_prediction_process() {
 
   return 0;
 }
+
+// 8.5.1 Specification of transform decoding process for 4x4 luma residual blocks
+// NOTE: 跟帧内预测中transform_decoding_for_4x4_luma_residual_blocks()几乎一样的逻辑
+//int PictureBase::transform_decoding_for_4x4_luma_residual_blocks_inter(
+//    int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
+//    int32_t PicWidthInSamples, uint8_t *pic_buff) {
+//
+//  /* ------------------ 设置别名 ------------------ */
+//  const MacroBlock &mb = m_mbs[CurrMbAddr];
+//  bool isMbAff =
+//      m_slice->slice_header->MbaffFrameFlag && mb.mb_field_decoding_flag;
+//  /* ------------------  End ------------------ */
+//
+//  if (mb.m_mb_pred_mode != Intra_16x16) {
+//    RET(scaling_functions(isChroma, isChromaCb));
+//
+//    for (int32_t luma4x4BlkIdx = 0; luma4x4BlkIdx < 16; luma4x4BlkIdx++) {
+//      int32_t c[4][4] = {{0}};
+//      // 8.5.6 Inverse scanning process for 4x4 transform coefficients and scaling lists
+//      RET(inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
+//          mb.LumaLevel4x4[luma4x4BlkIdx], c,
+//          mb.field_pic_flag | mb.mb_field_decoding_flag));
+//
+//      int32_t r[4][4] = {{0}};
+//      RET(scaling_and_transform_for_residual_4x4_blocks(c, r, isChroma,
+//                                                        isChromaCb));
+//
+//      if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_4x4 &&
+//          (mb.Intra4x4PredMode[luma4x4BlkIdx] & -1) == 0)
+//        intra_residual_transform_bypass_decoding(
+//            4, 4, mb.Intra4x4PredMode[luma4x4BlkIdx], &r[0][0]);
+//
+//      int32_t xO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
+//                   InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
+//      int32_t yO = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
+//                   InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
+//
+//      //--------帧内预测------------
+//      //RET(Intra_4x4_sample_prediction(luma4x4BlkIdx, pic_buff, isChroma, BitDepth);
+//
+//      // 原始像素值 = 值残差值 + 预测值
+//      int32_t u[16] = {0};
+//      for (int32_t i = 0; i < 4; i++)
+//        for (int32_t j = 0; j < 4; j++) {
+//          int32_t y = mb.m_mb_position_y + (yO + i) * (1 + isMbAff);
+//          int32_t x = mb.m_mb_position_x + (xO + j);
+//          u[i * 4 + j] =
+//              Clip1C(pic_buff[y * PicWidthInSamples + x] + r[i][j], BitDepth);
+//        }
+//
+//      RET(picture_construction_process_prior_to_deblocking_filter(
+//          u, 4, 4, luma4x4BlkIdx, isChroma, PicWidthInSamples, pic_buff));
+//    }
+//  }
+//
+//  return 0;
+//}
+
+// 8.5.3 Specification of transform decoding process for 8x8 luma residual blocks
+// This specification applies when transform_size_8x8_flag is equal to 1.
+// NOTE: 跟帧内预测中transform_decoding_for_8x8_luma_residual_blocks()几乎一样的逻辑
+//int PictureBase::transform_decoding_for_8x8_luma_residual_blocks_inter(
+//    int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
+//    int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff) {
+//
+//  /* ------------------ 设置别名 ------------------ */
+//  const MacroBlock &mb = m_mbs[CurrMbAddr];
+//  bool isMbAff =
+//      m_slice->slice_header->MbaffFrameFlag && mb.mb_field_decoding_flag;
+//  /* ------------------  End ------------------ */
+//
+//  RET(scaling_functions(isChroma, isChromaCb));
+//
+//  for (int32_t luma8x8BlkIdx = 0; luma8x8BlkIdx < 4; luma8x8BlkIdx++) {
+//    int32_t c[8][8] = {{0}};
+//    RET(inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
+//        Level8x8[luma8x8BlkIdx], c,
+//        mb.field_pic_flag | mb.mb_field_decoding_flag));
+//
+//    int32_t r[8][8] = {{0}};
+//    RET(scaling_and_transform_for_residual_8x8_blocks(c, r, isChroma,
+//                                                      isChromaCb));
+//
+//    if (mb.TransformBypassModeFlag && mb.m_mb_pred_mode == Intra_8x8 &&
+//        (mb.Intra8x8PredMode[luma8x8BlkIdx] & -1) == 0)
+//      intra_residual_transform_bypass_decoding(
+//          8, 8, mb.Intra8x8PredMode[luma8x8BlkIdx], &r[0][0]);
+//
+//    int32_t xO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 0);
+//    int32_t yO = InverseRasterScan(luma8x8BlkIdx, 8, 8, 16, 1);
+//
+//    //--------帧内预测------------
+//    //RET(Intra_8x8_sample_prediction(luma8x8BlkIdx, pic_buff, isChroma, BitDepth));
+//
+//    int32_t u[64] = {0};
+//
+//    for (int32_t i = 0; i < 8; i++)
+//      for (int32_t j = 0; j < 8; j++) {
+//        int32_t y = mb.m_mb_position_y + (yO + i) * (1 + isMbAff);
+//        int32_t x = mb.m_mb_position_x + (xO + j);
+//        u[i * 8 + j] =
+//            Clip1C(pic_buff[y * PicWidthInSamples + x] + r[i][j], BitDepth);
+//      }
+//
+//    RET(picture_construction_process_prior_to_deblocking_filter(
+//        u, 8, 8, luma8x8BlkIdx, isChroma, PicWidthInSamples, pic_buff));
+//  }
+//
+//  return 0;
+//}
+
+// 8.5.4 Specification of transform decoding process for chroma samples
+// This process is invoked for each chroma component Cb and Cr separately when ChromaArrayType is not equal to 0.
+//int PictureBase::transform_decoding_for_chroma_samples_inter(
+//    int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff) {
+//  // 8.5.5 Specification of transform decoding process for chroma samples with ChromaArrayType equal to 3
+//  if (m_slice->slice_header->m_sps->ChromaArrayType == 3)
+//    return transform_decoding_for_chroma_samples_with_YUV444(
+//        isChromaCb, PicWidthInSamples, pic_buff);
+//  else
+//    return transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
+//        isChromaCb, PicWidthInSamples, pic_buff, false);
+//
+//  return 0;
+//}
 
 // 8.4.1 Derivation process for motion vector components and reference indices(运动矢量分量和参考索引的推导过程)
 /* 该过程的输入是： 
@@ -2036,6 +1758,377 @@ int PictureBase::Derivation_process_for_chroma_motion_vectors(
   return 0;
 }
 
+// 6.4.11.7 Derivation process for neighbouring partitions
+int PictureBase::Derivation_process_for_neighbouring_partitions(
+    int32_t xN, int32_t yN, int32_t mbPartIdx, H264_MB_TYPE currSubMbType,
+    int32_t subMbPartIdx, int32_t isChroma, int32_t &mbAddrN,
+    int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
+  int ret = 0;
+  SliceHeader *slice_header = m_slice->slice_header;
+
+  //---------------------------------------
+  // 1. The inverse macroblock partition scanning process as described in
+  // clause 6.4.2.1 is invoked with mbPartIdx as the input and ( x, y ) as the
+  // output.
+
+  // 2. The location of the upper-left luma sample inside a macroblock partition
+  // ( xS, yS ) is derived as follows:
+  //    – If mb_type is equal to P_8x8, P_8x8ref0 or B_8x8, the inverse
+  //    sub-macroblock partition scanning process
+  //      as described in clause 6.4.2.2 is invoked with subMbPartIdx as the
+  //      input and ( xS, yS ) as the output.
+  //    – Otherwise, ( xS, yS ) are set to ( 0, 0 ).
+
+  // 3. The variable predPartWidth in Table 6-2 is specified as follows:
+  //    – If mb_type is equal to P_Skip, B_Skip, or B_Direct_16x16,
+  //    predPartWidth = 16. – Otherwise, if mb_type is equal to B_8x8, the
+  //    following applies:
+  //      – If currSubMbType is equal to B_Direct_8x8, predPartWidth = 16.
+  //      – Otherwise, predPartWidth = SubMbPartWidth( sub_mb_type[ mbPartIdx ]
+  //      ).
+  //    – Otherwise, if mb_type is equal to P_8x8 or P_8x8ref0, predPartWidth =
+  //    SubMbPartWidth( sub_mb_type[ mbPartIdx ] ). – Otherwise, predPartWidth =
+  //    MbPartWidth( mb_type ).
+
+  // 4. The difference of luma location ( xD, yD ) is set according to Table
+  // 6-2.
+
+  // 5. The neighbouring luma location ( xN, yN ) is specified by
+  //        xN = x + xS + xD    (6-29)
+  //        yN = y + yS + yD    (6-30)
+
+  // 6. The derivation process for neighbouring locations as specified in
+  // clause 6.4.12 is invoked for luma locations with ( xN, yN ) as the input
+  // and the output is assigned to mbAddrN and ( xW, yW ).
+
+  //---------------------------------------
+  // mbAddrA\mbPartIdxA\subMbPartIdxA
+  // 6.4.12 Derivation process for neighbouring locations
+  int32_t xW = 0;
+  int32_t yW = 0;
+  int32_t maxW = 0;
+  int32_t maxH = 0;
+
+  MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
+  int32_t luma4x4BlkIdxN = 0;
+  int32_t luma8x8BlkIdxN = 0;
+
+  if (isChroma == 0) {
+    maxW = 16;
+    maxH = 16;
+  } else // if (isChroma == 1)
+  {
+    maxW = MbWidthC;
+    maxH = MbHeightC;
+  }
+
+  if (slice_header->MbaffFrameFlag == 0) {
+    // 6.4.12.1 Specification for neighbouring locations in fields and non-MBAFF
+    // frames
+    ret = neighbouring_locations_non_MBAFF(
+        xN, yN, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
+        luma8x8BlkIdxN, xW, yW, isChroma);
+    RETURN_IF_FAILED(ret != 0, ret);
+  } else // if (slice_header.MbaffFrameFlag == 1)
+  {
+    // 6.4.12.2 Specification for neighbouring locations in MBAFF frames
+    ret = neighbouring_locations_MBAFF(xN, yN, maxW, maxH, CurrMbAddr,
+                                       mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
+                                       luma8x8BlkIdxN, xW, yW, isChroma);
+    RETURN_IF_FAILED(ret != 0, ret);
+  }
+
+  //----------------
+  if (mbAddrN < 0) // mbAddrN is not available
+  {
+    mbAddrN = NA;
+    mbPartIdxN = NA;
+    subMbPartIdxN = NA;
+  } else // mbAddrN is available
+  {
+    // 6.4.13.4 Derivation process for macroblock and sub-macroblock partition
+    // indices
+    ret =
+        Derivation_process_for_macroblock_and_sub_macroblock_partition_indices(
+            m_mbs[mbAddrN].m_name_of_mb_type,
+            m_mbs[mbAddrN].m_name_of_sub_mb_type, xW, yW, mbPartIdxN,
+            subMbPartIdxN);
+    RETURN_IF_FAILED(ret != 0, ret);
+
+    // FIXME:
+    // When the partition given by mbPartIdxN and subMbPartIdxN is not yet
+    // decoded, the macroblock partition mbPartIdxN and the sub-macroblock
+    // partition subMbPartIdxN are marked as not available.
+    if (m_mbs[mbAddrN].NumSubMbPart[mbPartIdxN] > subMbPartIdxN &&
+        m_mbs[mbAddrN].m_isDecoded[mbPartIdxN][subMbPartIdxN] == 0) {
+      // mbAddrN = NA;
+      // mbPartIdxN = NA;
+      // subMbPartIdxN = NA;
+    }
+  }
+
+  return 0;
+}
+
+// 6.4.13.4 Derivation process for macroblock and sub-macroblock partition
+// indices
+int PictureBase::
+    Derivation_process_for_macroblock_and_sub_macroblock_partition_indices(
+        H264_MB_TYPE mb_type_, H264_MB_TYPE subMbType_[4], int32_t xP,
+        int32_t yP, int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
+  int ret = 0;
+  if (mb_type_ == MB_TYPE_NA) RET(-1);
+
+  //---------------------
+  if (mb_type_ >= I_NxN &&
+      mb_type_ <= I_PCM) // If mbType specifies an I macroblock type
+  {
+    mbPartIdxN = 0;
+  } else // mbType does not specify an I macroblock type
+  {
+    int32_t MbPartWidth = 0;
+    int32_t MbPartHeight = 0;
+
+    ret = MacroBlock::getMbPartWidthAndHeight(mb_type_, MbPartWidth,
+                                              MbPartHeight);
+    RETURN_IF_FAILED(ret != 0, ret);
+
+    // mbPartIdx = ( 16 / MbPartWidth( mbType ) ) * ( yP / MbPartHeight( mbType
+    // ) ) + ( xP / MbPartWidth( mbType ) );
+    mbPartIdxN = (16 / MbPartWidth) * (yP / MbPartHeight) + (xP / MbPartWidth);
+  }
+
+  // If mbType is not equal to P_8x8, P_8x8ref0, B_8x8, B_Skip, or
+  // B_Direct_16x16, subMbPartIdx is set equal to 0.
+  if (mb_type_ != P_8x8 && mb_type_ != P_8x8ref0 && mb_type_ != B_8x8 &&
+      mb_type_ != B_Skip && mb_type_ != B_Direct_16x16) {
+    subMbPartIdxN = 0;
+  } else if (mb_type_ == B_Skip || mb_type_ == B_Direct_16x16) {
+    // subMbPartIdx = 2 * ( ( yP % 8 ) / 4 ) + ( ( xP % 8 ) / 4 );
+    subMbPartIdxN = 2 * ((yP % 8) / 4) + ((xP % 8) / 4);
+  } else // mbType is equal to P_8x8, P_8x8ref0, or B_8x8
+  {
+    int32_t SubMbPartWidth = 0;
+    int32_t SubMbPartHeight = 0;
+
+    ret = MacroBlock::getMbPartWidthAndHeight(subMbType_[mbPartIdxN],
+                                              SubMbPartWidth, SubMbPartHeight);
+    RETURN_IF_FAILED(ret != 0, ret);
+
+    // subMbPartIdx = ( 8 / SubMbPartWidth( subMbType[ mbPartIdx ] ) ) * ( ( yP
+    // % 8 ) / SubMbPartHeight( subMbType[ mbPartIdx ] ) ) + ( ( xP % 8 ) /
+    // SubMbPartWidth( subMbType[ mbPartIdx ] ) )
+    subMbPartIdxN = (8 / SubMbPartWidth) * ((yP % 8) / SubMbPartHeight) +
+                    ((xP % 8) / SubMbPartWidth);
+  }
+
+  return 0;
+}
+
+// 8.4.3 Derivation process for prediction weights
+/* 输入：参考索引 refIdxL0 和 refIdxL1，预测利用标志 predFlagL0 和 predFlagL1
+ * 输出: 加权预测变量 logWDC、w0C、w1C、o0C、o1C，其中 C 被 L 替换，并且当 ChromaArrayType 不等于 0 时，为 Cb 和 Cr。*/
+int PictureBase::derivation_prediction_weights(
+    int32_t refIdxL0, int32_t refIdxL1, int32_t predFlagL0, int32_t predFlagL1,
+    int32_t &logWDL, int32_t &w0L, int32_t &w1L, int32_t &o0L, int32_t &o1L,
+    int32_t &logWDCb, int32_t &w0Cb, int32_t &w1Cb, int32_t &o0Cb,
+    int32_t &o1Cb, int32_t &logWDCr, int32_t &w0Cr, int32_t &w1Cr,
+    int32_t &o0Cr, int32_t &o1Cr) {
+
+  const SliceHeader *slice_header = m_slice->slice_header;
+  uint32_t weighted_bipred_idc =
+      m_slice->slice_header->m_pps->weighted_bipred_idc;
+  uint32_t slice_type = slice_header->slice_type % 5;
+
+  /* 变量implicitModeFlag和explicitModeFlag的推导如下：
+   * – 如果weighted_bipred_idc等于2，(slice_type % 5)等于1，predFlagL0等于1，并且predFlagL1等于1，则implicitModeFlag设置为等于1并且explicitModeFlag设置为等于0。 
+   * – 否则，如果weighted_bipred_idc等于 1，(slice_type % 5) 等于 1，并且 predFlagL0 + predFlagL1 等于 1 或 2，implicitModeFlag 设置为等于 0，explicitModeFlag 设置为等于 1。 
+   * – 否则，如果weighted_pred_flag 等于 1， (slice_type % 5) 等于 0 或 3，并且 predFlagL0 等于 1，implicitModeFlag 设置为等于 0，explicitModeFlag 设置为等于 1。 
+   * – 否则，implicitModeFlag 设置为等于 0，explicitModeFlag 设置为等于 0。*/
+  bool implicitModeFlag = 0, explicitModeFlag = 0;
+  if (weighted_bipred_idc == 2 && slice_type == SLICE_B && predFlagL0 &&
+      predFlagL1) {
+    implicitModeFlag = 1;
+    explicitModeFlag = 0;
+  } else if (weighted_bipred_idc == 1 && slice_type == SLICE_B &&
+             (predFlagL0 + predFlagL1)) {
+    implicitModeFlag = 0;
+    explicitModeFlag = 1;
+  } else if (m_slice->slice_header->m_pps->weighted_pred_flag == 1 &&
+             (slice_type == SLICE_P || slice_type == SLICE_SP) && predFlagL0) {
+    implicitModeFlag = 0;
+    explicitModeFlag = 1;
+  } else
+    implicitModeFlag = explicitModeFlag = 0;
+
+  /* 将C替换为L，当ChromaArrayType不等于0、Cb和Cr时，变量logWDC、w0C、w1C、o0C、o1C推导如下：
+   * – 如果implicitModeFlag等于1，则使用隐式模式加权预测，如下所示：*/
+  if (implicitModeFlag) {
+    logWDL = 5;
+    o0L = o1L = 0;
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
+      logWDCb = logWDCr = 5;
+      o0Cb = o1Cb = o0Cr = o1Cr = 0;
+    }
+    /* w0C 和 w1C 是按照以下顺序步骤中指定的导出的：
+     * 1. 变量 currPicOrField、pic0 和 pic1 的推导如下： */
+    PictureBase *currPicOrField = nullptr, *pic0 = nullptr, *pic1 = nullptr;
+
+    if (slice_header->field_pic_flag == 0 &&
+        m_mbs[CurrMbAddr].mb_field_decoding_flag) {
+      /* 帧图像，但是场宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
+
+      //* a.currPicOrField 是当前图片CurrPic 中与当前宏块具有相同奇偶性的字段。
+      if (CurrMbAddr % 2 == 0)
+        currPicOrField = &(m_parent->m_picture_top_filed);
+      else
+        currPicOrField = &(m_parent->m_picture_bottom_filed);
+
+      /* b.变量 pic0 的推导如下： 
+            * – 如果 refIdxL0 % 2 等于 0（参考帧索引为偶数），则 pic0 是 RefPicList0[ refIdxL0 / 2 ] 中与当前宏块具有相同奇偶校验的字段。  */
+      if (refIdxL0 % 2 == 0) {
+        if (CurrMbAddr % 2 == 0)
+          pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_top_filed);
+        else
+          pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_bottom_filed);
+
+        /* – 否则（refIdxL0 % 2 不等于 0）（参考帧索引为奇数），pic0 是 RefPicList0[ refIdxL0 / 2 ] 中与当前宏块具有相反奇偶校验的字段。   */
+      } else {
+        if (CurrMbAddr % 2 == 0)
+          pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_bottom_filed);
+        else
+          pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_top_filed);
+      }
+
+      /* c.变量 pic1 的推导：同pic0 */
+      if (refIdxL1 % 2 == 0) {
+        if (CurrMbAddr % 2 == 0)
+          pic1 = &(m_RefPicList1[refIdxL1 / 2]->m_picture_top_filed);
+        else
+          pic1 = &(m_RefPicList1[refIdxL1 / 2]->m_picture_bottom_filed);
+      } else {
+        if (CurrMbAddr % 2 == 0)
+          pic1 = &(m_RefPicList1[refIdxL1 / 2]->m_picture_bottom_filed);
+        else
+          pic1 = &(m_RefPicList1[refIdxL1 / 2]->m_picture_top_filed);
+      }
+
+      //* – 否则（field_pic_flag等于1或当前宏块是帧宏块），currPicOrField是当前图片CurrPic，pic1是RefPicList1[refIdxL1]，pic0是RefPicList0[refIdxL0]。*/
+      /* 场图像，或者帧宏块 */
+    } else {
+      currPicOrField = &(m_parent->m_picture_frame);
+      pic0 = &(m_RefPicList0[refIdxL0]->m_picture_frame);
+      pic1 = &(m_RefPicList1[refIdxL1]->m_picture_frame);
+    }
+
+    /* 2-1. 变量DistScaleFactor的推导如下： */
+    //8.4.1.2.3 Derivation process for temporal direct luma motion vector and reference index prediction mode -> page 161
+    int32_t tb = CLIP3(-128, 127, DiffPicOrderCnt(currPicOrField, pic0));
+    int32_t td = CLIP3(-128, 127, DiffPicOrderCnt(pic1, pic0));
+    if (td == 0) RET(-1);
+    int32_t tx = (16384 + ABS(td / 2)) / td;
+    int32_t DistScaleFactor = CLIP3(-1024, 1023, (tb * tx + 32) >> 6);
+
+    /* 2-2. 变量w0C和w1C的推导如下： */
+    //– 如果 DiffPicOrderCnt( pic1, pic0 ) 等于 0 或 pic1 和 pic0 之一或两者被标记为“用于长期参考”或 ( DistScaleFactor >> 2 ) < −64 或 ( DistScaleFactor >> 2 ) > 128 、w0C 和 w1C 推导为：
+    if (DiffPicOrderCnt(pic1, pic0) == 0 ||
+        pic0->reference_marked_type == PICTURE_MARKED_AS_used_long_ref ||
+        pic1->reference_marked_type == PICTURE_MARKED_AS_used_long_ref ||
+        (DistScaleFactor >> 2) < -64 || (DistScaleFactor >> 2) > 128) {
+      w0L = w1L = 32;
+
+      if (m_slice->slice_header->m_sps->ChromaArrayType != 0)
+        w0Cb = w1Cb = w0Cr = w1Cr = 32;
+
+      /* 否则，变量 tb、td、tx 和 DistScaleFactor 分别使用方程 8-201、8-202、8-197 和 8-198 从 currPicOrField、pic0 和 pic1 的值导出，权重 w0C 和w1C 导出为 */
+    } else {
+      w0L = 64 - (DistScaleFactor >> 2);
+      w1L = DistScaleFactor >> 2;
+
+      if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
+        w0Cb = w0Cr = 64 - (DistScaleFactor >> 2);
+        w1Cb = w1Cr = DistScaleFactor >> 2;
+      }
+    }
+
+    /* 否则，如果explicitModeFlag等于1，则按照以下顺序步骤指定使用显式模式加权预测： */
+  } else if (explicitModeFlag == 1) {
+    //1.变量refIdxL0WP和refIdxL1WP的推导如下：
+    int32_t refIdxL0WP = 0, refIdxL1WP = 0;
+    /* 宏块自适应帧场，场宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
+    if (slice_header->MbaffFrameFlag &&
+        m_mbs[CurrMbAddr].mb_field_decoding_flag) {
+      refIdxL0WP = refIdxL0 >> 1;
+      refIdxL1WP = refIdxL1 >> 1;
+    } else {
+      /* 非宏块自适应帧场，帧宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
+      refIdxL0WP = refIdxL0;
+      refIdxL1WP = refIdxL1;
+    }
+
+    /* 2. 变量logWDC、w0C、w1C、o0C和o1C的推导如下： */
+    // – 对于亮度样本，如果 C 等于 L
+    logWDL = slice_header->luma_log2_weight_denom;
+    w0L = slice_header->luma_weight_l0[refIdxL0WP];
+    w1L = slice_header->luma_weight_l1[refIdxL1WP];
+    o0L = slice_header->luma_offset_l0[refIdxL0WP] *
+          (1 << (m_slice->slice_header->m_sps->BitDepthY - 8));
+    o1L = slice_header->luma_offset_l1[refIdxL1WP] *
+          (1 << (m_slice->slice_header->m_sps->BitDepthY - 8));
+
+    // – 否则（对于色度样本，C 等于 Cb 或 Cr，对于 Cb，iCbCr = 0，对于 Cr，iCbCr = 1）
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
+      logWDCb = logWDCr = slice_header->chroma_log2_weight_denom;
+
+      w0Cb = slice_header->chroma_weight_l0[refIdxL0WP][0];
+      w0Cr = slice_header->chroma_weight_l0[refIdxL0WP][1];
+
+      w1Cb = slice_header->chroma_weight_l1[refIdxL1WP][0];
+      w1Cr = slice_header->chroma_weight_l1[refIdxL1WP][1];
+
+      o0Cb = slice_header->chroma_offset_l0[refIdxL0WP][0] *
+             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
+      o0Cr = slice_header->chroma_offset_l0[refIdxL0WP][1] *
+             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
+
+      o1Cb = slice_header->chroma_offset_l1[refIdxL1WP][0] *
+             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
+      o1Cr = slice_header->chroma_offset_l1[refIdxL1WP][1] *
+             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
+    }
+  } else {
+    /* 否则(implicitModeFlag等于0且explicitModeFlag等于0)，变量logWDC、w0C、w1C、o0C、o1C不用于当前宏块的重建过程。*/
+  }
+
+  /* 当explicitModeFlag等于1并且predFlagL0和predFlagL1等于1时，对于C等于L，并且当ChromaArrayType不等于0时，Cb和Cr应遵守以下约束： */
+  if (explicitModeFlag && predFlagL0 && predFlagL1) {
+    int32_t max = (logWDL == 7) ? 127 : 128;
+    if (-128 > (w0L + w1L) || (w0L + w1L) > max) {
+      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+                << std::endl;
+      return -1;
+    }
+
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
+      int32_t max = (logWDCb == 7) ? 127 : 128;
+      if (-128 > (w0Cb + w1Cb) || (w0Cb + w1Cb) > max) {
+        std::cerr << "An error occurred on " << __FUNCTION__
+                  << "():" << __LINE__ << std::endl;
+        return -1;
+      }
+
+      max = (logWDCr == 7) ? 127 : 128;
+      if (-128 > (w0Cr + w1Cr) || (w0Cr + w1Cr) > max) {
+        std::cerr << "An error occurred on " << __FUNCTION__
+                  << "():" << __LINE__ << std::endl;
+        return -1;
+      }
+    }
+  }
+
+  return 0;
+}
+
 // 8.4.2 Decoding process for Inter prediction samples
 /* 输入： 
    * – 宏块分区 mbPartIdx， 
@@ -2591,72 +2684,6 @@ int PictureBase::weighted_sample_prediction(
   return 0;
 }
 
-// 8.4.2.3.1 Default weighted sample prediction process
-/* 输入、输出同weighted_sample_prediction() */
-int PictureBase::default_weighted_sample_prediction(
-    int32_t predFlagL0, int32_t predFlagL1, int32_t partWidth,
-    int32_t partHeight, int32_t partWidthC, int32_t partHeightC,
-    uint8_t *predPartL0L, uint8_t *predPartL0Cb, uint8_t *predPartL0Cr,
-    uint8_t *predPartL1L, uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
-    /* Output: */
-    uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
-
-  /* 根据导出预测块的可用组件，以下适用： 
-   * – 如果导出亮度样本预测值 predPartL[ x, y ]，则以下适用，其中 C 设置等于 L，x 设置等于 0。 partWidth − 1，且 y 设置等于 0..partHeight − 1。 
-   * – 否则，如果导出色度 Cb 分量样本预测值 predPartCb[ x, y ]，则以下情况适用于 C 设置等于 Cb，x 设置等于0..partWidthC − 1，且 y 设置等于 0..partHeightC − 1。 
-   * – 否则（导出色度 Cr 分量样本预测值 predPartCr[ x, y ]），以下适用于设置等于 Cr、x 的 C设置等于 0..partWidthC − 1，y 设置等于 0..partHeightC − 1。 */
-  if (predFlagL0 && predFlagL1 == 0) {
-    for (int y = 0; y <= partHeight - 1; y++)
-      for (int x = 0; x <= partWidth - 1; x++)
-        predPartL[y * partWidth + x] = predPartL0L[y * partWidth + x];
-
-    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-      for (int y = 0; y <= partHeightC - 1; y++) {
-        for (int x = 0; x <= partWidthC - 1; x++) {
-          predPartCb[y * partWidthC + x] = predPartL0Cb[y * partWidthC + x];
-          predPartCr[y * partWidthC + x] = predPartL0Cr[y * partWidthC + x];
-        }
-      }
-    }
-  } else if (predFlagL0 == 0 && predFlagL1) {
-    for (int y = 0; y <= partHeight - 1; y++)
-      for (int x = 0; x <= partWidth - 1; x++)
-        predPartL[y * partWidth + x] = predPartL1L[y * partWidth + x];
-
-    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-      for (int y = 0; y <= partHeightC - 1; y++) {
-        for (int x = 0; x <= partWidthC - 1; x++) {
-          predPartCb[y * partWidthC + x] = predPartL1Cb[y * partWidthC + x];
-          predPartCr[y * partWidthC + x] = predPartL1Cr[y * partWidthC + x];
-        }
-      }
-    }
-  } else {
-    for (int y = 0; y <= partHeight - 1; y++)
-      for (int x = 0; x <= partWidth - 1; x++)
-        predPartL[y * partWidth + x] = (predPartL0L[y * partWidth + x] +
-                                        predPartL1L[y * partWidth + x] + 1) >>
-                                       1;
-
-    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-      for (int y = 0; y <= partHeightC - 1; y++) {
-        for (int x = 0; x <= partWidthC - 1; x++) {
-          predPartCb[y * partWidthC + x] =
-              (predPartL0Cb[y * partWidthC + x] +
-               predPartL1Cb[y * partWidthC + x] + 1) >>
-              1;
-          predPartCr[y * partWidthC + x] =
-              (predPartL0Cr[y * partWidthC + x] +
-               predPartL1Cr[y * partWidthC + x] + 1) >>
-              1;
-        }
-      }
-    }
-  }
-
-  return 0;
-}
-
 // 8.4.2.3.2 Weighted sample prediction process
 /* 输入、输出同weighted_sample_prediction() */
 int PictureBase::weighted_sample_prediction_process_2(
@@ -2805,203 +2832,65 @@ int PictureBase::weighted_sample_prediction_process_2(
   return 0;
 }
 
-// 8.4.3 Derivation process for prediction weights
-/* 输入：参考索引 refIdxL0 和 refIdxL1，预测利用标志 predFlagL0 和 predFlagL1
- * 输出: 加权预测变量 logWDC、w0C、w1C、o0C、o1C，其中 C 被 L 替换，并且当 ChromaArrayType 不等于 0 时，为 Cb 和 Cr。*/
-int PictureBase::derivation_prediction_weights(
-    int32_t refIdxL0, int32_t refIdxL1, int32_t predFlagL0, int32_t predFlagL1,
-    int32_t &logWDL, int32_t &w0L, int32_t &w1L, int32_t &o0L, int32_t &o1L,
-    int32_t &logWDCb, int32_t &w0Cb, int32_t &w1Cb, int32_t &o0Cb,
-    int32_t &o1Cb, int32_t &logWDCr, int32_t &w0Cr, int32_t &w1Cr,
-    int32_t &o0Cr, int32_t &o1Cr) {
+// 8.4.2.3.1 Default weighted sample prediction process
+/* 输入、输出同weighted_sample_prediction() */
+int PictureBase::default_weighted_sample_prediction(
+    int32_t predFlagL0, int32_t predFlagL1, int32_t partWidth,
+    int32_t partHeight, int32_t partWidthC, int32_t partHeightC,
+    uint8_t *predPartL0L, uint8_t *predPartL0Cb, uint8_t *predPartL0Cr,
+    uint8_t *predPartL1L, uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
+    /* Output: */
+    uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
 
-  const SliceHeader *slice_header = m_slice->slice_header;
-  uint32_t weighted_bipred_idc =
-      m_slice->slice_header->m_pps->weighted_bipred_idc;
-  uint32_t slice_type = slice_header->slice_type % 5;
+  /* 根据导出预测块的可用组件，以下适用： 
+   * – 如果导出亮度样本预测值 predPartL[ x, y ]，则以下适用，其中 C 设置等于 L，x 设置等于 0。 partWidth − 1，且 y 设置等于 0..partHeight − 1。 
+   * – 否则，如果导出色度 Cb 分量样本预测值 predPartCb[ x, y ]，则以下情况适用于 C 设置等于 Cb，x 设置等于0..partWidthC − 1，且 y 设置等于 0..partHeightC − 1。 
+   * – 否则（导出色度 Cr 分量样本预测值 predPartCr[ x, y ]），以下适用于设置等于 Cr、x 的 C设置等于 0..partWidthC − 1，y 设置等于 0..partHeightC − 1。 */
+  if (predFlagL0 && predFlagL1 == 0) {
+    for (int y = 0; y <= partHeight - 1; y++)
+      for (int x = 0; x <= partWidth - 1; x++)
+        predPartL[y * partWidth + x] = predPartL0L[y * partWidth + x];
 
-  /* 变量implicitModeFlag和explicitModeFlag的推导如下：
-   * – 如果weighted_bipred_idc等于2，(slice_type % 5)等于1，predFlagL0等于1，并且predFlagL1等于1，则implicitModeFlag设置为等于1并且explicitModeFlag设置为等于0。 
-   * – 否则，如果weighted_bipred_idc等于 1，(slice_type % 5) 等于 1，并且 predFlagL0 + predFlagL1 等于 1 或 2，implicitModeFlag 设置为等于 0，explicitModeFlag 设置为等于 1。 
-   * – 否则，如果weighted_pred_flag 等于 1， (slice_type % 5) 等于 0 或 3，并且 predFlagL0 等于 1，implicitModeFlag 设置为等于 0，explicitModeFlag 设置为等于 1。 
-   * – 否则，implicitModeFlag 设置为等于 0，explicitModeFlag 设置为等于 0。*/
-  bool implicitModeFlag = 0, explicitModeFlag = 0;
-  if (weighted_bipred_idc == 2 && slice_type == SLICE_B && predFlagL0 &&
-      predFlagL1) {
-    implicitModeFlag = 1;
-    explicitModeFlag = 0;
-  } else if (weighted_bipred_idc == 1 && slice_type == SLICE_B &&
-             (predFlagL0 + predFlagL1)) {
-    implicitModeFlag = 0;
-    explicitModeFlag = 1;
-  } else if (m_slice->slice_header->m_pps->weighted_pred_flag == 1 &&
-             (slice_type == SLICE_P || slice_type == SLICE_SP) && predFlagL0) {
-    implicitModeFlag = 0;
-    explicitModeFlag = 1;
-  } else
-    implicitModeFlag = explicitModeFlag = 0;
-
-  /* 将C替换为L，当ChromaArrayType不等于0、Cb和Cr时，变量logWDC、w0C、w1C、o0C、o1C推导如下：
-   * – 如果implicitModeFlag等于1，则使用隐式模式加权预测，如下所示：*/
-  if (implicitModeFlag) {
-    logWDL = 5;
-    o0L = o1L = 0;
     if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-      logWDCb = logWDCr = 5;
-      o0Cb = o1Cb = o0Cr = o1Cr = 0;
-    }
-    /* w0C 和 w1C 是按照以下顺序步骤中指定的导出的：
-     * 1. 变量 currPicOrField、pic0 和 pic1 的推导如下： */
-    PictureBase *currPicOrField = nullptr, *pic0 = nullptr, *pic1 = nullptr;
-
-    if (slice_header->field_pic_flag == 0 &&
-        m_mbs[CurrMbAddr].mb_field_decoding_flag) {
-      /* 帧图像，但是场宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
-
-      //* a.currPicOrField 是当前图片CurrPic 中与当前宏块具有相同奇偶性的字段。
-      if (CurrMbAddr % 2 == 0)
-        currPicOrField = &(m_parent->m_picture_top_filed);
-      else
-        currPicOrField = &(m_parent->m_picture_bottom_filed);
-
-      /* b.变量 pic0 的推导如下： 
-            * – 如果 refIdxL0 % 2 等于 0（参考帧索引为偶数），则 pic0 是 RefPicList0[ refIdxL0 / 2 ] 中与当前宏块具有相同奇偶校验的字段。  */
-      if (refIdxL0 % 2 == 0) {
-        if (CurrMbAddr % 2 == 0)
-          pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_top_filed);
-        else
-          pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_bottom_filed);
-
-        /* – 否则（refIdxL0 % 2 不等于 0）（参考帧索引为奇数），pic0 是 RefPicList0[ refIdxL0 / 2 ] 中与当前宏块具有相反奇偶校验的字段。   */
-      } else {
-        if (CurrMbAddr % 2 == 0)
-          pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_bottom_filed);
-        else
-          pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_top_filed);
-      }
-
-      /* c.变量 pic1 的推导：同pic0 */
-      if (refIdxL1 % 2 == 0) {
-        if (CurrMbAddr % 2 == 0)
-          pic1 = &(m_RefPicList1[refIdxL1 / 2]->m_picture_top_filed);
-        else
-          pic1 = &(m_RefPicList1[refIdxL1 / 2]->m_picture_bottom_filed);
-      } else {
-        if (CurrMbAddr % 2 == 0)
-          pic1 = &(m_RefPicList1[refIdxL1 / 2]->m_picture_bottom_filed);
-        else
-          pic1 = &(m_RefPicList1[refIdxL1 / 2]->m_picture_top_filed);
-      }
-
-      //* – 否则（field_pic_flag等于1或当前宏块是帧宏块），currPicOrField是当前图片CurrPic，pic1是RefPicList1[refIdxL1]，pic0是RefPicList0[refIdxL0]。*/
-      /* 场图像，或者帧宏块 */
-    } else {
-      currPicOrField = &(m_parent->m_picture_frame);
-      pic0 = &(m_RefPicList0[refIdxL0]->m_picture_frame);
-      pic1 = &(m_RefPicList1[refIdxL1]->m_picture_frame);
-    }
-
-    /* 2-1. 变量DistScaleFactor的推导如下： */
-    //8.4.1.2.3 Derivation process for temporal direct luma motion vector and reference index prediction mode -> page 161
-    int32_t tb = CLIP3(-128, 127, DiffPicOrderCnt(currPicOrField, pic0));
-    int32_t td = CLIP3(-128, 127, DiffPicOrderCnt(pic1, pic0));
-    if (td == 0) RET(-1);
-    int32_t tx = (16384 + ABS(td / 2)) / td;
-    int32_t DistScaleFactor = CLIP3(-1024, 1023, (tb * tx + 32) >> 6);
-
-    /* 2-2. 变量w0C和w1C的推导如下： */
-    //– 如果 DiffPicOrderCnt( pic1, pic0 ) 等于 0 或 pic1 和 pic0 之一或两者被标记为“用于长期参考”或 ( DistScaleFactor >> 2 ) < −64 或 ( DistScaleFactor >> 2 ) > 128 、w0C 和 w1C 推导为：
-    if (DiffPicOrderCnt(pic1, pic0) == 0 ||
-        pic0->reference_marked_type == PICTURE_MARKED_AS_used_long_ref ||
-        pic1->reference_marked_type == PICTURE_MARKED_AS_used_long_ref ||
-        (DistScaleFactor >> 2) < -64 || (DistScaleFactor >> 2) > 128) {
-      w0L = w1L = 32;
-
-      if (m_slice->slice_header->m_sps->ChromaArrayType != 0)
-        w0Cb = w1Cb = w0Cr = w1Cr = 32;
-
-      /* 否则，变量 tb、td、tx 和 DistScaleFactor 分别使用方程 8-201、8-202、8-197 和 8-198 从 currPicOrField、pic0 和 pic1 的值导出，权重 w0C 和w1C 导出为 */
-    } else {
-      w0L = 64 - (DistScaleFactor >> 2);
-      w1L = DistScaleFactor >> 2;
-
-      if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-        w0Cb = w0Cr = 64 - (DistScaleFactor >> 2);
-        w1Cb = w1Cr = DistScaleFactor >> 2;
+      for (int y = 0; y <= partHeightC - 1; y++) {
+        for (int x = 0; x <= partWidthC - 1; x++) {
+          predPartCb[y * partWidthC + x] = predPartL0Cb[y * partWidthC + x];
+          predPartCr[y * partWidthC + x] = predPartL0Cr[y * partWidthC + x];
+        }
       }
     }
+  } else if (predFlagL0 == 0 && predFlagL1) {
+    for (int y = 0; y <= partHeight - 1; y++)
+      for (int x = 0; x <= partWidth - 1; x++)
+        predPartL[y * partWidth + x] = predPartL1L[y * partWidth + x];
 
-    /* 否则，如果explicitModeFlag等于1，则按照以下顺序步骤指定使用显式模式加权预测： */
-  } else if (explicitModeFlag == 1) {
-    //1.变量refIdxL0WP和refIdxL1WP的推导如下：
-    int32_t refIdxL0WP = 0, refIdxL1WP = 0;
-    /* 宏块自适应帧场，场宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
-    if (slice_header->MbaffFrameFlag &&
-        m_mbs[CurrMbAddr].mb_field_decoding_flag) {
-      refIdxL0WP = refIdxL0 >> 1;
-      refIdxL1WP = refIdxL1 >> 1;
-    } else {
-      /* 非宏块自适应帧场，帧宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
-      refIdxL0WP = refIdxL0;
-      refIdxL1WP = refIdxL1;
-    }
-
-    /* 2. 变量logWDC、w0C、w1C、o0C和o1C的推导如下： */
-    // – 对于亮度样本，如果 C 等于 L
-    logWDL = slice_header->luma_log2_weight_denom;
-    w0L = slice_header->luma_weight_l0[refIdxL0WP];
-    w1L = slice_header->luma_weight_l1[refIdxL1WP];
-    o0L = slice_header->luma_offset_l0[refIdxL0WP] *
-          (1 << (m_slice->slice_header->m_sps->BitDepthY - 8));
-    o1L = slice_header->luma_offset_l1[refIdxL1WP] *
-          (1 << (m_slice->slice_header->m_sps->BitDepthY - 8));
-
-    // – 否则（对于色度样本，C 等于 Cb 或 Cr，对于 Cb，iCbCr = 0，对于 Cr，iCbCr = 1）
     if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-      logWDCb = logWDCr = slice_header->chroma_log2_weight_denom;
-
-      w0Cb = slice_header->chroma_weight_l0[refIdxL0WP][0];
-      w0Cr = slice_header->chroma_weight_l0[refIdxL0WP][1];
-
-      w1Cb = slice_header->chroma_weight_l1[refIdxL1WP][0];
-      w1Cr = slice_header->chroma_weight_l1[refIdxL1WP][1];
-
-      o0Cb = slice_header->chroma_offset_l0[refIdxL0WP][0] *
-             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
-      o0Cr = slice_header->chroma_offset_l0[refIdxL0WP][1] *
-             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
-
-      o1Cb = slice_header->chroma_offset_l1[refIdxL1WP][0] *
-             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
-      o1Cr = slice_header->chroma_offset_l1[refIdxL1WP][1] *
-             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
+      for (int y = 0; y <= partHeightC - 1; y++) {
+        for (int x = 0; x <= partWidthC - 1; x++) {
+          predPartCb[y * partWidthC + x] = predPartL1Cb[y * partWidthC + x];
+          predPartCr[y * partWidthC + x] = predPartL1Cr[y * partWidthC + x];
+        }
+      }
     }
   } else {
-    /* 否则(implicitModeFlag等于0且explicitModeFlag等于0)，变量logWDC、w0C、w1C、o0C、o1C不用于当前宏块的重建过程。*/
-  }
-
-  /* 当explicitModeFlag等于1并且predFlagL0和predFlagL1等于1时，对于C等于L，并且当ChromaArrayType不等于0时，Cb和Cr应遵守以下约束： */
-  if (explicitModeFlag && predFlagL0 && predFlagL1) {
-    int32_t max = (logWDL == 7) ? 127 : 128;
-    if (-128 > (w0L + w1L) || (w0L + w1L) > max) {
-      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-                << std::endl;
-      return -1;
-    }
+    for (int y = 0; y <= partHeight - 1; y++)
+      for (int x = 0; x <= partWidth - 1; x++)
+        predPartL[y * partWidth + x] = (predPartL0L[y * partWidth + x] +
+                                        predPartL1L[y * partWidth + x] + 1) >>
+                                       1;
 
     if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-      int32_t max = (logWDCb == 7) ? 127 : 128;
-      if (-128 > (w0Cb + w1Cb) || (w0Cb + w1Cb) > max) {
-        std::cerr << "An error occurred on " << __FUNCTION__
-                  << "():" << __LINE__ << std::endl;
-        return -1;
-      }
-
-      max = (logWDCr == 7) ? 127 : 128;
-      if (-128 > (w0Cr + w1Cr) || (w0Cr + w1Cr) > max) {
-        std::cerr << "An error occurred on " << __FUNCTION__
-                  << "():" << __LINE__ << std::endl;
-        return -1;
+      for (int y = 0; y <= partHeightC - 1; y++) {
+        for (int x = 0; x <= partWidthC - 1; x++) {
+          predPartCb[y * partWidthC + x] =
+              (predPartL0Cb[y * partWidthC + x] +
+               predPartL1Cb[y * partWidthC + x] + 1) >>
+              1;
+          predPartCr[y * partWidthC + x] =
+              (predPartL0Cr[y * partWidthC + x] +
+               predPartL1Cr[y * partWidthC + x] + 1) >>
+              1;
+        }
       }
     }
   }
@@ -3013,8 +2902,6 @@ int PictureBase::derivation_prediction_weights(
 int PictureBase::Inverse_sub_macroblock_partition_scanning_process(
     MacroBlock *mb, int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &x,
     int32_t &y) {
-  //int32_t MbPartWidth = mb->MbPartWidth;
-  //int32_t MbPartHeight = mb->MbPartHeight;
   int32_t SubMbPartWidth = mb->SubMbPartWidth[mbPartIdx];
   int32_t SubMbPartHeight = mb->SubMbPartHeight[mbPartIdx];
 
@@ -3025,173 +2912,6 @@ int PictureBase::Inverse_sub_macroblock_partition_scanning_process(
   } else {
     x = InverseRasterScan(subMbPartIdx, 4, 4, 8, 0);
     y = InverseRasterScan(subMbPartIdx, 4, 4, 8, 1);
-  }
-
-  return 0;
-}
-
-// 6.4.11.7 Derivation process for neighbouring partitions
-int PictureBase::Derivation_process_for_neighbouring_partitions(
-    int32_t xN, int32_t yN, int32_t mbPartIdx, H264_MB_TYPE currSubMbType,
-    int32_t subMbPartIdx, int32_t isChroma, int32_t &mbAddrN,
-    int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
-  int ret = 0;
-  SliceHeader *slice_header = m_slice->slice_header;
-
-  //---------------------------------------
-  // 1. The inverse macroblock partition scanning process as described in
-  // clause 6.4.2.1 is invoked with mbPartIdx as the input and ( x, y ) as the
-  // output.
-
-  // 2. The location of the upper-left luma sample inside a macroblock partition
-  // ( xS, yS ) is derived as follows:
-  //    – If mb_type is equal to P_8x8, P_8x8ref0 or B_8x8, the inverse
-  //    sub-macroblock partition scanning process
-  //      as described in clause 6.4.2.2 is invoked with subMbPartIdx as the
-  //      input and ( xS, yS ) as the output.
-  //    – Otherwise, ( xS, yS ) are set to ( 0, 0 ).
-
-  // 3. The variable predPartWidth in Table 6-2 is specified as follows:
-  //    – If mb_type is equal to P_Skip, B_Skip, or B_Direct_16x16,
-  //    predPartWidth = 16. – Otherwise, if mb_type is equal to B_8x8, the
-  //    following applies:
-  //      – If currSubMbType is equal to B_Direct_8x8, predPartWidth = 16.
-  //      – Otherwise, predPartWidth = SubMbPartWidth( sub_mb_type[ mbPartIdx ]
-  //      ).
-  //    – Otherwise, if mb_type is equal to P_8x8 or P_8x8ref0, predPartWidth =
-  //    SubMbPartWidth( sub_mb_type[ mbPartIdx ] ). – Otherwise, predPartWidth =
-  //    MbPartWidth( mb_type ).
-
-  // 4. The difference of luma location ( xD, yD ) is set according to Table
-  // 6-2.
-
-  // 5. The neighbouring luma location ( xN, yN ) is specified by
-  //        xN = x + xS + xD    (6-29)
-  //        yN = y + yS + yD    (6-30)
-
-  // 6. The derivation process for neighbouring locations as specified in
-  // clause 6.4.12 is invoked for luma locations with ( xN, yN ) as the input
-  // and the output is assigned to mbAddrN and ( xW, yW ).
-
-  //---------------------------------------
-  // mbAddrA\mbPartIdxA\subMbPartIdxA
-  // 6.4.12 Derivation process for neighbouring locations
-  int32_t xW = 0;
-  int32_t yW = 0;
-  int32_t maxW = 0;
-  int32_t maxH = 0;
-
-  MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-  int32_t luma4x4BlkIdxN = 0;
-  int32_t luma8x8BlkIdxN = 0;
-
-  if (isChroma == 0) {
-    maxW = 16;
-    maxH = 16;
-  } else // if (isChroma == 1)
-  {
-    maxW = MbWidthC;
-    maxH = MbHeightC;
-  }
-
-  if (slice_header->MbaffFrameFlag == 0) {
-    // 6.4.12.1 Specification for neighbouring locations in fields and non-MBAFF
-    // frames
-    ret = neighbouring_locations_non_MBAFF(
-        xN, yN, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-        luma8x8BlkIdxN, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else // if (slice_header.MbaffFrameFlag == 1)
-  {
-    // 6.4.12.2 Specification for neighbouring locations in MBAFF frames
-    ret = neighbouring_locations_MBAFF(xN, yN, maxW, maxH, CurrMbAddr,
-                                       mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                       luma8x8BlkIdxN, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
-  }
-
-  //----------------
-  if (mbAddrN < 0) // mbAddrN is not available
-  {
-    mbAddrN = NA;
-    mbPartIdxN = NA;
-    subMbPartIdxN = NA;
-  } else // mbAddrN is available
-  {
-    // 6.4.13.4 Derivation process for macroblock and sub-macroblock partition
-    // indices
-    ret =
-        Derivation_process_for_macroblock_and_sub_macroblock_partition_indices(
-            m_mbs[mbAddrN].m_name_of_mb_type,
-            m_mbs[mbAddrN].m_name_of_sub_mb_type, xW, yW, mbPartIdxN,
-            subMbPartIdxN);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    // FIXME:
-    // When the partition given by mbPartIdxN and subMbPartIdxN is not yet
-    // decoded, the macroblock partition mbPartIdxN and the sub-macroblock
-    // partition subMbPartIdxN are marked as not available.
-    if (m_mbs[mbAddrN].NumSubMbPart[mbPartIdxN] > subMbPartIdxN &&
-        m_mbs[mbAddrN].m_isDecoded[mbPartIdxN][subMbPartIdxN] == 0) {
-      // mbAddrN = NA;
-      // mbPartIdxN = NA;
-      // subMbPartIdxN = NA;
-    }
-  }
-
-  return 0;
-}
-
-// 6.4.13.4 Derivation process for macroblock and sub-macroblock partition
-// indices
-int PictureBase::
-    Derivation_process_for_macroblock_and_sub_macroblock_partition_indices(
-        H264_MB_TYPE mb_type_, H264_MB_TYPE subMbType_[4], int32_t xP,
-        int32_t yP, int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
-  int ret = 0;
-  if (mb_type_ == MB_TYPE_NA) RET(-1);
-
-  //---------------------
-  if (mb_type_ >= I_NxN &&
-      mb_type_ <= I_PCM) // If mbType specifies an I macroblock type
-  {
-    mbPartIdxN = 0;
-  } else // mbType does not specify an I macroblock type
-  {
-    int32_t MbPartWidth = 0;
-    int32_t MbPartHeight = 0;
-
-    ret = MacroBlock::getMbPartWidthAndHeight(mb_type_, MbPartWidth,
-                                              MbPartHeight);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    // mbPartIdx = ( 16 / MbPartWidth( mbType ) ) * ( yP / MbPartHeight( mbType
-    // ) ) + ( xP / MbPartWidth( mbType ) );
-    mbPartIdxN = (16 / MbPartWidth) * (yP / MbPartHeight) + (xP / MbPartWidth);
-  }
-
-  // If mbType is not equal to P_8x8, P_8x8ref0, B_8x8, B_Skip, or
-  // B_Direct_16x16, subMbPartIdx is set equal to 0.
-  if (mb_type_ != P_8x8 && mb_type_ != P_8x8ref0 && mb_type_ != B_8x8 &&
-      mb_type_ != B_Skip && mb_type_ != B_Direct_16x16) {
-    subMbPartIdxN = 0;
-  } else if (mb_type_ == B_Skip || mb_type_ == B_Direct_16x16) {
-    // subMbPartIdx = 2 * ( ( yP % 8 ) / 4 ) + ( ( xP % 8 ) / 4 );
-    subMbPartIdxN = 2 * ((yP % 8) / 4) + ((xP % 8) / 4);
-  } else // mbType is equal to P_8x8, P_8x8ref0, or B_8x8
-  {
-    int32_t SubMbPartWidth = 0;
-    int32_t SubMbPartHeight = 0;
-
-    ret = MacroBlock::getMbPartWidthAndHeight(subMbType_[mbPartIdxN],
-                                              SubMbPartWidth, SubMbPartHeight);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    // subMbPartIdx = ( 8 / SubMbPartWidth( subMbType[ mbPartIdx ] ) ) * ( ( yP
-    // % 8 ) / SubMbPartHeight( subMbType[ mbPartIdx ] ) ) + ( ( xP % 8 ) /
-    // SubMbPartWidth( subMbType[ mbPartIdx ] ) )
-    subMbPartIdxN = (8 / SubMbPartWidth) * ((yP % 8) / SubMbPartHeight) +
-                    ((xP % 8) / SubMbPartWidth);
   }
 
   return 0;

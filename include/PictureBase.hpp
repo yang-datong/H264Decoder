@@ -169,29 +169,31 @@ class PictureBase {
       Frame *(&dpb)[16]);
 
   //================= 帧内预测 ========================
-  int transform_decoding_for_4x4_luma_residual_blocks(int32_t isChroma,
-                                                      int32_t isChromaCb,
-                                                      int32_t BitDepth,
-                                                      int32_t PicWidthInSamples,
-                                                      uint8_t *pic_buff);
+  int transform_decoding_for_4x4_luma_residual_blocks(
+      int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
+      int32_t PicWidthInSamples, uint8_t *pic_buff,
+      bool isNeedIntraPrediction = true);
   int transform_decoding_for_8x8_luma_residual_blocks(
       int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
-      int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff);
+      int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff,
+      bool isNeedIntraPrediction = true);
   int transform_decoding_for_luma_samples_of_16x16(
       int32_t isChroma, int32_t BitDepth, int32_t QP1,
       int32_t PicWidthInSamples, int32_t Intra16x16DCLevel[16],
       int32_t Intra16x16ACLevel[16][16], uint8_t *pic_buff);
   int transform_decoding_for_chroma_samples(int32_t isChromaCb,
                                             int32_t PicWidthInSamples,
-                                            uint8_t *pic_buff);
+                                            uint8_t *pic_buff,
+                                            bool isNeedIntraPrediction = true);
   int transform_decoding_for_chroma_samples_with_YUV444(
       int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff);
   int transform_decoding_for_chroma_samples_with_YUV420_or_YUV422(
-      int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff);
+      int32_t isChromaCb, int32_t PicWidthInSamples, uint8_t *pic_buff,
+      bool isNeedIntraPrediction = true);
   int transform_decoding_for_residual_4x4_blocks(int32_t d[4][4],
-                                             int32_t (&r)[4][4]);
+                                                 int32_t (&r)[4][4]);
   int transform_decoding_for_residual_8x8_blocks(int32_t d[8][8],
-                                             int32_t (&r)[8][8]);
+                                                 int32_t (&r)[8][8]);
   //----------------- 获取当前使用的帧内预测模式 ------------------------
   int getIntra4x4PredMode(int32_t luma4x4BlkIdx, int32_t &currMbAddrPredMode,
                           int32_t isChroma);
@@ -310,15 +312,15 @@ class PictureBase {
 
   //--------------帧间预测------------------------
   int inter_prediction_process();
-  int transform_decoding_for_4x4_luma_residual_blocks_inter(
-      int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
-      int32_t PicWidthInSamples, uint8_t *pic_buff);
-  int transform_decoding_for_8x8_luma_residual_blocks_inter(
-      int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
-      int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff);
-  int transform_decoding_for_chroma_samples_inter(int32_t isChromaCb,
-                                                  int32_t PicWidthInSamples,
-                                                  uint8_t *pic_buff);
+  //int transform_decoding_for_4x4_luma_residual_blocks_inter(
+  //    int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
+  //    int32_t PicWidthInSamples, uint8_t *pic_buff);
+  //int transform_decoding_for_8x8_luma_residual_blocks_inter(
+  //    int32_t isChroma, int32_t isChromaCb, int32_t BitDepth,
+  //    int32_t PicWidthInSamples, int32_t Level8x8[4][64], uint8_t *pic_buff);
+  //int transform_decoding_for_chroma_samples_inter(int32_t isChromaCb,
+  //                                                int32_t PicWidthInSamples,
+  //                                                uint8_t *pic_buff);
   int derivation_motion_vector_components_and_reference_indices(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
       int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
