@@ -2,7 +2,9 @@
 #include "Nalu.hpp"
 #include "PictureBase.hpp"
 #include "Type.hpp"
+#include <algorithm>
 #include <cstdint>
+#include <cstring>
 
 #define FLD 0
 #define FRM 1
@@ -15,18 +17,25 @@ int PictureBase::inter_prediction_process() {
   /* ------------------ 设置别名 ------------------ */
   const SliceHeader *header = m_slice->slice_header;
   MacroBlock &mb = m_mbs[CurrMbAddr];
-  const H264_MB_TYPE &mb_type = mb.m_name_of_mb_type;
+  const int32_t MbPartWidth = mb.MbPartWidth;
+  const int32_t MbPartHeight = mb.MbPartHeight;
+
   const int32_t SubHeightC = header->m_sps->SubHeightC;
   const int32_t SubWidthC = header->m_sps->SubWidthC;
   const uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
   const uint32_t slice_type = header->slice_type % 5;
   const uint32_t weighted_bipred_idc = header->m_pps->weighted_bipred_idc;
   const bool weighted_pred_flag = header->m_pps->weighted_pred_flag;
-  bool isMbAff = header->MbaffFrameFlag && mb.mb_field_decoding_flag;
+  const bool isMbAff = header->MbaffFrameFlag && mb.mb_field_decoding_flag;
+
+  const H264_MB_TYPE &mb_type = mb.m_name_of_mb_type;
   /* ------------------  End ------------------ */
 
   // 宏块分区数量，指示当前宏块被划分成的分区数量，mb.m_NumMbPart已经在macroblock_mb_skip(对于B、P帧）或macroblock_layer(对于I、SI帧）函数计算过，比如P_Skip和P/B_16x16 -> 分区为1，P/B_8x16,P/B_16x8 -> 分区为2, P/B_8x8 -> 分区为4, 注意，对于帧间预测，并不存在16个分区的I_4x4
-  // B_Skip 和 B_Direct_16x16 类型的宏块不需要显式地传输运动矢量和参考索引，通过将宏块分为 4 个 8x8 的子宏块，可以直接使用相邻宏块的运动信息进行预测，而不需要额外的运动矢量计算。
+
+  /* B_Skip：通常这类宏块不进行运动估计，而是直接采用邻近宏块的运动矢量或默认为零运动矢量
+   * B_Direct_16x16：这类宏块使用直接模式预测，通常基于时间和空间的参考来决定运动矢量
+   * P_Skip: 宏块被自动处理为一个完整的单元（16x16像素），其预测模式和运动矢量直接继承自邻近宏块，无需任何进一步的分割或详细处理，所以这里并没有出现P_Skip */
   int32_t NumMbPart =
       (mb_type == B_Skip || mb_type == B_Direct_16x16) ? 4 : mb.m_NumMbPart;
 
@@ -34,90 +43,90 @@ int PictureBase::inter_prediction_process() {
   int32_t SubMbPartWidth = 0, SubMbPartHeight = 0;
   H264_MB_PART_PRED_MODE SubMbPredMode = MB_PRED_MODE_NA;
 
-  // 遍历每个宏块分区，宏块分区索引 mbPartIdx
+  //NOTE: 宏块通常是16x16大小，子宏块通常是8x8大小，子宏块也是宏块的8x8分区
+
+  // 遍历每个宏块分区，比如1个16x16，2个16x8/8x16，4个B_Skip/B_Direct_16x16/P/B_8x8
   for (int mbPartIdx = 0; mbPartIdx < NumMbPart; mbPartIdx++) {
-    /* 1. 根据"宏块"类型，进行查表并设置"子宏块"的预测模式：
-     * 比如，当前宏块为P_skip时，宏块分区数量为1, 当宏块分区数量为1时，会当作一个子宏块处理，即子宏块分区数量为1, 子宏块大小为8x8  */
+    /* 1. 根据"宏块"类型，进行查表并设置"子宏块"的预测模式：比如当前宏块为P_skip，宏块分区数量为1，这里的子宏块类型推导是无效的， 因为P_Skip宏块不包含任何子宏块分区。所有的预测和复制操作都基于整个宏块的单元进行，没有进一步细分为更小的单元或子宏块 */
+    // 比如，当前宏块为P_skip时，宏块分区数量为1, 当宏块分区数量为1时，会当作一个子宏块处理，即子宏块分区数量为1, 子宏块大小为8x8
     RET(MacroBlock::SubMbPredMode(header->slice_type, mb.sub_mb_type[mbPartIdx],
                                   NumSubMbPart, SubMbPredMode, SubMbPartWidth,
                                   SubMbPartHeight));
 
-    /* 2. 对于每个宏块分区或子宏块分区的变量partWidth和partHeight推导如下：*/
+    /* 2. 每个宏块分区或子宏块分区的大小 */
     int32_t partWidth = 0, partHeight = 0;
 
-    // 对于P/B宏块，意味着整个宏块被划分为 4 个 8x8 的子宏块，但这些子宏块可能进一步划分为更小的分区（如 4x4 或 4x8）所以对于这种情况，需要暂时先将宏块信息设为子宏块的信息，方便进一步划分或直接操作子宏块解码
+    // a. 当前分区为子宏块(8x8块)，子宏块可能进一步划分为更小的分区（如 4x4 或 4x8）对于这种情况，需要暂时先将宏块信息设为子宏块的信息，方便进一步划分或直接操作子宏块解码
     if (mb_type == P_8x8 || mb_type == P_8x8ref0 ||
         (mb_type == B_8x8 &&
-         mb.m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8)) {
+         mb.m_name_of_sub_mb_type[mbPartIdx] != B_Direct_8x8))
+      //比如1个8x8的子宏块
+      partWidth = mb.SubMbPartWidth[mbPartIdx],
+      partHeight = mb.SubMbPartHeight[mbPartIdx],
       NumSubMbPart = mb.NumSubMbPart[mbPartIdx];
-      partWidth = mb.SubMbPartWidth[mbPartIdx];
-      partHeight = mb.SubMbPartHeight[mbPartIdx];
-    }
 
-    // 如果宏块类型是 B_Skip 或 B_Direct_16x16，或者宏块类型是 B_8x8 且子宏块类型是 B_Direct_8x8，则直接将分区设置为 4x4 的大小，表示为对子宏块分区为 4 个 4x4 块
+    // b. 不需要显示的计算运动矢量的分区，将子宏块分区为4个4x4块
     else if (mb_type == B_Skip || mb_type == B_Direct_16x16 ||
              (mb_type == B_8x8 &&
               mb.m_name_of_sub_mb_type[mbPartIdx] == B_Direct_8x8))
+      //4个4x4的子宏块分区
       NumSubMbPart = partWidth = partHeight = 4;
 
-    // 表示没有划分为子宏块(但存在宏块分区)，比如P/B_16x16,P/B_8x16,P/B_16x8的宏块
-    else {
-      partWidth = mb.MbPartWidth, partHeight = mb.MbPartHeight;
-      NumSubMbPart = 1;
-    }
+    // c. 当前分区无子宏块(无8x8块)，但存在宏块分区，比如一个P/B_16x16,P/B_8x16,P/B_16x8的宏块
+    else
+      partWidth = MbPartWidth, partHeight = MbPartHeight, NumSubMbPart = 1;
 
     /* 色度块宽高：YUV420则为8x8,YUV422则为8x16(宽x高) */
     int32_t partWidthC = 0, partHeightC = 0;
     if (ChromaArrayType != 0)
       partWidthC = partWidth / SubWidthC, partHeightC = partHeight / SubHeightC;
 
-    int32_t xP =
-        InverseRasterScan(mbPartIdx, mb.MbPartWidth, mb.MbPartHeight, 16, 0);
-    int32_t yP =
-        InverseRasterScan(mbPartIdx, mb.MbPartWidth, mb.MbPartHeight, 16, 1);
+    int32_t xP = InverseRasterScan(mbPartIdx, MbPartWidth, MbPartHeight, 16, 0);
+    int32_t yP = InverseRasterScan(mbPartIdx, MbPartWidth, MbPartHeight, 16, 1);
 
     // 亮度运动矢量 mvL0, mvL1，色度运动矢量 mvCL0, mvCL1
     int32_t mvL0[2] = {0}, mvL1[2] = {0}, mvCL0[2] = {0}, mvCL1[2] = {0};
-    // 参考索引 refIdxL0, refIdxL1
-    int32_t refIdxL0 = -1, refIdxL1 = -1;
-    // 预测列表利用标志 predFlagL0, predFlagL1
-    int32_t predFlagL0 = 0, predFlagL1 = 0;
+    // 参考索引 refIdxL0, refIdxL1。 预测列表利用标志 predFlagL0, predFlagL1
+    int32_t refIdxL0 = -1, refIdxL1 = -1, predFlagL0 = 0, predFlagL1 = 0;
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
     // 宏块、子宏块分区运动向量计数 subMvCnt
     int32_t MvCnt = 0, subMvCnt = 0;
 #pragma GCC diagnostic pop
 
-    /* 每个宏块分区由 mbPartIdx 引用。每个子宏块分区由 subMbPartIdx 引用：
-     * a. 当宏块划分由等于子宏块的分区组成时，每个子宏块可以进一步划分为由sub_mb_type[mbPartIdx]指定的子宏块分区。
+    /* NOTE: 每个宏块分区由 mbPartIdx 引用。每个子宏块分区由 subMbPartIdx 引用：
+     * a. 当宏块划分由等于子宏块的分区组成时，每个子宏块可以进一步划分为子宏块分区。即16x16 -> 4个8x8 == 8x8 -> 4个4x4的情况
      * b. 当宏块划分不由子宏块组成时，subMbPartIdx设置为等于0 */
 
-    // 遍历每个子宏块分区，宏块分区索引 subMbPartIdx
+    // 遍历每个子宏块分区，比如遍历4个4x4分区，遍历一个8x8分区，遍历1个16x16,16x8,8x16
     for (int subMbPartIdx = 0; subMbPartIdx < NumSubMbPart; subMbPartIdx++) {
-      /* 给出两个参考帧指针 */
+      // 前后方向的参考帧指针
       PictureBase *refPicL0 = nullptr, *refPicL1 = nullptr;
 
-      //1. 推导运动矢量分量和参考索引
+      /* TODO YangJing 为什么会将1个16x8/8x16进行运动预测，而不是分为2个8x8进行? <24-10-10 19:44:28> */
+
+      /* 1. 对每个宏块分区或子宏块分区，计算其运动向量和参考帧索引 */
       RET(derivation_motion_vector_components_and_reference_indices(
           mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, mvCL0, mvCL1,
           subMvCnt, predFlagL0, predFlagL1, refPicL0, refPicL1));
 
-      //2. 变量MvCnt 增加subMvCnt。
+      /* 2. 变量MvCnt 增加subMvCnt */
       MvCnt += subMvCnt;
 
+      /* 3. 当P Slice存在加权预测 或 B Slice使用加权双向预测时，计算预测权重 */
+      //加权预测变量 logWDC、w0C、w1C、o0C、o1C，其中 C 被 L 替换
       int32_t logWDL = 0, w0L = 1, w1L = 1, o0L = 0, o1L = 0;
       int32_t logWDCb = 0, w0Cb = 1, w1Cb = 1, o0Cb = 0, o1Cb = 0;
       int32_t logWDCr = 0, w0Cr = 1, w1Cr = 1, o0Cr = 0, o1Cr = 0;
-
-      // 3. 当P Slice存在加权预测 或 B Slice使用加权双向预测时
       if ((weighted_pred_flag &&
            (slice_type == SLICE_P || slice_type == SLICE_SP)) ||
-          (weighted_bipred_idc > 0 && slice_type == SLICE_B))
-        //推导预测权重
+          (weighted_bipred_idc > 0 && slice_type == SLICE_B)) {
         RET(derivation_prediction_weights(refIdxL0, refIdxL1, predFlagL0,
                                           predFlagL1, logWDL, w0L, w1L, o0L,
                                           o1L, logWDCb, w0Cb, w1Cb, o0Cb, o1Cb,
                                           logWDCr, w0Cr, w1Cr, o0Cr, o1Cr));
+      }
 
       // 宏块分区、子宏块分区的左上样本相对于宏块的左上样本的位置
       int32_t xS = 0, yS = 0;
@@ -129,7 +138,7 @@ int PictureBase::inter_prediction_process() {
         yS = InverseRasterScan(subMbPartIdx, 4, 4, 8, 1);
       }
 
-      // 4. 计算帧间预测样本
+      // 4. 计算帧间预测样本，通过运动向量和参考帧，该函数将使用这些信息来生成预测的像素值
       int32_t xAL = mb.m_mb_position_x + xP + xS;
       int32_t yAL = (isMbAff) ? mb.m_mb_position_y / 2 + yP + yS
                               : mb.m_mb_position_y + yP + yS;
@@ -211,212 +220,137 @@ int PictureBase::derivation_motion_vector_components_and_reference_indices(
     int32_t (&mvCL0)[2], int32_t (&mvCL1)[2], int32_t &subMvCnt,
     int32_t &predFlagL0, int32_t &predFlagL1, PictureBase *&refPicL0,
     PictureBase *&refPicL1) {
-  int ret = 0;
 
-  int32_t mvpL0[2] = {0};
-  int32_t mvpL1[2] = {0};
+  const uint32_t ChromaArrayType =
+      m_slice->slice_header->m_sps->ChromaArrayType;
+
+  int32_t mvpL0[2] = {0}, mvpL1[2] = {0};
+  bool listSuffixFlag = false, refPicLSetFlag = false;
   H264_MB_TYPE currSubMbType = MB_TYPE_NA;
-  int32_t listSuffixFlag = 0;
-  int32_t refPicLSetFlag = 0;
 
   if (m_mbs[CurrMbAddr].m_name_of_mb_type == P_Skip) {
-    // 8.4.1.1 Derivation process for luma motion vectors for skipped
-    // macroblocks in P and SP slices
+    // 8.4.1.1 Derivation process for luma motion vectors for skipped macroblocks in P and SP slices
     refIdxL0 = 0;
-    m_mbs[CurrMbAddr].m_PredFlagL0[0] = 1;
-    m_mbs[CurrMbAddr].m_PredFlagL0[1] = 1;
-    m_mbs[CurrMbAddr].m_PredFlagL0[2] = 1;
-    m_mbs[CurrMbAddr].m_PredFlagL0[3] = 1;
+    fill_n(m_mbs[CurrMbAddr].m_PredFlagL0, 4, 1);
 
-    int32_t mbAddrN_A = 0;
-    int32_t mvLXN_A[2] = {0};
-    int32_t refIdxLXN_A = 0;
-
-    int32_t mbAddrN_B = 0;
-    int32_t mvLXN_B[2] = {0};
-    int32_t refIdxLXN_B = 0;
-
-    int32_t mbAddrN_C = 0;
-    int32_t mvLXN_C[2] = {0};
-    int32_t refIdxLXN_C = 0;
+    int32_t mbAddrN_A = 0, mbAddrN_B = 0, mbAddrN_C = 0;
+    int32_t mvLXN_A[2] = {0}, mvLXN_B[2] = {0}, mvLXN_C[2] = {0};
+    int32_t refIdxLXN_A = 0, refIdxLXN_B = 0, refIdxLXN_C = 0;
 
     // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
-    ret = Derivation_process_for_motion_data_of_neighbouring_partitions(
+    RET(Derivation_process_for_motion_data_of_neighbouring_partitions(
         mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, mbAddrN_A,
         mvLXN_A, refIdxLXN_A, mbAddrN_B, mvLXN_B, refIdxLXN_B, mbAddrN_C,
-        mvLXN_C, refIdxLXN_C);
-    RETURN_IF_FAILED(ret != 0, ret);
+        mvLXN_C, refIdxLXN_C));
 
-    //--------------------------------------
     if (mbAddrN_A < 0 || mbAddrN_B < 0 ||
         (refIdxLXN_A == 0 && mvLXN_A[0] == 0 && mvLXN_A[1] == 0) ||
-        (refIdxLXN_B == 0 && mvLXN_B[0] == 0 && mvLXN_B[1] == 0)) {
-      mvL0[0] = 0;
-      mvL0[1] = 0;
-    } else {
-      // the derivation process for luma motion vector prediction as specified
-      // in clause 8.4.1.3 is invoked with mbPartIdx = 0, subMbPartIdx = 0,
-      // refIdxL0, and currSubMbType = "na" as inputs and the output is assigned
-      // to mvL0.
-
+        (refIdxLXN_B == 0 && mvLXN_B[0] == 0 && mvLXN_B[1] == 0))
+      mvL0[0] = 0, mvL0[1] = 0;
+    else
       // 8.4.1.3 Derivation process for luma motion vector prediction
-      ret = Derivation_process_for_luma_motion_vector_prediction(
+      RET(Derivation_process_for_luma_motion_vector_prediction(
           mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, refIdxL0,
-          mvL0);
-      RETURN_IF_FAILED(ret != 0, ret);
-    }
+          mvL0));
 
-    // and predFlagL0 is set equal to 1. mvL1 and refIdxL1 are marked as not
-    // available and predFlagL1 is set equal to 0. The motion vector count
-    // variable subMvCnt is set equal to 1.
-    predFlagL0 = 1;
-    predFlagL1 = 0;
-    mvL1[0] = NA;
-    mvL1[1] = NA;
+    predFlagL0 = 1, predFlagL1 = 0;
+    mvL1[0] = NA, mvL1[1] = NA;
     subMvCnt = 1;
   } else if (m_mbs[CurrMbAddr].m_name_of_mb_type == B_Skip ||
              m_mbs[CurrMbAddr].m_name_of_mb_type == B_Direct_16x16 ||
              m_mbs[CurrMbAddr].m_name_of_sub_mb_type[mbPartIdx] ==
                  B_Direct_8x8) {
-    // 8.4.1.2 Derivation process for luma motion vectors for B_Skip,
-    // B_Direct_16x16, and B_Direct_8x8
-    ret =
-        Derivation_process_for_luma_motion_vectors_for_B_Skip_or_B_Direct_16x16_or_B_Direct_8x8(
-            mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
-            predFlagL0, predFlagL1);
-    RETURN_IF_FAILED(ret != 0, ret);
+    // 8.4.1.2 Derivation process for luma motion vectors for B_Skip, B_Direct_16x16, and B_Direct_8x8
+    RET(Derivation_process_for_luma_motion_vectors_for_B_Skip_or_B_Direct_16x16_or_B_Direct_8x8(
+        mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
+        predFlagL0, predFlagL1));
   } else {
-    int32_t NumSubMbPart = 0;
-    H264_MB_PART_PRED_MODE SubMbPredMode = MB_PRED_MODE_NA;
-    int32_t SubMbPartWidth = 0;
-    int32_t SubMbPartHeight = 0;
-    H264_MB_PART_PRED_MODE mb_pred_mode = MB_PRED_MODE_NA;
+    int32_t NumSubMbPart = 0, SubMbPartWidth = 0, SubMbPartHeight = 0;
+    H264_MB_PART_PRED_MODE mb_pred_mode = MB_PRED_MODE_NA,
+                           SubMbPredMode = MB_PRED_MODE_NA;
 
-    ret = MacroBlock::MbPartPredMode(
+    RET(MacroBlock::MbPartPredMode(
         m_mbs[CurrMbAddr].m_name_of_mb_type, mbPartIdx,
-        m_mbs[CurrMbAddr].transform_size_8x8_flag, mb_pred_mode);
-    RETURN_IF_FAILED(ret != 0, ret);
+        m_mbs[CurrMbAddr].transform_size_8x8_flag, mb_pred_mode));
+    RET(MacroBlock::SubMbPredMode(m_slice->slice_header->slice_type,
+                                  m_mbs[CurrMbAddr].sub_mb_type[mbPartIdx],
+                                  NumSubMbPart, SubMbPredMode, SubMbPartWidth,
+                                  SubMbPartHeight));
 
-    ret = MacroBlock::SubMbPredMode(m_slice->slice_header->slice_type,
-                                    m_mbs[CurrMbAddr].sub_mb_type[mbPartIdx],
-                                    NumSubMbPart, SubMbPredMode, SubMbPartWidth,
-                                    SubMbPartHeight);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    // If MbPartPredMode( mb_type, mbPartIdx ) or SubMbPredMode( sub_mb_type[
-    // mbPartIdx ] ) is equal to Pred_LX or to BiPred,
     if (mb_pred_mode == Pred_L0 || mb_pred_mode == BiPred ||
-        SubMbPredMode == Pred_L0 || SubMbPredMode == BiPred) {
-      refIdxL0 = m_mbs[CurrMbAddr].ref_idx_l0[mbPartIdx];
-      predFlagL0 = 1;
-    } else {
-      refIdxL0 = -1;
-      predFlagL0 = 0;
-    }
+        SubMbPredMode == Pred_L0 || SubMbPredMode == BiPred)
+      refIdxL0 = m_mbs[CurrMbAddr].ref_idx_l0[mbPartIdx], predFlagL0 = 1;
+    else
+      refIdxL0 = -1, predFlagL0 = 0;
 
-    // If MbPartPredMode( mb_type, mbPartIdx ) or SubMbPredMode( sub_mb_type[
-    // mbPartIdx ] ) is equal to Pred_LX or to BiPred,
     if (mb_pred_mode == Pred_L1 || mb_pred_mode == BiPred ||
-        SubMbPredMode == Pred_L1 || SubMbPredMode == BiPred) {
-      refIdxL1 = m_mbs[CurrMbAddr].ref_idx_l1[mbPartIdx];
-      predFlagL1 = 1;
-    } else {
-      refIdxL1 = -1;
-      predFlagL1 = 0;
-    }
+        SubMbPredMode == Pred_L1 || SubMbPredMode == BiPred)
+      predFlagL1 = 1, refIdxL1 = m_mbs[CurrMbAddr].ref_idx_l1[mbPartIdx];
+    else
+      predFlagL1 = 0, refIdxL1 = -1;
 
     subMvCnt = predFlagL0 + predFlagL1;
-
-    if (m_mbs[CurrMbAddr].m_name_of_mb_type == B_8x8) {
+    if (m_mbs[CurrMbAddr].m_name_of_mb_type == B_8x8)
       currSubMbType = m_mbs[CurrMbAddr].m_name_of_sub_mb_type[mbPartIdx];
-    } else {
+    else
       currSubMbType = MB_TYPE_NA;
-    }
 
-    //-----------------------
     if (predFlagL0 == 1) {
-      refPicLSetFlag = 1;
-      refPicL0 = NULL;
-
       // 8.4.2.1 Reference picture selection process
-      ret = Reference_picture_selection_process(refIdxL0, m_RefPicList0,
-                                                m_RefPicList0Length, refPicL0);
-      RETURN_IF_FAILED(ret, -1);
-
-      //---------------------
-      listSuffixFlag = 0;
+      refPicLSetFlag = 1, refPicL0 = NULL;
+      RET(Reference_picture_selection_process(refIdxL0, m_RefPicList0,
+                                              m_RefPicList0Length, refPicL0));
 
       // 8.4.1.3 Derivation process for luma motion vector prediction
-      ret = Derivation_process_for_luma_motion_vector_prediction(
+      listSuffixFlag = 0;
+      RET(Derivation_process_for_luma_motion_vector_prediction(
           mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, refIdxL0,
-          mvpL0);
-      RETURN_IF_FAILED(ret != 0, ret);
-
+          mvpL0));
       mvL0[0] = mvpL0[0] + m_mbs[CurrMbAddr].mvd_l0[mbPartIdx][subMbPartIdx][0];
       mvL0[1] = mvpL0[1] + m_mbs[CurrMbAddr].mvd_l0[mbPartIdx][subMbPartIdx][1];
     }
 
     if (predFlagL1 == 1) {
-      refPicLSetFlag = 1;
-      refPicL1 = NULL;
-
       // 8.4.2.1 Reference picture selection process
-      ret = Reference_picture_selection_process(refIdxL1, m_RefPicList1,
-                                                m_RefPicList1Length, refPicL1);
-      RETURN_IF_FAILED(ret, -1);
-
-      //---------------------
-      listSuffixFlag = 1;
+      refPicLSetFlag = 1, refPicL1 = NULL;
+      RET(Reference_picture_selection_process(refIdxL1, m_RefPicList1,
+                                              m_RefPicList1Length, refPicL1));
 
       // 8.4.1.3 Derivation process for luma motion vector prediction
-      ret = Derivation_process_for_luma_motion_vector_prediction(
+      listSuffixFlag = 1;
+      RET(Derivation_process_for_luma_motion_vector_prediction(
           mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, refIdxL1,
-          mvpL1);
-      RETURN_IF_FAILED(ret != 0, ret);
-
+          mvpL1));
       mvL1[0] = mvpL1[0] + m_mbs[CurrMbAddr].mvd_l1[mbPartIdx][subMbPartIdx][0];
       mvL1[1] = mvpL1[1] + m_mbs[CurrMbAddr].mvd_l1[mbPartIdx][subMbPartIdx][1];
     }
   }
 
-  //-----------------------------
   if (refPicLSetFlag == 0) {
     if (predFlagL0 == 1) {
-      refPicLSetFlag = 1;
-      refPicL0 = NULL;
-
       // 8.4.2.1 Reference picture selection process
-      ret = Reference_picture_selection_process(refIdxL0, m_RefPicList0,
-                                                m_RefPicList0Length, refPicL0);
-      RETURN_IF_FAILED(ret, -1);
+      refPicLSetFlag = 1, refPicL0 = NULL;
+      RET(Reference_picture_selection_process(refIdxL0, m_RefPicList0,
+                                              m_RefPicList0Length, refPicL0));
     }
-
     if (predFlagL1 == 1) {
-      refPicLSetFlag = 1;
-      refPicL1 = NULL;
-
       // 8.4.2.1 Reference picture selection process
-      ret = Reference_picture_selection_process(refIdxL1, m_RefPicList1,
-                                                m_RefPicList1Length, refPicL1);
-      RETURN_IF_FAILED(ret, -1);
+      refPicLSetFlag = 1, refPicL1 = NULL;
+      RET(Reference_picture_selection_process(refIdxL1, m_RefPicList1,
+                                              m_RefPicList1Length, refPicL1));
     }
   }
 
-  //-----------------------------
-  if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-    if (predFlagL0 == 1) {
+  if (ChromaArrayType != 0) {
+    if (predFlagL0 == 1)
       // 8.4.1.4 Derivation process for chroma motion vectors
-      ret = Derivation_process_for_chroma_motion_vectors(
-          m_slice->slice_header->m_sps->ChromaArrayType, mvL0, refPicL0, mvCL0);
-      RETURN_IF_FAILED(ret != 0, ret);
-    }
+      RET(Derivation_process_for_chroma_motion_vectors(ChromaArrayType, mvL0,
+                                                       refPicL0, mvCL0));
 
-    if (predFlagL1 == 1) {
+    if (predFlagL1 == 1)
       // 8.4.1.4 Derivation process for chroma motion vectors
-      ret = Derivation_process_for_chroma_motion_vectors(
-          m_slice->slice_header->m_sps->ChromaArrayType, mvL1, refPicL1, mvCL1);
-      RETURN_IF_FAILED(ret != 0, ret);
-    }
+      RET(Derivation_process_for_chroma_motion_vectors(ChromaArrayType, mvL1,
+                                                       refPicL1, mvCL1));
   }
 
   return 0;
@@ -645,8 +579,8 @@ int PictureBase::
         yM = (2 * yCol) % 16;
         vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
       } else // if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag == 1) //If the
-             // macroblock mbAddrX in the picture colPic is a field macroblock,
-             // fieldDecodingFlagX is set equal to 1.
+      // macroblock mbAddrX in the picture colPic is a field macroblock,
+      // fieldDecodingFlagX is set equal to 1.
       {
         //fieldDecodingFlagX = 1;
         int32_t mbAddrCol3 =
@@ -1387,7 +1321,7 @@ int PictureBase::Derivation_process_for_motion_data_of_neighbouring_partitions(
   //-----------------------------------
   if (mbAddrN_C < 0 || mbPartIdxN_C < 0 ||
       subMbPartIdxN_C < 0) // When the partition
-                           // mbAddrC\mbPartIdxC\subMbPartIdxC is not available
+  // mbAddrC\mbPartIdxC\subMbPartIdxC is not available
   {
     mbAddrN_C = mbAddrN_D;
     mbPartIdxN_C = mbPartIdxN_D;
@@ -1551,8 +1485,8 @@ int PictureBase::Derivation_process_for_chroma_motion_vectors(
     mvCLX[0] = mvLX[0];
     mvCLX[1] = mvLX[1];
   } else // if (ChromaArrayType == 1 && m_mbs[CurrMbAddr].mb_field_decoding_flag
-         // == 1) // ChromaArrayType is equal to 1 and the current macroblock is
-         // a field macroblock
+  // == 1) // ChromaArrayType is equal to 1 and the current macroblock is
+  // a field macroblock
   {
     mvCLX[0] = mvLX[0];
 
@@ -1758,49 +1692,38 @@ int PictureBase::derivation_prediction_weights(
     int32_t &o1Cb, int32_t &logWDCr, int32_t &w0Cr, int32_t &w1Cr,
     int32_t &o0Cr, int32_t &o1Cr) {
 
-  const SliceHeader *slice_header = m_slice->slice_header;
-  uint32_t weighted_bipred_idc =
-      m_slice->slice_header->m_pps->weighted_bipred_idc;
-  uint32_t slice_type = slice_header->slice_type % 5;
+  const SliceHeader *header = m_slice->slice_header;
+  const uint32_t weighted_bipred_idc = header->m_pps->weighted_bipred_idc;
+  const uint32_t slice_type = header->slice_type % 5;
+  const bool weighted_pred_flag = header->m_pps->weighted_pred_flag;
+  const uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
 
-  /* 变量implicitModeFlag和explicitModeFlag的推导如下：
-   * – 如果weighted_bipred_idc等于2，(slice_type % 5)等于1，predFlagL0等于1，并且predFlagL1等于1，则implicitModeFlag设置为等于1并且explicitModeFlag设置为等于0。 
-   * – 否则，如果weighted_bipred_idc等于 1，(slice_type % 5) 等于 1，并且 predFlagL0 + predFlagL1 等于 1 或 2，implicitModeFlag 设置为等于 0，explicitModeFlag 设置为等于 1。 
-   * – 否则，如果weighted_pred_flag 等于 1， (slice_type % 5) 等于 0 或 3，并且 predFlagL0 等于 1，implicitModeFlag 设置为等于 0，explicitModeFlag 设置为等于 1。 
-   * – 否则，implicitModeFlag 设置为等于 0，explicitModeFlag 设置为等于 0。*/
-  bool implicitModeFlag = 0, explicitModeFlag = 0;
+  bool implicitModeFlag = false, explicitModeFlag = false;
   if (weighted_bipred_idc == 2 && slice_type == SLICE_B && predFlagL0 &&
-      predFlagL1) {
-    implicitModeFlag = 1;
-    explicitModeFlag = 0;
-  } else if (weighted_bipred_idc == 1 && slice_type == SLICE_B &&
-             (predFlagL0 + predFlagL1)) {
-    implicitModeFlag = 0;
-    explicitModeFlag = 1;
-  } else if (m_slice->slice_header->m_pps->weighted_pred_flag == 1 &&
-             (slice_type == SLICE_P || slice_type == SLICE_SP) && predFlagL0) {
-    implicitModeFlag = 0;
-    explicitModeFlag = 1;
-  } else
-    implicitModeFlag = explicitModeFlag = 0;
+      predFlagL1)
+    implicitModeFlag = true, explicitModeFlag = false;
+  else if (weighted_bipred_idc == 1 && slice_type == SLICE_B &&
+           (predFlagL0 + predFlagL1))
+    implicitModeFlag = false, explicitModeFlag = true;
+  else if (weighted_pred_flag == true &&
+           (slice_type == SLICE_P || slice_type == SLICE_SP) && predFlagL0)
+    implicitModeFlag = false, explicitModeFlag = true;
 
   /* 将C替换为L，当ChromaArrayType不等于0、Cb和Cr时，变量logWDC、w0C、w1C、o0C、o1C推导如下：
    * – 如果implicitModeFlag等于1，则使用隐式模式加权预测，如下所示：*/
   if (implicitModeFlag) {
-    logWDL = 5;
-    o0L = o1L = 0;
-    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-      logWDCb = logWDCr = 5;
-      o0Cb = o1Cb = o0Cr = o1Cr = 0;
-    }
+    logWDL = 5, o0L = o1L = 0;
+
+    if (ChromaArrayType != 0)
+      logWDCb = logWDCr = 5, o0Cb = o1Cb = o0Cr = o1Cr = 0;
+
     /* w0C 和 w1C 是按照以下顺序步骤中指定的导出的：
      * 1. 变量 currPicOrField、pic0 和 pic1 的推导如下： */
     PictureBase *currPicOrField = nullptr, *pic0 = nullptr, *pic1 = nullptr;
 
-    if (slice_header->field_pic_flag == 0 &&
+    /* 帧图像，但是场宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
+    if (header->field_pic_flag == 0 &&
         m_mbs[CurrMbAddr].mb_field_decoding_flag) {
-      /* 帧图像，但是场宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
-
       //* a.currPicOrField 是当前图片CurrPic 中与当前宏块具有相同奇偶性的字段。
       if (CurrMbAddr % 2 == 0)
         currPicOrField = &(m_parent->m_picture_top_filed);
@@ -1860,92 +1783,73 @@ int PictureBase::derivation_prediction_weights(
         (DistScaleFactor >> 2) < -64 || (DistScaleFactor >> 2) > 128) {
       w0L = w1L = 32;
 
-      if (m_slice->slice_header->m_sps->ChromaArrayType != 0)
-        w0Cb = w1Cb = w0Cr = w1Cr = 32;
+      if (ChromaArrayType != 0) w0Cb = w1Cb = w0Cr = w1Cr = 32;
 
       /* 否则，变量 tb、td、tx 和 DistScaleFactor 分别使用方程 8-201、8-202、8-197 和 8-198 从 currPicOrField、pic0 和 pic1 的值导出，权重 w0C 和w1C 导出为 */
     } else {
       w0L = 64 - (DistScaleFactor >> 2);
       w1L = DistScaleFactor >> 2;
 
-      if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
+      if (ChromaArrayType != 0) {
         w0Cb = w0Cr = 64 - (DistScaleFactor >> 2);
         w1Cb = w1Cr = DistScaleFactor >> 2;
       }
     }
 
-    /* 否则，如果explicitModeFlag等于1，则按照以下顺序步骤指定使用显式模式加权预测： */
-  } else if (explicitModeFlag == 1) {
-    //1.变量refIdxL0WP和refIdxL1WP的推导如下：
+    /* 使用显式模式加权预测： */
+  } else if (explicitModeFlag) {
     int32_t refIdxL0WP = 0, refIdxL1WP = 0;
     /* 宏块自适应帧场，场宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
-    if (slice_header->MbaffFrameFlag &&
-        m_mbs[CurrMbAddr].mb_field_decoding_flag) {
-      refIdxL0WP = refIdxL0 >> 1;
-      refIdxL1WP = refIdxL1 >> 1;
-    } else {
-      /* 非宏块自适应帧场，帧宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
-      refIdxL0WP = refIdxL0;
-      refIdxL1WP = refIdxL1;
-    }
+    if (header->MbaffFrameFlag && m_mbs[CurrMbAddr].mb_field_decoding_flag)
+      refIdxL0WP = refIdxL0 >> 1, refIdxL1WP = refIdxL1 >> 1;
+    /* 非宏块自适应帧场，帧宏块(一般是帧图像中，为了应对复杂场景而使用场宏块编码） */
+    else
+      refIdxL0WP = refIdxL0, refIdxL1WP = refIdxL1;
 
-    /* 2. 变量logWDC、w0C、w1C、o0C和o1C的推导如下： */
     // – 对于亮度样本，如果 C 等于 L
-    logWDL = slice_header->luma_log2_weight_denom;
-    w0L = slice_header->luma_weight_l0[refIdxL0WP];
-    w1L = slice_header->luma_weight_l1[refIdxL1WP];
-    o0L = slice_header->luma_offset_l0[refIdxL0WP] *
-          (1 << (m_slice->slice_header->m_sps->BitDepthY - 8));
-    o1L = slice_header->luma_offset_l1[refIdxL1WP] *
-          (1 << (m_slice->slice_header->m_sps->BitDepthY - 8));
+    logWDL = header->luma_log2_weight_denom;
+    w0L = header->luma_weight_l0[refIdxL0WP];
+    w1L = header->luma_weight_l1[refIdxL1WP];
+    o0L = header->luma_offset_l0[refIdxL0WP] *
+          (1 << (header->m_sps->BitDepthY - 8));
+    o1L = header->luma_offset_l1[refIdxL1WP] *
+          (1 << (header->m_sps->BitDepthY - 8));
 
-    // – 否则（对于色度样本，C 等于 Cb 或 Cr，对于 Cb，iCbCr = 0，对于 Cr，iCbCr = 1）
-    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-      logWDCb = logWDCr = slice_header->chroma_log2_weight_denom;
+    // 对于色度样本
+    if (ChromaArrayType != 0) {
+      logWDCb = logWDCr = header->chroma_log2_weight_denom;
 
-      w0Cb = slice_header->chroma_weight_l0[refIdxL0WP][0];
-      w0Cr = slice_header->chroma_weight_l0[refIdxL0WP][1];
+      w0Cb = header->chroma_weight_l0[refIdxL0WP][0];
+      w0Cr = header->chroma_weight_l0[refIdxL0WP][1];
 
-      w1Cb = slice_header->chroma_weight_l1[refIdxL1WP][0];
-      w1Cr = slice_header->chroma_weight_l1[refIdxL1WP][1];
+      w1Cb = header->chroma_weight_l1[refIdxL1WP][0];
+      w1Cr = header->chroma_weight_l1[refIdxL1WP][1];
 
-      o0Cb = slice_header->chroma_offset_l0[refIdxL0WP][0] *
-             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
-      o0Cr = slice_header->chroma_offset_l0[refIdxL0WP][1] *
-             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
+      o0Cb = header->chroma_offset_l0[refIdxL0WP][0] *
+             (1 << (header->m_sps->BitDepthC - 8));
+      o0Cr = header->chroma_offset_l0[refIdxL0WP][1] *
+             (1 << (header->m_sps->BitDepthC - 8));
 
-      o1Cb = slice_header->chroma_offset_l1[refIdxL1WP][0] *
-             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
-      o1Cr = slice_header->chroma_offset_l1[refIdxL1WP][1] *
-             (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
+      o1Cb = header->chroma_offset_l1[refIdxL1WP][0] *
+             (1 << (header->m_sps->BitDepthC - 8));
+      o1Cr = header->chroma_offset_l1[refIdxL1WP][1] *
+             (1 << (header->m_sps->BitDepthC - 8));
     }
   } else {
-    /* 否则(implicitModeFlag等于0且explicitModeFlag等于0)，变量logWDC、w0C、w1C、o0C、o1C不用于当前宏块的重建过程。*/
+    /* 变量logWDC、w0C、w1C、o0C、o1C不用于当前宏块的重建过程*/
   }
 
   /* 当explicitModeFlag等于1并且predFlagL0和predFlagL1等于1时，对于C等于L，并且当ChromaArrayType不等于0时，Cb和Cr应遵守以下约束： */
   if (explicitModeFlag && predFlagL0 && predFlagL1) {
     int32_t max = (logWDL == 7) ? 127 : 128;
-    if (-128 > (w0L + w1L) || (w0L + w1L) > max) {
-      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-                << std::endl;
-      return -1;
-    }
+    if (-128 > (w0L + w1L) || (w0L + w1L) > max) RET(-1);
 
-    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
+    if (ChromaArrayType != 0) {
       int32_t max = (logWDCb == 7) ? 127 : 128;
-      if (-128 > (w0Cb + w1Cb) || (w0Cb + w1Cb) > max) {
-        std::cerr << "An error occurred on " << __FUNCTION__
-                  << "():" << __LINE__ << std::endl;
-        return -1;
-      }
+      if (-128 > (w0Cb + w1Cb) || (w0Cb + w1Cb) > max) RET(-1);
 
       max = (logWDCr == 7) ? 127 : 128;
-      if (-128 > (w0Cr + w1Cr) || (w0Cr + w1Cr) > max) {
-        std::cerr << "An error occurred on " << __FUNCTION__
-                  << "():" << __LINE__ << std::endl;
-        return -1;
-      }
+      if (-128 > (w0Cr + w1Cr) || (w0Cr + w1Cr) > max) RET(-1);
     }
   }
 
