@@ -380,15 +380,13 @@ class PictureBase {
       PictureBase *refPicLX, uint8_t *predPartLXL, uint8_t *predPartLXCb,
       uint8_t *predPartLXCr);
 
-  int luma_sample_interpolation_process(int32_t xIntL, int32_t yIntL,
-                                        int32_t xFracL, int32_t yFracL,
-                                        PictureBase *refPic,
-                                        uint8_t &predPartLXL_xL_yL);
-  int chroma_sample_interpolation_process(int32_t xIntC, int32_t yIntC,
-                                          int32_t xFracC, int32_t yFracC,
-                                          PictureBase *refPic,
-                                          int32_t isChromaCb,
-                                          uint8_t &predPartLXC_xC_yC);
+  int luma_sample_interpolation(int32_t xIntL, int32_t yIntL, int32_t xFracL,
+                                int32_t yFracL, PictureBase *refPic,
+                                uint8_t &predPartLXL_xL_yL);
+  int chroma_sample_interpolation(int32_t xIntC, int32_t yIntC, int32_t xFracC,
+                                  int32_t yFracC, PictureBase *refPic,
+                                  int32_t isChromaCb,
+                                  uint8_t &predPartLXC_xC_yC);
   int weighted_sample_prediction(
       int32_t mbPartIdx, int32_t subMbPartIdx, bool predFlagL0, bool predFlagL1,
       int32_t partWidth, int32_t partHeight, int32_t partWidthC,
@@ -412,7 +410,7 @@ class PictureBase {
       uint8_t *predPartL0Cb, uint8_t *predPartL0Cr, uint8_t *predPartL1L,
       uint8_t *predPartL1Cb, uint8_t *predPartL1Cr, uint8_t *predPartL,
       uint8_t *predPartCb, uint8_t *predPartCr);
-  int weighted_sample_prediction_process_2(
+  int weighted_sample_prediction_2(
       int32_t mbPartIdx, int32_t subMbPartIdx, bool predFlagL0, bool predFlagL1,
       int32_t partWidth, int32_t partHeight, int32_t partWidthC,
       int32_t partHeightC, int32_t logWDL, int32_t w0L, int32_t w1L,
@@ -423,14 +421,12 @@ class PictureBase {
       uint8_t *predPartL1Cr, uint8_t *predPartL, uint8_t *predPartCb,
       uint8_t *predPartCr);
 
-  int Inverse_sub_macroblock_partition_scanning_process(MacroBlock *mb,
-                                                        int32_t mbPartIdx,
-                                                        int32_t subMbPartIdx,
-                                                        int32_t &x, int32_t &y);
-  int derivation_neighbouring_partitions(
-      int32_t xN, int32_t yN, int32_t mbPartIdx, H264_MB_TYPE currSubMbType,
-      int32_t subMbPartIdx, int32_t isChroma, int32_t &mbAddrN,
-      int32_t &mbPartIdxN, int32_t &subMbPartIdxN);
+  int derivation_neighbouring_partitions(int32_t xN, int32_t yN,
+                                         int32_t mbPartIdx,
+                                         H264_MB_TYPE currSubMbType,
+                                         int32_t subMbPartIdx, int32_t isChroma,
+                                         int32_t &mbAddrN, int32_t &mbPartIdxN,
+                                         int32_t &subMbPartIdxN);
   int derivation_macroblock_and_sub_macroblock_partition_indices(
       H264_MB_TYPE mb_type_, H264_MB_TYPE subMbType[4], int32_t xP, int32_t yP,
       int32_t &mbPartIdxN, int32_t &subMbPartIdxN);
