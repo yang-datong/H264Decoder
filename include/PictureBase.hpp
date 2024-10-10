@@ -335,7 +335,7 @@ class PictureBase {
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
       int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
       int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1);
-  int Derivation_process_for_the_co_located_4x4_sub_macroblock_partitions(
+  int derivation_the_co_located_4x4_sub_macroblock_partitions(
       int32_t mbPartIdx, int32_t subMbPartIdx, PictureBase *&colPic,
       int32_t &mbAddrCol, int32_t (&mvCol)[2], int32_t &refIdxCol,
       int32_t &vertMvScale);

@@ -200,7 +200,7 @@ int PictureBase::inter_prediction_process() {
       }
 
       /* 完成该宏块解码 */
-      mb.m_isDecoded[mbPartIdx][subMbPartIdx] = 1;
+      mb.m_isDecoded[mbPartIdx][subMbPartIdx] = true;
     }
   }
 
@@ -386,24 +386,15 @@ int PictureBase::
 }
 
 // 8.4.1.2.1 Derivation process for the co-located 4x4 sub-macroblock partitions
-int PictureBase::
-    Derivation_process_for_the_co_located_4x4_sub_macroblock_partitions(
-        int32_t mbPartIdx, int32_t subMbPartIdx, PictureBase *&colPic,
-        int32_t &mbAddrCol, int32_t (&mvCol)[2], int32_t &refIdxCol,
-        int32_t &vertMvScale) {
-  int ret = 0;
+int PictureBase::derivation_the_co_located_4x4_sub_macroblock_partitions(
+    int32_t mbPartIdx, int32_t subMbPartIdx, PictureBase *&colPic,
+    int32_t &mbAddrCol, int32_t (&mvCol)[2], int32_t &refIdxCol,
+    int32_t &vertMvScale) {
 
-  SliceHeader *slice_header = m_slice->slice_header;
+  const SliceHeader *slice_header = m_slice->slice_header;
 
-  PictureBase *firstRefPicL1Top = NULL;
-  PictureBase *firstRefPicL1Bottom = NULL;
-
-  int32_t topAbsDiffPOC = 0;
-  int32_t bottomAbsDiffPOC = 0;
-  // if (slice_header.slice_type == 1) {
-  // std::cout << "B" << std::endl;
-  //}
-
+  PictureBase *firstRefPicL1Top = NULL, *firstRefPicL1Bottom = NULL;
+  int32_t topAbsDiffPOC = 0, bottomAbsDiffPOC = 0;
   if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
           PICTURE_CODED_TYPE_FRAME ||
       m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
@@ -413,129 +404,86 @@ int PictureBase::
 
     topAbsDiffPOC = ABS(DiffPicOrderCnt(firstRefPicL1Top, this));
     bottomAbsDiffPOC = ABS(DiffPicOrderCnt(firstRefPicL1Bottom, this));
-  } else {
-    //
   }
 
-  //------------------------------
   // Table 8-6 – Specification of the variable colPic
   colPic = NULL;
 
-  if (slice_header->field_pic_flag == 1) {
-    if (m_RefPicList1[0]->m_is_decode_finished ==
-            1 // RefPicList1[0] is a field of a decoded frame
-        && (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-                PICTURE_CODED_TYPE_TOP_FIELD ||
-            m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-                PICTURE_CODED_TYPE_BOTTOM_FIELD)) {
-      colPic = &m_RefPicList1[0]->m_picture_frame;
-    } else // RefPicList1[0] is a decoded field
-    {
-      if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-          PICTURE_CODED_TYPE_TOP_FIELD) {
-        colPic = &m_RefPicList1[0]->m_picture_top_filed;
-      } else if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-                 PICTURE_CODED_TYPE_BOTTOM_FIELD) {
-        colPic = &m_RefPicList1[0]->m_picture_bottom_filed;
-      } else {
-        //
-      }
+  Frame *refList1_0 = m_RefPicList1[0];
+  if (slice_header->field_pic_flag) {
+    if (refList1_0->m_is_decode_finished &&
+        (refList1_0->m_picture_coded_type_marked_as_refrence ==
+             PICTURE_CODED_TYPE_TOP_FIELD ||
+         refList1_0->m_picture_coded_type_marked_as_refrence ==
+             PICTURE_CODED_TYPE_BOTTOM_FIELD)) {
+      colPic = &refList1_0->m_picture_frame;
+    } else {
+      if (refList1_0->m_picture_coded_type_marked_as_refrence ==
+          PICTURE_CODED_TYPE_TOP_FIELD)
+        colPic = &refList1_0->m_picture_top_filed;
+      else if (refList1_0->m_picture_coded_type_marked_as_refrence ==
+               PICTURE_CODED_TYPE_BOTTOM_FIELD)
+        colPic = &refList1_0->m_picture_bottom_filed;
     }
-  } else // if (slice_header.field_pic_flag == 0)
-  {
-    if (m_RefPicList1[0]->m_is_decode_finished ==
-            1 // RefPicList1[0] is a decoded frame
-        && m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
-               PICTURE_CODED_TYPE_FRAME) {
-      colPic = &m_RefPicList1[0]->m_picture_frame;
-    } else if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
+  } else {
+    if (refList1_0->m_is_decode_finished &&
+        refList1_0->m_picture_coded_type_marked_as_refrence ==
+            PICTURE_CODED_TYPE_FRAME) {
+      colPic = &refList1_0->m_picture_frame;
+    } else if (refList1_0->m_picture_coded_type_marked_as_refrence ==
                PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
-      if (m_slice->slice_data->mb_field_decoding_flag == 0) {
-        if (topAbsDiffPOC < bottomAbsDiffPOC) {
-          colPic = firstRefPicL1Top;
-        } else // if (topAbsDiffPOC >= bottomAbsDiffPOC)
-        {
-          colPic = firstRefPicL1Bottom;
-        }
-      } else // if (m_slice->slice_body.mb_field_decoding_flag == 1)
-      {
-        if ((CurrMbAddr & 1) == 0) {
-          colPic = firstRefPicL1Top;
-        } else //(CurrMbAddr & 1 ) != 0
-        {
-          colPic = firstRefPicL1Bottom;
-        }
-      }
+      if (m_slice->slice_data->mb_field_decoding_flag == 0)
+        colPic = (topAbsDiffPOC < bottomAbsDiffPOC) ? firstRefPicL1Top
+                                                    : firstRefPicL1Bottom;
+      else
+        colPic =
+            ((CurrMbAddr & 1) == 0) ? firstRefPicL1Top : firstRefPicL1Bottom;
     }
   }
 
-  RETURN_IF_FAILED(colPic == NULL, -1);
+  if (colPic == NULL) RET(-1);
 
   //----------------------------------------------------
   // Table 8-7 – Specification of PicCodingStruct( X )
   int32_t PicCodingStruct_CurrPic = FLD;
 
-  if (slice_header->field_pic_flag == 1) {
+  if (slice_header->field_pic_flag)
     PicCodingStruct_CurrPic = FLD;
-  } else // if (slice_header.field_pic_flag == 0)
-  {
-    if (m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag == 0) {
+  else {
+    if (m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag == 0)
       PicCodingStruct_CurrPic = FRM;
-    } else // if (m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag == 1)
-    {
+    else
       PicCodingStruct_CurrPic = AFRM;
-    }
   }
 
   //----------------------------------------------------
   // Table 8-7 – Specification of PicCodingStruct( X )
   int32_t PicCodingStruct_colPic = FLD;
 
-  if (colPic->m_slice->slice_header->field_pic_flag == 1) {
+  if (colPic->m_slice->slice_header->field_pic_flag)
     PicCodingStruct_colPic = FLD;
-  } else // if (colPic->m_slice_header.field_pic_flag == 0)
-  {
-    if (colPic->m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag ==
-        0) {
+  else {
+    if (colPic->m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag == 0)
       PicCodingStruct_colPic = FRM;
-    } else // if (colPic->m_h264_m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag
-    // == 1)
-    {
+    else
       PicCodingStruct_colPic = AFRM;
-    }
   }
 
-  // NOTE – It is not possible for CurrPic and colPic picture coding types to be
-  // either (FRM, AFRM) or (AFRM, FRM) because these picture coding types must
-  // be separated by an IDR picture.
-  RETURN_IF_FAILED(
-      PicCodingStruct_CurrPic == FRM && PicCodingStruct_colPic == AFRM, -1);
-  RETURN_IF_FAILED(
-      PicCodingStruct_CurrPic == AFRM && PicCodingStruct_colPic == FRM, -1);
+  if ((PicCodingStruct_CurrPic == FRM && PicCodingStruct_colPic == AFRM) ||
+      (PicCodingStruct_CurrPic == AFRM && PicCodingStruct_colPic == FRM))
+    RET(-1);
 
-  //--------------------------------
-  int32_t luma4x4BlkIdx = 0;
-
-  if (m_slice->slice_header->m_sps->direct_8x8_inference_flag == 0) {
+  int32_t luma4x4BlkIdx = 5 * mbPartIdx;
+  if (m_slice->slice_header->m_sps->direct_8x8_inference_flag == 0)
     luma4x4BlkIdx = (4 * mbPartIdx + subMbPartIdx);
-  } else // if (m_slice->slice_header->m_sps->direct_8x8_inference_flag == 1)
-  {
-    luma4x4BlkIdx = 5 * mbPartIdx;
-  }
 
-  //------------------------------------------------------
-  // 6.4.3 Inverse 4x4 luma block scanning process
-  // InverseRasterScan = (a % (d / b) ) * b;    if e == 0;
-  // InverseRasterScan = (a / (d / b) ) * c;    if e == 1;
   int32_t xCol = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
                  InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
   int32_t yCol = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
                  InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
 
-  //-----------------
-  //int32_t fieldDecodingFlagX = 0;
-  mbAddrCol = CurrMbAddr;
   int32_t yM = 0;
+  mbAddrCol = CurrMbAddr;
   vertMvScale = H264_VERT_MV_SCALE_UNKNOWN;
 
   // Table 8-8 – Specification of mbAddrCol, yM, and vertMvScale
@@ -553,20 +501,12 @@ int PictureBase::
       vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
     } else if (PicCodingStruct_colPic == AFRM) {
       int32_t mbAddrX = 2 * CurrMbAddr;
-      if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag ==
-          0) // Otherwise (the macroblock mbAddrX in the picture colPic is a
-             // frame macroblock), fieldDecodingFlagX is set equal to 0.
-      {
-        //fieldDecodingFlagX = 0;
+      if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag == 0) {
         int32_t mbAddrCol2 = 2 * CurrMbAddr + (yCol / 8);
         mbAddrCol = mbAddrCol2;
         yM = (2 * yCol) % 16;
         vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
-      } else // if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag == 1) //If the
-      // macroblock mbAddrX in the picture colPic is a field macroblock,
-      // fieldDecodingFlagX is set equal to 1.
-      {
-        //fieldDecodingFlagX = 1;
+      } else {
         int32_t mbAddrCol3 =
             2 * CurrMbAddr + this->m_mbs[CurrMbAddr].bottom_field_flag;
         mbAddrCol = mbAddrCol3;
@@ -593,8 +533,7 @@ int PictureBase::
         mbAddrCol = mbAddrCol5;
         yM = 8 * (CurrMbAddr % 2) + 4 * (yCol / 8);
         vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
-      } else // if (m_slice->slice_body.mb_field_decoding_flag == 1)
-      {
+      } else {
         mbAddrCol = mbAddrCol5;
         yM = yCol;
         vertMvScale = H264_VERT_MV_SCALE_One_To_One;
@@ -602,41 +541,24 @@ int PictureBase::
     } else if (PicCodingStruct_colPic == AFRM) {
       int32_t mbAddrX = CurrMbAddr;
       if (m_slice->slice_data->mb_field_decoding_flag == 0) {
-        if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag ==
-            0) // Otherwise (the macroblock mbAddrX in the picture colPic is a
-               // frame macroblock), fieldDecodingFlagX is set equal to 0.
-        {
-          //fieldDecodingFlagX = 0;
+        if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag == 0) {
           mbAddrCol = CurrMbAddr;
           yM = yCol;
           vertMvScale = H264_VERT_MV_SCALE_One_To_One;
-        } else // if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag == 1) //If
-               // the macroblock mbAddrX in the picture colPic is a field
-               // macroblock, fieldDecodingFlagX is set equal to 1.
-        {
-          //fieldDecodingFlagX = 1;
+        } else {
           int32_t mbAddrCol6 = 2 * (CurrMbAddr / 2) +
                                ((topAbsDiffPOC < bottomAbsDiffPOC) ? 0 : 1);
           mbAddrCol = mbAddrCol6;
           yM = 8 * (CurrMbAddr % 2) + 4 * (yCol / 8);
           vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
         }
-      } else // if (m_slice->slice_body.mb_field_decoding_flag == 1)
-      {
-        if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag ==
-            0) // Otherwise (the macroblock mbAddrX in the picture colPic is a
-               // frame macroblock), fieldDecodingFlagX is set equal to 0.
-        {
-          //fieldDecodingFlagX = 0;
+      } else {
+        if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag == 0) {
           int32_t mbAddrCol7 = 2 * (CurrMbAddr / 2) + (yCol / 8);
           mbAddrCol = mbAddrCol7;
           yM = (2 * yCol) % 16;
           vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
-        } else // if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag == 1) //If
-               // the macroblock mbAddrX in the picture colPic is a field
-               // macroblock, fieldDecodingFlagX is set equal to 1.
-        {
-          //fieldDecodingFlagX = 1;
+        } else {
           mbAddrCol = CurrMbAddr;
           yM = yCol;
           vertMvScale = H264_VERT_MV_SCALE_One_To_One;
@@ -645,7 +567,6 @@ int PictureBase::
     }
   }
 
-  //--------------------------
   H264_MB_TYPE mbTypeCol = colPic->m_mbs[mbAddrCol].m_name_of_mb_type;
   H264_MB_TYPE subMbTypeCol[4] = {MB_TYPE_NA, MB_TYPE_NA, MB_TYPE_NA,
                                   MB_TYPE_NA};
@@ -660,41 +581,28 @@ int PictureBase::
   int32_t mbPartIdxCol = 0;
   int32_t subMbPartIdxCol = 0;
 
-  // 6.4.13.4 Derivation process for macroblock and sub-macroblock partition
-  // indices
-  ret = derivation_macroblock_and_sub_macroblock_partition_indices(
-      mbTypeCol, subMbTypeCol, xCol, yM, mbPartIdxCol, subMbPartIdxCol);
-  RETURN_IF_FAILED(ret != 0, ret);
+  // 6.4.13.4 Derivation process for macroblock and sub-macroblock partition indices
+  RET(derivation_macroblock_and_sub_macroblock_partition_indices(
+      mbTypeCol, subMbTypeCol, xCol, yM, mbPartIdxCol, subMbPartIdxCol));
 
-  //-----------------------------
   refIdxCol = -1;
-
-  if (IS_INTRA_Prediction_Mode(colPic->m_mbs[mbAddrCol].m_mb_pred_mode) ==
-      true) {
-    mvCol[0] = 0;
-    mvCol[1] = 0;
-    refIdxCol = -1;
-  } else {
+  if (IS_INTRA_Prediction_Mode(colPic->m_mbs[mbAddrCol].m_mb_pred_mode))
+    mvCol[0] = 0, mvCol[1] = 0, refIdxCol = -1;
+  else {
     int32_t predFlagL0Col = colPic->m_mbs[mbAddrCol].m_PredFlagL0[mbPartIdxCol];
-    //int32_t predFlagL1Col = colPic->m_mbs[mbAddrCol].m_PredFlagL1[mbPartIdxCol];
 
     if (predFlagL0Col == 1) {
-      mvCol[0] = colPic->m_mbs[mbAddrCol]
-                     .m_MvL0[mbPartIdxCol][subMbPartIdxCol]
-                            [0]; // MvL0[ mbPartIdxCol ][ subMbPartIdxCol ]
+      mvCol[0] =
+          colPic->m_mbs[mbAddrCol].m_MvL0[mbPartIdxCol][subMbPartIdxCol][0];
       mvCol[1] =
           colPic->m_mbs[mbAddrCol].m_MvL0[mbPartIdxCol][subMbPartIdxCol][1];
-      refIdxCol = colPic->m_mbs[mbAddrCol]
-                      .m_RefIdxL0[mbPartIdxCol]; // RefIdxL0[ mbPartIdxCol ]
-    } else // if (predFlagL0Col == 0 && predFlagL1Col == 1)
-    {
-      mvCol[0] = colPic->m_mbs[mbAddrCol]
-                     .m_MvL1[mbPartIdxCol][subMbPartIdxCol]
-                            [0]; // MvL1[ mbPartIdxCol ][ subMbPartIdxCol ]
+      refIdxCol = colPic->m_mbs[mbAddrCol].m_RefIdxL0[mbPartIdxCol];
+    } else {
+      mvCol[0] =
+          colPic->m_mbs[mbAddrCol].m_MvL1[mbPartIdxCol][subMbPartIdxCol][0];
       mvCol[1] =
           colPic->m_mbs[mbAddrCol].m_MvL1[mbPartIdxCol][subMbPartIdxCol][1];
-      refIdxCol = colPic->m_mbs[mbAddrCol]
-                      .m_RefIdxL1[mbPartIdxCol]; // RefIdxL1[ mbPartIdxCol ]
+      refIdxCol = colPic->m_mbs[mbAddrCol].m_RefIdxL1[mbPartIdxCol];
     }
   }
 
@@ -751,7 +659,7 @@ int PictureBase::
   int32_t refIdxCol = 0;
   int32_t vertMvScale = 0;
 
-  RET(Derivation_process_for_the_co_located_4x4_sub_macroblock_partitions(
+  RET(derivation_the_co_located_4x4_sub_macroblock_partitions(
       mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol,
       vertMvScale));
 
@@ -811,7 +719,7 @@ int PictureBase::
   int32_t refIdxCol = 0;
   int32_t vertMvScale = 0;
 
-  RET(Derivation_process_for_the_co_located_4x4_sub_macroblock_partitions(
+  RET(derivation_the_co_located_4x4_sub_macroblock_partitions(
       mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol,
       vertMvScale));
 
@@ -2115,21 +2023,23 @@ int PictureBase::default_weighted_sample_prediction(
 }
 
 // 6.4.2.2 Inverse sub-macroblock partition scanning process
+[[deprecated]]
 int PictureBase::Inverse_sub_macroblock_partition_scanning_process(
     MacroBlock *mb, int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &x,
     int32_t &y) {
-  int32_t SubMbPartWidth = mb->SubMbPartWidth[mbPartIdx];
-  int32_t SubMbPartHeight = mb->SubMbPartHeight[mbPartIdx];
-
-  if (mb->m_name_of_mb_type == P_8x8 || mb->m_name_of_mb_type == P_8x8ref0 ||
-      mb->m_name_of_mb_type == B_8x8) {
-    x = InverseRasterScan(subMbPartIdx, SubMbPartWidth, SubMbPartHeight, 8, 0);
-    y = InverseRasterScan(subMbPartIdx, SubMbPartWidth, SubMbPartHeight, 8, 1);
-  } else {
-    x = InverseRasterScan(subMbPartIdx, 4, 4, 8, 0);
-    y = InverseRasterScan(subMbPartIdx, 4, 4, 8, 1);
-  }
-
+  /* TODO YangJing  <24-10-11 02:30:06> */
+  //  int32_t SubMbPartWidth = mb->SubMbPartWidth[mbPartIdx];
+  //  int32_t SubMbPartHeight = mb->SubMbPartHeight[mbPartIdx];
+  //
+  //  if (mb->m_name_of_mb_type == P_8x8 || mb->m_name_of_mb_type == P_8x8ref0 ||
+  //      mb->m_name_of_mb_type == B_8x8) {
+  //    x = InverseRasterScan(subMbPartIdx, SubMbPartWidth, SubMbPartHeight, 8, 0);
+  //    y = InverseRasterScan(subMbPartIdx, SubMbPartWidth, SubMbPartHeight, 8, 1);
+  //  } else {
+  //    x = InverseRasterScan(subMbPartIdx, 4, 4, 8, 0);
+  //    y = InverseRasterScan(subMbPartIdx, 4, 4, 8, 1);
+  //  }
+  //
   return 0;
 }
 

@@ -226,7 +226,7 @@ class MacroBlock {
   int32_t m_RefIdxL1[4] = {0};
   int32_t m_PredFlagL0[4] = {0};
   int32_t m_PredFlagL1[4] = {0};
-  uint8_t m_isDecoded[4][4] = {{0}};
+  bool m_isDecoded[4][4] = {{0}};
 
  private:
   /* 用于内部类中使用 */
