@@ -156,38 +156,35 @@ int PictureBase::inter_prediction_process() {
       mb.m_PredFlagL1[mbPartIdx] = predFlagL1;
 
       // 5. 通过将宏块或子宏块分区预测样本放置在它们在宏块中的正确相对位置来形成宏块预测
-      // 默认为帧宏块
-      int32_t y_offset = mb_y * MbHeightL + yP + yS;
-      int32_t chroma_y_offset =
-          mb_y * MbHeightC + yP / SubHeightC + yS / SubHeightC;
+      // 帧宏块,场宏块偏移
+      int32_t luma_offset =
+          mb.mb_field_decoding_flag ? ((mb_y % 2) * PicWidthInSamplesL) : 0;
+      int32_t chroma_offset =
+          mb.mb_field_decoding_flag ? ((mb_y % 2) * PicWidthInSamplesC) : 0;
+      int32_t n = mb.mb_field_decoding_flag + 1;
 
-      // 当为场宏块时
-      if (mb.mb_field_decoding_flag) {
-        y_offset = (mb_y % 2) * PicWidthInSamplesL +
-                   ((mb_y / 2) * MbHeightL + yP + yS) * 2;
-        chroma_y_offset =
-            (mb_y % 2) * PicWidthInSamplesC +
-            ((mb_y / 2) * MbHeightC + yP / SubHeightC + yS / SubHeightC) * 2;
-      }
-
-      for (int i = 0; i < partHeight; i++)
+      for (int i = 0; i < partHeight; i++) {
+        int32_t y = (mb_y / n * MbHeightL + yP + yS + i) * n;
         for (int j = 0; j < partWidth; j++) {
-          int32_t y = y_offset + i;
           int32_t x = mb_x * MbWidthL + xP + xS + j;
-          m_pic_buff_luma[y * PicWidthInSamplesL + x] =
+          m_pic_buff_luma[luma_offset + y * PicWidthInSamplesL + x] =
               predPartL[i * partWidth + j];
         }
+      }
 
       if (ChromaArrayType != 0) {
-        for (int i = 0; i < partHeightC; i++)
+        for (int i = 0; i < partHeightC; i++) {
+          int32_t y =
+              (mb_y / n * MbHeightC + yP / SubHeightC + yS / SubHeightC + i) *
+              n;
           for (int j = 0; j < partWidthC; j++) {
-            int32_t y = chroma_y_offset + i;
             int32_t x = mb_x * MbWidthC + xP / SubWidthC + xS / SubWidthC + j;
-            m_pic_buff_cb[y * PicWidthInSamplesC + x] =
+            m_pic_buff_cb[chroma_offset + y * PicWidthInSamplesC + x] =
                 predPartCb[i * partWidthC + j];
-            m_pic_buff_cr[y * PicWidthInSamplesC + x] =
+            m_pic_buff_cr[chroma_offset + y * PicWidthInSamplesC + x] =
                 predPartCr[i * partWidthC + j];
           }
+        }
       }
 
       /* 完成该宏块解码 */
