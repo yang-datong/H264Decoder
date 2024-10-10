@@ -1,4 +1,5 @@
 #include "Common.hpp"
+#include "MacroBlock.hpp"
 #include "Nalu.hpp"
 #include "PictureBase.hpp"
 #include "Type.hpp"
@@ -237,8 +238,7 @@ int PictureBase::derivation_motion_vector_components_and_reference_indices(
   /* ---------------------------- P_Skip 宏块的亮度运动矢量 ---------------------------- */
   if (mb_type == P_Skip) {
     RET(derivation_luma_motion_vectors_for_P_Skip(
-        mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
-        predFlagL0, predFlagL1, listSuffixFlag, currSubMbType));
+        refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt, predFlagL0, predFlagL1));
   }
   /* -------------------- B_Skip,B_Direct_16x16/8x8 宏块的亮度运动矢量 -------------------- */
   else if (mb_type == B_Skip || mb_type == B_Direct_16x16 ||
@@ -328,36 +328,40 @@ int PictureBase::derivation_motion_vector_components_and_reference_indices(
 
 // 8.4.1.1 Derivation process for luma motion vectors for skipped macroblocks in P and SP slices
 int PictureBase::derivation_luma_motion_vectors_for_P_Skip(
-    int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
-    int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
-    int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1, bool &listSuffixFlag,
-    H264_MB_TYPE &currSubMbType) {
+    int32_t &refIdxL0, int32_t &refIdxL1, int32_t (&mvL0)[2],
+    int32_t (&mvL1)[2], int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1) {
+
+  /* NOTE:由于P_Skip宏块的预测值等于实际运动矢量，因此输出直接分配给 mvL0,mvL1 */
+
+  /* P宏块不存在后参考预测 */
+  predFlagL0 = true, predFlagL1 = false;
+  mvL1[0] = NA, mvL1[1] = NA;
+  subMvCnt = 1;
 
   refIdxL0 = 0;
   fill_n(m_mbs[CurrMbAddr].m_PredFlagL0, 4, 1);
-  int32_t mbAddrN_A = 0, mbAddrN_B = 0, mbAddrN_C = 0;
-  int32_t mvLXN_A[2] = {0}, mvLXN_B[2] = {0}, mvLXN_C[2] = {0};
-  int32_t refIdxLXN_A = 0, refIdxLXN_B = 0, refIdxLXN_C = 0;
+  int32_t mbAddrN_A = 0, mbAddrN_B = 0;
+  int32_t mvL0_A[2] = {0}, mvL0_B[2] = {0};
+  int32_t refIdxL0_A = 0, refIdxL0_B = 0;
 
-  // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
-  RET(Derivation_process_for_motion_data_of_neighbouring_partitions(
-      mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, mbAddrN_A,
-      mvLXN_A, refIdxLXN_A, mbAddrN_B, mvLXN_B, refIdxLXN_B, mbAddrN_C, mvLXN_C,
-      refIdxLXN_C));
+  /* 空引用对象 */
+  int32_t nullref, nullref2[2];
 
-  if (mbAddrN_A < 0 || mbAddrN_B < 0 ||
-      (refIdxLXN_A == 0 && mvLXN_A[0] == 0 && mvLXN_A[1] == 0) ||
-      (refIdxLXN_B == 0 && mvLXN_B[0] == 0 && mvLXN_B[1] == 0))
+  // 根据相邻分区运动矢量进行推导当前运动矢量
+  RET(derivation_motion_data_of_neighbouring_partitions(
+      0, 0, MB_TYPE_NA, false, mbAddrN_A, mvL0_A, refIdxL0_A, mbAddrN_B, mvL0_B,
+      refIdxL0_B, nullref, nullref2, nullref));
+
+  /* 相邻宏块不可用 */
+  if (mbAddrN_A < 0 || mbAddrN_B < 0)
     mvL0[0] = 0, mvL0[1] = 0;
+  else if ((refIdxL0_A == 0 && mvL0_A[0] == 0 && mvL0_A[1] == 0) ||
+           (refIdxL0_B == 0 && mvL0_B[0] == 0 && mvL0_B[1] == 0))
+    mvL0[0] = 0, mvL0[1] = 0;
+  /* 运动预测 */
   else
-    // 8.4.1.3 Derivation process for luma motion vector prediction
-    RET(derivation_luma_motion_vector_prediction(mbPartIdx, subMbPartIdx,
-                                                 currSubMbType, listSuffixFlag,
+    RET(derivation_luma_motion_vector_prediction(0, 0, MB_TYPE_NA, false,
                                                  refIdxL0, mvL0));
-
-  predFlagL0 = 1, predFlagL1 = 0;
-  mvL1[0] = NA, mvL1[1] = NA;
-  subMvCnt = 1;
   return 0;
 }
 
@@ -727,7 +731,7 @@ int PictureBase::
   int32_t listSuffixFlag = 0;
 
   // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
-  ret = Derivation_process_for_motion_data_of_neighbouring_partitions(
+  ret = derivation_motion_data_of_neighbouring_partitions(
       mbPartIdx_, subMbPartIdx_, currSubMbType, listSuffixFlag, mbAddrA, mvL0A,
       refIdxL0A, mbAddrB, mvL0B, refIdxL0B, mbAddrC, mvL0C, refIdxL0C);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -748,7 +752,7 @@ int PictureBase::
   listSuffixFlag = 1;
 
   // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
-  ret = Derivation_process_for_motion_data_of_neighbouring_partitions(
+  ret = derivation_motion_data_of_neighbouring_partitions(
       mbPartIdx_, subMbPartIdx_, currSubMbType, listSuffixFlag, mbAddrA, mvL1A,
       refIdxL1A, mbAddrB, mvL1B, refIdxL1B, mbAddrC, mvL1C, refIdxL1C);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -1114,7 +1118,7 @@ int PictureBase::derivation_luma_motion_vector_prediction(
   int32_t refIdxLXN_A = 0, refIdxLXN_B = 0, refIdxLXN_C = 0;
 
   // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
-  RET(Derivation_process_for_motion_data_of_neighbouring_partitions(
+  RET(derivation_motion_data_of_neighbouring_partitions(
       mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, mbAddrN_A,
       mvLXN_A, refIdxLXN_A, mbAddrN_B, mvLXN_B, refIdxLXN_B, mbAddrN_C, mvLXN_C,
       refIdxLXN_C));
@@ -1167,112 +1171,65 @@ int PictureBase::derivation_luma_motion_vector_prediction(
 }
 
 // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
-int PictureBase::Derivation_process_for_motion_data_of_neighbouring_partitions(
+int PictureBase::derivation_motion_data_of_neighbouring_partitions(
     int32_t mbPartIdx, int32_t subMbPartIdx, H264_MB_TYPE currSubMbType,
     int32_t listSuffixFlag, int32_t &mbAddrN_A, int32_t (&mvLXN_A)[2],
     int32_t &refIdxLXN_A, int32_t &mbAddrN_B, int32_t (&mvLXN_B)[2],
     int32_t &refIdxLXN_B, int32_t &mbAddrN_C, int32_t (&mvLXN_C)[2],
     int32_t &refIdxLXN_C) {
-  int ret = 0;
 
-  //    int32_t mbAddrN_A= 0;
-  int32_t mbPartIdxN_A = 0;
-  int32_t subMbPartIdxN_A = 0;
-
-  //    int32_t mbAddrN_B = 0;
-  int32_t mbPartIdxN_B = 0;
-  int32_t subMbPartIdxN_B = 0;
-
-  //    int32_t mbAddrN_C = 0;
-  int32_t mbPartIdxN_C = 0;
-  int32_t subMbPartIdxN_C = 0;
-
-  int32_t mbAddrN_D = 0;
-  int32_t mbPartIdxN_D = 0;
-  int32_t subMbPartIdxN_D = 0;
+  const MacroBlock &mb = m_mbs[CurrMbAddr];
+  const int32_t MbPartWidth = mb.MbPartWidth;
+  const int32_t MbPartHeight = mb.MbPartHeight;
+  const int32_t SubMbPartWidth = mb.SubMbPartWidth[mbPartIdx];
+  const int32_t SubMbPartHeight = mb.SubMbPartHeight[mbPartIdx];
 
   //--------------------------------
   // 6.4.2.1 Inverse macroblock partition scanning process
-  int32_t MbPartWidth = m_mbs[CurrMbAddr].MbPartWidth;
-  int32_t MbPartHeight = m_mbs[CurrMbAddr].MbPartHeight;
-  int32_t SubMbPartWidth = m_mbs[CurrMbAddr].SubMbPartWidth[mbPartIdx];
-  int32_t SubMbPartHeight = m_mbs[CurrMbAddr].SubMbPartHeight[mbPartIdx];
-
   int32_t x = InverseRasterScan(mbPartIdx, MbPartWidth, MbPartHeight, 16, 0);
   int32_t y = InverseRasterScan(mbPartIdx, MbPartWidth, MbPartHeight, 16, 1);
 
-  //--------------------
-  int32_t xS = 0;
-  int32_t yS = 0;
-
-  if (m_mbs[CurrMbAddr].m_name_of_mb_type == P_8x8 ||
-      m_mbs[CurrMbAddr].m_name_of_mb_type == P_8x8ref0 ||
-      m_mbs[CurrMbAddr].m_name_of_mb_type == B_8x8) {
+  int32_t xS = 0, yS = 0;
+  if (mb.m_name_of_mb_type == P_8x8 || mb.m_name_of_mb_type == P_8x8ref0 ||
+      mb.m_name_of_mb_type == B_8x8) {
     // 6.4.2.2 Inverse sub-macroblock partition scanning process
     xS = InverseRasterScan(subMbPartIdx, SubMbPartWidth, SubMbPartHeight, 8, 0);
     yS = InverseRasterScan(subMbPartIdx, SubMbPartWidth, SubMbPartHeight, 8, 1);
-
-    // Otherwise (mb_type is not equal to P_8x8, P_8x8ref0, or B_8x8),
-    // xS = InverseRasterScan( subMbPartIdx, 4, 4, 8, 0 );
-    // yS = InverseRasterScan( subMbPartIdx, 4, 4, 8, 1 );
-  } else {
-    xS = 0;
-    yS = 0;
   }
 
-  //--------------------------
   int32_t predPartWidth = 0;
-
-  if (m_mbs[CurrMbAddr].m_name_of_mb_type == P_Skip ||
-      m_mbs[CurrMbAddr].m_name_of_mb_type == B_Skip ||
-      m_mbs[CurrMbAddr].m_name_of_mb_type == B_Direct_16x16) {
+  if (mb.m_name_of_mb_type == P_Skip || mb.m_name_of_mb_type == B_Skip ||
+      mb.m_name_of_mb_type == B_Direct_16x16)
     predPartWidth = 16;
-  } else if (m_mbs[CurrMbAddr].m_name_of_mb_type == B_8x8) {
-    if (currSubMbType == B_Direct_8x8) {
-      predPartWidth = 16;
-    } else {
-      predPartWidth =
-          SubMbPartWidth; // SubMbPartWidth( sub_mb_type[ mbPartIdx ] );
-    }
-  } else if (m_mbs[CurrMbAddr].m_name_of_mb_type == P_8x8 ||
-             m_mbs[CurrMbAddr].m_name_of_mb_type == P_8x8ref0) {
-    predPartWidth =
-        SubMbPartWidth; // SubMbPartWidth( sub_mb_type[ mbPartIdx ] );
-  } else {
-    predPartWidth = MbPartWidth; // MbPartWidth( mb_type );
-  }
+  else if (mb.m_name_of_mb_type == B_8x8)
+    predPartWidth = (currSubMbType == B_Direct_8x8) ? 16 : SubMbPartWidth;
+  else if (mb.m_name_of_mb_type == P_8x8 || mb.m_name_of_mb_type == P_8x8ref0)
+    predPartWidth = SubMbPartWidth;
+  else
+    predPartWidth = MbPartWidth;
 
-  //--------------------------------
-  int32_t isChroma = 0;
+  int32_t mbPartIdxN_A = 0, mbPartIdxN_B = 0, mbPartIdxN_C = 0,
+          mbPartIdxN_D = 0;
+  int32_t subMbPartIdxN_A = 0, subMbPartIdxN_B = 0, subMbPartIdxN_C = 0,
+          subMbPartIdxN_D = 0;
+  int32_t mbAddrN_D = 0;
+  const int32_t isChroma = 0;
 
-  // 6.4.11.7 Derivation process for neighbouring partitions
-  ret = Derivation_process_for_neighbouring_partitions(
+  RET(Derivation_process_for_neighbouring_partitions(
       x + xS - 1, y + yS + 0, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
-      mbAddrN_A, mbPartIdxN_A, subMbPartIdxN_A);
-  RETURN_IF_FAILED(ret != 0, ret);
-
-  ret = Derivation_process_for_neighbouring_partitions(
+      mbAddrN_A, mbPartIdxN_A, subMbPartIdxN_A));
+  RET(Derivation_process_for_neighbouring_partitions(
       x + xS + 0, y + yS - 1, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
-      mbAddrN_B, mbPartIdxN_B, subMbPartIdxN_B);
-  RETURN_IF_FAILED(ret != 0, ret);
-
-  ret = Derivation_process_for_neighbouring_partitions(
+      mbAddrN_B, mbPartIdxN_B, subMbPartIdxN_B));
+  RET(Derivation_process_for_neighbouring_partitions(
       x + xS + predPartWidth, y + yS - 1, mbPartIdx, currSubMbType,
-      subMbPartIdx, isChroma, mbAddrN_C, mbPartIdxN_C, subMbPartIdxN_C);
-  RETURN_IF_FAILED(ret != 0, ret);
-
-  ret = Derivation_process_for_neighbouring_partitions(
+      subMbPartIdx, isChroma, mbAddrN_C, mbPartIdxN_C, subMbPartIdxN_C));
+  RET(Derivation_process_for_neighbouring_partitions(
       x + xS - 1, y + yS - 1, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
-      mbAddrN_D, mbPartIdxN_D, subMbPartIdxN_D);
-  RETURN_IF_FAILED(ret != 0, ret);
+      mbAddrN_D, mbPartIdxN_D, subMbPartIdxN_D));
 
-  //-----------------------------------
-  if (mbAddrN_C < 0 || mbPartIdxN_C < 0 ||
-      subMbPartIdxN_C < 0) // When the partition
-  // mbAddrC\mbPartIdxC\subMbPartIdxC is not available
-  {
-    mbAddrN_C = mbAddrN_D;
-    mbPartIdxN_C = mbPartIdxN_D;
+  if (mbAddrN_C < 0 || mbPartIdxN_C < 0 || subMbPartIdxN_C < 0) {
+    mbAddrN_C = mbAddrN_D, mbPartIdxN_C = mbPartIdxN_D,
     subMbPartIdxN_C = subMbPartIdxN_D;
   }
 
@@ -1281,45 +1238,26 @@ int PictureBase::Derivation_process_for_motion_data_of_neighbouring_partitions(
       IS_INTRA_Prediction_Mode(m_mbs[mbAddrN_A].m_mb_pred_mode) == true ||
       (listSuffixFlag == 0 &&
        m_mbs[mbAddrN_A].m_PredFlagL0[mbPartIdxN_A] == 0) ||
-      (listSuffixFlag == 1 &&
-       m_mbs[mbAddrN_A].m_PredFlagL1[mbPartIdxN_A] == 0)) {
-    mvLXN_A[0] = 0;
-    mvLXN_A[1] = 0;
-    refIdxLXN_A = -1;
-  } else {
-    // The motion vector mvLXN and reference index refIdxLXN are set equal to
-    // MvLX[ mbPartIdxN ][ subMbPartIdxN ] and RefIdxLX[ mbPartIdxN ],
-    // respectively, which are the motion vector mvLX and reference index
-    // refIdxLX that have been assigned to the (sub-)macroblock partition
-    // mbAddrN\mbPartIdxN\subMbPartIdxN.
+      (listSuffixFlag == 1 && m_mbs[mbAddrN_A].m_PredFlagL1[mbPartIdxN_A] == 0))
+    mvLXN_A[0] = 0, mvLXN_A[1] = 0, refIdxLXN_A = -1;
+  else {
     if (listSuffixFlag == 0) {
       mvLXN_A[0] = m_mbs[mbAddrN_A].m_MvL0[mbPartIdxN_A][subMbPartIdxN_A][0];
       mvLXN_A[1] = m_mbs[mbAddrN_A].m_MvL0[mbPartIdxN_A][subMbPartIdxN_A][1];
       refIdxLXN_A = m_mbs[mbAddrN_A].m_RefIdxL0[mbPartIdxN_A];
-    } else // if (listSuffixFlag == 1)
-    {
+    } else {
       mvLXN_A[0] = m_mbs[mbAddrN_A].m_MvL1[mbPartIdxN_A][subMbPartIdxN_A][0];
       mvLXN_A[1] = m_mbs[mbAddrN_A].m_MvL1[mbPartIdxN_A][subMbPartIdxN_A][1];
       refIdxLXN_A = m_mbs[mbAddrN_A].m_RefIdxL1[mbPartIdxN_A];
     }
 
-    if (m_mbs[CurrMbAddr].mb_field_decoding_flag == 1 &&
-        m_mbs[mbAddrN_A].mb_field_decoding_flag ==
-            0) // If the current macroblock is a field macroblock and the
-               // macroblock mbAddrN is a frame macroblock
-    {
-      mvLXN_A[1] = mvLXN_A[1] / 2;
-      refIdxLXN_A = refIdxLXN_A * 2;
-    } else if (m_mbs[CurrMbAddr].mb_field_decoding_flag == 0 &&
-               m_mbs[mbAddrN_A].mb_field_decoding_flag ==
-                   1) // if the current macroblock is a frame macroblock and the
-                      // macroblock mbAddrN is a field macroblock
-    {
-      mvLXN_A[1] = mvLXN_A[1] * 2;
-      refIdxLXN_A = refIdxLXN_A / 2;
-    } else {
-      // the vertical motion vector component mvLXN[ 1 ] and the reference index
-      // refIdxLXN remain unchanged.
+    if (mb.mb_field_decoding_flag &&
+        m_mbs[mbAddrN_A].mb_field_decoding_flag == 0)
+      mvLXN_A[1] = mvLXN_A[1] / 2, refIdxLXN_A = refIdxLXN_A * 2;
+    else if (mb.mb_field_decoding_flag == 0 &&
+             m_mbs[mbAddrN_A].mb_field_decoding_flag)
+      mvLXN_A[1] = mvLXN_A[1] * 2, refIdxLXN_A = refIdxLXN_A / 2;
+    else {
     }
   }
 
@@ -1328,45 +1266,26 @@ int PictureBase::Derivation_process_for_motion_data_of_neighbouring_partitions(
       IS_INTRA_Prediction_Mode(m_mbs[mbAddrN_B].m_mb_pred_mode) == true ||
       (listSuffixFlag == 0 &&
        m_mbs[mbAddrN_B].m_PredFlagL0[mbPartIdxN_B] == 0) ||
-      (listSuffixFlag == 1 &&
-       m_mbs[mbAddrN_B].m_PredFlagL1[mbPartIdxN_B] == 0)) {
-    mvLXN_B[0] = 0;
-    mvLXN_B[1] = 0;
-    refIdxLXN_B = -1;
-  } else {
-    // The motion vector mvLXN and reference index refIdxLXN are set equal to
-    // MvLX[ mbPartIdxN ][ subMbPartIdxN ] and RefIdxLX[ mbPartIdxN ],
-    // respectively, which are the motion vector mvLX and reference index
-    // refIdxLX that have been assigned to the (sub-)macroblock partition
-    // mbAddrN\mbPartIdxN\subMbPartIdxN.
+      (listSuffixFlag == 1 && m_mbs[mbAddrN_B].m_PredFlagL1[mbPartIdxN_B] == 0))
+    mvLXN_B[0] = 0, mvLXN_B[1] = 0, refIdxLXN_B = -1;
+  else {
     if (listSuffixFlag == 0) {
       mvLXN_B[0] = m_mbs[mbAddrN_B].m_MvL0[mbPartIdxN_B][subMbPartIdxN_B][0];
       mvLXN_B[1] = m_mbs[mbAddrN_B].m_MvL0[mbPartIdxN_B][subMbPartIdxN_B][1];
       refIdxLXN_B = m_mbs[mbAddrN_B].m_RefIdxL0[mbPartIdxN_B];
-    } else // if (listSuffixFlag == 1)
-    {
+    } else {
       mvLXN_B[0] = m_mbs[mbAddrN_B].m_MvL1[mbPartIdxN_B][subMbPartIdxN_B][0];
       mvLXN_B[1] = m_mbs[mbAddrN_B].m_MvL1[mbPartIdxN_B][subMbPartIdxN_B][1];
       refIdxLXN_B = m_mbs[mbAddrN_B].m_RefIdxL1[mbPartIdxN_B];
     }
 
-    if (m_mbs[CurrMbAddr].mb_field_decoding_flag == 1 &&
-        m_mbs[mbAddrN_B].mb_field_decoding_flag ==
-            0) // If the current macroblock is a field macroblock and the
-               // macroblock mbAddrN is a frame macroblock
-    {
-      mvLXN_B[1] = mvLXN_B[1] / 2;
-      refIdxLXN_B = refIdxLXN_B * 2;
-    } else if (m_mbs[CurrMbAddr].mb_field_decoding_flag == 0 &&
-               m_mbs[mbAddrN_B].mb_field_decoding_flag ==
-                   1) // if the current macroblock is a frame macroblock and the
-                      // macroblock mbAddrN is a field macroblock
-    {
-      mvLXN_B[1] = mvLXN_B[1] * 2;
-      refIdxLXN_B = refIdxLXN_B / 2;
-    } else {
-      // the vertical motion vector component mvLXN[ 1 ] and the reference index
-      // refIdxLXN remain unchanged.
+    if (mb.mb_field_decoding_flag &&
+        m_mbs[mbAddrN_B].mb_field_decoding_flag == 0)
+      mvLXN_B[1] = mvLXN_B[1] / 2, refIdxLXN_B = refIdxLXN_B * 2;
+    else if (mb.mb_field_decoding_flag == 0 &&
+             m_mbs[mbAddrN_B].mb_field_decoding_flag)
+      mvLXN_B[1] = mvLXN_B[1] * 2, refIdxLXN_B = refIdxLXN_B / 2;
+    else {
     }
   }
 
@@ -1375,45 +1294,26 @@ int PictureBase::Derivation_process_for_motion_data_of_neighbouring_partitions(
       IS_INTRA_Prediction_Mode(m_mbs[mbAddrN_C].m_mb_pred_mode) == true ||
       (listSuffixFlag == 0 &&
        m_mbs[mbAddrN_C].m_PredFlagL0[mbPartIdxN_C] == 0) ||
-      (listSuffixFlag == 1 &&
-       m_mbs[mbAddrN_C].m_PredFlagL1[mbPartIdxN_C] == 0)) {
-    mvLXN_C[0] = 0;
-    mvLXN_C[1] = 0;
-    refIdxLXN_C = -1;
-  } else {
-    // The motion vector mvLXN and reference index refIdxLXN are set equal to
-    // MvLX[ mbPartIdxN ][ subMbPartIdxN ] and RefIdxLX[ mbPartIdxN ],
-    // respectively, which are the motion vector mvLX and reference index
-    // refIdxLX that have been assigned to the (sub-)macroblock partition
-    // mbAddrN\mbPartIdxN\subMbPartIdxN.
+      (listSuffixFlag == 1 && m_mbs[mbAddrN_C].m_PredFlagL1[mbPartIdxN_C] == 0))
+    mvLXN_C[0] = 0, mvLXN_C[1] = 0, refIdxLXN_C = -1;
+  else {
     if (listSuffixFlag == 0) {
       mvLXN_C[0] = m_mbs[mbAddrN_C].m_MvL0[mbPartIdxN_C][subMbPartIdxN_C][0];
       mvLXN_C[1] = m_mbs[mbAddrN_C].m_MvL0[mbPartIdxN_C][subMbPartIdxN_C][1];
       refIdxLXN_C = m_mbs[mbAddrN_C].m_RefIdxL0[mbPartIdxN_C];
-    } else // if (listSuffixFlag == 1)
-    {
+    } else {
       mvLXN_C[0] = m_mbs[mbAddrN_C].m_MvL1[mbPartIdxN_C][subMbPartIdxN_C][0];
       mvLXN_C[1] = m_mbs[mbAddrN_C].m_MvL1[mbPartIdxN_C][subMbPartIdxN_C][1];
       refIdxLXN_C = m_mbs[mbAddrN_C].m_RefIdxL1[mbPartIdxN_C];
     }
 
-    if (m_mbs[CurrMbAddr].mb_field_decoding_flag == 1 &&
-        m_mbs[mbAddrN_C].mb_field_decoding_flag ==
-            0) // If the current macroblock is a field macroblock and the
-               // macroblock mbAddrN is a frame macroblock
-    {
-      mvLXN_C[1] = mvLXN_C[1] / 2;
-      refIdxLXN_C = refIdxLXN_C * 2;
-    } else if (m_mbs[CurrMbAddr].mb_field_decoding_flag == 0 &&
-               m_mbs[mbAddrN_C].mb_field_decoding_flag ==
-                   1) // if the current macroblock is a frame macroblock and the
-                      // macroblock mbAddrN is a field macroblock
-    {
-      mvLXN_C[1] = mvLXN_C[1] * 2;
-      refIdxLXN_C = refIdxLXN_C / 2;
-    } else {
-      // the vertical motion vector component mvLXN[ 1 ] and the reference index
-      // refIdxLXN remain unchanged.
+    if (mb.mb_field_decoding_flag &&
+        m_mbs[mbAddrN_C].mb_field_decoding_flag == 0)
+      mvLXN_C[1] = mvLXN_C[1] / 2, refIdxLXN_C = refIdxLXN_C * 2;
+    else if (mb.mb_field_decoding_flag == 0 &&
+             m_mbs[mbAddrN_C].mb_field_decoding_flag)
+      mvLXN_C[1] = mvLXN_C[1] * 2, refIdxLXN_C = refIdxLXN_C / 2;
+    else {
     }
   }
 

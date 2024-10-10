@@ -328,10 +328,9 @@ class PictureBase {
       bool &predFlagL0, bool &predFlagL1, PictureBase *&refPicL0,
       PictureBase *&refPicL1);
   int derivation_luma_motion_vectors_for_P_Skip(
-      int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
-      int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
-      int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1,
-      bool &listSuffixFlag, H264_MB_TYPE &currSubMbType);
+      int32_t &refIdxL0, int32_t &refIdxL1, int32_t (&mvL0)[2],
+      int32_t (&mvL1)[2], int32_t &subMvCnt, bool &predFlagL0,
+      bool &predFlagL1);
   int derivation_luma_motion_vectors_for_B_Skip_or_B_Direct_16x16_8x8(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
       int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
@@ -351,16 +350,15 @@ class PictureBase {
   int derivation_luma_motion_vector_prediction(
       int32_t mbPartIdx, int32_t subMbPartIdx, H264_MB_TYPE currSubMbType,
       int32_t listSuffixFlag, int32_t refIdxLX, int32_t (&mvpLX)[2]);
-  int Derivation_process_for_motion_data_of_neighbouring_partitions(
+  int derivation_motion_data_of_neighbouring_partitions(
       int32_t mbPartIdx, int32_t subMbPartIdx, H264_MB_TYPE currSubMbType,
       int32_t listSuffixFlag, int32_t &mbAddrN_A, int32_t (&mvLXN_A)[2],
       int32_t &refIdxLXN_A, int32_t &mbAddrN_B, int32_t (&mvLXN_B)[2],
       int32_t &refIdxLXN_B, int32_t &mbAddrN_C, int32_t (&mvLXN_C)[2],
       int32_t &refIdxLXN_C);
-  int derivation_chroma_motion_vectors(int32_t ChromaArrayType,
-                                                   int32_t mvLX[2],
-                                                   PictureBase *refPic,
-                                                   int32_t (&mvCLX)[2]);
+  int derivation_chroma_motion_vectors(int32_t ChromaArrayType, int32_t mvLX[2],
+                                       PictureBase *refPic,
+                                       int32_t (&mvCLX)[2]);
 
   int decoding_inter_prediction_samples(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t partWidth,
@@ -372,10 +370,9 @@ class PictureBase {
       int32_t w1Cb, int32_t o0Cb, int32_t o1Cb, int32_t logWDCr, int32_t w0Cr,
       int32_t w1Cr, int32_t o0Cr, int32_t o1Cr, uint8_t *predPartL,
       uint8_t *predPartCb, uint8_t *predPartCr);
-  int reference_picture_selection(int32_t refIdxLX,
-                                          Frame *RefPicListX[16],
-                                          int32_t RefPicListXLength,
-                                          PictureBase *&refPic);
+  int reference_picture_selection(int32_t refIdxLX, Frame *RefPicListX[16],
+                                  int32_t RefPicListXLength,
+                                  PictureBase *&refPic);
   int fractional_sample_interpolation(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t partWidth,
       int32_t partHeight, int32_t partWidthC, int32_t partHeightC, int32_t xAL,
