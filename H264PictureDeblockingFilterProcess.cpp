@@ -1204,7 +1204,7 @@ int PictureBase::
 
   // 6.4.13.4 Derivation process for macroblock and sub-macroblock partition
   // indices
-  ret = Derivation_process_for_macroblock_and_sub_macroblock_partition_indices(
+  ret = derivation_macroblock_and_sub_macroblock_partition_indices(
       m_mbs[mbAddr_p0].m_name_of_mb_type,
       m_mbs[mbAddr_p0].m_name_of_sub_mb_type, mb_x_p0, mb_y_p0, mbPartIdx_p0,
       subMbPartIdx_p0);
@@ -1212,7 +1212,7 @@ int PictureBase::
 
   // 6.4.13.4 Derivation process for macroblock and sub-macroblock partition
   // indices
-  ret = Derivation_process_for_macroblock_and_sub_macroblock_partition_indices(
+  ret = derivation_macroblock_and_sub_macroblock_partition_indices(
       m_mbs[mbAddr_q0].m_name_of_mb_type,
       m_mbs[mbAddr_q0].m_name_of_sub_mb_type, mb_x_q0, mb_y_q0, mbPartIdx_q0,
       subMbPartIdx_q0);

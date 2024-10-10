@@ -371,12 +371,12 @@ int PictureBase::
         int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
         int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
         int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1) {
-  if (m_slice->slice_header->direct_spatial_mv_pred_flag == 1) {
-    RET(Derivation_process_for_spatial_direct_luma_motion_vector_and_reference_index_prediction_mode(
+  if (m_slice->slice_header->direct_spatial_mv_pred_flag) {
+    RET(derivation_spatial_direct_luma_motion_vector_and_ref_index_prediction(
         mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
         predFlagL0, predFlagL1));
   } else {
-    RET(Derivation_process_for_temporal_direct_luma_motion_vector_and_reference_index_prediction_mode(
+    RET(derivation_temporal_direct_luma_motion_vector_and_ref_index_prediction(
         mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
         predFlagL0, predFlagL1));
     subMvCnt = (subMbPartIdx == 0) ? 2 : 0;
@@ -662,7 +662,7 @@ int PictureBase::
 
   // 6.4.13.4 Derivation process for macroblock and sub-macroblock partition
   // indices
-  ret = Derivation_process_for_macroblock_and_sub_macroblock_partition_indices(
+  ret = derivation_macroblock_and_sub_macroblock_partition_indices(
       mbTypeCol, subMbTypeCol, xCol, yM, mbPartIdxCol, subMbPartIdxCol);
   RETURN_IF_FAILED(ret != 0, ret);
 
@@ -701,213 +701,126 @@ int PictureBase::
   return 0;
 }
 
-// 8.4.1.2.2 Derivation process for spatial direct luma motion vector and
-// reference index prediction mode
+// 8.4.1.2.2 Derivation process for spatial direct luma motion vector and reference index prediction mode
 int PictureBase::
-    Derivation_process_for_spatial_direct_luma_motion_vector_and_reference_index_prediction_mode(
+    derivation_spatial_direct_luma_motion_vector_and_ref_index_prediction(
         int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
         int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
         int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1) {
-  int ret = 0;
 
-  //--------------
   H264_MB_TYPE currSubMbType =
       m_mbs[CurrMbAddr].m_name_of_sub_mb_type[mbPartIdx];
 
-  int32_t mbAddrA = 0;
-  int32_t mvL0A[2] = {0};
-  int32_t refIdxL0A = 0;
+  int32_t mbAddrA = 0, mbAddrB = 0, mbAddrC = 0;
+  int32_t mvL0A[2] = {0}, mvL0B[2] = {0}, mvL0C[2] = {0};
+  int32_t refIdxL0A = 0, refIdxL0B = 0, refIdxL0C = 0;
 
-  int32_t mbAddrB = 0;
-  int32_t mvL0B[2] = {0};
-  int32_t refIdxL0B = 0;
-
-  int32_t mbAddrC = 0;
-  int32_t mvL0C[2] = {0};
-  int32_t refIdxL0C = 0;
-
-  int32_t mbPartIdx_ = 0;
-  int32_t subMbPartIdx_ = 0;
+  int32_t mbPartIdx_ = 0, subMbPartIdx_ = 0;
   int32_t listSuffixFlag = 0;
 
-  // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
-  ret = derivation_motion_data_of_neighbouring_partitions(
+  RET(derivation_motion_data_of_neighbouring_partitions(
       mbPartIdx_, subMbPartIdx_, currSubMbType, listSuffixFlag, mbAddrA, mvL0A,
-      refIdxL0A, mbAddrB, mvL0B, refIdxL0B, mbAddrC, mvL0C, refIdxL0C);
-  RETURN_IF_FAILED(ret != 0, ret);
+      refIdxL0A, mbAddrB, mvL0B, refIdxL0B, mbAddrC, mvL0C, refIdxL0C));
 
-  //--------------
-  mbAddrA = 0;
-  int32_t mvL1A[2] = {0};
-  int32_t refIdxL1A = 0;
-
-  mbAddrB = 0;
-  int32_t mvL1B[2] = {0};
-  int32_t refIdxL1B = 0;
-
-  mbAddrC = 0;
-  int32_t mvL1C[2] = {0};
-  int32_t refIdxL1C = 0;
-
+  int32_t mvL1A[2] = {0}, mvL1B[2] = {0}, mvL1C[2] = {0};
+  int32_t refIdxL1A = 0, refIdxL1B = 0, refIdxL1C = 0;
+  mbAddrA = 0, mbAddrB = 0, mbAddrC = 0;
   listSuffixFlag = 1;
 
-  // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
-  ret = derivation_motion_data_of_neighbouring_partitions(
+  RET(derivation_motion_data_of_neighbouring_partitions(
       mbPartIdx_, subMbPartIdx_, currSubMbType, listSuffixFlag, mbAddrA, mvL1A,
-      refIdxL1A, mbAddrB, mvL1B, refIdxL1B, mbAddrC, mvL1C, refIdxL1C);
-  RETURN_IF_FAILED(ret != 0, ret);
+      refIdxL1A, mbAddrB, mvL1B, refIdxL1B, mbAddrC, mvL1C, refIdxL1C));
 
-  //--------------
 #define MinPositive(x, y)                                                      \
   ((x) >= 0 && (y) >= 0) ? (MIN((x), (y))) : (MAX((x), (y)))
 
   refIdxL0 = MinPositive(refIdxL0A, MinPositive(refIdxL0B, refIdxL0C));
   refIdxL1 = MinPositive(refIdxL1A, MinPositive(refIdxL1B, refIdxL1C));
-  int32_t directZeroPredictionFlag = 0;
 
 #undef MinPositive
 
-  if (refIdxL0 < 0 && refIdxL1 < 0) {
-    refIdxL0 = 0;
-    refIdxL1 = 0;
-    directZeroPredictionFlag = 1;
-  }
+  bool directZeroPredictionFlag = false;
+  if (refIdxL0 < 0 && refIdxL1 < 0)
+    refIdxL0 = 0, refIdxL1 = 0, directZeroPredictionFlag = true;
 
   //-------------------------------------
-  // 8.4.1.2.1 Derivation process for the co-located 4x4 sub-macroblock
-  // partitions
+  // 8.4.1.2.1 Derivation process for the co-located 4x4 sub-macroblock partitions
   PictureBase *colPic = NULL;
   int32_t mbAddrCol = 0;
   int32_t mvCol[2] = {0};
   int32_t refIdxCol = 0;
   int32_t vertMvScale = 0;
-  int32_t colZeroFlag = 0;
 
-  ret = Derivation_process_for_the_co_located_4x4_sub_macroblock_partitions(
+  RET(Derivation_process_for_the_co_located_4x4_sub_macroblock_partitions(
       mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol,
-      vertMvScale);
-  RETURN_IF_FAILED(ret != 0, ret);
+      vertMvScale));
 
-  //------------------------
+  int32_t colZeroFlag = 0;
   if (m_RefPicList1[0]->reference_marked_type ==
           PICTURE_MARKED_AS_used_short_ref &&
       refIdxCol == 0 &&
       ((m_mbs[mbAddrCol].mb_field_decoding_flag == 0 &&
         (mvCol[0] >= -1 && mvCol[0] <= 1) &&
         (mvCol[1] >= -1 && mvCol[1] <= 1)) ||
-       (m_mbs[mbAddrCol].mb_field_decoding_flag == 1 &&
-        (mvCol[0] >= -1 && mvCol[0] <= 1) && (mvCol[1] >= -1 && mvCol[1] <= 1)))
-      /* FIXME:
-          both motion vector components mvCol[ 0 ] and mvCol[ 1 ] lie in the
-         range of −1 to 1 in units specified as follows: – If the co-located
-         macroblock is a frame macroblock, the units of mvCol[ 0 ] and mvCol[ 1
-         ] are units of quarter luma frame samples. – Otherwise (the co-located
-         macroblock is a field macroblock), the units of mvCol[ 0 ] and mvCol[ 1
-         ] are units of quarter luma field samples.
-      */
-  ) {
+       (m_mbs[mbAddrCol].mb_field_decoding_flag &&
+        (mvCol[0] >= -1 && mvCol[0] <= 1) &&
+        (mvCol[1] >= -1 && mvCol[1] <= 1)))) {
     colZeroFlag = 1;
-  } else {
-    colZeroFlag = 0;
   }
 
-  //--------------------------
-  if (directZeroPredictionFlag == 1 || refIdxL0 < 0 ||
-      (refIdxL0 == 0 && colZeroFlag == 1)) {
-    mvL0[0] = 0;
-    mvL0[1] = 0;
-  } else {
-    mbPartIdx_ = 0;
-    subMbPartIdx_ = 0;
-    listSuffixFlag = 0;
+  if (directZeroPredictionFlag || refIdxL0 < 0 ||
+      (refIdxL0 == 0 && colZeroFlag))
+    mvL0[0] = 0, mvL0[1] = 0;
+  else
+    RET(derivation_luma_motion_vector_prediction(0, 0, currSubMbType, false,
+                                                 refIdxL0, mvL0));
 
-    // 8.4.1.3 Derivation process for luma motion vector prediction
-    ret = derivation_luma_motion_vector_prediction(
-        mbPartIdx_, subMbPartIdx_, currSubMbType, listSuffixFlag, refIdxL0,
-        mvL0);
-    RETURN_IF_FAILED(ret != 0, ret);
-  }
+  if (directZeroPredictionFlag || refIdxL1 < 0 ||
+      (refIdxL1 == 0 && colZeroFlag))
+    mvL1[0] = 0, mvL1[1] = 0;
+  else
+    RET(derivation_luma_motion_vector_prediction(0, 0, currSubMbType, true,
+                                                 refIdxL1, mvL1));
 
-  //--------------------------
-  if (directZeroPredictionFlag == 1 || refIdxL1 < 0 ||
-      (refIdxL1 == 0 && colZeroFlag == 1)) {
-    mvL1[0] = 0;
-    mvL1[1] = 0;
-  } else {
-    mbPartIdx_ = 0;
-    subMbPartIdx_ = 0;
-    listSuffixFlag = 1;
+  if (refIdxL0 >= 0 && refIdxL1 >= 0)
+    predFlagL0 = 1, predFlagL1 = 1;
+  else if (refIdxL0 >= 0 && refIdxL1 < 0)
+    predFlagL0 = 1, predFlagL1 = 0;
+  else if (refIdxL0 < 0 && refIdxL1 >= 0)
+    predFlagL0 = 0, predFlagL1 = 1;
+  else
+    RET(-1);
 
-    // 8.4.1.3 Derivation process for luma motion vector prediction
-    ret = derivation_luma_motion_vector_prediction(
-        mbPartIdx_, subMbPartIdx_, currSubMbType, listSuffixFlag, refIdxL1,
-        mvL1);
-    RETURN_IF_FAILED(ret != 0, ret);
-  }
-
-  //---------------------------
-  if (refIdxL0 >= 0 && refIdxL1 >= 0) {
-    predFlagL0 = 1;
-    predFlagL1 = 1;
-  } else if (refIdxL0 >= 0 && refIdxL1 < 0) {
-    predFlagL0 = 1;
-    predFlagL1 = 0;
-  } else if (refIdxL0 < 0 && refIdxL1 >= 0) {
-    predFlagL0 = 0;
-    predFlagL1 = 1;
-  } else // if (refIdxL0 < 0 && refIdxL1 < 0)
-  {
-    RETURN_IF_FAILED(0, -1);
-  }
-
-  //----------------------
-  if (subMbPartIdx != 0) {
-    subMvCnt = 0;
-  } else {
-    subMvCnt = predFlagL0 + predFlagL1;
-  }
-
+  subMvCnt = (subMbPartIdx != 0) ? 0 : (predFlagL0 + predFlagL1);
   return 0;
 }
 
-// 8.4.1.2.3 Derivation process for temporal direct luma motion vector and
-// reference index prediction mode This process is invoked when
-// direct_spatial_mv_pred_flag is equal to 0 and any of the following conditions
-// are true: – mb_type is equal to B_Skip, – mb_type is equal to B_Direct_16x16,
-// – sub_mb_type[ mbPartIdx ] is equal to B_Direct_8x8.
+// 8.4.1.2.3 Derivation process for temporal direct luma motion vector and reference index prediction mode This process is invoked when
 int PictureBase::
-    Derivation_process_for_temporal_direct_luma_motion_vector_and_reference_index_prediction_mode(
+    derivation_temporal_direct_luma_motion_vector_and_ref_index_prediction(
         int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
         int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
         int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1) {
-  int ret = 0;
 
-  // 8.4.1.2.1 Derivation process for the co-located 4x4 sub-macroblock
-  // partitions
+  const SliceHeader *slice_header = m_slice->slice_header;
+
+  // 8.4.1.2.1 Derivation process for the co-located 4x4 sub-macroblock partitions
   PictureBase *colPic = NULL;
   int32_t mbAddrCol = 0;
   int32_t mvCol[2] = {0};
   int32_t refIdxCol = 0;
   int32_t vertMvScale = 0;
 
-  ret = Derivation_process_for_the_co_located_4x4_sub_macroblock_partitions(
+  RET(Derivation_process_for_the_co_located_4x4_sub_macroblock_partitions(
       mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol,
-      vertMvScale);
-  RETURN_IF_FAILED(ret != 0, ret);
+      vertMvScale));
 
-  SliceHeader *slice_header = m_slice->slice_header;
-
-  //---------------------------------
   int32_t refIdxL0_temp = 0;
-
-  if (refIdxCol < 0) {
-    refIdxL0_temp = 0;
-  } else {
-    // refIdxL0_temp = MapColToList0( refIdxCol ) );
+  if (refIdxCol >= 0) {
     int32_t refIdxL0Frm = NA;
 
     for (int i = 0; i < H264_MAX_REF_PIC_LIST_COUNT; i++) {
-      if (!m_RefPicList0[i]) break;
+      if (m_RefPicList0[i] == nullptr) break;
       if ((m_RefPicList0[i]->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME &&
            (&m_RefPicList0[i]->m_picture_frame == colPic)) ||
           (m_RefPicList0[i]->m_picture_coded_type ==
@@ -919,174 +832,71 @@ int PictureBase::
       }
     }
 
-    RETURN_IF_FAILED(refIdxL0Frm == NA, -1);
+    if (refIdxL0Frm == NA) RET(-1);
 
     if (vertMvScale == H264_VERT_MV_SCALE_One_To_One) {
       if (slice_header->field_pic_flag == 0 &&
-          m_mbs[CurrMbAddr].mb_field_decoding_flag ==
-              1) // If field_pic_flag is equal to 0 and the current macroblock
-                 // is a field macroblock
-      {
-        /* FIXME:
-        Let refIdxL0Frm be the lowest valued reference index in the current
-        reference picture list RefPicList0 that references the frame or
-        complementary field pair that contains the field refPicCol. RefPicList0
-        shall contain a frame or complementary field pair that contains the
-        field refPicCol. The return value of MapColToList0( ) is specified as
-        follows: – If the field referred to by refIdxCol has the same parity as
-        the current macroblock, MapColToList0( refIdxCol ) returns the reference
-        index ( refIdxL0Frm << 1 ). – Otherwise (the field referred by refIdxCol
-        has the opposite parity of the current macroblock), MapColToList0(
-        refIdxCol ) returns the reference index ( ( refIdxL0Frm << 1 ) + 1 ).
-        */
+          m_mbs[CurrMbAddr].mb_field_decoding_flag) {
         if ((colPic->m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD &&
              CurrMbAddr % 2 == 0) ||
             (colPic->m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD &&
-             CurrMbAddr % 2 == 1)) {
+             CurrMbAddr % 2 == 1))
           refIdxL0_temp = refIdxL0Frm << 1;
-        } else {
+        else
           refIdxL0_temp = (refIdxL0Frm << 1) + 1;
-        }
-      } else // field_pic_flag is equal to 1 or the current macroblock is a
-             // frame macroblock
-      {
-        // FIXME:
-        // MapColToList0( refIdxCol ) returns the lowest valued reference index
-        // refIdxL0 in the current reference picture list RefPicList0 that
-        // references refPicCol. RefPicList0 shall contain refPicCol.
+      } else
         refIdxL0_temp = refIdxL0Frm;
-      }
-    } else if (vertMvScale ==
-               H264_VERT_MV_SCALE_Frm_To_Fld) // if vertMvScale is equal to
-                                              // Frm_To_Fld, the following
-                                              // applies
-    {
-      if (m_mbs[mbAddrCol].field_pic_flag == 0) {
-        // let refIdxL0Frm be the lowest valued reference index in the current
-        // reference picture list RefPicList0 that references refPicCol.
-        // MapColToList0( refIdxCol ) returns the reference index ( refIdxL0Frm
-        // << 1 ). RefPicList0 shall contain refPicCol
+    } else if (vertMvScale == H264_VERT_MV_SCALE_Frm_To_Fld) {
+      if (m_mbs[mbAddrCol].field_pic_flag == 0)
         refIdxL0_temp = refIdxL0Frm << 1;
-      } else {
-        // MapColToList0( refIdxCol ) returns the lowest valued reference index
-        // refIdxL0 in the current reference picture list RefPicList0 that
-        // references the field of refPicCol with the same parity as the current
-        // picture CurrPic. RefPicList0 shall contain the field of refPicCol
-        // with the same parity as the current picture CurrPic.
-        if (colPic->m_picture_coded_type == this->m_picture_coded_type) {
+      else {
+        if (colPic->m_picture_coded_type == this->m_picture_coded_type)
           refIdxL0_temp = refIdxL0Frm;
-        } else {
-          RETURN_IF_FAILED(0, -1);
-        }
+        else
+          RET(-1);
       }
-    } else if (vertMvScale ==
-               H264_VERT_MV_SCALE_Fld_To_Frm) // if vertMvScale is equal to
-                                              // Frm_To_Fld, the following
-                                              // applies
-    {
-      // MapColToList0( refIdxCol ) returns the lowest valued reference index
-      // refIdxL0 in the current reference picture list RefPicList0 that
-      // references the frame or complementary field pair that contains
-      // refPicCol. RefPicList0 shall contain a frame or complementary field
-      // pair that contains the field refPicCol.
+    } else if (vertMvScale == H264_VERT_MV_SCALE_Fld_To_Frm)
       refIdxL0_temp = refIdxL0Frm;
-    }
   }
 
-  //---------------------------------
-  refIdxL0 = refIdxL0_temp; // refIdxL0 = ( ( refIdxCol < 0 ) ? 0 :
-                            // MapColToList0( refIdxCol ) );
-  refIdxL1 = 0;
+  refIdxL0 = refIdxL0_temp, refIdxL1 = 0;
 
-  //----------------------------------
-  if (vertMvScale == H264_VERT_MV_SCALE_Frm_To_Fld) {
+  if (vertMvScale == H264_VERT_MV_SCALE_Frm_To_Fld)
     mvCol[1] = mvCol[1] / 2;
-  } else if (vertMvScale == H264_VERT_MV_SCALE_Fld_To_Frm) {
+  else if (vertMvScale == H264_VERT_MV_SCALE_Fld_To_Frm)
     mvCol[1] = mvCol[1] * 2;
-  } else // if (vertMvScale == H264_VERT_MV_SCALE_One_To_One)
-  {
+  else {
     // mvCol[ 1 ] = mvCol[ 1 ]; //mvCol[ 1 ] remains unchanged
   }
 
-  //---------------------------
-  PictureBase *pic0 = NULL;
-  PictureBase *pic1 = NULL;
-  PictureBase *currPicOrField = NULL;
-
+  PictureBase *pic0 = NULL, *pic1 = NULL, *currPicOrField = NULL;
   if (slice_header->field_pic_flag == 0 &&
-      m_mbs[CurrMbAddr].mb_field_decoding_flag ==
-          1) // If field_pic_flag is equal to 0 and the current macroblock is a
-             // field macroblock
-  {
-    // 1. currPicOrField is the field of the current picture CurrPic that has
-    // the same parity as the current macroblock.
-    // 2. pic1 is the field of RefPicList1[ 0 ] that has the same parity as the
-    // current macroblock.
-    // 3. The variable pic0 is derived as follows:
-    //    – If refIdxL0 % 2 is equal to 0, pic0 is the field of RefPicList0[
-    //    refIdxL0 / 2 ] that has the same parity as the current macroblock. –
-    //    Otherwise (refIdxL0 % 2 is not equal to 0), pic0 is the field of
-    //    RefPicList0[ refIdxL0 / 2 ] that has the opposite parity of the
-    //    current macroblock.
+      m_mbs[CurrMbAddr].mb_field_decoding_flag) {
+    currPicOrField = (CurrMbAddr % 2) ? &(m_parent->m_picture_bottom_filed)
+                                      : &(m_parent->m_picture_top_filed);
+    pic1 = (CurrMbAddr % 2) ? &(m_RefPicList1[0]->m_picture_bottom_filed)
+                            : &(m_RefPicList1[0]->m_picture_top_filed);
 
-    if (CurrMbAddr % 2 ==
-        0) // currPicOrField is the field of the current picture CurrPic that
-           // has the same parity as the current macroblock.
-    {
-      currPicOrField = &(m_parent->m_picture_top_filed);
-    } else {
-      currPicOrField = &(m_parent->m_picture_bottom_filed);
-    }
+    if (refIdxL0 % 2)
+      pic0 = (CurrMbAddr % 2)
+                 ? &(m_RefPicList0[refIdxL0 / 2]->m_picture_top_filed)
+                 : &(m_RefPicList0[refIdxL0 / 2]->m_picture_bottom_filed);
+    else
+      pic0 = (CurrMbAddr % 2)
+                 ? &(m_RefPicList0[refIdxL0 / 2]->m_picture_bottom_filed)
+                 : &(m_RefPicList0[refIdxL0 / 2]->m_picture_top_filed);
 
-    if (CurrMbAddr % 2 == 0) // pic1 is the field of RefPicList1[ 0 ] that has
-                             // the same parity as the current macroblock.
-    {
-      pic1 = &(m_RefPicList1[0]->m_picture_top_filed);
-    } else {
-      pic1 = &(m_RefPicList1[0]->m_picture_bottom_filed);
-    }
-
-    if (refIdxL0 % 2 == 0) {
-      if (CurrMbAddr % 2 ==
-          0) // pic0 is the field of RefPicList0[ refIdxL0 / 2 ] that has the
-             // same parity as the current macroblock.
-      {
-        pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_top_filed);
-      } else {
-        pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_bottom_filed);
-      }
-    } else // if (refIdxL0 % 2 != 0)
-    {
-      if (CurrMbAddr % 2 ==
-          0) // pic0 is the field of RefPicList0[ refIdxL0 / 2 ] that has the
-             // opposite parity of the current macroblock.
-      {
-        pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_bottom_filed);
-      } else {
-        pic0 = &(m_RefPicList0[refIdxL0 / 2]->m_picture_top_filed);
-      }
-    }
-  } else // field_pic_flag is equal to 1 or the current macroblock is a frame
-         // macroblock
-  {
-    // currPicOrField is the current picture CurrPic, pic1 is the decoded
-    // reference picture RefPicList1[ 0 ], and pic0 is the decoded reference
-    // picture RefPicList0[ refIdxL0 ].
-
+  } else {
     currPicOrField = &(m_parent->m_picture_frame);
     pic0 = &(m_RefPicList0[refIdxL0]->m_picture_frame);
     pic1 = &(m_RefPicList1[0]->m_picture_frame);
   }
 
-  //---------------------------
   if (m_RefPicList0[refIdxL0]->reference_marked_type ==
           PICTURE_MARKED_AS_used_long_ref ||
-      DiffPicOrderCnt(pic1, pic0)) {
-    mvL0[0] = mvCol[0];
-    mvL0[1] = mvCol[1];
-    mvL1[0] = 0;
-    mvL1[1] = 0;
-  } else {
+      DiffPicOrderCnt(pic1, pic0))
+    mvL0[0] = mvCol[0], mvL0[1] = mvCol[1], mvL1[0] = 0, mvL1[1] = 0;
+  else {
     int32_t tb = CLIP3(-128, 127, DiffPicOrderCnt(currPicOrField, pic0));
     int32_t td = CLIP3(-128, 127, DiffPicOrderCnt(pic1, pic0));
 
@@ -1099,8 +909,7 @@ int PictureBase::
     mvL1[1] = mvL0[1] - mvCol[1];
   }
 
-  predFlagL0 = 1;
-  predFlagL1 = 1;
+  predFlagL0 = predFlagL1 = true;
 
   return 0;
 }
@@ -1117,7 +926,6 @@ int PictureBase::derivation_luma_motion_vector_prediction(
   int32_t mvLXN_A[2] = {0}, mvLXN_B[2] = {0}, mvLXN_C[2] = {0};
   int32_t refIdxLXN_A = 0, refIdxLXN_B = 0, refIdxLXN_C = 0;
 
-  // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
   RET(derivation_motion_data_of_neighbouring_partitions(
       mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, mbAddrN_A,
       mvLXN_A, refIdxLXN_A, mbAddrN_B, mvLXN_B, refIdxLXN_B, mbAddrN_C, mvLXN_C,
@@ -1170,7 +978,39 @@ int PictureBase::derivation_luma_motion_vector_prediction(
   return 0;
 }
 
+int fill_mvLXN_and_refIdxLXN(const MacroBlock &mb, int mbAddrN, int mbPartIdxN,
+                             int subMbPartIdxN, bool listSuffixFlag,
+                             int &refIdxLXN, int mvLXN[2],
+                             const MacroBlock &mbCurrent) {
+  /* 1. 宏块分区或子宏块分区 mbAddrN\mbPartIdxN\subMbPartIdxN 不可用或mbAddrN以帧内宏块预测模式进行编码，或者mbAddrN\mbPartIdxN\subMbPartIdxN的predFlagLX等于0 */
+  if (mbAddrN < 0 || mbPartIdxN < 0 || subMbPartIdxN < 0 ||
+      IS_INTRA_Prediction_Mode(mb.m_mb_pred_mode) ||
+      (listSuffixFlag == false && mb.m_PredFlagL0[mbPartIdxN] == 0) ||
+      (listSuffixFlag && mb.m_PredFlagL1[mbPartIdxN] == 0))
+    mvLXN[0] = 0, mvLXN[1] = 0, refIdxLXN = -1;
+  else {
+    if (listSuffixFlag == false) {
+      mvLXN[0] = mb.m_MvL0[mbPartIdxN][subMbPartIdxN][0];
+      mvLXN[1] = mb.m_MvL0[mbPartIdxN][subMbPartIdxN][1];
+      refIdxLXN = mb.m_RefIdxL0[mbPartIdxN];
+    } else {
+      mvLXN[0] = mb.m_MvL1[mbPartIdxN][subMbPartIdxN][0];
+      mvLXN[1] = mb.m_MvL1[mbPartIdxN][subMbPartIdxN][1];
+      refIdxLXN = mb.m_RefIdxL1[mbPartIdxN];
+    }
+
+    /* 2. 当前宏块是场宏块且宏块mbAddrN是帧宏块 */
+    if (mbCurrent.mb_field_decoding_flag && mb.mb_field_decoding_flag == false)
+      mvLXN[1] /= 2, refIdxLXN *= 2;
+    else if (mbCurrent.mb_field_decoding_flag == false &&
+             mb.mb_field_decoding_flag)
+      mvLXN[1] *= 2, refIdxLXN /= 2;
+  }
+  return 0;
+}
+
 // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
+// mvLXN为 相邻分区的运动向量，refIdxLXN为相邻分区的参考索引
 int PictureBase::derivation_motion_data_of_neighbouring_partitions(
     int32_t mbPartIdx, int32_t subMbPartIdx, H264_MB_TYPE currSubMbType,
     int32_t listSuffixFlag, int32_t &mbAddrN_A, int32_t (&mvLXN_A)[2],
@@ -1184,15 +1024,12 @@ int PictureBase::derivation_motion_data_of_neighbouring_partitions(
   const int32_t SubMbPartWidth = mb.SubMbPartWidth[mbPartIdx];
   const int32_t SubMbPartHeight = mb.SubMbPartHeight[mbPartIdx];
 
-  //--------------------------------
-  // 6.4.2.1 Inverse macroblock partition scanning process
   int32_t x = InverseRasterScan(mbPartIdx, MbPartWidth, MbPartHeight, 16, 0);
   int32_t y = InverseRasterScan(mbPartIdx, MbPartWidth, MbPartHeight, 16, 1);
 
   int32_t xS = 0, yS = 0;
   if (mb.m_name_of_mb_type == P_8x8 || mb.m_name_of_mb_type == P_8x8ref0 ||
       mb.m_name_of_mb_type == B_8x8) {
-    // 6.4.2.2 Inverse sub-macroblock partition scanning process
     xS = InverseRasterScan(subMbPartIdx, SubMbPartWidth, SubMbPartHeight, 8, 0);
     yS = InverseRasterScan(subMbPartIdx, SubMbPartWidth, SubMbPartHeight, 8, 1);
   }
@@ -1215,107 +1052,35 @@ int PictureBase::derivation_motion_data_of_neighbouring_partitions(
   int32_t mbAddrN_D = 0;
   const int32_t isChroma = 0;
 
-  RET(Derivation_process_for_neighbouring_partitions(
+  RET(derivation_neighbouring_partitions(
       x + xS - 1, y + yS + 0, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
       mbAddrN_A, mbPartIdxN_A, subMbPartIdxN_A));
-  RET(Derivation_process_for_neighbouring_partitions(
+  RET(derivation_neighbouring_partitions(
       x + xS + 0, y + yS - 1, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
       mbAddrN_B, mbPartIdxN_B, subMbPartIdxN_B));
-  RET(Derivation_process_for_neighbouring_partitions(
+  RET(derivation_neighbouring_partitions(
       x + xS + predPartWidth, y + yS - 1, mbPartIdx, currSubMbType,
       subMbPartIdx, isChroma, mbAddrN_C, mbPartIdxN_C, subMbPartIdxN_C));
-  RET(Derivation_process_for_neighbouring_partitions(
+  RET(derivation_neighbouring_partitions(
       x + xS - 1, y + yS - 1, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
       mbAddrN_D, mbPartIdxN_D, subMbPartIdxN_D));
 
+  /* 当分区 mbAddrC\mbPartIdxC\subMbPartIdxC 不可用时 */
   if (mbAddrN_C < 0 || mbPartIdxN_C < 0 || subMbPartIdxN_C < 0) {
     mbAddrN_C = mbAddrN_D, mbPartIdxN_C = mbPartIdxN_D,
     subMbPartIdxN_C = subMbPartIdxN_D;
   }
 
-  //----------------mbAddrN_A---------------
-  if (mbAddrN_A < 0 || mbPartIdxN_A < 0 || subMbPartIdxN_A < 0 ||
-      IS_INTRA_Prediction_Mode(m_mbs[mbAddrN_A].m_mb_pred_mode) == true ||
-      (listSuffixFlag == 0 &&
-       m_mbs[mbAddrN_A].m_PredFlagL0[mbPartIdxN_A] == 0) ||
-      (listSuffixFlag == 1 && m_mbs[mbAddrN_A].m_PredFlagL1[mbPartIdxN_A] == 0))
-    mvLXN_A[0] = 0, mvLXN_A[1] = 0, refIdxLXN_A = -1;
-  else {
-    if (listSuffixFlag == 0) {
-      mvLXN_A[0] = m_mbs[mbAddrN_A].m_MvL0[mbPartIdxN_A][subMbPartIdxN_A][0];
-      mvLXN_A[1] = m_mbs[mbAddrN_A].m_MvL0[mbPartIdxN_A][subMbPartIdxN_A][1];
-      refIdxLXN_A = m_mbs[mbAddrN_A].m_RefIdxL0[mbPartIdxN_A];
-    } else {
-      mvLXN_A[0] = m_mbs[mbAddrN_A].m_MvL1[mbPartIdxN_A][subMbPartIdxN_A][0];
-      mvLXN_A[1] = m_mbs[mbAddrN_A].m_MvL1[mbPartIdxN_A][subMbPartIdxN_A][1];
-      refIdxLXN_A = m_mbs[mbAddrN_A].m_RefIdxL1[mbPartIdxN_A];
-    }
-
-    if (mb.mb_field_decoding_flag &&
-        m_mbs[mbAddrN_A].mb_field_decoding_flag == 0)
-      mvLXN_A[1] = mvLXN_A[1] / 2, refIdxLXN_A = refIdxLXN_A * 2;
-    else if (mb.mb_field_decoding_flag == 0 &&
-             m_mbs[mbAddrN_A].mb_field_decoding_flag)
-      mvLXN_A[1] = mvLXN_A[1] * 2, refIdxLXN_A = refIdxLXN_A / 2;
-    else {
-    }
-  }
-
-  //----------------mbAddrN_B---------------
-  if (mbAddrN_B < 0 || mbPartIdxN_B < 0 || subMbPartIdxN_B < 0 ||
-      IS_INTRA_Prediction_Mode(m_mbs[mbAddrN_B].m_mb_pred_mode) == true ||
-      (listSuffixFlag == 0 &&
-       m_mbs[mbAddrN_B].m_PredFlagL0[mbPartIdxN_B] == 0) ||
-      (listSuffixFlag == 1 && m_mbs[mbAddrN_B].m_PredFlagL1[mbPartIdxN_B] == 0))
-    mvLXN_B[0] = 0, mvLXN_B[1] = 0, refIdxLXN_B = -1;
-  else {
-    if (listSuffixFlag == 0) {
-      mvLXN_B[0] = m_mbs[mbAddrN_B].m_MvL0[mbPartIdxN_B][subMbPartIdxN_B][0];
-      mvLXN_B[1] = m_mbs[mbAddrN_B].m_MvL0[mbPartIdxN_B][subMbPartIdxN_B][1];
-      refIdxLXN_B = m_mbs[mbAddrN_B].m_RefIdxL0[mbPartIdxN_B];
-    } else {
-      mvLXN_B[0] = m_mbs[mbAddrN_B].m_MvL1[mbPartIdxN_B][subMbPartIdxN_B][0];
-      mvLXN_B[1] = m_mbs[mbAddrN_B].m_MvL1[mbPartIdxN_B][subMbPartIdxN_B][1];
-      refIdxLXN_B = m_mbs[mbAddrN_B].m_RefIdxL1[mbPartIdxN_B];
-    }
-
-    if (mb.mb_field_decoding_flag &&
-        m_mbs[mbAddrN_B].mb_field_decoding_flag == 0)
-      mvLXN_B[1] = mvLXN_B[1] / 2, refIdxLXN_B = refIdxLXN_B * 2;
-    else if (mb.mb_field_decoding_flag == 0 &&
-             m_mbs[mbAddrN_B].mb_field_decoding_flag)
-      mvLXN_B[1] = mvLXN_B[1] * 2, refIdxLXN_B = refIdxLXN_B / 2;
-    else {
-    }
-  }
-
-  //----------------mbAddrN_C---------------
-  if (mbAddrN_C < 0 || mbPartIdxN_C < 0 || subMbPartIdxN_C < 0 ||
-      IS_INTRA_Prediction_Mode(m_mbs[mbAddrN_C].m_mb_pred_mode) == true ||
-      (listSuffixFlag == 0 &&
-       m_mbs[mbAddrN_C].m_PredFlagL0[mbPartIdxN_C] == 0) ||
-      (listSuffixFlag == 1 && m_mbs[mbAddrN_C].m_PredFlagL1[mbPartIdxN_C] == 0))
-    mvLXN_C[0] = 0, mvLXN_C[1] = 0, refIdxLXN_C = -1;
-  else {
-    if (listSuffixFlag == 0) {
-      mvLXN_C[0] = m_mbs[mbAddrN_C].m_MvL0[mbPartIdxN_C][subMbPartIdxN_C][0];
-      mvLXN_C[1] = m_mbs[mbAddrN_C].m_MvL0[mbPartIdxN_C][subMbPartIdxN_C][1];
-      refIdxLXN_C = m_mbs[mbAddrN_C].m_RefIdxL0[mbPartIdxN_C];
-    } else {
-      mvLXN_C[0] = m_mbs[mbAddrN_C].m_MvL1[mbPartIdxN_C][subMbPartIdxN_C][0];
-      mvLXN_C[1] = m_mbs[mbAddrN_C].m_MvL1[mbPartIdxN_C][subMbPartIdxN_C][1];
-      refIdxLXN_C = m_mbs[mbAddrN_C].m_RefIdxL1[mbPartIdxN_C];
-    }
-
-    if (mb.mb_field_decoding_flag &&
-        m_mbs[mbAddrN_C].mb_field_decoding_flag == 0)
-      mvLXN_C[1] = mvLXN_C[1] / 2, refIdxLXN_C = refIdxLXN_C * 2;
-    else if (mb.mb_field_decoding_flag == 0 &&
-             m_mbs[mbAddrN_C].mb_field_decoding_flag)
-      mvLXN_C[1] = mvLXN_C[1] * 2, refIdxLXN_C = refIdxLXN_C / 2;
-    else {
-    }
-  }
+  //相邻分区的运动向量
+  fill_mvLXN_and_refIdxLXN(m_mbs[mbAddrN_A], mbAddrN_A, mbPartIdxN_A,
+                           subMbPartIdxN_A, listSuffixFlag, refIdxLXN_A,
+                           mvLXN_A, mb);
+  fill_mvLXN_and_refIdxLXN(m_mbs[mbAddrN_B], mbAddrN_B, mbPartIdxN_B,
+                           subMbPartIdxN_B, listSuffixFlag, refIdxLXN_B,
+                           mvLXN_B, mb);
+  fill_mvLXN_and_refIdxLXN(m_mbs[mbAddrN_C], mbAddrN_C, mbPartIdxN_C,
+                           subMbPartIdxN_C, listSuffixFlag, refIdxLXN_C,
+                           mvLXN_C, mb);
 
   return 0;
 }
@@ -1351,165 +1116,75 @@ int PictureBase::derivation_chroma_motion_vectors(int32_t ChromaArrayType,
 }
 
 // 6.4.11.7 Derivation process for neighbouring partitions
-int PictureBase::Derivation_process_for_neighbouring_partitions(
+int PictureBase::derivation_neighbouring_partitions(
     int32_t xN, int32_t yN, int32_t mbPartIdx, H264_MB_TYPE currSubMbType,
     int32_t subMbPartIdx, int32_t isChroma, int32_t &mbAddrN,
     int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
-  int ret = 0;
-  SliceHeader *slice_header = m_slice->slice_header;
 
-  //---------------------------------------
-  // 1. The inverse macroblock partition scanning process as described in
-  // clause 6.4.2.1 is invoked with mbPartIdx as the input and ( x, y ) as the
-  // output.
-
-  // 2. The location of the upper-left luma sample inside a macroblock partition
-  // ( xS, yS ) is derived as follows:
-  //    – If mb_type is equal to P_8x8, P_8x8ref0 or B_8x8, the inverse
-  //    sub-macroblock partition scanning process
-  //      as described in clause 6.4.2.2 is invoked with subMbPartIdx as the
-  //      input and ( xS, yS ) as the output.
-  //    – Otherwise, ( xS, yS ) are set to ( 0, 0 ).
-
-  // 3. The variable predPartWidth in Table 6-2 is specified as follows:
-  //    – If mb_type is equal to P_Skip, B_Skip, or B_Direct_16x16,
-  //    predPartWidth = 16. – Otherwise, if mb_type is equal to B_8x8, the
-  //    following applies:
-  //      – If currSubMbType is equal to B_Direct_8x8, predPartWidth = 16.
-  //      – Otherwise, predPartWidth = SubMbPartWidth( sub_mb_type[ mbPartIdx ]
-  //      ).
-  //    – Otherwise, if mb_type is equal to P_8x8 or P_8x8ref0, predPartWidth =
-  //    SubMbPartWidth( sub_mb_type[ mbPartIdx ] ). – Otherwise, predPartWidth =
-  //    MbPartWidth( mb_type ).
-
-  // 4. The difference of luma location ( xD, yD ) is set according to Table
-  // 6-2.
-
-  // 5. The neighbouring luma location ( xN, yN ) is specified by
-  //        xN = x + xS + xD    (6-29)
-  //        yN = y + yS + yD    (6-30)
-
-  // 6. The derivation process for neighbouring locations as specified in
-  // clause 6.4.12 is invoked for luma locations with ( xN, yN ) as the input
-  // and the output is assigned to mbAddrN and ( xW, yW ).
+  const SliceHeader *slice_header = m_slice->slice_header;
 
   //---------------------------------------
   // mbAddrA\mbPartIdxA\subMbPartIdxA
   // 6.4.12 Derivation process for neighbouring locations
-  int32_t xW = 0;
-  int32_t yW = 0;
-  int32_t maxW = 0;
-  int32_t maxH = 0;
-
+  int32_t xW = 0, yW = 0, maxW = 16, maxH = 16;
+  int32_t luma4x4BlkIdxN = 0, luma8x8BlkIdxN = 0;
   MB_ADDR_TYPE mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-  int32_t luma4x4BlkIdxN = 0;
-  int32_t luma8x8BlkIdxN = 0;
+  if (isChroma) maxW = MbWidthC, maxH = MbHeightC;
 
-  if (isChroma == 0) {
-    maxW = 16;
-    maxH = 16;
-  } else // if (isChroma == 1)
-  {
-    maxW = MbWidthC;
-    maxH = MbHeightC;
+  if (slice_header->MbaffFrameFlag) {
+    RET(neighbouring_locations_MBAFF(xN, yN, maxW, maxH, CurrMbAddr,
+                                     mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
+                                     luma8x8BlkIdxN, xW, yW, isChroma));
+  } else {
+    RET(neighbouring_locations_non_MBAFF(xN, yN, maxW, maxH, CurrMbAddr,
+                                         mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
+                                         luma8x8BlkIdxN, xW, yW, isChroma));
   }
 
-  if (slice_header->MbaffFrameFlag == 0) {
-    // 6.4.12.1 Specification for neighbouring locations in fields and non-MBAFF
-    // frames
-    ret = neighbouring_locations_non_MBAFF(
-        xN, yN, maxW, maxH, CurrMbAddr, mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-        luma8x8BlkIdxN, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else // if (slice_header.MbaffFrameFlag == 1)
-  {
-    // 6.4.12.2 Specification for neighbouring locations in MBAFF frames
-    ret = neighbouring_locations_MBAFF(xN, yN, maxW, maxH, CurrMbAddr,
-                                       mbAddrN_type, mbAddrN, luma4x4BlkIdxN,
-                                       luma8x8BlkIdxN, xW, yW, isChroma);
-    RETURN_IF_FAILED(ret != 0, ret);
-  }
+  /* mbAddrN 不可用，则宏块或子宏块分区 mbAddrN\mbPartIdxN\subMbPartIdxN 被标记为不可用 */
+  if (mbAddrN < 0)
+    mbAddrN = NA, mbPartIdxN = NA, subMbPartIdxN = NA;
+  else {
+    RET(derivation_macroblock_and_sub_macroblock_partition_indices(
+        m_mbs[mbAddrN].m_name_of_mb_type, m_mbs[mbAddrN].m_name_of_sub_mb_type,
+        xW, yW, mbPartIdxN, subMbPartIdxN));
 
-  //----------------
-  if (mbAddrN < 0) // mbAddrN is not available
-  {
-    mbAddrN = NA;
-    mbPartIdxN = NA;
-    subMbPartIdxN = NA;
-  } else // mbAddrN is available
-  {
-    // 6.4.13.4 Derivation process for macroblock and sub-macroblock partition
-    // indices
-    ret =
-        Derivation_process_for_macroblock_and_sub_macroblock_partition_indices(
-            m_mbs[mbAddrN].m_name_of_mb_type,
-            m_mbs[mbAddrN].m_name_of_sub_mb_type, xW, yW, mbPartIdxN,
-            subMbPartIdxN);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    // FIXME:
-    // When the partition given by mbPartIdxN and subMbPartIdxN is not yet
-    // decoded, the macroblock partition mbPartIdxN and the sub-macroblock
-    // partition subMbPartIdxN are marked as not available.
+    /* 当mbPartIdxN和subMbPartIdxN给出的分区尚未被解码时，宏块分区mbPartIdxN和子宏块分区subMbPartIdxN被标记为不可用：如当 mbPartIdx = 2、subMbPartIdx = 3、xD = 4、yD = −1 时的情况，即，当请求第三个子宏块的最后 4x4 亮度块的邻居 C 时的情况。*/
     if (m_mbs[mbAddrN].NumSubMbPart[mbPartIdxN] > subMbPartIdxN &&
         m_mbs[mbAddrN].m_isDecoded[mbPartIdxN][subMbPartIdxN] == 0) {
-      // mbAddrN = NA;
-      // mbPartIdxN = NA;
-      // subMbPartIdxN = NA;
+      //mbAddrN = NA, mbPartIdxN = NA,
+      //subMbPartIdxN = NA;
+      /* TODO YangJing 这为什么应该注释？不注释就解码报错了 <24-10-11 01:38:20> */
     }
   }
 
   return 0;
 }
 
-// 6.4.13.4 Derivation process for macroblock and sub-macroblock partition
-// indices
-int PictureBase::
-    Derivation_process_for_macroblock_and_sub_macroblock_partition_indices(
-        H264_MB_TYPE mb_type_, H264_MB_TYPE subMbType_[4], int32_t xP,
-        int32_t yP, int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
-  int ret = 0;
+// 6.4.13.4 Derivation process for macroblock and sub-macroblock partition indices
+int PictureBase::derivation_macroblock_and_sub_macroblock_partition_indices(
+    H264_MB_TYPE mb_type_, H264_MB_TYPE subMbType_[4], int32_t xP, int32_t yP,
+    int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
+
   if (mb_type_ == MB_TYPE_NA) RET(-1);
-
-  //---------------------
-  if (mb_type_ >= I_NxN &&
-      mb_type_ <= I_PCM) // If mbType specifies an I macroblock type
-  {
+  if (mb_type_ >= I_NxN && mb_type_ <= I_PCM)
     mbPartIdxN = 0;
-  } else // mbType does not specify an I macroblock type
-  {
-    int32_t MbPartWidth = 0;
-    int32_t MbPartHeight = 0;
-
-    ret = MacroBlock::getMbPartWidthAndHeight(mb_type_, MbPartWidth,
-                                              MbPartHeight);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    // mbPartIdx = ( 16 / MbPartWidth( mbType ) ) * ( yP / MbPartHeight( mbType
-    // ) ) + ( xP / MbPartWidth( mbType ) );
+  else {
+    int32_t MbPartWidth = 0, MbPartHeight = 0;
+    RET(MacroBlock::getMbPartWidthAndHeight(mb_type_, MbPartWidth,
+                                            MbPartHeight));
     mbPartIdxN = (16 / MbPartWidth) * (yP / MbPartHeight) + (xP / MbPartWidth);
   }
 
-  // If mbType is not equal to P_8x8, P_8x8ref0, B_8x8, B_Skip, or
-  // B_Direct_16x16, subMbPartIdx is set equal to 0.
   if (mb_type_ != P_8x8 && mb_type_ != P_8x8ref0 && mb_type_ != B_8x8 &&
       mb_type_ != B_Skip && mb_type_ != B_Direct_16x16) {
     subMbPartIdxN = 0;
   } else if (mb_type_ == B_Skip || mb_type_ == B_Direct_16x16) {
-    // subMbPartIdx = 2 * ( ( yP % 8 ) / 4 ) + ( ( xP % 8 ) / 4 );
     subMbPartIdxN = 2 * ((yP % 8) / 4) + ((xP % 8) / 4);
-  } else // mbType is equal to P_8x8, P_8x8ref0, or B_8x8
-  {
-    int32_t SubMbPartWidth = 0;
-    int32_t SubMbPartHeight = 0;
-
-    ret = MacroBlock::getMbPartWidthAndHeight(subMbType_[mbPartIdxN],
-                                              SubMbPartWidth, SubMbPartHeight);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    // subMbPartIdx = ( 8 / SubMbPartWidth( subMbType[ mbPartIdx ] ) ) * ( ( yP
-    // % 8 ) / SubMbPartHeight( subMbType[ mbPartIdx ] ) ) + ( ( xP % 8 ) /
-    // SubMbPartWidth( subMbType[ mbPartIdx ] ) )
+  } else {
+    int32_t SubMbPartWidth = 0, SubMbPartHeight = 0;
+    RET(MacroBlock::getMbPartWidthAndHeight(subMbType_[mbPartIdxN],
+                                            SubMbPartWidth, SubMbPartHeight));
     subMbPartIdxN = (8 / SubMbPartWidth) * ((yP % 8) / SubMbPartHeight) +
                     ((xP % 8) / SubMbPartWidth);
   }

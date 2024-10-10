@@ -339,11 +339,11 @@ class PictureBase {
       int32_t mbPartIdx, int32_t subMbPartIdx, PictureBase *&colPic,
       int32_t &mbAddrCol, int32_t (&mvCol)[2], int32_t &refIdxCol,
       int32_t &vertMvScale);
-  int Derivation_process_for_spatial_direct_luma_motion_vector_and_reference_index_prediction_mode(
+  int derivation_spatial_direct_luma_motion_vector_and_ref_index_prediction(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
       int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
       int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1);
-  int Derivation_process_for_temporal_direct_luma_motion_vector_and_reference_index_prediction_mode(
+  int derivation_temporal_direct_luma_motion_vector_and_ref_index_prediction(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
       int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
       int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1);
@@ -427,11 +427,11 @@ class PictureBase {
                                                         int32_t mbPartIdx,
                                                         int32_t subMbPartIdx,
                                                         int32_t &x, int32_t &y);
-  int Derivation_process_for_neighbouring_partitions(
+  int derivation_neighbouring_partitions(
       int32_t xN, int32_t yN, int32_t mbPartIdx, H264_MB_TYPE currSubMbType,
       int32_t subMbPartIdx, int32_t isChroma, int32_t &mbAddrN,
       int32_t &mbPartIdxN, int32_t &subMbPartIdxN);
-  int Derivation_process_for_macroblock_and_sub_macroblock_partition_indices(
+  int derivation_macroblock_and_sub_macroblock_partition_indices(
       H264_MB_TYPE mb_type_, H264_MB_TYPE subMbType[4], int32_t xP, int32_t yP,
       int32_t &mbPartIdxN, int32_t &subMbPartIdxN);
 

@@ -581,12 +581,12 @@ int CH264Cabac::
   }
 
   // 6.4.11.7 Derivation process for neighbouring partitions
-  ret = picture.Derivation_process_for_neighbouring_partitions(
+  ret = picture.derivation_neighbouring_partitions(
       x + xS - 1, y + yS + 0, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
       mbAddrN_A, mbPartIdxN_A, subMbPartIdxN_A);
   RETURN_IF_FAILED(ret != 0, ret);
 
-  ret = picture.Derivation_process_for_neighbouring_partitions(
+  ret = picture.derivation_neighbouring_partitions(
       x + xS + 0, y + yS - 1, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
       mbAddrN_B, mbPartIdxN_B, subMbPartIdxN_B);
   RETURN_IF_FAILED(ret != 0, ret);
@@ -808,12 +808,12 @@ int CH264Cabac::
   }
 
   // 6.4.11.7 Derivation process for neighbouring partitions
-  ret = picture.Derivation_process_for_neighbouring_partitions(
+  ret = picture.derivation_neighbouring_partitions(
       x + xS - 1, y + yS + 0, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
       mbAddrN_A, mbPartIdxN_A, subMbPartIdxN_A);
   RETURN_IF_FAILED(ret != 0, ret);
 
-  ret = picture.Derivation_process_for_neighbouring_partitions(
+  ret = picture.derivation_neighbouring_partitions(
       x + xS + 0, y + yS - 1, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
       mbAddrN_B, mbPartIdxN_B, subMbPartIdxN_B);
   RETURN_IF_FAILED(ret != 0, ret);
