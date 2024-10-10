@@ -84,10 +84,12 @@ int PictureBase::inter_prediction_process() {
     int32_t xP = InverseRasterScan(mbPartIdx, MbPartWidth, MbPartHeight, 16, 0);
     int32_t yP = InverseRasterScan(mbPartIdx, MbPartWidth, MbPartHeight, 16, 1);
 
-    // 亮度运动矢量 mvL0, mvL1，色度运动矢量 mvCL0, mvCL1
+    // 二维坐标，亮度运动矢量 mvL0(x,y), mvL1(x,y)，色度运动矢量 mvCL0(x,y), mvCL1(x,y)
     int32_t mvL0[2] = {0}, mvL1[2] = {0}, mvCL0[2] = {0}, mvCL1[2] = {0};
-    // 参考索引 refIdxL0, refIdxL1。 预测列表利用标志 predFlagL0, predFlagL1
-    int32_t refIdxL0 = -1, refIdxL1 = -1, predFlagL0 = 0, predFlagL1 = 0;
+    // 参考帧索引
+    int32_t refIdxL0 = -1, refIdxL1 = -1;
+    // 预测列表利用标志
+    bool predFlagL0 = false, predFlagL1 = false;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
@@ -144,7 +146,7 @@ int PictureBase::inter_prediction_process() {
                               : mb.m_mb_position_y + yP + yS;
       uint8_t predPartL[256] = {0}, predPartCb[256] = {0},
               predPartCr[256] = {0};
-      RET(decoding_Inter_prediction_samples(
+      RET(decoding_inter_prediction_samples(
           mbPartIdx, subMbPartIdx, partWidth, partHeight, partWidthC,
           partHeightC, xAL, yAL, mvL0, mvL1, mvCL0, mvCL1, refPicL0, refPicL1,
           predFlagL0, predFlagL1, logWDL, w0L, w1L, o0L, o1L, logWDCb, w0Cb,
@@ -209,193 +211,171 @@ int PictureBase::inter_prediction_process() {
    * – 宏块分区 mbPartIdx， 
    * – 子宏块分区 subMbPartIdx。  
  * 该过程的输出为： 
-   * – 亮度运动矢量 mvL0 和 mvL1，
-   * - ChromaArrayType 不等于 0 时，色度运动矢量 mvCL0 和 mvCL1 
+   * – 亮度运动矢量 mvL0 和 mvL1，色度运动矢量 mvCL0 和 mvCL1 
    * – 参考索引 refIdxL0 和 refIdxL1 
    * – 预测列表利用标志 predFlagL0 和 predFlagL1 
-   * – 子宏块分区运动向量计数 subMvCnt。*/
+   * – 子宏块分区运动向量计数 subMvCnt */
 int PictureBase::derivation_motion_vector_components_and_reference_indices(
     int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
     int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
     int32_t (&mvCL0)[2], int32_t (&mvCL1)[2], int32_t &subMvCnt,
-    int32_t &predFlagL0, int32_t &predFlagL1, PictureBase *&refPicL0,
+    bool &predFlagL0, bool &predFlagL1, PictureBase *&refPicL0,
     PictureBase *&refPicL1) {
 
-  const uint32_t ChromaArrayType =
-      m_slice->slice_header->m_sps->ChromaArrayType;
+  /* ------------------ 设置别名 ------------------ */
+  const SliceHeader *header = m_slice->slice_header;
+  MacroBlock &mb = m_mbs[CurrMbAddr];
+  const H264_MB_TYPE &mb_type = mb.m_name_of_mb_type;
+  const H264_MB_TYPE &sub_mb_type = mb.m_name_of_sub_mb_type[mbPartIdx];
+  const uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
+  /* ------------------  End ------------------ */
 
   int32_t mvpL0[2] = {0}, mvpL1[2] = {0};
   bool listSuffixFlag = false, refPicLSetFlag = false;
   H264_MB_TYPE currSubMbType = MB_TYPE_NA;
 
-  if (m_mbs[CurrMbAddr].m_name_of_mb_type == P_Skip) {
-    // 8.4.1.1 Derivation process for luma motion vectors for skipped macroblocks in P and SP slices
-    refIdxL0 = 0;
-    fill_n(m_mbs[CurrMbAddr].m_PredFlagL0, 4, 1);
-
-    int32_t mbAddrN_A = 0, mbAddrN_B = 0, mbAddrN_C = 0;
-    int32_t mvLXN_A[2] = {0}, mvLXN_B[2] = {0}, mvLXN_C[2] = {0};
-    int32_t refIdxLXN_A = 0, refIdxLXN_B = 0, refIdxLXN_C = 0;
-
-    // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
-    RET(Derivation_process_for_motion_data_of_neighbouring_partitions(
-        mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, mbAddrN_A,
-        mvLXN_A, refIdxLXN_A, mbAddrN_B, mvLXN_B, refIdxLXN_B, mbAddrN_C,
-        mvLXN_C, refIdxLXN_C));
-
-    if (mbAddrN_A < 0 || mbAddrN_B < 0 ||
-        (refIdxLXN_A == 0 && mvLXN_A[0] == 0 && mvLXN_A[1] == 0) ||
-        (refIdxLXN_B == 0 && mvLXN_B[0] == 0 && mvLXN_B[1] == 0))
-      mvL0[0] = 0, mvL0[1] = 0;
-    else
-      // 8.4.1.3 Derivation process for luma motion vector prediction
-      RET(Derivation_process_for_luma_motion_vector_prediction(
-          mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, refIdxL0,
-          mvL0));
-
-    predFlagL0 = 1, predFlagL1 = 0;
-    mvL1[0] = NA, mvL1[1] = NA;
-    subMvCnt = 1;
-  } else if (m_mbs[CurrMbAddr].m_name_of_mb_type == B_Skip ||
-             m_mbs[CurrMbAddr].m_name_of_mb_type == B_Direct_16x16 ||
-             m_mbs[CurrMbAddr].m_name_of_sub_mb_type[mbPartIdx] ==
-                 B_Direct_8x8) {
-    // 8.4.1.2 Derivation process for luma motion vectors for B_Skip, B_Direct_16x16, and B_Direct_8x8
-    RET(Derivation_process_for_luma_motion_vectors_for_B_Skip_or_B_Direct_16x16_or_B_Direct_8x8(
+  /* ---------------------------- P_Skip 宏块的亮度运动矢量 ---------------------------- */
+  if (mb_type == P_Skip) {
+    RET(derivation_luma_motion_vectors_for_P_Skip(
+        mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
+        predFlagL0, predFlagL1, listSuffixFlag, currSubMbType));
+  }
+  /* -------------------- B_Skip,B_Direct_16x16/8x8 宏块的亮度运动矢量 -------------------- */
+  else if (mb_type == B_Skip || mb_type == B_Direct_16x16 ||
+           sub_mb_type == B_Direct_8x8) {
+    RET(derivation_luma_motion_vectors_for_B_Skip_or_B_Direct_16x16_8x8(
         mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
         predFlagL0, predFlagL1));
-  } else {
+  }
+  /* ---------------------------- 宏块运动预测 ---------------------------- */
+  else {
     int32_t NumSubMbPart = 0, SubMbPartWidth = 0, SubMbPartHeight = 0;
     H264_MB_PART_PRED_MODE mb_pred_mode = MB_PRED_MODE_NA,
                            SubMbPredMode = MB_PRED_MODE_NA;
 
-    RET(MacroBlock::MbPartPredMode(
-        m_mbs[CurrMbAddr].m_name_of_mb_type, mbPartIdx,
-        m_mbs[CurrMbAddr].transform_size_8x8_flag, mb_pred_mode));
-    RET(MacroBlock::SubMbPredMode(m_slice->slice_header->slice_type,
-                                  m_mbs[CurrMbAddr].sub_mb_type[mbPartIdx],
+    RET(MacroBlock::MbPartPredMode(mb_type, mbPartIdx,
+                                   mb.transform_size_8x8_flag, mb_pred_mode));
+    RET(MacroBlock::SubMbPredMode(header->slice_type, mb.sub_mb_type[mbPartIdx],
                                   NumSubMbPart, SubMbPredMode, SubMbPartWidth,
                                   SubMbPartHeight));
 
+    refIdxL0 = -1, predFlagL0 = false;
     if (mb_pred_mode == Pred_L0 || mb_pred_mode == BiPred ||
         SubMbPredMode == Pred_L0 || SubMbPredMode == BiPred)
-      refIdxL0 = m_mbs[CurrMbAddr].ref_idx_l0[mbPartIdx], predFlagL0 = 1;
-    else
-      refIdxL0 = -1, predFlagL0 = 0;
+      refIdxL0 = mb.ref_idx_l0[mbPartIdx], predFlagL0 = true;
 
+    refIdxL1 = -1, predFlagL1 = false;
     if (mb_pred_mode == Pred_L1 || mb_pred_mode == BiPred ||
         SubMbPredMode == Pred_L1 || SubMbPredMode == BiPred)
-      predFlagL1 = 1, refIdxL1 = m_mbs[CurrMbAddr].ref_idx_l1[mbPartIdx];
-    else
-      predFlagL1 = 0, refIdxL1 = -1;
+      refIdxL1 = mb.ref_idx_l1[mbPartIdx], predFlagL1 = true;
 
     subMvCnt = predFlagL0 + predFlagL1;
-    if (m_mbs[CurrMbAddr].m_name_of_mb_type == B_8x8)
-      currSubMbType = m_mbs[CurrMbAddr].m_name_of_sub_mb_type[mbPartIdx];
-    else
-      currSubMbType = MB_TYPE_NA;
+    currSubMbType = (mb_type == B_8x8) ? sub_mb_type : MB_TYPE_NA;
 
-    if (predFlagL0 == 1) {
-      // 8.4.2.1 Reference picture selection process
-      refPicLSetFlag = 1, refPicL0 = NULL;
-      RET(Reference_picture_selection_process(refIdxL0, m_RefPicList0,
-                                              m_RefPicList0Length, refPicL0));
+    /* 亮度宏块预测 */
+    if (predFlagL0) {
+      refPicLSetFlag = true, refPicL0 = NULL;
+      RET(reference_picture_selection(refIdxL0, m_RefPicList0,
+                                      m_RefPicList0Length, refPicL0));
 
-      // 8.4.1.3 Derivation process for luma motion vector prediction
       listSuffixFlag = 0;
-      RET(Derivation_process_for_luma_motion_vector_prediction(
+      RET(derivation_luma_motion_vector_prediction(
           mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, refIdxL0,
           mvpL0));
-      mvL0[0] = mvpL0[0] + m_mbs[CurrMbAddr].mvd_l0[mbPartIdx][subMbPartIdx][0];
-      mvL0[1] = mvpL0[1] + m_mbs[CurrMbAddr].mvd_l0[mbPartIdx][subMbPartIdx][1];
+      mvL0[0] = mvpL0[0] + mb.mvd_l0[mbPartIdx][subMbPartIdx][0];
+      mvL0[1] = mvpL0[1] + mb.mvd_l0[mbPartIdx][subMbPartIdx][1];
     }
 
-    if (predFlagL1 == 1) {
-      // 8.4.2.1 Reference picture selection process
-      refPicLSetFlag = 1, refPicL1 = NULL;
-      RET(Reference_picture_selection_process(refIdxL1, m_RefPicList1,
-                                              m_RefPicList1Length, refPicL1));
+    if (predFlagL1) {
+      refPicLSetFlag = true, refPicL1 = NULL;
+      RET(reference_picture_selection(refIdxL1, m_RefPicList1,
+                                      m_RefPicList1Length, refPicL1));
 
-      // 8.4.1.3 Derivation process for luma motion vector prediction
-      listSuffixFlag = 1;
-      RET(Derivation_process_for_luma_motion_vector_prediction(
+      listSuffixFlag = true;
+      RET(derivation_luma_motion_vector_prediction(
           mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, refIdxL1,
           mvpL1));
-      mvL1[0] = mvpL1[0] + m_mbs[CurrMbAddr].mvd_l1[mbPartIdx][subMbPartIdx][0];
-      mvL1[1] = mvpL1[1] + m_mbs[CurrMbAddr].mvd_l1[mbPartIdx][subMbPartIdx][1];
+      mvL1[0] = mvpL1[0] + mb.mvd_l1[mbPartIdx][subMbPartIdx][0];
+      mvL1[1] = mvpL1[1] + mb.mvd_l1[mbPartIdx][subMbPartIdx][1];
     }
   }
 
-  if (refPicLSetFlag == 0) {
-    if (predFlagL0 == 1) {
-      // 8.4.2.1 Reference picture selection process
-      refPicLSetFlag = 1, refPicL0 = NULL;
-      RET(Reference_picture_selection_process(refIdxL0, m_RefPicList0,
-                                              m_RefPicList0Length, refPicL0));
+  /* 色度宏块预测 */
+  if (refPicLSetFlag == false) {
+    if (predFlagL0) {
+      refPicLSetFlag = true, refPicL0 = NULL;
+      RET(reference_picture_selection(refIdxL0, m_RefPicList0,
+                                      m_RefPicList0Length, refPicL0));
     }
-    if (predFlagL1 == 1) {
-      // 8.4.2.1 Reference picture selection process
-      refPicLSetFlag = 1, refPicL1 = NULL;
-      RET(Reference_picture_selection_process(refIdxL1, m_RefPicList1,
-                                              m_RefPicList1Length, refPicL1));
+    if (predFlagL1) {
+      refPicLSetFlag = true, refPicL1 = NULL;
+      RET(reference_picture_selection(refIdxL1, m_RefPicList1,
+                                      m_RefPicList1Length, refPicL1));
     }
   }
 
   if (ChromaArrayType != 0) {
-    if (predFlagL0 == 1)
-      // 8.4.1.4 Derivation process for chroma motion vectors
-      RET(Derivation_process_for_chroma_motion_vectors(ChromaArrayType, mvL0,
-                                                       refPicL0, mvCL0));
-
-    if (predFlagL1 == 1)
-      // 8.4.1.4 Derivation process for chroma motion vectors
-      RET(Derivation_process_for_chroma_motion_vectors(ChromaArrayType, mvL1,
-                                                       refPicL1, mvCL1));
+    if (predFlagL0)
+      RET(derivation_chroma_motion_vectors(ChromaArrayType, mvL0, refPicL0,
+                                           mvCL0));
+    if (predFlagL1)
+      RET(derivation_chroma_motion_vectors(ChromaArrayType, mvL1, refPicL1,
+                                           mvCL1));
   }
 
   return 0;
 }
 
-// 8.4.1.2 Derivation process for luma motion vectors for B_Skip,
-// B_Direct_16x16, and B_Direct_8x8
+// 8.4.1.1 Derivation process for luma motion vectors for skipped macroblocks in P and SP slices
+int PictureBase::derivation_luma_motion_vectors_for_P_Skip(
+    int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
+    int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
+    int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1, bool &listSuffixFlag,
+    H264_MB_TYPE &currSubMbType) {
+
+  refIdxL0 = 0;
+  fill_n(m_mbs[CurrMbAddr].m_PredFlagL0, 4, 1);
+  int32_t mbAddrN_A = 0, mbAddrN_B = 0, mbAddrN_C = 0;
+  int32_t mvLXN_A[2] = {0}, mvLXN_B[2] = {0}, mvLXN_C[2] = {0};
+  int32_t refIdxLXN_A = 0, refIdxLXN_B = 0, refIdxLXN_C = 0;
+
+  // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
+  RET(Derivation_process_for_motion_data_of_neighbouring_partitions(
+      mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, mbAddrN_A,
+      mvLXN_A, refIdxLXN_A, mbAddrN_B, mvLXN_B, refIdxLXN_B, mbAddrN_C, mvLXN_C,
+      refIdxLXN_C));
+
+  if (mbAddrN_A < 0 || mbAddrN_B < 0 ||
+      (refIdxLXN_A == 0 && mvLXN_A[0] == 0 && mvLXN_A[1] == 0) ||
+      (refIdxLXN_B == 0 && mvLXN_B[0] == 0 && mvLXN_B[1] == 0))
+    mvL0[0] = 0, mvL0[1] = 0;
+  else
+    // 8.4.1.3 Derivation process for luma motion vector prediction
+    RET(derivation_luma_motion_vector_prediction(mbPartIdx, subMbPartIdx,
+                                                 currSubMbType, listSuffixFlag,
+                                                 refIdxL0, mvL0));
+
+  predFlagL0 = 1, predFlagL1 = 0;
+  mvL1[0] = NA, mvL1[1] = NA;
+  subMvCnt = 1;
+  return 0;
+}
+
+// 8.4.1.2 Derivation process for luma motion vectors for B_Skip, B_Direct_16x16, and B_Direct_8x8
 int PictureBase::
-    Derivation_process_for_luma_motion_vectors_for_B_Skip_or_B_Direct_16x16_or_B_Direct_8x8(
+    derivation_luma_motion_vectors_for_B_Skip_or_B_Direct_16x16_8x8(
         int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
         int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
-        int32_t &subMvCnt, int32_t &predFlagL0, int32_t &predFlagL1) {
-  int ret = 0;
-
-  SliceHeader *header = m_slice->slice_header;
-
-  //-----------------------------------
-  if (header->direct_spatial_mv_pred_flag ==
-      1) // the mode in which the outputs of this process are derived is
-         // referred to as spatial direct prediction mode.
-  {
-    // 8.4.1.2.2 Derivation process for spatial direct luma motion vector and
-    // reference index prediction mode
-    ret =
-        Derivation_process_for_spatial_direct_luma_motion_vector_and_reference_index_prediction_mode(
-            mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
-            predFlagL0, predFlagL1);
-    RETURN_IF_FAILED(ret != 0, ret);
-  } else //(temporal direct prediction mode is used) mode in which the outputs
-         // of this process are derived is referred to as temporal direct
-         // prediction mode.
-  {
-    // 8.4.1.2.3 Derivation process for temporal direct luma motion vector and
-    // reference index prediction mode
-    ret =
-        Derivation_process_for_temporal_direct_luma_motion_vector_and_reference_index_prediction_mode(
-            mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
-            predFlagL0, predFlagL1);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    if (subMbPartIdx == 0) {
-      subMvCnt = 2;
-    } else {
-      subMvCnt = 0;
-    }
+        int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1) {
+  if (m_slice->slice_header->direct_spatial_mv_pred_flag == 1) {
+    RET(Derivation_process_for_spatial_direct_luma_motion_vector_and_reference_index_prediction_mode(
+        mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
+        predFlagL0, predFlagL1));
+  } else {
+    RET(Derivation_process_for_temporal_direct_luma_motion_vector_and_reference_index_prediction_mode(
+        mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
+        predFlagL0, predFlagL1));
+    subMvCnt = (subMbPartIdx == 0) ? 2 : 0;
   }
 
   return 0;
@@ -723,7 +703,7 @@ int PictureBase::
     Derivation_process_for_spatial_direct_luma_motion_vector_and_reference_index_prediction_mode(
         int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
         int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
-        int32_t &subMvCnt, int32_t &predFlagL0, int32_t &predFlagL1) {
+        int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1) {
   int ret = 0;
 
   //--------------
@@ -838,7 +818,7 @@ int PictureBase::
     listSuffixFlag = 0;
 
     // 8.4.1.3 Derivation process for luma motion vector prediction
-    ret = Derivation_process_for_luma_motion_vector_prediction(
+    ret = derivation_luma_motion_vector_prediction(
         mbPartIdx_, subMbPartIdx_, currSubMbType, listSuffixFlag, refIdxL0,
         mvL0);
     RETURN_IF_FAILED(ret != 0, ret);
@@ -855,7 +835,7 @@ int PictureBase::
     listSuffixFlag = 1;
 
     // 8.4.1.3 Derivation process for luma motion vector prediction
-    ret = Derivation_process_for_luma_motion_vector_prediction(
+    ret = derivation_luma_motion_vector_prediction(
         mbPartIdx_, subMbPartIdx_, currSubMbType, listSuffixFlag, refIdxL1,
         mvL1);
     RETURN_IF_FAILED(ret != 0, ret);
@@ -895,7 +875,7 @@ int PictureBase::
     Derivation_process_for_temporal_direct_luma_motion_vector_and_reference_index_prediction_mode(
         int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
         int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
-        int32_t &subMvCnt, int32_t &predFlagL0, int32_t &predFlagL1) {
+        int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1) {
   int ret = 0;
 
   // 8.4.1.2.1 Derivation process for the co-located 4x4 sub-macroblock
@@ -1122,56 +1102,37 @@ int PictureBase::
 }
 
 // 8.4.1.3 Derivation process for luma motion vector prediction
-int PictureBase::Derivation_process_for_luma_motion_vector_prediction(
+int PictureBase::derivation_luma_motion_vector_prediction(
     int32_t mbPartIdx, int32_t subMbPartIdx, H264_MB_TYPE currSubMbType,
     int32_t listSuffixFlag, int32_t refIdxLX, int32_t (&mvpLX)[2]) {
-  int ret = 0;
 
-  int32_t mbAddrN_A = 0;
-  int32_t mvLXN_A[2] = {0};
-  int32_t refIdxLXN_A = 0;
+  const int32_t MbPartWidth = m_mbs[CurrMbAddr].MbPartWidth;
+  const int32_t MbPartHeight = m_mbs[CurrMbAddr].MbPartHeight;
 
-  int32_t mbAddrN_B = 0;
-  int32_t mvLXN_B[2] = {0};
-  int32_t refIdxLXN_B = 0;
-
-  int32_t mbAddrN_C = 0;
-  int32_t mvLXN_C[2] = {0};
-  int32_t refIdxLXN_C = 0;
+  int32_t mbAddrN_A = 0, mbAddrN_B = 0, mbAddrN_C = 0;
+  int32_t mvLXN_A[2] = {0}, mvLXN_B[2] = {0}, mvLXN_C[2] = {0};
+  int32_t refIdxLXN_A = 0, refIdxLXN_B = 0, refIdxLXN_C = 0;
 
   // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
-  ret = Derivation_process_for_motion_data_of_neighbouring_partitions(
+  RET(Derivation_process_for_motion_data_of_neighbouring_partitions(
       mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, mbAddrN_A,
       mvLXN_A, refIdxLXN_A, mbAddrN_B, mvLXN_B, refIdxLXN_B, mbAddrN_C, mvLXN_C,
-      refIdxLXN_C);
-  RETURN_IF_FAILED(ret != 0, ret);
-
-  //------------------
-  int32_t MbPartWidth = m_mbs[CurrMbAddr].MbPartWidth;
-  int32_t MbPartHeight = m_mbs[CurrMbAddr].MbPartHeight;
+      refIdxLXN_C));
 
   if (MbPartWidth == 16 && MbPartHeight == 8 && mbPartIdx == 0 &&
-      refIdxLXN_B == refIdxLX) {
-    mvpLX[0] = mvLXN_B[0];
-    mvpLX[1] = mvLXN_B[1];
-  } else if (MbPartWidth == 16 && MbPartHeight == 8 && mbPartIdx == 1 &&
-             refIdxLXN_A == refIdxLX) {
-    mvpLX[0] = mvLXN_A[0];
-    mvpLX[1] = mvLXN_A[1];
-  } else if (MbPartWidth == 8 && MbPartHeight == 16 && mbPartIdx == 0 &&
-             refIdxLXN_A == refIdxLX) {
-    mvpLX[0] = mvLXN_A[0];
-    mvpLX[1] = mvLXN_A[1];
-  } else if (MbPartWidth == 8 && MbPartHeight == 16 && mbPartIdx == 1 &&
-             refIdxLXN_C == refIdxLX) {
-    mvpLX[0] = mvLXN_C[0];
-    mvpLX[1] = mvLXN_C[1];
-  } else {
+      refIdxLXN_B == refIdxLX)
+    mvpLX[0] = mvLXN_B[0], mvpLX[1] = mvLXN_B[1];
+  else if (MbPartWidth == 16 && MbPartHeight == 8 && mbPartIdx == 1 &&
+           refIdxLXN_A == refIdxLX)
+    mvpLX[0] = mvLXN_A[0], mvpLX[1] = mvLXN_A[1];
+  else if (MbPartWidth == 8 && MbPartHeight == 16 && mbPartIdx == 0 &&
+           refIdxLXN_A == refIdxLX)
+    mvpLX[0] = mvLXN_A[0], mvpLX[1] = mvLXN_A[1];
+  else if (MbPartWidth == 8 && MbPartHeight == 16 && mbPartIdx == 1 &&
+           refIdxLXN_C == refIdxLX)
+    mvpLX[0] = mvLXN_C[0], mvpLX[1] = mvLXN_C[1];
+  else {
     // 8.4.1.3.1 Derivation process for median luma motion vector prediction
-
-    // When both partitions mbAddrB\mbPartIdxB\subMbPartIdxB and
-    // mbAddrC\mbPartIdxC\subMbPartIdxC are not available and
-    // mbAddrA\mbPartIdxA\subMbPartIdxA is available
     if (mbAddrN_B < 0 && mbAddrN_C < 0 && mbAddrN_A >= 0) {
       mvLXN_B[0] = mvLXN_A[0];
       mvLXN_B[1] = mvLXN_A[1];
@@ -1181,37 +1142,24 @@ int PictureBase::Derivation_process_for_luma_motion_vector_prediction(
       refIdxLXN_C = refIdxLXN_A;
     }
 
-    //------------
-    // If one and only one of the reference indices refIdxLXA, refIdxLXB, or
-    // refIdxLXC is equal to the reference index refIdxLX of the current
-    // partition, the following applies. Let refIdxLXN be the reference index
-    // that is equal to refIdxLX, the motion vector mvLXN is assigned to the
-    // motion vector prediction mvpLX:
     if (refIdxLXN_A == refIdxLX && refIdxLXN_B != refIdxLX &&
-        refIdxLXN_C != refIdxLX) {
-      mvpLX[0] = mvLXN_A[0];
-      mvpLX[1] = mvLXN_A[1];
-    } else if (refIdxLXN_A != refIdxLX && refIdxLXN_B == refIdxLX &&
-               refIdxLXN_C != refIdxLX) {
-      mvpLX[0] = mvLXN_B[0];
-      mvpLX[1] = mvLXN_B[1];
-    } else if (refIdxLXN_A != refIdxLX && refIdxLXN_B != refIdxLX &&
-               refIdxLXN_C == refIdxLX) {
-      mvpLX[0] = mvLXN_C[0];
-      mvpLX[1] = mvLXN_C[1];
-    } else {
+        refIdxLXN_C != refIdxLX)
+      mvpLX[0] = mvLXN_A[0], mvpLX[1] = mvLXN_A[1];
+    else if (refIdxLXN_A != refIdxLX && refIdxLXN_B == refIdxLX &&
+             refIdxLXN_C != refIdxLX)
+      mvpLX[0] = mvLXN_B[0], mvpLX[1] = mvLXN_B[1];
+    else if (refIdxLXN_A != refIdxLX && refIdxLXN_B != refIdxLX &&
+             refIdxLXN_C == refIdxLX)
+      mvpLX[0] = mvLXN_C[0], mvpLX[1] = mvLXN_C[1];
+    else {
       int32_t MIN0 = MIN(mvLXN_A[0], MIN(mvLXN_B[0], mvLXN_C[0]));
       int32_t MAX0 = MAX(mvLXN_A[0], MAX(mvLXN_B[0], mvLXN_C[0]));
 
       int32_t MIN1 = MIN(mvLXN_A[1], MIN(mvLXN_B[1], mvLXN_C[1]));
       int32_t MAX1 = MAX(mvLXN_A[1], MAX(mvLXN_B[1], mvLXN_C[1]));
 
-      mvpLX[0] =
-          mvLXN_A[0] + mvLXN_B[0] + mvLXN_C[0] - MIN0 -
-          MAX0; // mvpLX[0] = Median(( mvLXN_A[0], mvLXN_B[0], mvLXN_C[0] );
-      mvpLX[1] =
-          mvLXN_A[1] + mvLXN_B[1] + mvLXN_C[1] - MIN1 -
-          MAX1; // mvpLX[1] = Median(( mvLXN_A[1], mvLXN_B[1], mvLXN_C[1] );
+      mvpLX[0] = mvLXN_A[0] + mvLXN_B[0] + mvLXN_C[0] - MIN0 - MAX0;
+      mvpLX[1] = mvLXN_A[1] + mvLXN_B[1] + mvLXN_C[1] - MIN1 - MAX1;
     }
   }
 
@@ -1474,42 +1422,29 @@ int PictureBase::Derivation_process_for_motion_data_of_neighbouring_partitions(
 
 // 8.4.1.4 Derivation process for chroma motion vectors
 // This process is only invoked when ChromaArrayType is not equal to 0.
-int PictureBase::Derivation_process_for_chroma_motion_vectors(
-    int32_t ChromaArrayType, int32_t mvLX[2], PictureBase *refPic,
-    int32_t (&mvCLX)[2]) {
+int PictureBase::derivation_chroma_motion_vectors(int32_t ChromaArrayType,
+                                                  int32_t mvLX[2],
+                                                  PictureBase *refPic,
+                                                  int32_t (&mvCLX)[2]) {
 
-  if (ChromaArrayType == 0) {
-    RETURN_IF_FAILED(0, -1);
-  } else if (ChromaArrayType != 1 ||
-             m_mbs[CurrMbAddr].mb_field_decoding_flag == 0) {
-    mvCLX[0] = mvLX[0];
-    mvCLX[1] = mvLX[1];
-  } else // if (ChromaArrayType == 1 && m_mbs[CurrMbAddr].mb_field_decoding_flag
-  // == 1) // ChromaArrayType is equal to 1 and the current macroblock is
-  // a field macroblock
-  {
+  if (ChromaArrayType != 1 || m_mbs[CurrMbAddr].mb_field_decoding_flag == 0)
+    mvCLX[0] = mvLX[0], mvCLX[1] = mvLX[1];
+  else {
     mvCLX[0] = mvLX[0];
 
-    // Table 8-10 – Derivation of the vertical component of the chroma vector in
-    // field coding mode
+    // Table 8-10 – Derivation of the vertical component of the chroma vector in field coding mode
     if (refPic &&
         refPic->m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD &&
-        (this->m_picture_coded_type ==
-             PICTURE_CODED_TYPE_BOTTOM_FIELD // bottom field
-         || mb_y % 2 == 1                    // bottom field macroblock
-         )) {
+        (this->m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD ||
+         mb_y % 2 == 1))
       mvCLX[1] = mvLX[1] + 2;
-    } else if (refPic &&
-               refPic->m_picture_coded_type ==
-                   PICTURE_CODED_TYPE_BOTTOM_FIELD &&
-               (this->m_picture_coded_type ==
-                    PICTURE_CODED_TYPE_TOP_FIELD // top field
-                || mb_y % 2 == 0                 // top field macroblock
-                )) {
+    else if (refPic &&
+             refPic->m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD &&
+             (this->m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD ||
+              mb_y % 2 == 0))
       mvCLX[1] = mvLX[1] - 2;
-    } else {
+    else
       mvCLX[1] = mvLX[1];
-    }
   }
 
   return 0;
@@ -1686,7 +1621,7 @@ int PictureBase::
 /* 输入：参考索引 refIdxL0 和 refIdxL1，预测利用标志 predFlagL0 和 predFlagL1
  * 输出: 加权预测变量 logWDC、w0C、w1C、o0C、o1C，其中 C 被 L 替换，并且当 ChromaArrayType 不等于 0 时，为 Cb 和 Cr。*/
 int PictureBase::derivation_prediction_weights(
-    int32_t refIdxL0, int32_t refIdxL1, int32_t predFlagL0, int32_t predFlagL1,
+    int32_t refIdxL0, int32_t refIdxL1, bool predFlagL0, bool predFlagL1,
     int32_t &logWDL, int32_t &w0L, int32_t &w1L, int32_t &o0L, int32_t &o1L,
     int32_t &logWDCb, int32_t &w0Cb, int32_t &w1Cb, int32_t &o0Cb,
     int32_t &o1Cb, int32_t &logWDCr, int32_t &w0Cr, int32_t &w1Cr,
@@ -1866,16 +1801,16 @@ int PictureBase::derivation_prediction_weights(
    * – 预测列表利用标志 predFlagL0 和 predFlagL1， 
    * – 加权预测变量 logWDC，w0C， w1C、o0C、o1C，其中 C 被 L 替换，并且当 ChromaArrayType 不等于 0 时，Cb 和 Cr。
  * 输出：帧间预测样本predPart，它们是预测亮度样本的(partWidth)x(partHeight)数组predPartL，并且当ChromaArrayType不等于0时，预测的两个(partWidthC)x(partHeightC)数组predPartCb、predPartCr色度样本，每个色度分量 Cb 和 Cr 各一个。 */
-int PictureBase::decoding_Inter_prediction_samples(
+int PictureBase::decoding_inter_prediction_samples(
     int32_t mbPartIdx, int32_t subMbPartIdx, int32_t partWidth,
     int32_t partHeight, int32_t partWidthC, int32_t partHeightC, int32_t xAL,
     int32_t yAL, int32_t (&mvL0)[2], int32_t (&mvL1)[2], int32_t (&mvCL0)[2],
     int32_t (&mvCL1)[2], PictureBase *refPicL0, PictureBase *refPicL1,
-    int32_t predFlagL0, int32_t predFlagL1, int32_t logWDL, int32_t w0L,
-    int32_t w1L, int32_t o0L, int32_t o1L, int32_t logWDCb, int32_t w0Cb,
-    int32_t w1Cb, int32_t o0Cb, int32_t o1Cb, int32_t logWDCr, int32_t w0Cr,
-    int32_t w1Cr, int32_t o0Cr, int32_t o1Cr, uint8_t *predPartL,
-    uint8_t *predPartCb, uint8_t *predPartCr) {
+    bool predFlagL0, bool predFlagL1, int32_t logWDL, int32_t w0L, int32_t w1L,
+    int32_t o0L, int32_t o1L, int32_t logWDCb, int32_t w0Cb, int32_t w1Cb,
+    int32_t o0Cb, int32_t o1Cb, int32_t logWDCr, int32_t w0Cr, int32_t w1Cr,
+    int32_t o0Cr, int32_t o1Cr, uint8_t *predPartL, uint8_t *predPartCb,
+    uint8_t *predPartCr) {
 
   /* 预测亮度样本值的 (partWidth)x(partHeight) 数组 */
   /* 最大为16x16 = 256 , 最小为4x4 = 16 */
@@ -1905,17 +1840,14 @@ int PictureBase::decoding_Inter_prediction_samples(
   }
 
   if (predFlagL1) {
-    // 8.4.2.2 Fractional sample interpolation process
-    ret = fractional_sample_interpolation(
+    RET(fractional_sample_interpolation(
         mbPartIdx, subMbPartIdx, partWidth, partHeight, partWidthC, partHeightC,
         xAL, yAL, mvL1, mvCL1, refPicL1, predPartL1L, predPartL1Cb,
-        predPartL1Cr);
-    RET(ret);
+        predPartL1Cr));
   }
 
   /* 对于 C 被 L、Cb（如果可用）或 Cr（如果可用）替换，分量 C 的预测样本的数组 predPartC 是通过调用第 8.4.2.3 节中指定的过程以及 mbPartIdx 指定的当前分区和subMbPartIdx、预测利用标志 predFlagL0 和 predFlagL1、数组 predPartL0C 和 predPartL1C 以及作为输入给出的加权预测变量 logWDC、w0C、w1C、o0C、o1C。 */
-  // 8.4.2.3 Weighted sample prediction process(加权样本预测过程)
-  ret = weighted_sample_prediction(
+  RET(weighted_sample_prediction(
       /* Input： */
       mbPartIdx, subMbPartIdx, predFlagL0, predFlagL1, partWidth, partHeight,
       partWidthC, partHeightC,
@@ -1927,99 +1859,81 @@ int PictureBase::decoding_Inter_prediction_samples(
       logWDCr, w0Cr, w1Cr, o0Cr, o1Cr, predPartL0L, predPartL0Cb, predPartL0Cr,
       predPartL1L, predPartL1Cb, predPartL1Cr,
       /* Output: */
-      predPartL, predPartCb, predPartCr);
-  RET(ret);
+      predPartL, predPartCb, predPartCr));
 
   return 0;
 }
 
 // 8.4.2.1 Reference picture selection process
 //  Page 164/186/812
-int PictureBase::Reference_picture_selection_process(int32_t refIdxLX,
-                                                     Frame *RefPicListX[16],
-                                                     int32_t RefPicListXLength,
-                                                     PictureBase *&refPic) {
-  SliceHeader *slice_header = m_slice->slice_header;
+int PictureBase::reference_picture_selection(int32_t refIdxLX,
+                                             Frame *RefPicListX[16],
+                                             int32_t RefPicListXLength,
+                                             PictureBase *&refPic) {
+  const SliceHeader *header = m_slice->slice_header;
 
-  RETURN_IF_FAILED(refIdxLX < 0 || refIdxLX >= 32, -1);
+  if (refIdxLX < 0 || refIdxLX >= 32) RET(-1);
 
-  if (slice_header->field_pic_flag == 1) {
-    // each entry of RefPicListX is a reference field or a field of a reference
-    // frame.
+  if (header->field_pic_flag) {
+    // each entry of RefPicListX is a reference field or a field of a reference frame.
     for (int i = 0; i < RefPicListXLength; i++) {
       if (!(RefPicListX[i]->m_picture_coded_type_marked_as_refrence ==
                 PICTURE_CODED_TYPE_TOP_FIELD ||
             RefPicListX[i]->m_picture_coded_type_marked_as_refrence ==
-                PICTURE_CODED_TYPE_BOTTOM_FIELD)) {
-        RETURN_IF_FAILED(-1, -1);
-      }
+                PICTURE_CODED_TYPE_BOTTOM_FIELD))
+        RET(-1);
     }
-  } else // if (slice_header.field_pic_flag == 0)
-  {
-    // each entry of RefPicListX is a reference frame or a complementary
-    // reference field pair.
+  } else {
+    // each entry of RefPicListX is a reference frame or a complementary reference field pair.
     for (int i = 0; i < RefPicListXLength; i++) {
       if (!(RefPicListX[i]->m_picture_coded_type_marked_as_refrence ==
                 PICTURE_CODED_TYPE_FRAME ||
             RefPicListX[i]->m_picture_coded_type_marked_as_refrence ==
-                PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR)) {
-        RETURN_IF_FAILED(-1, -1);
-      }
+                PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR))
+        RET(-1);
     }
   }
 
-  //---------------------
-  if (slice_header->field_pic_flag == 1) {
+  if (header->field_pic_flag) {
     if (RefPicListX[refIdxLX]->m_picture_coded_type_marked_as_refrence ==
-        PICTURE_CODED_TYPE_TOP_FIELD) {
+        PICTURE_CODED_TYPE_TOP_FIELD)
       refPic = &(RefPicListX[refIdxLX]->m_picture_top_filed);
-    } else if (RefPicListX[refIdxLX]->m_picture_coded_type_marked_as_refrence ==
-               PICTURE_CODED_TYPE_BOTTOM_FIELD) {
+    else if (RefPicListX[refIdxLX]->m_picture_coded_type_marked_as_refrence ==
+             PICTURE_CODED_TYPE_BOTTOM_FIELD)
       refPic = &(RefPicListX[refIdxLX]->m_picture_bottom_filed);
-    } else {
-      RETURN_IF_FAILED(-1, -1);
-    }
-  } else // if (slice_header.field_pic_flag == 0)
-  {
-    if (m_mbs[CurrMbAddr].mb_field_decoding_flag ==
-        0) // If the current macroblock is a frame macroblock
-    {
+    else
+      RET(-1);
+  } else {
+    if (m_mbs[CurrMbAddr].mb_field_decoding_flag == 0)
       refPic = &(RefPicListX[refIdxLX]->m_picture_frame);
-    } else // the current macroblock is a field macroblock
-    {
+    else {
       if (refIdxLX % 2 == 0) {
-        if (mb_y % 2 == 0) {
+        if (mb_y % 2 == 0)
           refPic = &(RefPicListX[refIdxLX / 2]->m_picture_top_filed);
-        } else {
+        else
           refPic = &(RefPicListX[refIdxLX / 2]->m_picture_bottom_filed);
-        }
-      } else // if (refIdxLX % 2 == 1)
-      {
-        if (mb_y % 2 == 0) {
+
+      } else {
+        if (mb_y % 2 == 0)
           refPic = &(RefPicListX[refIdxLX / 2]->m_picture_bottom_filed);
-        } else {
+        else
           refPic = &(RefPicListX[refIdxLX / 2]->m_picture_top_filed);
-        }
       }
     }
   }
 
-  //-----------------------------
-  if (m_slice->slice_header->m_sps->separate_colour_plane_flag == 0) {
-    // FIXME: 8.7 Deblocking filter process
-  } else // if (m_slice->slice_header->m_sps->separate_colour_plane_flag == 1)
-  {
-    if (slice_header->colour_plane_id == 0) {
+  //  if (header->m_sps->separate_colour_plane_flag == 0) {
+  //    // FIXME: 8.7 Deblocking filter process
+  //  } else {
+  //    if (header->colour_plane_id == 0) {
+  //
+  //    } else if (header->colour_plane_id == 1) {
+  //
+  //    } else {
+  //    }
+  //  }
 
-    } else if (slice_header->colour_plane_id == 1) {
-
-    } else // if (slice_header.colour_plane_id == 2)
-    {
-    }
-  }
-
-  RETURN_IF_FAILED(refPic == NULL, -1);
-
+  if (refPic == nullptr) RET(-1);
   return 0;
 }
 
@@ -2331,14 +2245,14 @@ int PictureBase::chroma_sample_interpolation_process(
  * 输出： – predPartL：预测亮度样本的 (partWidth)x(partHeight) 数组， – 当 ChromaArrayType 不等于 0 时，predPartCb 和 predPartCr：预测色度样本的 (partWidthC)x(partHeightC) 数组，色度分量 Cb 和 Cr 各一个。*/
 int PictureBase::weighted_sample_prediction(
     /* Input: */
-    int32_t mbPartIdx, int32_t subMbPartIdx, int32_t predFlagL0,
-    int32_t predFlagL1, int32_t partWidth, int32_t partHeight,
-    int32_t partWidthC, int32_t partHeightC, int32_t logWDL, int32_t w0L,
-    int32_t w1L, int32_t o0L, int32_t o1L, int32_t logWDCb, int32_t w0Cb,
-    int32_t w1Cb, int32_t o0Cb, int32_t o1Cb, int32_t logWDCr, int32_t w0Cr,
-    int32_t w1Cr, int32_t o0Cr, int32_t o1Cr, uint8_t *predPartL0L,
-    uint8_t *predPartL0Cb, uint8_t *predPartL0Cr, uint8_t *predPartL1L,
-    uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
+    int32_t mbPartIdx, int32_t subMbPartIdx, bool predFlagL0, bool predFlagL1,
+    int32_t partWidth, int32_t partHeight, int32_t partWidthC,
+    int32_t partHeightC, int32_t logWDL, int32_t w0L, int32_t w1L, int32_t o0L,
+    int32_t o1L, int32_t logWDCb, int32_t w0Cb, int32_t w1Cb, int32_t o0Cb,
+    int32_t o1Cb, int32_t logWDCr, int32_t w0Cr, int32_t w1Cr, int32_t o0Cr,
+    int32_t o1Cr, uint8_t *predPartL0L, uint8_t *predPartL0Cb,
+    uint8_t *predPartL0Cr, uint8_t *predPartL1L, uint8_t *predPartL1Cb,
+    uint8_t *predPartL1Cr,
     /* Output: */
     uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
 
@@ -2414,14 +2328,14 @@ int PictureBase::weighted_sample_prediction(
 // 8.4.2.3.2 Weighted sample prediction process
 /* 输入、输出同weighted_sample_prediction() */
 int PictureBase::weighted_sample_prediction_process_2(
-    int32_t mbPartIdx, int32_t subMbPartIdx, int32_t predFlagL0,
-    int32_t predFlagL1, int32_t partWidth, int32_t partHeight,
-    int32_t partWidthC, int32_t partHeightC, int32_t logWDL, int32_t w0L,
-    int32_t w1L, int32_t o0L, int32_t o1L, int32_t logWDCb, int32_t w0Cb,
-    int32_t w1Cb, int32_t o0Cb, int32_t o1Cb, int32_t logWDCr, int32_t w0Cr,
-    int32_t w1Cr, int32_t o0Cr, int32_t o1Cr, uint8_t *predPartL0L,
-    uint8_t *predPartL0Cb, uint8_t *predPartL0Cr, uint8_t *predPartL1L,
-    uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
+    int32_t mbPartIdx, int32_t subMbPartIdx, bool predFlagL0, bool predFlagL1,
+    int32_t partWidth, int32_t partHeight, int32_t partWidthC,
+    int32_t partHeightC, int32_t logWDL, int32_t w0L, int32_t w1L, int32_t o0L,
+    int32_t o1L, int32_t logWDCb, int32_t w0Cb, int32_t w1Cb, int32_t o0Cb,
+    int32_t o1Cb, int32_t logWDCr, int32_t w0Cr, int32_t w1Cr, int32_t o0Cr,
+    int32_t o1Cr, uint8_t *predPartL0L, uint8_t *predPartL0Cb,
+    uint8_t *predPartL0Cr, uint8_t *predPartL1L, uint8_t *predPartL1Cb,
+    uint8_t *predPartL1Cr,
     /* Output: */
     uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
 
@@ -2562,10 +2476,10 @@ int PictureBase::weighted_sample_prediction_process_2(
 // 8.4.2.3.1 Default weighted sample prediction process
 /* 输入、输出同weighted_sample_prediction() */
 int PictureBase::default_weighted_sample_prediction(
-    int32_t predFlagL0, int32_t predFlagL1, int32_t partWidth,
-    int32_t partHeight, int32_t partWidthC, int32_t partHeightC,
-    uint8_t *predPartL0L, uint8_t *predPartL0Cb, uint8_t *predPartL0Cr,
-    uint8_t *predPartL1L, uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
+    bool predFlagL0, bool predFlagL1, int32_t partWidth, int32_t partHeight,
+    int32_t partWidthC, int32_t partHeightC, uint8_t *predPartL0L,
+    uint8_t *predPartL0Cb, uint8_t *predPartL0Cr, uint8_t *predPartL1L,
+    uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
     /* Output: */
     uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
 
