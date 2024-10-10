@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 
+//Table 8-7 – Specification of PicCodingStruct( X )
 #define FLD 0
 #define FRM 1
 #define AFRM 2
@@ -570,14 +571,16 @@ int PictureBase::derivation_median_luma_motion_vector_prediction(
 }
 
 // 8.4.1.2.1 Derivation process for the co-located 4x4 sub-macroblock partitions
-int PictureBase::derivation_the_co_located_4x4_sub_macroblock_partitions(
+// 共置 4x4 子宏块分区的推导过程
+int PictureBase::derivation_the_coLocated_4x4_sub_macroblock_partitions(
     int32_t mbPartIdx, int32_t subMbPartIdx, PictureBase *&colPic,
     int32_t &mbAddrCol, int32_t (&mvCol)[2], int32_t &refIdxCol,
     int32_t &vertMvScale) {
 
-  const SliceHeader *slice_header = m_slice->slice_header;
+  const SliceHeader *header = m_slice->slice_header;
   Frame *refList1_0 = m_RefPicList1[0];
 
+  /* 当RefPicList1[0]是帧或互补字段对时，令firstRefPicL1Top和firstRefPicL1Bottom分别为RefPicList1[0]的顶字段和底字段 */
   PictureBase *firstRefPicL1Top = NULL, *firstRefPicL1Bottom = NULL;
   int32_t topAbsDiffPOC = 0, bottomAbsDiffPOC = 0;
   if (refList1_0->m_picture_coded_type_marked_as_refrence ==
@@ -592,9 +595,10 @@ int PictureBase::derivation_the_co_located_4x4_sub_macroblock_partitions(
   }
 
   // Table 8-6 – Specification of the variable colPic
-  colPic = NULL;
+  // 共置宏块的图像，若当前图像是编码帧、当前宏块是帧宏块且互补字段被标记为“用于长期参考”时，互补字段对的图像顺序计数值对解码过程有影响。标记为“用于长期参考”的对是参考列表 1 中的第一张图片
+  colPic = nullptr;
 
-  if (slice_header->field_pic_flag) {
+  if (header->field_pic_flag) { // 场图像
     if (refList1_0->m_is_decode_finished &&
         (refList1_0->m_picture_coded_type_marked_as_refrence ==
              PICTURE_CODED_TYPE_TOP_FIELD ||
@@ -609,7 +613,7 @@ int PictureBase::derivation_the_co_located_4x4_sub_macroblock_partitions(
                PICTURE_CODED_TYPE_BOTTOM_FIELD)
         colPic = &refList1_0->m_picture_bottom_filed;
     }
-  } else {
+  } else { // 帧图像
     if (refList1_0->m_is_decode_finished &&
         refList1_0->m_picture_coded_type_marked_as_refrence ==
             PICTURE_CODED_TYPE_FRAME) {
@@ -620,45 +624,41 @@ int PictureBase::derivation_the_co_located_4x4_sub_macroblock_partitions(
         colPic = (topAbsDiffPOC < bottomAbsDiffPOC) ? firstRefPicL1Top
                                                     : firstRefPicL1Bottom;
       else
-        colPic =
-            ((CurrMbAddr & 1) == 0) ? firstRefPicL1Top : firstRefPicL1Bottom;
+        colPic = (CurrMbAddr & 1) ? firstRefPicL1Bottom : firstRefPicL1Top;
     }
   }
 
-  if (colPic == NULL) RET(-1);
+  RET(colPic == nullptr);
 
-  //----------------------------------------------------
   // Table 8-7 – Specification of PicCodingStruct( X )
   int32_t PicCodingStruct_CurrPic = FLD;
-
-  if (slice_header->field_pic_flag)
+  if (header->field_pic_flag) //场图像
     PicCodingStruct_CurrPic = FLD;
-  else {
-    if (m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag == 0)
+  else { //帧图像
+    if (header->m_sps->mb_adaptive_frame_field_flag == 0)
       PicCodingStruct_CurrPic = FRM;
-    else
+    else //MBAFF
       PicCodingStruct_CurrPic = AFRM;
   }
 
-  //----------------------------------------------------
   // Table 8-7 – Specification of PicCodingStruct( X )
   int32_t PicCodingStruct_colPic = FLD;
-
-  if (colPic->m_slice->slice_header->field_pic_flag)
+  if (colPic->m_slice->slice_header->field_pic_flag) //场图像
     PicCodingStruct_colPic = FLD;
-  else {
+  else { //帧图像
     if (colPic->m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag == 0)
       PicCodingStruct_colPic = FRM;
-    else
+    else //MBAFF
       PicCodingStruct_colPic = AFRM;
   }
 
+  /* CurrPic 和 colPic 图像编码类型不可能是（FRM，AFRM）或（AFRM，FRM），因为这些图像编码类型必须由 IDR 图像分隔。 */
   if ((PicCodingStruct_CurrPic == FRM && PicCodingStruct_colPic == AFRM) ||
       (PicCodingStruct_CurrPic == AFRM && PicCodingStruct_colPic == FRM))
     RET(-1);
 
   int32_t luma4x4BlkIdx = 5 * mbPartIdx;
-  if (m_slice->slice_header->m_sps->direct_8x8_inference_flag == 0)
+  if (header->m_sps->direct_8x8_inference_flag == 0)
     luma4x4BlkIdx = (4 * mbPartIdx + subMbPartIdx);
 
   int32_t xCol = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
@@ -674,108 +674,93 @@ int PictureBase::derivation_the_co_located_4x4_sub_macroblock_partitions(
   if (PicCodingStruct_CurrPic == FLD) {
     if (PicCodingStruct_colPic == FLD) {
       mbAddrCol = CurrMbAddr;
-      yM = yCol;
-      vertMvScale = H264_VERT_MV_SCALE_One_To_One;
-    } else if (PicCodingStruct_colPic == FRM) {
-      int32_t mbAddrCol1 = 2 * PicWidthInMbs * (CurrMbAddr / PicWidthInMbs) +
-                           (CurrMbAddr % PicWidthInMbs) +
-                           PicWidthInMbs * (yCol / 8);
-      mbAddrCol = mbAddrCol1;
-      yM = (2 * yCol) % 16;
-      vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
-    } else if (PicCodingStruct_colPic == AFRM) {
-      int32_t mbAddrX = 2 * CurrMbAddr;
-      if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag == 0) {
-        int32_t mbAddrCol2 = 2 * CurrMbAddr + (yCol / 8);
-        mbAddrCol = mbAddrCol2;
-        yM = (2 * yCol) % 16;
-        vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
+      yM = yCol, vertMvScale = H264_VERT_MV_SCALE_One_To_One;
+    }
+
+    else if (PicCodingStruct_colPic == FRM) {
+      mbAddrCol = 2 * PicWidthInMbs * (CurrMbAddr / PicWidthInMbs) +
+                  (CurrMbAddr % PicWidthInMbs) + PicWidthInMbs * (yCol / 8);
+      yM = (2 * yCol) % 16, vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
+    }
+
+    else if (PicCodingStruct_colPic == AFRM) {
+      if (colPic->m_mbs[2 * CurrMbAddr].mb_field_decoding_flag == 0) {
+        mbAddrCol = 2 * CurrMbAddr + this->m_mbs[CurrMbAddr].bottom_field_flag;
+        yM = yCol, vertMvScale = H264_VERT_MV_SCALE_One_To_One;
       } else {
-        int32_t mbAddrCol3 =
-            2 * CurrMbAddr + this->m_mbs[CurrMbAddr].bottom_field_flag;
-        mbAddrCol = mbAddrCol3;
-        yM = yCol;
-        vertMvScale = H264_VERT_MV_SCALE_One_To_One;
+        mbAddrCol = 2 * CurrMbAddr + (yCol / 8);
+        yM = (2 * yCol) % 16, vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
       }
     }
-  } else if (PicCodingStruct_CurrPic == FRM) {
+  }
+
+  else if (PicCodingStruct_CurrPic == FRM) {
     if (PicCodingStruct_colPic == FLD) {
-      int32_t mbAddrCol4 = PicWidthInMbs * (CurrMbAddr / (2 * PicWidthInMbs)) +
-                           (CurrMbAddr % PicWidthInMbs);
-      mbAddrCol = mbAddrCol4;
+      mbAddrCol = PicWidthInMbs * (CurrMbAddr / (2 * PicWidthInMbs)) +
+                  (CurrMbAddr % PicWidthInMbs);
       yM = 8 * ((CurrMbAddr / PicWidthInMbs) % 2) + 4 * (yCol / 8);
       vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
     } else if (PicCodingStruct_colPic == FRM) {
       mbAddrCol = CurrMbAddr;
-      yM = yCol;
-      vertMvScale = H264_VERT_MV_SCALE_One_To_One;
+      yM = yCol, vertMvScale = H264_VERT_MV_SCALE_One_To_One;
     }
   } else if (PicCodingStruct_CurrPic == AFRM) {
     if (PicCodingStruct_colPic == FLD) {
-      int32_t mbAddrCol5 = CurrMbAddr / 2;
-      if (m_slice->slice_data->mb_field_decoding_flag == 0) {
-        mbAddrCol = mbAddrCol5;
-        yM = 8 * (CurrMbAddr % 2) + 4 * (yCol / 8);
+      mbAddrCol = CurrMbAddr / 2;
+      if (m_slice->slice_data->mb_field_decoding_flag == 0)
+        yM = 8 * (CurrMbAddr % 2) + 4 * (yCol / 8),
         vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
-      } else {
-        mbAddrCol = mbAddrCol5;
-        yM = yCol;
-        vertMvScale = H264_VERT_MV_SCALE_One_To_One;
-      }
+      else
+        yM = yCol, vertMvScale = H264_VERT_MV_SCALE_One_To_One;
     } else if (PicCodingStruct_colPic == AFRM) {
-      int32_t mbAddrX = CurrMbAddr;
       if (m_slice->slice_data->mb_field_decoding_flag == 0) {
-        if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag == 0) {
+        if (colPic->m_mbs[CurrMbAddr].mb_field_decoding_flag == 0) {
           mbAddrCol = CurrMbAddr;
-          yM = yCol;
-          vertMvScale = H264_VERT_MV_SCALE_One_To_One;
+          yM = yCol, vertMvScale = H264_VERT_MV_SCALE_One_To_One;
         } else {
-          int32_t mbAddrCol6 = 2 * (CurrMbAddr / 2) +
-                               ((topAbsDiffPOC < bottomAbsDiffPOC) ? 0 : 1);
-          mbAddrCol = mbAddrCol6;
+          mbAddrCol = 2 * (CurrMbAddr / 2) +
+                      ((topAbsDiffPOC < bottomAbsDiffPOC) ? 0 : 1);
           yM = 8 * (CurrMbAddr % 2) + 4 * (yCol / 8);
           vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
         }
       } else {
-        if (colPic->m_mbs[mbAddrX].mb_field_decoding_flag == 0) {
-          int32_t mbAddrCol7 = 2 * (CurrMbAddr / 2) + (yCol / 8);
-          mbAddrCol = mbAddrCol7;
-          yM = (2 * yCol) % 16;
-          vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
+        if (colPic->m_mbs[CurrMbAddr].mb_field_decoding_flag == 0) {
+          mbAddrCol = 2 * (CurrMbAddr / 2) + (yCol / 8);
+          yM = (2 * yCol) % 16, vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
         } else {
           mbAddrCol = CurrMbAddr;
-          yM = yCol;
-          vertMvScale = H264_VERT_MV_SCALE_One_To_One;
+          yM = yCol, vertMvScale = H264_VERT_MV_SCALE_One_To_One;
         }
       }
     }
   }
 
+  /* mbTypeCol为图片colPic内地址为mbAddrCol的宏块类型 */
   H264_MB_TYPE mbTypeCol = colPic->m_mbs[mbAddrCol].m_name_of_mb_type;
   H264_MB_TYPE subMbTypeCol[4] = {MB_TYPE_NA, MB_TYPE_NA, MB_TYPE_NA,
                                   MB_TYPE_NA};
-
   if (mbTypeCol == P_8x8 || mbTypeCol == P_8x8ref0 || mbTypeCol == B_8x8) {
+    // 令subMbTypeCol为图片colPic内地址为mbAddrCol的宏块的语法元素列表sub_mb_type
     subMbTypeCol[0] = colPic->m_mbs[mbAddrCol].m_name_of_sub_mb_type[0];
     subMbTypeCol[1] = colPic->m_mbs[mbAddrCol].m_name_of_sub_mb_type[1];
     subMbTypeCol[2] = colPic->m_mbs[mbAddrCol].m_name_of_sub_mb_type[2];
     subMbTypeCol[3] = colPic->m_mbs[mbAddrCol].m_name_of_sub_mb_type[3];
   }
 
-  int32_t mbPartIdxCol = 0;
-  int32_t subMbPartIdxCol = 0;
-
-  // 6.4.13.4 Derivation process for macroblock and sub-macroblock partition indices
+  /* mbPartIdxCol为共位分区的宏块分区索引，subMbPartIdxCol为共位子宏块分区的子宏块分区索引 */
+  int32_t mbPartIdxCol = 0, subMbPartIdxCol = 0;
   RET(derivation_macroblock_and_sub_macroblock_partition_indices(
       mbTypeCol, subMbTypeCol, xCol, yM, mbPartIdxCol, subMbPartIdxCol));
 
   refIdxCol = -1;
+  // 宏块mbAddrCol以帧内宏块预测模式编码，则mvCol的两个分量被设置为等于0并且refIdxCol被设置为等于-1
   if (IS_INTRA_Prediction_Mode(colPic->m_mbs[mbAddrCol].m_mb_pred_mode))
     mvCol[0] = 0, mvCol[1] = 0, refIdxCol = -1;
+  // 宏块mbAddrCol以场内宏块预测模式编码
   else {
     int32_t predFlagL0Col = colPic->m_mbs[mbAddrCol].m_PredFlagL0[mbPartIdxCol];
 
-    if (predFlagL0Col == 1) {
+    if (predFlagL0Col) {
       mvCol[0] =
           colPic->m_mbs[mbAddrCol].m_MvL0[mbPartIdxCol][subMbPartIdxCol][0];
       mvCol[1] =
@@ -832,8 +817,7 @@ int PictureBase::
 
   PictureBase *colPic = nullptr;
   int32_t mvCol[2] = {0}, refIdxCol = 0, mbAddrCol = 0, vertMvScale = 0;
-  /* TODO YangJing  <24-10-11 04:36:00> */
-  RET(derivation_the_co_located_4x4_sub_macroblock_partitions(
+  RET(derivation_the_coLocated_4x4_sub_macroblock_partitions(
       mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol,
       vertMvScale));
 
@@ -892,8 +876,7 @@ int PictureBase::
 
   PictureBase *colPic = nullptr;
   int32_t mvCol[2] = {0}, refIdxCol = 0, mbAddrCol = 0, vertMvScale = 0;
-  /* TODO YangJing  <24-10-11 04:56:00> */
-  RET(derivation_the_co_located_4x4_sub_macroblock_partitions(
+  RET(derivation_the_coLocated_4x4_sub_macroblock_partitions(
       mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol,
       vertMvScale));
 
