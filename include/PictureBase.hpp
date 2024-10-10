@@ -331,7 +331,7 @@ class PictureBase {
       int32_t &refIdxL0, int32_t &refIdxL1, int32_t (&mvL0)[2],
       int32_t (&mvL1)[2], int32_t &subMvCnt, bool &predFlagL0,
       bool &predFlagL1);
-  int derivation_luma_motion_vectors_for_B_Skip_or_B_Direct_16x16_8x8(
+  int derivation_luma_motion_vectors_for_B_Skip_or_Direct_16x16_8x8(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
       int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
       int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1);
@@ -350,6 +350,11 @@ class PictureBase {
   int derivation_luma_motion_vector_prediction(
       int32_t mbPartIdx, int32_t subMbPartIdx, H264_MB_TYPE currSubMbType,
       int32_t listSuffixFlag, int32_t refIdxLX, int32_t (&mvpLX)[2]);
+  int derivation_median_luma_motion_vector_prediction(
+      int32_t &mbAddrN_A, int32_t (&mvLXN_A)[2], int32_t &refIdxLXN_A,
+      int32_t &mbAddrN_B, int32_t (&mvLXN_B)[2], int32_t &refIdxLXN_B,
+      int32_t &mbAddrN_C, int32_t (&mvLXN_C)[2], int32_t &refIdxLXN_C,
+      int32_t refIdxLX, int32_t (&mvpLX)[2]);
   int derivation_motion_data_of_neighbouring_partitions(
       int32_t mbPartIdx, int32_t subMbPartIdx, H264_MB_TYPE currSubMbType,
       int32_t listSuffixFlag, int32_t &mbAddrN_A, int32_t (&mvLXN_A)[2],
@@ -359,6 +364,8 @@ class PictureBase {
   int derivation_chroma_motion_vectors(int32_t ChromaArrayType, int32_t mvLX[2],
                                        PictureBase *refPic,
                                        int32_t (&mvCLX)[2]);
+  int mapColToList0(int32_t refIdxCol, PictureBase *colPic, int32_t mbAddrCol,
+                    int32_t vertMvScale, bool field_pic_flag);
 
   int decoding_inter_prediction_samples(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t partWidth,

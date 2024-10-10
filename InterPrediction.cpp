@@ -316,7 +316,7 @@ int PictureBase::derivation_motion_vector_components_and_reference_indices(
   /* -------------------- B_Skip,B_Direct_16x16/8x8 宏块的亮度运动矢量 -------------------- */
   else if (mb_type == B_Skip || mb_type == B_Direct_16x16 ||
            sub_mb_type == B_Direct_8x8) {
-    RET(derivation_luma_motion_vectors_for_B_Skip_or_B_Direct_16x16_8x8(
+    RET(derivation_luma_motion_vectors_for_B_Skip_or_Direct_16x16_8x8(
         mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
         predFlagL0, predFlagL1));
   }
@@ -461,7 +461,7 @@ int PictureBase::derivation_luma_motion_vectors_for_P_Skip(
   else if ((refIdxL0_A == 0 && mvL0_A[0] == 0 && mvL0_A[1] == 0) ||
            (refIdxL0_B == 0 && mvL0_B[0] == 0 && mvL0_B[1] == 0))
     mvL0[0] = 0, mvL0[1] = 0;
-  /* 运动预测 */
+  /* 亮度运动矢量预测 */
   else
     RET(derivation_luma_motion_vector_prediction(0, 0, MB_TYPE_NA, false,
                                                  refIdxL0, mvL0));
@@ -469,16 +469,20 @@ int PictureBase::derivation_luma_motion_vectors_for_P_Skip(
 }
 
 // 8.4.1.2 Derivation process for luma motion vectors for B_Skip, B_Direct_16x16, and B_Direct_8x8
-int PictureBase::
-    derivation_luma_motion_vectors_for_B_Skip_or_B_Direct_16x16_8x8(
-        int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
-        int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
-        int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1) {
+int PictureBase::derivation_luma_motion_vectors_for_B_Skip_or_Direct_16x16_8x8(
+    int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
+    int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
+    int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1) {
+  /* NOTE:空间和时间直接预测模式均使用同位运动向量和参考索引 */
+
+  //空间直接运动矢量预测
   if (m_slice->slice_header->direct_spatial_mv_pred_flag) {
     RET(derivation_spatial_direct_luma_motion_vector_and_ref_index_prediction(
         mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
         predFlagL0, predFlagL1));
-  } else {
+  }
+  //时间直接运动预测模式
+  else {
     RET(derivation_temporal_direct_luma_motion_vector_and_ref_index_prediction(
         mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
         predFlagL0, predFlagL1));
@@ -500,6 +504,7 @@ int PictureBase::derivation_luma_motion_vector_prediction(
   int32_t mvLXN_A[2] = {0}, mvLXN_B[2] = {0}, mvLXN_C[2] = {0};
   int32_t refIdxLXN_A = 0, refIdxLXN_B = 0, refIdxLXN_C = 0;
 
+  // 根据相邻分区运动矢量进行推导当前运动矢量
   RET(derivation_motion_data_of_neighbouring_partitions(
       mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, mbAddrN_A,
       mvLXN_A, refIdxLXN_A, mbAddrN_B, mvLXN_B, refIdxLXN_B, mbAddrN_C, mvLXN_C,
@@ -517,38 +522,50 @@ int PictureBase::derivation_luma_motion_vector_prediction(
   else if (MbPartWidth == 8 && MbPartHeight == 16 && mbPartIdx == 1 &&
            refIdxLXN_C == refIdxLX)
     mvpLX[0] = mvLXN_C[0], mvpLX[1] = mvLXN_C[1];
-  else {
-    // 8.4.1.3.1 Derivation process for median luma motion vector prediction
-    if (mbAddrN_B < 0 && mbAddrN_C < 0 && mbAddrN_A >= 0) {
-      mvLXN_B[0] = mvLXN_A[0];
-      mvLXN_B[1] = mvLXN_A[1];
-      mvLXN_C[0] = mvLXN_A[0];
-      mvLXN_C[1] = mvLXN_A[1];
-      refIdxLXN_B = refIdxLXN_A;
-      refIdxLXN_C = refIdxLXN_A;
-    }
+  //中值预测
+  else
+    derivation_median_luma_motion_vector_prediction(
+        mbAddrN_A, mvLXN_A, refIdxLXN_A, mbAddrN_B, mvLXN_B, refIdxLXN_B,
+        mbAddrN_C, mvLXN_C, refIdxLXN_C, refIdxLX, mvpLX);
 
-    if (refIdxLXN_A == refIdxLX && refIdxLXN_B != refIdxLX &&
-        refIdxLXN_C != refIdxLX)
-      mvpLX[0] = mvLXN_A[0], mvpLX[1] = mvLXN_A[1];
-    else if (refIdxLXN_A != refIdxLX && refIdxLXN_B == refIdxLX &&
-             refIdxLXN_C != refIdxLX)
-      mvpLX[0] = mvLXN_B[0], mvpLX[1] = mvLXN_B[1];
-    else if (refIdxLXN_A != refIdxLX && refIdxLXN_B != refIdxLX &&
-             refIdxLXN_C == refIdxLX)
-      mvpLX[0] = mvLXN_C[0], mvpLX[1] = mvLXN_C[1];
-    else {
-      int32_t MIN0 = MIN(mvLXN_A[0], MIN(mvLXN_B[0], mvLXN_C[0]));
-      int32_t MAX0 = MAX(mvLXN_A[0], MAX(mvLXN_B[0], mvLXN_C[0]));
+  return 0;
+}
 
-      int32_t MIN1 = MIN(mvLXN_A[1], MIN(mvLXN_B[1], mvLXN_C[1]));
-      int32_t MAX1 = MAX(mvLXN_A[1], MAX(mvLXN_B[1], mvLXN_C[1]));
-
-      mvpLX[0] = mvLXN_A[0] + mvLXN_B[0] + mvLXN_C[0] - MIN0 - MAX0;
-      mvpLX[1] = mvLXN_A[1] + mvLXN_B[1] + mvLXN_C[1] - MIN1 - MAX1;
-    }
+// 8.4.1.3.1 Derivation process for median luma motion vector prediction
+int PictureBase::derivation_median_luma_motion_vector_prediction(
+    int32_t &mbAddrN_A, int32_t (&mvLXN_A)[2], int32_t &refIdxLXN_A,
+    int32_t &mbAddrN_B, int32_t (&mvLXN_B)[2], int32_t &refIdxLXN_B,
+    int32_t &mbAddrN_C, int32_t (&mvLXN_C)[2], int32_t &refIdxLXN_C,
+    int32_t refIdxLX, int32_t (&mvpLX)[2]) {
+  /* 当分区 mbAddrB\mbPartIdxB\subMbPartIdxB 和 mbAddrC\mbPartIdxC\subMbPartIdxC 都不可用且 mbAddrA\mbPartIdxA\subMbPartIdxA 可用时， */
+  if (mbAddrN_B < 0 && mbAddrN_C < 0 && mbAddrN_A >= 0) {
+    mvLXN_B[0] = mvLXN_A[0];
+    mvLXN_B[1] = mvLXN_A[1];
+    mvLXN_C[0] = mvLXN_A[0];
+    mvLXN_C[1] = mvLXN_A[1];
+    refIdxLXN_B = refIdxLXN_A;
+    refIdxLXN_C = refIdxLXN_A;
   }
 
+  if (refIdxLXN_A == refIdxLX && refIdxLXN_B != refIdxLX &&
+      refIdxLXN_C != refIdxLX)
+    mvpLX[0] = mvLXN_A[0], mvpLX[1] = mvLXN_A[1];
+  else if (refIdxLXN_A != refIdxLX && refIdxLXN_B == refIdxLX &&
+           refIdxLXN_C != refIdxLX)
+    mvpLX[0] = mvLXN_B[0], mvpLX[1] = mvLXN_B[1];
+  else if (refIdxLXN_A != refIdxLX && refIdxLXN_B != refIdxLX &&
+           refIdxLXN_C == refIdxLX)
+    mvpLX[0] = mvLXN_C[0], mvpLX[1] = mvLXN_C[1];
+  else {
+    int32_t MIN0 = MIN(mvLXN_A[0], MIN(mvLXN_B[0], mvLXN_C[0]));
+    int32_t MAX0 = MAX(mvLXN_A[0], MAX(mvLXN_B[0], mvLXN_C[0]));
+
+    int32_t MIN1 = MIN(mvLXN_A[1], MIN(mvLXN_B[1], mvLXN_C[1]));
+    int32_t MAX1 = MAX(mvLXN_A[1], MAX(mvLXN_B[1], mvLXN_C[1]));
+
+    mvpLX[0] = mvLXN_A[0] + mvLXN_B[0] + mvLXN_C[0] - MIN0 - MAX0;
+    mvpLX[1] = mvLXN_A[1] + mvLXN_B[1] + mvLXN_C[1] - MIN1 - MAX1;
+  }
   return 0;
 }
 
@@ -559,15 +576,16 @@ int PictureBase::derivation_the_co_located_4x4_sub_macroblock_partitions(
     int32_t &vertMvScale) {
 
   const SliceHeader *slice_header = m_slice->slice_header;
+  Frame *refList1_0 = m_RefPicList1[0];
 
   PictureBase *firstRefPicL1Top = NULL, *firstRefPicL1Bottom = NULL;
   int32_t topAbsDiffPOC = 0, bottomAbsDiffPOC = 0;
-  if (m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
+  if (refList1_0->m_picture_coded_type_marked_as_refrence ==
           PICTURE_CODED_TYPE_FRAME ||
-      m_RefPicList1[0]->m_picture_coded_type_marked_as_refrence ==
+      refList1_0->m_picture_coded_type_marked_as_refrence ==
           PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
-    firstRefPicL1Top = &m_RefPicList1[0]->m_picture_top_filed;
-    firstRefPicL1Bottom = &m_RefPicList1[0]->m_picture_bottom_filed;
+    firstRefPicL1Top = &refList1_0->m_picture_top_filed;
+    firstRefPicL1Bottom = &refList1_0->m_picture_bottom_filed;
 
     topAbsDiffPOC = ABS(DiffPicOrderCnt(firstRefPicL1Top, this));
     bottomAbsDiffPOC = ABS(DiffPicOrderCnt(firstRefPicL1Bottom, this));
@@ -576,7 +594,6 @@ int PictureBase::derivation_the_co_located_4x4_sub_macroblock_partitions(
   // Table 8-6 – Specification of the variable colPic
   colPic = NULL;
 
-  Frame *refList1_0 = m_RefPicList1[0];
   if (slice_header->field_pic_flag) {
     if (refList1_0->m_is_decode_finished &&
         (refList1_0->m_picture_coded_type_marked_as_refrence ==
@@ -777,6 +794,7 @@ int PictureBase::derivation_the_co_located_4x4_sub_macroblock_partitions(
 }
 
 // 8.4.1.2.2 Derivation process for spatial direct luma motion vector and reference index prediction mode
+//空间直接运动矢量预测
 int PictureBase::
     derivation_spatial_direct_luma_motion_vector_and_ref_index_prediction(
         int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
@@ -786,67 +804,60 @@ int PictureBase::
   H264_MB_TYPE currSubMbType =
       m_mbs[CurrMbAddr].m_name_of_sub_mb_type[mbPartIdx];
 
+  /* NOTE: 对于宏块的所有 4x4 子宏块分区，运动矢量 mvL0N、mvL1N 和参考索引 refIdxL0N、refIdxL1N 是相同的 */
+
   int32_t mbAddrA = 0, mbAddrB = 0, mbAddrC = 0;
-  int32_t mvL0A[2] = {0}, mvL0B[2] = {0}, mvL0C[2] = {0};
-  int32_t refIdxL0A = 0, refIdxL0B = 0, refIdxL0C = 0;
-
-  int32_t mbPartIdx_ = 0, subMbPartIdx_ = 0;
-  int32_t listSuffixFlag = 0;
-
+  int32_t mvL0A[2] = {0}, mvL0B[2] = {0}, mvL0C[2] = {0}, mvL1A[2] = {0},
+          mvL1B[2] = {0}, mvL1C[2] = {0};
+  int32_t refIdxL0A = 0, refIdxL0B = 0, refIdxL0C = 0, refIdxL1A = 0,
+          refIdxL1B = 0, refIdxL1C = 0;
   RET(derivation_motion_data_of_neighbouring_partitions(
-      mbPartIdx_, subMbPartIdx_, currSubMbType, listSuffixFlag, mbAddrA, mvL0A,
-      refIdxL0A, mbAddrB, mvL0B, refIdxL0B, mbAddrC, mvL0C, refIdxL0C));
-
-  int32_t mvL1A[2] = {0}, mvL1B[2] = {0}, mvL1C[2] = {0};
-  int32_t refIdxL1A = 0, refIdxL1B = 0, refIdxL1C = 0;
-  mbAddrA = 0, mbAddrB = 0, mbAddrC = 0;
-  listSuffixFlag = 1;
-
+      0, 0, currSubMbType, false, mbAddrA, mvL0A, refIdxL0A, mbAddrB, mvL0B,
+      refIdxL0B, mbAddrC, mvL0C, refIdxL0C));
   RET(derivation_motion_data_of_neighbouring_partitions(
-      mbPartIdx_, subMbPartIdx_, currSubMbType, listSuffixFlag, mbAddrA, mvL1A,
-      refIdxL1A, mbAddrB, mvL1B, refIdxL1B, mbAddrC, mvL1C, refIdxL1C));
+      0, 0, currSubMbType, true, mbAddrA, mvL1A, refIdxL1A, mbAddrB, mvL1B,
+      refIdxL1B, mbAddrC, mvL1C, refIdxL1C));
 
+// define for (8-187)
 #define MinPositive(x, y)                                                      \
   ((x) >= 0 && (y) >= 0) ? (MIN((x), (y))) : (MAX((x), (y)))
-
   refIdxL0 = MinPositive(refIdxL0A, MinPositive(refIdxL0B, refIdxL0C));
   refIdxL1 = MinPositive(refIdxL1A, MinPositive(refIdxL1B, refIdxL1C));
-
 #undef MinPositive
 
+  //直接零预测标志
   bool directZeroPredictionFlag = false;
   if (refIdxL0 < 0 && refIdxL1 < 0)
     refIdxL0 = 0, refIdxL1 = 0, directZeroPredictionFlag = true;
 
-  //-------------------------------------
-  // 8.4.1.2.1 Derivation process for the co-located 4x4 sub-macroblock partitions
-  PictureBase *colPic = NULL;
-  int32_t mbAddrCol = 0;
-  int32_t mvCol[2] = {0};
-  int32_t refIdxCol = 0;
-  int32_t vertMvScale = 0;
-
+  PictureBase *colPic = nullptr;
+  int32_t mvCol[2] = {0}, refIdxCol = 0, mbAddrCol = 0, vertMvScale = 0;
+  /* TODO YangJing  <24-10-11 04:36:00> */
   RET(derivation_the_co_located_4x4_sub_macroblock_partitions(
       mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol,
       vertMvScale));
 
-  int32_t colZeroFlag = 0;
+  /* TODO YangJing 同位宏块是什么？ <24-10-11 04:42:13> */
+
+  bool colZeroFlag = false;
+  /* 首个后参考帧，当前被标记为“用于短期参考” */
   if (m_RefPicList1[0]->reference_marked_type ==
           PICTURE_MARKED_AS_used_short_ref &&
-      refIdxCol == 0 &&
-      ((m_mbs[mbAddrCol].mb_field_decoding_flag == 0 &&
-        (mvCol[0] >= -1 && mvCol[0] <= 1) &&
-        (mvCol[1] >= -1 && mvCol[1] <= 1)) ||
-       (m_mbs[mbAddrCol].mb_field_decoding_flag &&
-        (mvCol[0] >= -1 && mvCol[0] <= 1) &&
-        (mvCol[1] >= -1 && mvCol[1] <= 1)))) {
-    colZeroFlag = 1;
+      refIdxCol == 0) {
+    if (m_mbs[mbAddrCol].mb_field_decoding_flag == 0 &&
+        (mvCol[0] >= -1 && mvCol[0] <= 1) && (mvCol[1] >= -1 && mvCol[1] <= 1))
+      colZeroFlag = true;
+    else if ((m_mbs[mbAddrCol].mb_field_decoding_flag &&
+              (mvCol[0] >= -1 && mvCol[0] <= 1) &&
+              (mvCol[1] >= -1 && mvCol[1] <= 1)))
+      colZeroFlag = true;
   }
 
   if (directZeroPredictionFlag || refIdxL0 < 0 ||
       (refIdxL0 == 0 && colZeroFlag))
     mvL0[0] = 0, mvL0[1] = 0;
   else
+    //NOTE:该函数返回的运动矢量 mvLX 对于调用该过程的宏块的所有 4x4 子宏块分区是相同的
     RET(derivation_luma_motion_vector_prediction(0, 0, currSubMbType, false,
                                                  refIdxL0, mvL0));
 
@@ -857,92 +868,45 @@ int PictureBase::
     RET(derivation_luma_motion_vector_prediction(0, 0, currSubMbType, true,
                                                  refIdxL1, mvL1));
 
+  //Table 8-9 – Assignment of prediction utilization flags
   if (refIdxL0 >= 0 && refIdxL1 >= 0)
-    predFlagL0 = 1, predFlagL1 = 1;
+    predFlagL0 = true, predFlagL1 = true;
   else if (refIdxL0 >= 0 && refIdxL1 < 0)
-    predFlagL0 = 1, predFlagL1 = 0;
+    predFlagL0 = true, predFlagL1 = false;
   else if (refIdxL0 < 0 && refIdxL1 >= 0)
-    predFlagL0 = 0, predFlagL1 = 1;
-  else
-    RET(-1);
+    predFlagL0 = false, predFlagL1 = true;
 
-  subMvCnt = (subMbPartIdx != 0) ? 0 : (predFlagL0 + predFlagL1);
+  subMvCnt = (subMbPartIdx == 0) ? (predFlagL0 + predFlagL1) : 0;
   return 0;
 }
 
-// 8.4.1.2.3 Derivation process for temporal direct luma motion vector and reference index prediction mode This process is invoked when
+// 8.4.1.2.3 Derivation process for temporal direct luma motion vector and reference index prediction mode
+//时间直接运动预测模式
+//NOTE:如果当前宏块是字段宏块，则 refIdxL0 和 refIdxL1 索引字段列表；否则（当前宏块是帧宏块），refIdxL0 和 refIdxL1 索引帧或互补参考字段对的列表。
 int PictureBase::
     derivation_temporal_direct_luma_motion_vector_and_ref_index_prediction(
         int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
         int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
         int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1) {
-
   const SliceHeader *slice_header = m_slice->slice_header;
 
-  // 8.4.1.2.1 Derivation process for the co-located 4x4 sub-macroblock partitions
-  PictureBase *colPic = NULL;
-  int32_t mbAddrCol = 0;
-  int32_t mvCol[2] = {0};
-  int32_t refIdxCol = 0;
-  int32_t vertMvScale = 0;
-
+  PictureBase *colPic = nullptr;
+  int32_t mvCol[2] = {0}, refIdxCol = 0, mbAddrCol = 0, vertMvScale = 0;
+  /* TODO YangJing  <24-10-11 04:56:00> */
   RET(derivation_the_co_located_4x4_sub_macroblock_partitions(
       mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol,
       vertMvScale));
 
-  int32_t refIdxL0_temp = 0;
-  if (refIdxCol >= 0) {
-    int32_t refIdxL0Frm = NA;
-
-    for (int i = 0; i < H264_MAX_REF_PIC_LIST_COUNT; i++) {
-      if (m_RefPicList0[i] == nullptr) break;
-      if ((m_RefPicList0[i]->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME &&
-           (&m_RefPicList0[i]->m_picture_frame == colPic)) ||
-          (m_RefPicList0[i]->m_picture_coded_type ==
-               PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR &&
-           (&m_RefPicList0[i]->m_picture_top_filed == colPic ||
-            &m_RefPicList0[i]->m_picture_bottom_filed == colPic))) {
-        refIdxL0Frm = i;
-        break;
-      }
-    }
-
-    if (refIdxL0Frm == NA) RET(-1);
-
-    if (vertMvScale == H264_VERT_MV_SCALE_One_To_One) {
-      if (slice_header->field_pic_flag == 0 &&
-          m_mbs[CurrMbAddr].mb_field_decoding_flag) {
-        if ((colPic->m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD &&
-             CurrMbAddr % 2 == 0) ||
-            (colPic->m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD &&
-             CurrMbAddr % 2 == 1))
-          refIdxL0_temp = refIdxL0Frm << 1;
-        else
-          refIdxL0_temp = (refIdxL0Frm << 1) + 1;
-      } else
-        refIdxL0_temp = refIdxL0Frm;
-    } else if (vertMvScale == H264_VERT_MV_SCALE_Frm_To_Fld) {
-      if (m_mbs[mbAddrCol].field_pic_flag == 0)
-        refIdxL0_temp = refIdxL0Frm << 1;
-      else {
-        if (colPic->m_picture_coded_type == this->m_picture_coded_type)
-          refIdxL0_temp = refIdxL0Frm;
-        else
-          RET(-1);
-      }
-    } else if (vertMvScale == H264_VERT_MV_SCALE_Fld_To_Frm)
-      refIdxL0_temp = refIdxL0Frm;
-  }
-
-  refIdxL0 = refIdxL0_temp, refIdxL1 = 0;
+  refIdxL0 = 0, refIdxL1 = 0;
+  if (refIdxCol >= 0)
+    refIdxL0 = mapColToList0(refIdxCol, colPic, mbAddrCol, vertMvScale,
+                             slice_header->field_pic_flag);
 
   if (vertMvScale == H264_VERT_MV_SCALE_Frm_To_Fld)
     mvCol[1] = mvCol[1] / 2;
   else if (vertMvScale == H264_VERT_MV_SCALE_Fld_To_Frm)
     mvCol[1] = mvCol[1] * 2;
-  else {
-    // mvCol[ 1 ] = mvCol[ 1 ]; //mvCol[ 1 ] remains unchanged
-  }
+  //else if (vertMvScale == H264_VERT_MV_SCALE_One_To_One) { }
 
   PictureBase *pic0 = NULL, *pic1 = NULL, *currPicOrField = NULL;
   if (slice_header->field_pic_flag == 0 &&
@@ -967,11 +931,16 @@ int PictureBase::
     pic1 = &(m_RefPicList1[0]->m_picture_frame);
   }
 
+  /* 当前宏块的每个4x4子宏块分区的两个运动向量mvL0和mvL1推导如下： */
+  // 参考索引 refIdxL0 为长期参考图片
   if (m_RefPicList0[refIdxL0]->reference_marked_type ==
           PICTURE_MARKED_AS_used_long_ref ||
       DiffPicOrderCnt(pic1, pic0))
     mvL0[0] = mvCol[0], mvL0[1] = mvCol[1], mvL1[0] = 0, mvL1[1] = 0;
+
+  // 运动矢量 mvL0、mvL1 被导出为同位子宏块分区的运动矢量 mvCol 的缩放版本（见图 8-2）
   else {
+    /* TODO YangJing 好好看一下图8-2 – 时间直接模式运动矢量推断示例 -> page 161 <24-10-11 05:21:45> */
     int32_t tb = CLIP3(-128, 127, DiffPicOrderCnt(currPicOrField, pic0));
     int32_t td = CLIP3(-128, 127, DiffPicOrderCnt(pic1, pic0));
 
@@ -989,10 +958,10 @@ int PictureBase::
   return 0;
 }
 
-int fill_mvLXN_and_refIdxLXN(const MacroBlock &mb, int mbAddrN, int mbPartIdxN,
-                             int subMbPartIdxN, bool listSuffixFlag,
-                             int &refIdxLXN, int mvLXN[2],
-                             const MacroBlock &mbCurrent) {
+int derivation_mvLXN_and_refIdxLXN(const MacroBlock &mb, int mbAddrN,
+                                   int mbPartIdxN, int subMbPartIdxN,
+                                   bool listSuffixFlag, int &refIdxLXN,
+                                   int mvLXN[2], const MacroBlock &mbCurrent) {
   /* 1. 宏块分区或子宏块分区 mbAddrN\mbPartIdxN\subMbPartIdxN 不可用或mbAddrN以帧内宏块预测模式进行编码，或者mbAddrN\mbPartIdxN\subMbPartIdxN的predFlagLX等于0 */
   if (mbAddrN < 0 || mbPartIdxN < 0 || subMbPartIdxN < 0 ||
       IS_INTRA_Prediction_Mode(mb.m_mb_pred_mode) ||
@@ -1035,9 +1004,11 @@ int PictureBase::derivation_motion_data_of_neighbouring_partitions(
   const int32_t SubMbPartWidth = mb.SubMbPartWidth[mbPartIdx];
   const int32_t SubMbPartHeight = mb.SubMbPartHeight[mbPartIdx];
 
+  /* 宏块坐标 */
   int32_t x = InverseRasterScan(mbPartIdx, MbPartWidth, MbPartHeight, 16, 0);
   int32_t y = InverseRasterScan(mbPartIdx, MbPartWidth, MbPartHeight, 16, 1);
 
+  /* 子宏块坐标 */
   int32_t xS = 0, yS = 0;
   if (mb.m_name_of_mb_type == P_8x8 || mb.m_name_of_mb_type == P_8x8ref0 ||
       mb.m_name_of_mb_type == B_8x8) {
@@ -1050,6 +1021,7 @@ int PictureBase::derivation_motion_data_of_neighbouring_partitions(
       mb.m_name_of_mb_type == B_Direct_16x16)
     predPartWidth = 16;
   else if (mb.m_name_of_mb_type == B_8x8)
+    // 当 currSubMbType 等于 B_Direct_8x8 且 direct_spatial_mv_pred_flag 等于 1 时，预测运动矢量是完整宏块的预测运动矢量
     predPartWidth = (currSubMbType == B_Direct_8x8) ? 16 : SubMbPartWidth;
   else if (mb.m_name_of_mb_type == P_8x8 || mb.m_name_of_mb_type == P_8x8ref0)
     predPartWidth = SubMbPartWidth;
@@ -1061,19 +1033,17 @@ int PictureBase::derivation_motion_data_of_neighbouring_partitions(
   int32_t subMbPartIdxN_A = 0, subMbPartIdxN_B = 0, subMbPartIdxN_C = 0,
           subMbPartIdxN_D = 0;
   int32_t mbAddrN_D = 0;
-  const int32_t isChroma = 0;
-
   RET(derivation_neighbouring_partitions(
-      x + xS - 1, y + yS + 0, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
+      x + xS - 1, y + yS + 0, mbPartIdx, currSubMbType, subMbPartIdx, 0,
       mbAddrN_A, mbPartIdxN_A, subMbPartIdxN_A));
   RET(derivation_neighbouring_partitions(
-      x + xS + 0, y + yS - 1, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
+      x + xS + 0, y + yS - 1, mbPartIdx, currSubMbType, subMbPartIdx, 0,
       mbAddrN_B, mbPartIdxN_B, subMbPartIdxN_B));
   RET(derivation_neighbouring_partitions(
       x + xS + predPartWidth, y + yS - 1, mbPartIdx, currSubMbType,
-      subMbPartIdx, isChroma, mbAddrN_C, mbPartIdxN_C, subMbPartIdxN_C));
+      subMbPartIdx, 0, mbAddrN_C, mbPartIdxN_C, subMbPartIdxN_C));
   RET(derivation_neighbouring_partitions(
-      x + xS - 1, y + yS - 1, mbPartIdx, currSubMbType, subMbPartIdx, isChroma,
+      x + xS - 1, y + yS - 1, mbPartIdx, currSubMbType, subMbPartIdx, 0,
       mbAddrN_D, mbPartIdxN_D, subMbPartIdxN_D));
 
   /* 当分区 mbAddrC\mbPartIdxC\subMbPartIdxC 不可用时 */
@@ -1082,16 +1052,16 @@ int PictureBase::derivation_motion_data_of_neighbouring_partitions(
     subMbPartIdxN_C = subMbPartIdxN_D;
   }
 
-  //相邻分区的运动向量
-  fill_mvLXN_and_refIdxLXN(m_mbs[mbAddrN_A], mbAddrN_A, mbPartIdxN_A,
-                           subMbPartIdxN_A, listSuffixFlag, refIdxLXN_A,
-                           mvLXN_A, mb);
-  fill_mvLXN_and_refIdxLXN(m_mbs[mbAddrN_B], mbAddrN_B, mbPartIdxN_B,
-                           subMbPartIdxN_B, listSuffixFlag, refIdxLXN_B,
-                           mvLXN_B, mb);
-  fill_mvLXN_and_refIdxLXN(m_mbs[mbAddrN_C], mbAddrN_C, mbPartIdxN_C,
-                           subMbPartIdxN_C, listSuffixFlag, refIdxLXN_C,
-                           mvLXN_C, mb);
+  // 运动矢量 mvLXN 和参考索引 refIdxLXN (N 为 A、B 或 C) 推导
+  derivation_mvLXN_and_refIdxLXN(m_mbs[mbAddrN_A], mbAddrN_A, mbPartIdxN_A,
+                                 subMbPartIdxN_A, listSuffixFlag, refIdxLXN_A,
+                                 mvLXN_A, mb);
+  derivation_mvLXN_and_refIdxLXN(m_mbs[mbAddrN_B], mbAddrN_B, mbPartIdxN_B,
+                                 subMbPartIdxN_B, listSuffixFlag, refIdxLXN_B,
+                                 mvLXN_B, mb);
+  derivation_mvLXN_and_refIdxLXN(m_mbs[mbAddrN_C], mbAddrN_C, mbPartIdxN_C,
+                                 subMbPartIdxN_C, listSuffixFlag, refIdxLXN_C,
+                                 mvLXN_C, mb);
 
   return 0;
 }
@@ -2021,6 +1991,64 @@ int PictureBase::default_weighted_sample_prediction(
   }
 
   return 0;
+}
+
+// 8.4.1.2.3 Derivation process for temporal direct luma motion vector and reference index prediction mode
+//refPicCol 为在对图片 colPic 内的同位宏块 mbAddrCol 进行解码时由参考索引 refIdxCol 引用的帧、字段或互补字段对
+int PictureBase::mapColToList0(int32_t refIdxCol, PictureBase *colPic,
+                               int32_t mbAddrCol, int32_t vertMvScale,
+                               bool field_pic_flag) {
+
+  int32_t refIdxL0Frm = NA;
+  for (int i = 0; i < H264_MAX_REF_PIC_LIST_COUNT; i++) {
+    if (m_RefPicList0[i] == nullptr) break;
+    if ((m_RefPicList0[i]->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME &&
+         (&m_RefPicList0[i]->m_picture_frame == colPic)) ||
+        (m_RefPicList0[i]->m_picture_coded_type ==
+             PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR &&
+         (&m_RefPicList0[i]->m_picture_top_filed == colPic ||
+          &m_RefPicList0[i]->m_picture_bottom_filed == colPic))) {
+      refIdxL0Frm = i;
+      break;
+    }
+  }
+
+  if (refIdxL0Frm == NA) RET(-1);
+
+  //NOTE: refPicCol 引用的字段包含帧或互补字段对。 RefPicList0 应包含一个帧或包含字段 refPicCol 的互补字段对。
+  int32_t refIdxL0_temp = 0;
+  if (vertMvScale == H264_VERT_MV_SCALE_One_To_One) {
+    if (field_pic_flag == 0 && m_mbs[CurrMbAddr].mb_field_decoding_flag) {
+      // 引用refIdxCol 引用的字段与当前宏块具有相同的奇偶校验
+      if ((colPic->m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD &&
+           CurrMbAddr % 2 == 0) ||
+          (colPic->m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD &&
+           CurrMbAddr % 2 == 1))
+        refIdxL0_temp = refIdxL0Frm << 1;
+      // 引用refIdxCol 引用的字段具有与当前宏块相反的奇偶校验
+      else
+        refIdxL0_temp = (refIdxL0Frm << 1) + 1;
+    }
+    // 引用refPicCol 的当前参考图片列表 RefPicList0 中的最低值参考索引 refIdxL0
+    else
+      refIdxL0_temp = refIdxL0Frm;
+
+  } else if (vertMvScale == H264_VERT_MV_SCALE_Frm_To_Fld) {
+    // 引用refPicCol的当前参考图片列表RefPicList0中的最低值参考索引，RefPicList0 应包含 refPicCol
+    if (m_mbs[mbAddrCol].field_pic_flag == 0)
+      refIdxL0_temp = refIdxL0Frm << 1;
+    else {
+      // 引用refPicCol的当前参考图片列表RefPicList0中的最低值参考索引，该索引参考与当前图片 CurrPic 具有相同奇偶校验的 refPicCol 字段
+      if (colPic->m_picture_coded_type == this->m_picture_coded_type)
+        refIdxL0_temp = refIdxL0Frm;
+    }
+
+  } else if (vertMvScale == H264_VERT_MV_SCALE_Fld_To_Frm)
+    refIdxL0_temp = refIdxL0Frm;
+  /* TODO YangJing 什么是共置宏块？ <24-10-11 05:14:20> */
+
+  /* NOTE: 当在包含共置宏块的图片的解码过程中引用该解码参考图片时，该解码参考图片被标记为“用于短期参考”，可能已被修改为被标记为“用于长期参考”。参考之前被用于使用当前宏块的直接预测模式进行帧间预测的参考。 */
+  return refIdxL0_temp;
 }
 
 //8.2.1 Decoding process for picture order count (8-2)

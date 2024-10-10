@@ -33,6 +33,7 @@ using namespace std;
         e == 0 时，计算列索引。
         e == 1 时，计算行索引。
  */
+// 6.4.2.2 Inverse sub-macroblock partition scanning process
 #define InverseRasterScan(a, b, c, d, e)                                       \
   ((e) == 0   ? ((a) % ((d) / (b))) * (b)                                      \
    : (e) == 1 ? ((a) / ((d) / (b))) * (c)                                      \
