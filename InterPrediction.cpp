@@ -440,23 +440,29 @@ int PictureBase::derivation_luma_motion_vectors_for_P_Skip(
   /* P宏块不存在后参考预测 */
   predFlagL0 = true, predFlagL1 = false;
   mvL1[0] = NA, mvL1[1] = NA;
+  //P_Skip宏块只有一个运动矢量
   subMvCnt = 1;
 
+  //使用第一个参考帧
   refIdxL0 = 0;
   fill_n(m_mbs[CurrMbAddr].m_PredFlagL0, 4, 1);
+
+  //左边和上边相邻宏块的地址
   int32_t mbAddrN_A = 0, mbAddrN_B = 0;
+  //左边和上边相邻宏块的L0运动矢量
   int32_t mvL0_A[2] = {0}, mvL0_B[2] = {0};
+  //左边和上边相邻宏块的参考帧索引
   int32_t refIdxL0_A = 0, refIdxL0_B = 0;
 
   /* 空引用对象 */
   int32_t nullref, nullref2[2];
 
-  // 根据相邻分区运动矢量进行推导当前运动矢量
+  // MVP 是基于相邻宏块的运动矢量，来预测当前宏块的运动矢量，P_Skip 宏块通常使用最近的参考帧进行预测
   RET(derivation_motion_data_of_neighbouring_partitions(
       0, 0, MB_TYPE_NA, false, mbAddrN_A, mvL0_A, refIdxL0_A, mbAddrN_B, mvL0_B,
       refIdxL0_B, nullref, nullref2, nullref));
 
-  /* 相邻宏块不可用 */
+  /* 相邻宏块不可用，对于 P_Skip 宏块，运动矢量通常被假定为零 */
   if (mbAddrN_A < 0 || mbAddrN_B < 0)
     mvL0[0] = 0, mvL0[1] = 0;
   else if ((refIdxL0_A == 0 && mvL0_A[0] == 0 && mvL0_A[1] == 0) ||
@@ -1925,41 +1931,38 @@ int PictureBase::default_weighted_sample_prediction(
    * – 否则，如果导出色度 Cb 分量样本预测值 predPartCb[ x, y ]，则以下情况适用于 C 设置等于 Cb，x 设置等于0..partWidthC − 1，且 y 设置等于 0..partHeightC − 1。 
    * – 否则（导出色度 Cr 分量样本预测值 predPartCr[ x, y ]），以下适用于设置等于 Cr、x 的 C设置等于 0..partWidthC − 1，y 设置等于 0..partHeightC − 1。 */
   if (predFlagL0 && predFlagL1 == 0) {
-    for (int y = 0; y <= partHeight - 1; y++)
-      for (int x = 0; x <= partWidth - 1; x++)
+    for (int y = 0; y < partHeight; y++)
+      for (int x = 0; x < partWidth; x++)
         predPartL[y * partWidth + x] = predPartL0L[y * partWidth + x];
 
-    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-      for (int y = 0; y <= partHeightC - 1; y++) {
-        for (int x = 0; x <= partWidthC - 1; x++) {
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0)
+      for (int y = 0; y < partHeightC; y++)
+        for (int x = 0; x < partWidthC; x++) {
           predPartCb[y * partWidthC + x] = predPartL0Cb[y * partWidthC + x];
           predPartCr[y * partWidthC + x] = predPartL0Cr[y * partWidthC + x];
         }
-      }
-    }
+
   } else if (predFlagL0 == 0 && predFlagL1) {
-    for (int y = 0; y <= partHeight - 1; y++)
-      for (int x = 0; x <= partWidth - 1; x++)
+    for (int y = 0; y < partHeight; y++)
+      for (int x = 0; x < partWidth; x++)
         predPartL[y * partWidth + x] = predPartL1L[y * partWidth + x];
 
-    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-      for (int y = 0; y <= partHeightC - 1; y++) {
-        for (int x = 0; x <= partWidthC - 1; x++) {
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0)
+      for (int y = 0; y < partHeightC; y++)
+        for (int x = 0; x < partWidthC; x++) {
           predPartCb[y * partWidthC + x] = predPartL1Cb[y * partWidthC + x];
           predPartCr[y * partWidthC + x] = predPartL1Cr[y * partWidthC + x];
         }
-      }
-    }
   } else {
-    for (int y = 0; y <= partHeight - 1; y++)
-      for (int x = 0; x <= partWidth - 1; x++)
+    for (int y = 0; y < partHeight; y++)
+      for (int x = 0; x < partWidth; x++)
         predPartL[y * partWidth + x] = (predPartL0L[y * partWidth + x] +
                                         predPartL1L[y * partWidth + x] + 1) >>
                                        1;
 
-    if (m_slice->slice_header->m_sps->ChromaArrayType != 0) {
-      for (int y = 0; y <= partHeightC - 1; y++) {
-        for (int x = 0; x <= partWidthC - 1; x++) {
+    if (m_slice->slice_header->m_sps->ChromaArrayType != 0)
+      for (int y = 0; y < partHeightC; y++)
+        for (int x = 0; x < partWidthC; x++) {
           predPartCb[y * partWidthC + x] =
               (predPartL0Cb[y * partWidthC + x] +
                predPartL1Cb[y * partWidthC + x] + 1) >>
@@ -1969,8 +1972,6 @@ int PictureBase::default_weighted_sample_prediction(
                predPartL1Cr[y * partWidthC + x] + 1) >>
               1;
         }
-      }
-    }
   }
 
   return 0;
