@@ -483,18 +483,16 @@ int PictureBase::derivation_luma_motion_vectors_for_B_Skip_or_Direct_16x16_8x8(
   /* NOTE:空间和时间直接预测模式均使用同位运动向量和参考索引 */
 
   //空间直接运动矢量预测
-  if (m_slice->slice_header->direct_spatial_mv_pred_flag) {
-    RET(derivation_spatial_direct_luma_motion_vector_and_ref_index_prediction(
+  if (m_slice->slice_header->direct_spatial_mv_pred_flag)
+    return derivation_spatial_direct_luma_motion_vector_and_ref_index_prediction(
         mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
-        predFlagL0, predFlagL1));
-  }
+        predFlagL0, predFlagL1);
+
   //时间直接运动预测模式
-  else {
-    RET(derivation_temporal_direct_luma_motion_vector_and_ref_index_prediction(
+  else
+    return derivation_temporal_direct_luma_motion_vector_and_ref_index_prediction(
         mbPartIdx, subMbPartIdx, refIdxL0, refIdxL1, mvL0, mvL1, subMvCnt,
-        predFlagL0, predFlagL1));
-    subMvCnt = (subMbPartIdx == 0) ? 2 : 0;
-  }
+        predFlagL0, predFlagL1);
 
   return 0;
 }
@@ -581,20 +579,20 @@ int PictureBase::derivation_median_luma_motion_vector_prediction(
 int PictureBase::derivation_the_coLocated_4x4_sub_macroblock_partitions(
     int32_t mbPartIdx, int32_t subMbPartIdx, PictureBase *&colPic,
     int32_t &mbAddrCol, int32_t (&mvCol)[2], int32_t &refIdxCol,
-    int32_t &vertMvScale) {
+    int32_t &vertMvScale, bool useRefPicList1) {
 
   const SliceHeader *header = m_slice->slice_header;
-  Frame *refList1_0 = m_RefPicList1[0];
+  Frame *refPic = (useRefPicList1) ? m_RefPicList1[0] : m_RefPicList0[0];
+  const H264_PICTURE_CODED_TYPE &ref_marked_type =
+      refPic->m_picture_coded_type_marked_as_refrence;
 
-  /* 当RefPicList1[0]是帧或互补字段对时，令firstRefPicL1Top和firstRefPicL1Bottom分别为RefPicList1[0]的顶字段和底字段 */
+  // 参考帧是帧图像或互补场对，则获取其顶场和底场，并计算当前帧与顶场和底场的POC差值
   PictureBase *firstRefPicL1Top = NULL, *firstRefPicL1Bottom = NULL;
   int32_t topAbsDiffPOC = 0, bottomAbsDiffPOC = 0;
-  if (refList1_0->m_picture_coded_type_marked_as_refrence ==
-          PICTURE_CODED_TYPE_FRAME ||
-      refList1_0->m_picture_coded_type_marked_as_refrence ==
-          PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
-    firstRefPicL1Top = &refList1_0->m_picture_top_filed;
-    firstRefPicL1Bottom = &refList1_0->m_picture_bottom_filed;
+  if (ref_marked_type == PICTURE_CODED_TYPE_FRAME ||
+      ref_marked_type == PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+    firstRefPicL1Top = &refPic->m_picture_top_filed;
+    firstRefPicL1Bottom = &refPic->m_picture_bottom_filed;
 
     topAbsDiffPOC = ABS(DiffPicOrderCnt(firstRefPicL1Top, this));
     bottomAbsDiffPOC = ABS(DiffPicOrderCnt(firstRefPicL1Bottom, this));
@@ -603,29 +601,25 @@ int PictureBase::derivation_the_coLocated_4x4_sub_macroblock_partitions(
   // Table 8-6 – Specification of the variable colPic
   // 共置宏块的图像，若当前图像是编码帧、当前宏块是帧宏块且互补字段被标记为“用于长期参考”时，互补字段对的图像顺序计数值对解码过程有影响。标记为“用于长期参考”的对是参考列表 1 中的第一张图片
   colPic = nullptr;
-
-  if (header->field_pic_flag) { // 场图像
-    if (refList1_0->m_is_decode_finished &&
-        (refList1_0->m_picture_coded_type_marked_as_refrence ==
-             PICTURE_CODED_TYPE_TOP_FIELD ||
-         refList1_0->m_picture_coded_type_marked_as_refrence ==
-             PICTURE_CODED_TYPE_BOTTOM_FIELD)) {
-      colPic = &refList1_0->m_picture_frame;
-    } else {
-      if (refList1_0->m_picture_coded_type_marked_as_refrence ==
-          PICTURE_CODED_TYPE_TOP_FIELD)
-        colPic = &refList1_0->m_picture_top_filed;
-      else if (refList1_0->m_picture_coded_type_marked_as_refrence ==
-               PICTURE_CODED_TYPE_BOTTOM_FIELD)
-        colPic = &refList1_0->m_picture_bottom_filed;
+  // 如果当前帧是场图像，则根据参考帧的类型，选择顶场或底场作为共位宏块的参考帧
+  if (header->field_pic_flag) {
+    if (refPic->m_is_decode_finished &&
+        (ref_marked_type == PICTURE_CODED_TYPE_TOP_FIELD ||
+         ref_marked_type == PICTURE_CODED_TYPE_BOTTOM_FIELD))
+      colPic = &refPic->m_picture_frame;
+    else {
+      if (ref_marked_type == PICTURE_CODED_TYPE_TOP_FIELD)
+        colPic = &refPic->m_picture_top_filed;
+      else if (ref_marked_type == PICTURE_CODED_TYPE_BOTTOM_FIELD)
+        colPic = &refPic->m_picture_bottom_filed;
     }
-  } else { // 帧图像
-    if (refList1_0->m_is_decode_finished &&
-        refList1_0->m_picture_coded_type_marked_as_refrence ==
-            PICTURE_CODED_TYPE_FRAME) {
-      colPic = &refList1_0->m_picture_frame;
-    } else if (refList1_0->m_picture_coded_type_marked_as_refrence ==
-               PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+  }
+  // 如果当前帧是帧图像，则根据较小的POC差值选择顶场或底场，或者直接使用帧图像作为共位宏块的参考帧
+  else {
+    if (refPic->m_is_decode_finished &&
+        ref_marked_type == PICTURE_CODED_TYPE_FRAME)
+      colPic = &refPic->m_picture_frame;
+    else if (ref_marked_type == PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
       if (m_slice->slice_data->mb_field_decoding_flag == 0)
         colPic = (topAbsDiffPOC < bottomAbsDiffPOC) ? firstRefPicL1Top
                                                     : firstRefPicL1Bottom;
@@ -634,36 +628,37 @@ int PictureBase::derivation_the_coLocated_4x4_sub_macroblock_partitions(
     }
   }
 
+  // 异常处理
   RET(colPic == nullptr);
 
   // Table 8-7 – Specification of PicCodingStruct( X )
-  int32_t PicCodingStruct_CurrPic = FLD;
-  if (header->field_pic_flag) //场图像
-    PicCodingStruct_CurrPic = FLD;
-  else { //帧图像
-    if (header->m_sps->mb_adaptive_frame_field_flag == 0)
-      PicCodingStruct_CurrPic = FRM;
-    else //MBAFF
-      PicCodingStruct_CurrPic = AFRM;
+  // 当前帧、共位宏块所在参考帧的编码结构
+  int32_t PicCodingStruct_CurrPic = FLD, PicCodingStruct_colPic = FLD;
+#define info(obj, field_pic_flag, mb_adaptive_frame_field_flag)                \
+  if ((field_pic_flag))                                                        \
+    (obj) = FLD;                                                               \
+  else {                                                                       \
+    if ((mb_adaptive_frame_field_flag))                                        \
+      (obj) = AFRM;                                                            \
+    else                                                                       \
+      (obj) = FRM;                                                             \
   }
 
-  // Table 8-7 – Specification of PicCodingStruct( X )
-  int32_t PicCodingStruct_colPic = FLD;
-  if (colPic->m_slice->slice_header->field_pic_flag) //场图像
-    PicCodingStruct_colPic = FLD;
-  else { //帧图像
-    if (colPic->m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag == 0)
-      PicCodingStruct_colPic = FRM;
-    else //MBAFF
-      PicCodingStruct_colPic = AFRM;
-  }
+  info(PicCodingStruct_CurrPic, header->field_pic_flag,
+       header->m_sps->mb_adaptive_frame_field_flag);
+  info(PicCodingStruct_colPic, colPic->m_slice->slice_header->field_pic_flag,
+       colPic->m_slice->slice_header->m_sps->mb_adaptive_frame_field_flag);
 
-  /* CurrPic 和 colPic 图像编码类型不可能是（FRM，AFRM）或（AFRM，FRM），因为这些图像编码类型必须由 IDR 图像分隔。 */
-  if ((PicCodingStruct_CurrPic == FRM && PicCodingStruct_colPic == AFRM) ||
-      (PicCodingStruct_CurrPic == AFRM && PicCodingStruct_colPic == FRM))
-    RET(-1);
+#undef info
 
+  // 异常处理：当前帧,共位图像帧的编码类型不能是一个自适应帧场以及帧类型，这些图像编码类型必须由 IDR 图像分隔
+  RET((PicCodingStruct_CurrPic == FRM && PicCodingStruct_colPic == AFRM) ||
+      (PicCodingStruct_CurrPic == AFRM && PicCodingStruct_colPic == FRM));
+
+  // 共位宏块的4x4亮度块索引，以4x4为单位
+  // a. 直接使用 8x8 分区进行预测，每4个4x4为一个index
   int32_t luma4x4BlkIdx = 5 * mbPartIdx;
+  // b. 表示需要进一步划分 8x8 分区为 4x4 子块：当前 8x8 分区的起始 4x4 子块索引 + 当前 8x8 分区中的第几个 4x4 子块
   if (header->m_sps->direct_8x8_inference_flag == 0)
     luma4x4BlkIdx = (4 * mbPartIdx + subMbPartIdx);
 
@@ -678,39 +673,41 @@ int PictureBase::derivation_the_coLocated_4x4_sub_macroblock_partitions(
 
   // Table 8-8 – Specification of mbAddrCol, yM, and vertMvScale
   if (PicCodingStruct_CurrPic == FLD) {
-    if (PicCodingStruct_colPic == FLD) {
-      mbAddrCol = CurrMbAddr;
-      yM = yCol, vertMvScale = H264_VERT_MV_SCALE_One_To_One;
-    }
-
-    else if (PicCodingStruct_colPic == FRM) {
+    // 1. 当前帧和共位宏块都是场图像，则共位宏块的地址与当前宏块相同，且垂直运动矢量不需要缩放
+    if (PicCodingStruct_colPic == FLD)
+      mbAddrCol = CurrMbAddr, yM = yCol,
+      vertMvScale = H264_VERT_MV_SCALE_One_To_One;
+    // 2. 当前帧是场图像而共位宏块是帧图像，则需要根据宏块的垂直位置调整共位宏块的地址，并将垂直运动矢量减半
+    else if (PicCodingStruct_colPic == FRM)
       mbAddrCol = 2 * PicWidthInMbs * (CurrMbAddr / PicWidthInMbs) +
-                  (CurrMbAddr % PicWidthInMbs) + PicWidthInMbs * (yCol / 8);
+                  (CurrMbAddr % PicWidthInMbs) + PicWidthInMbs * (yCol / 8),
       yM = (2 * yCol) % 16, vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
-    }
-
+    // 3. 当前帧是场图像而共位宏块是自适应，
     else if (PicCodingStruct_colPic == AFRM) {
-      if (colPic->m_mbs[2 * CurrMbAddr].mb_field_decoding_flag == 0) {
-        mbAddrCol = 2 * CurrMbAddr + this->m_mbs[CurrMbAddr].bottom_field_flag;
+      if (colPic->m_mbs[2 * CurrMbAddr].mb_field_decoding_flag == 0)
+        mbAddrCol = 2 * CurrMbAddr + this->m_mbs[CurrMbAddr].bottom_field_flag,
         yM = yCol, vertMvScale = H264_VERT_MV_SCALE_One_To_One;
-      } else {
-        mbAddrCol = 2 * CurrMbAddr + (yCol / 8);
-        yM = (2 * yCol) % 16, vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
-      }
+      else
+        mbAddrCol = 2 * CurrMbAddr + (yCol / 8), yM = (2 * yCol) % 16,
+        vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
     }
   }
 
   else if (PicCodingStruct_CurrPic == FRM) {
-    if (PicCodingStruct_colPic == FLD) {
+    // 4. 当前帧是帧图像而共位宏块是场图像，
+    if (PicCodingStruct_colPic == FLD)
       mbAddrCol = PicWidthInMbs * (CurrMbAddr / (2 * PicWidthInMbs)) +
-                  (CurrMbAddr % PicWidthInMbs);
-      yM = 8 * ((CurrMbAddr / PicWidthInMbs) % 2) + 4 * (yCol / 8);
+                  (CurrMbAddr % PicWidthInMbs),
+      yM = 8 * ((CurrMbAddr / PicWidthInMbs) % 2) + 4 * (yCol / 8),
       vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
-    } else if (PicCodingStruct_colPic == FRM) {
-      mbAddrCol = CurrMbAddr;
-      yM = yCol, vertMvScale = H264_VERT_MV_SCALE_One_To_One;
-    }
-  } else if (PicCodingStruct_CurrPic == AFRM) {
+    // 6. 当前帧是帧图像而共位宏块是帧图像，
+    else if (PicCodingStruct_colPic == FRM)
+      mbAddrCol = CurrMbAddr, yM = yCol,
+      vertMvScale = H264_VERT_MV_SCALE_One_To_One;
+  }
+
+  else if (PicCodingStruct_CurrPic == AFRM) {
+    // 7. 当前帧是帧、场自适应图像而共位宏块是场图像，
     if (PicCodingStruct_colPic == FLD) {
       mbAddrCol = CurrMbAddr / 2;
       if (m_slice->slice_data->mb_field_decoding_flag == 0)
@@ -718,66 +715,61 @@ int PictureBase::derivation_the_coLocated_4x4_sub_macroblock_partitions(
         vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
       else
         yM = yCol, vertMvScale = H264_VERT_MV_SCALE_One_To_One;
-    } else if (PicCodingStruct_colPic == AFRM) {
+    }
+    // 8. 当前帧和共位宏块都是帧、场自适应图像
+    else if (PicCodingStruct_colPic == AFRM) {
       if (m_slice->slice_data->mb_field_decoding_flag == 0) {
-        if (colPic->m_mbs[CurrMbAddr].mb_field_decoding_flag == 0) {
-          mbAddrCol = CurrMbAddr;
-          yM = yCol, vertMvScale = H264_VERT_MV_SCALE_One_To_One;
-        } else {
+        if (colPic->m_mbs[CurrMbAddr].mb_field_decoding_flag == 0)
+          mbAddrCol = CurrMbAddr, yM = yCol,
+          vertMvScale = H264_VERT_MV_SCALE_One_To_One;
+        else
           mbAddrCol = 2 * (CurrMbAddr / 2) +
                       ((topAbsDiffPOC < bottomAbsDiffPOC) ? 0 : 1);
-          yM = 8 * (CurrMbAddr % 2) + 4 * (yCol / 8);
-          vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
-        }
+        yM = 8 * (CurrMbAddr % 2) + 4 * (yCol / 8),
+        vertMvScale = H264_VERT_MV_SCALE_Fld_To_Frm;
       } else {
-        if (colPic->m_mbs[CurrMbAddr].mb_field_decoding_flag == 0) {
-          mbAddrCol = 2 * (CurrMbAddr / 2) + (yCol / 8);
-          yM = (2 * yCol) % 16, vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
-        } else {
-          mbAddrCol = CurrMbAddr;
-          yM = yCol, vertMvScale = H264_VERT_MV_SCALE_One_To_One;
-        }
+        if (colPic->m_mbs[CurrMbAddr].mb_field_decoding_flag == 0)
+          mbAddrCol = 2 * (CurrMbAddr / 2) + (yCol / 8), yM = (2 * yCol) % 16,
+          vertMvScale = H264_VERT_MV_SCALE_Frm_To_Fld;
+        else
+          mbAddrCol = CurrMbAddr, yM = yCol,
+          vertMvScale = H264_VERT_MV_SCALE_One_To_One;
       }
     }
   }
 
-  /* mbTypeCol为图片colPic内地址为mbAddrCol的宏块类型 */
-  H264_MB_TYPE mbTypeCol = colPic->m_mbs[mbAddrCol].m_name_of_mb_type;
+  // 别名
+  const MacroBlock &colMb = colPic->m_mbs[mbAddrCol];
+
+  // 获取共位宏块,子宏块的类型，并推导共位宏块的宏块分区索引和子宏块分区索引
+  int32_t mbPartIdxCol = 0, subMbPartIdxCol = 0;
+  H264_MB_TYPE mbTypeCol = colMb.m_name_of_mb_type;
   H264_MB_TYPE subMbTypeCol[4] = {MB_TYPE_NA, MB_TYPE_NA, MB_TYPE_NA,
                                   MB_TYPE_NA};
   if (mbTypeCol == P_8x8 || mbTypeCol == P_8x8ref0 || mbTypeCol == B_8x8) {
     // 令subMbTypeCol为图片colPic内地址为mbAddrCol的宏块的语法元素列表sub_mb_type
-    subMbTypeCol[0] = colPic->m_mbs[mbAddrCol].m_name_of_sub_mb_type[0];
-    subMbTypeCol[1] = colPic->m_mbs[mbAddrCol].m_name_of_sub_mb_type[1];
-    subMbTypeCol[2] = colPic->m_mbs[mbAddrCol].m_name_of_sub_mb_type[2];
-    subMbTypeCol[3] = colPic->m_mbs[mbAddrCol].m_name_of_sub_mb_type[3];
+    subMbTypeCol[0] = colMb.m_name_of_sub_mb_type[0];
+    subMbTypeCol[1] = colMb.m_name_of_sub_mb_type[1];
+    subMbTypeCol[2] = colMb.m_name_of_sub_mb_type[2];
+    subMbTypeCol[3] = colMb.m_name_of_sub_mb_type[3];
   }
-
-  /* mbPartIdxCol为共位分区的宏块分区索引，subMbPartIdxCol为共位子宏块分区的子宏块分区索引 */
-  int32_t mbPartIdxCol = 0, subMbPartIdxCol = 0;
   RET(derivation_macroblock_and_sub_macroblock_partition_indices(
       mbTypeCol, subMbTypeCol, xCol, yM, mbPartIdxCol, subMbPartIdxCol));
 
   refIdxCol = -1;
-  // 宏块mbAddrCol以帧内宏块预测模式编码，则mvCol的两个分量被设置为等于0并且refIdxCol被设置为等于-1
-  if (IS_INTRA_Prediction_Mode(colPic->m_mbs[mbAddrCol].m_mb_pred_mode))
+  // 共位宏块以帧内宏块预测模式编码，则mvCol的两个分量被设置为等于0并且refIdxCol被设置为等于-1
+  if (IS_INTRA_Prediction_Mode(colMb.m_mb_pred_mode))
     mvCol[0] = 0, mvCol[1] = 0, refIdxCol = -1;
-  // 宏块mbAddrCol以场内宏块预测模式编码
+  // 反之，共位宏块以帧间宏块预测模式编码，则进行复制共位宏块的运动矢量、参考帧索引
   else {
-    int32_t predFlagL0Col = colPic->m_mbs[mbAddrCol].m_PredFlagL0[mbPartIdxCol];
-
-    if (predFlagL0Col) {
-      mvCol[0] =
-          colPic->m_mbs[mbAddrCol].m_MvL0[mbPartIdxCol][subMbPartIdxCol][0];
-      mvCol[1] =
-          colPic->m_mbs[mbAddrCol].m_MvL0[mbPartIdxCol][subMbPartIdxCol][1];
-      refIdxCol = colPic->m_mbs[mbAddrCol].m_RefIdxL0[mbPartIdxCol];
+    if (colMb.m_PredFlagL0[mbPartIdxCol]) {
+      mvCol[0] = colMb.m_MvL0[mbPartIdxCol][subMbPartIdxCol][0];
+      mvCol[1] = colMb.m_MvL0[mbPartIdxCol][subMbPartIdxCol][1];
+      refIdxCol = colMb.m_RefIdxL0[mbPartIdxCol];
     } else {
-      mvCol[0] =
-          colPic->m_mbs[mbAddrCol].m_MvL1[mbPartIdxCol][subMbPartIdxCol][0];
-      mvCol[1] =
-          colPic->m_mbs[mbAddrCol].m_MvL1[mbPartIdxCol][subMbPartIdxCol][1];
-      refIdxCol = colPic->m_mbs[mbAddrCol].m_RefIdxL1[mbPartIdxCol];
+      mvCol[0] = colMb.m_MvL1[mbPartIdxCol][subMbPartIdxCol][0];
+      mvCol[1] = colMb.m_MvL1[mbPartIdxCol][subMbPartIdxCol][1];
+      refIdxCol = colMb.m_RefIdxL1[mbPartIdxCol];
     }
   }
 
@@ -802,9 +794,11 @@ int PictureBase::
           mvL1B[2] = {0}, mvL1C[2] = {0};
   int32_t refIdxL0A = 0, refIdxL0B = 0, refIdxL0C = 0, refIdxL1A = 0,
           refIdxL1B = 0, refIdxL1C = 0;
+  //获取相邻宏块的L0运动信息
   RET(derivation_motion_data_of_neighbouring_partitions(
       0, 0, currSubMbType, false, mbAddrA, mvL0A, refIdxL0A, mbAddrB, mvL0B,
       refIdxL0B, mbAddrC, mvL0C, refIdxL0C));
+  //获取相邻宏块的L1运动信息
   RET(derivation_motion_data_of_neighbouring_partitions(
       0, 0, currSubMbType, true, mbAddrA, mvL1A, refIdxL1A, mbAddrB, mvL1B,
       refIdxL1B, mbAddrC, mvL1C, refIdxL1C));
@@ -812,23 +806,28 @@ int PictureBase::
 // define for (8-187)
 #define MinPositive(x, y)                                                      \
   ((x) >= 0 && (y) >= 0) ? (MIN((x), (y))) : (MAX((x), (y)))
+
+  // 计算L0和L1的参考帧索引。选择最小的非负参考帧索引。如果所有参考帧索引都为负，则选择最大的负值
   refIdxL0 = MinPositive(refIdxL0A, MinPositive(refIdxL0B, refIdxL0C));
   refIdxL1 = MinPositive(refIdxL1A, MinPositive(refIdxL1B, refIdxL1C));
+
 #undef MinPositive
 
-  //直接零预测标志
+  // 直接零预测模式
   bool directZeroPredictionFlag = false;
   if (refIdxL0 < 0 && refIdxL1 < 0)
     refIdxL0 = 0, refIdxL1 = 0, directZeroPredictionFlag = true;
 
+  // 获取共位宏块（即与当前宏块在参考帧中相同位置的宏块）的运动信息
   PictureBase *colPic = nullptr;
-  int32_t mvCol[2] = {0}, refIdxCol = 0, mbAddrCol = 0, vertMvScale = 0;
+  int32_t mvCol[2] = {0}, refIdxCol = 0, mbAddrCol = 0;
+  // vertMvScale：垂直运动矢量的缩放因子
+  int32_t vertMvScale = 0;
   RET(derivation_the_coLocated_4x4_sub_macroblock_partitions(
-      mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol,
-      vertMvScale));
+      mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol, vertMvScale,
+      true));
 
-  /* TODO YangJing 同位宏块是什么？ <24-10-11 04:42:13> */
-
+  // 判断共位宏块是否为零运动矢量（colZeroFlag）。如果共位宏块的参考帧索引为0，并且运动矢量的水平和垂直分量都在[-1, 1]之间，则认为共位宏块的运动矢量为零
   bool colZeroFlag = false;
   /* 首个后参考帧，当前被标记为“用于短期参考” */
   if (m_RefPicList1[0]->reference_marked_type ==
@@ -843,13 +842,15 @@ int PictureBase::
       colZeroFlag = true;
   }
 
+  // 当前宏块使用直接零预测模式，或者参考帧索引为负，或者参考帧索引为0且共位宏块的运动矢量为零，则将L0或L1的运动矢量设置为(0, 0)
   if (directZeroPredictionFlag || refIdxL0 < 0 ||
       (refIdxL0 == 0 && colZeroFlag))
     mvL0[0] = 0, mvL0[1] = 0;
   else
-    //NOTE:该函数返回的运动矢量 mvLX 对于调用该过程的宏块的所有 4x4 子宏块分区是相同的
+    // 运动矢量预测
     RET(derivation_luma_motion_vector_prediction(0, 0, currSubMbType, false,
                                                  refIdxL0, mvL0));
+  //NOTE:该函数返回的运动矢量 mvLX 对于调用该过程的宏块的所有 4x4 子宏块分区是相同的
 
   if (directZeroPredictionFlag || refIdxL1 < 0 ||
       (refIdxL1 == 0 && colZeroFlag))
@@ -858,6 +859,7 @@ int PictureBase::
     RET(derivation_luma_motion_vector_prediction(0, 0, currSubMbType, true,
                                                  refIdxL1, mvL1));
 
+  // 更新预测标志和子宏块运动矢量数量
   //Table 8-9 – Assignment of prediction utilization flags
   if (refIdxL0 >= 0 && refIdxL1 >= 0)
     predFlagL0 = true, predFlagL1 = true;
@@ -866,6 +868,7 @@ int PictureBase::
   else if (refIdxL0 < 0 && refIdxL1 >= 0)
     predFlagL0 = false, predFlagL1 = true;
 
+  // 如果是第一个子宏块分区，则计算子宏块的运动矢量数量
   subMvCnt = (subMbPartIdx == 0) ? (predFlagL0 + predFlagL1) : 0;
   return 0;
 }
@@ -878,33 +881,40 @@ int PictureBase::
         int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
         int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
         int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1) {
-  const SliceHeader *slice_header = m_slice->slice_header;
+  const SliceHeader *header = m_slice->slice_header;
 
+  // 获取共位宏块（即与当前宏块在参考帧中相同位置的宏块）的运动信息，（同空间域）
   PictureBase *colPic = nullptr;
-  int32_t mvCol[2] = {0}, refIdxCol = 0, mbAddrCol = 0, vertMvScale = 0;
+  int32_t mvCol[2] = {0}, refIdxCol = 0, mbAddrCol = 0;
+  // vertMvScale：垂直运动矢量的缩放因子
+  int32_t vertMvScale = 0;
   RET(derivation_the_coLocated_4x4_sub_macroblock_partitions(
-      mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol,
-      vertMvScale));
+      mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol, vertMvScale,
+      false));
 
+  // 将共位宏块的参考帧索引映射到当前帧的前参考帧索引
   refIdxL0 = 0, refIdxL1 = 0;
   if (refIdxCol >= 0)
-    refIdxL0 = mapColToList0(refIdxCol, colPic, mbAddrCol, vertMvScale,
-                             slice_header->field_pic_flag);
+    refIdxL0 = MapColToList0(refIdxCol, colPic, mbAddrCol, vertMvScale,
+                             header->field_pic_flag);
 
+  // 根据 vertMvScale 的值，对共位宏块的垂直运动矢量 mvCol[1] 进行缩放
   if (vertMvScale == H264_VERT_MV_SCALE_Frm_To_Fld)
+    // 从帧到场（Frm_To_Fld），则垂直运动矢量减半
     mvCol[1] = mvCol[1] / 2;
   else if (vertMvScale == H264_VERT_MV_SCALE_Fld_To_Frm)
+    // 从场到帧（Fld_To_Frm），则垂直运动矢量加倍
     mvCol[1] = mvCol[1] * 2;
-  //else if (vertMvScale == H264_VERT_MV_SCALE_One_To_One) { }
+  else if (vertMvScale == H264_VERT_MV_SCALE_One_To_One) {
+  }
 
-  PictureBase *pic0 = NULL, *pic1 = NULL, *currPicOrField = NULL;
-  if (slice_header->field_pic_flag == 0 &&
-      m_mbs[CurrMbAddr].mb_field_decoding_flag) {
+  PictureBase *pic0 = nullptr, *pic1 = nullptr, *currPicOrField = nullptr;
+  // 当前帧是帧图像，但当前宏块是场解码模式，则根据宏块地址的奇偶性选择顶部场或底部场
+  if (header->field_pic_flag == 0 && m_mbs[CurrMbAddr].mb_field_decoding_flag) {
     currPicOrField = (CurrMbAddr % 2) ? &(m_parent->m_picture_bottom_filed)
                                       : &(m_parent->m_picture_top_filed);
-    pic1 = (CurrMbAddr % 2) ? &(m_RefPicList1[0]->m_picture_bottom_filed)
-                            : &(m_RefPicList1[0]->m_picture_top_filed);
-
+    pic1 = (CurrMbAddr % 2) ? &(m_RefPicList1[refIdxL1]->m_picture_bottom_filed)
+                            : &(m_RefPicList1[refIdxL1]->m_picture_top_filed);
     if (refIdxL0 % 2)
       pic0 = (CurrMbAddr % 2)
                  ? &(m_RefPicList0[refIdxL0 / 2]->m_picture_top_filed)
@@ -914,28 +924,33 @@ int PictureBase::
                  ? &(m_RefPicList0[refIdxL0 / 2]->m_picture_bottom_filed)
                  : &(m_RefPicList0[refIdxL0 / 2]->m_picture_top_filed);
 
+    // 当前帧是场图像，则直接获取参考帧图像的指针
   } else {
     currPicOrField = &(m_parent->m_picture_frame);
     pic0 = &(m_RefPicList0[refIdxL0]->m_picture_frame);
-    pic1 = &(m_RefPicList1[0]->m_picture_frame);
+    pic1 = &(m_RefPicList1[refIdxL1]->m_picture_frame);
   }
 
   /* 当前宏块的每个4x4子宏块分区的两个运动向量mvL0和mvL1推导如下： */
-  // 参考索引 refIdxL0 为长期参考图片
+  // L0参考帧是长参考帧，或者L0和L1参考帧的POC存在差值，则直接使用共位宏块的运动矢量 mvCol 作为L0的运动矢量，并将L1的运动矢量设置为零
   if (m_RefPicList0[refIdxL0]->reference_marked_type ==
           PICTURE_MARKED_AS_used_long_ref ||
       DiffPicOrderCnt(pic1, pic0))
     mvL0[0] = mvCol[0], mvL0[1] = mvCol[1], mvL1[0] = 0, mvL1[1] = 0;
 
-  // 运动矢量 mvL0、mvL1 被导出为同位子宏块分区的运动矢量 mvCol 的缩放版本（见图 8-2）
+  // L0参考帧是短参考帧，或者L0和L1参考帧的POC存在差值
   else {
-    /* TODO YangJing 好好看一下图8-2 – 时间直接模式运动矢量推断示例 -> page 161 <24-10-11 05:21:45> */
-    int32_t tb = CLIP3(-128, 127, DiffPicOrderCnt(currPicOrField, pic0));
+    // 运动矢量 mvL0、mvL1 被导出为同位子宏块分区的运动矢量 mvCol 的缩放版本（见图 8-2）：
+    // L1参考帧与L0参考帧的POC差
     int32_t td = CLIP3(-128, 127, DiffPicOrderCnt(pic1, pic0));
+    // 当前帧与L0参考帧的POC差
+    int32_t tb = CLIP3(-128, 127, DiffPicOrderCnt(currPicOrField, pic0));
 
-    int32_t tx = (16384 + ABS(td / 2)) / td;
+    // 时间比例因子，用于缩放共位宏块的运动矢量
+    int32_t tx = (16384 + ABS(td / 2)) / td; // 16384 = 2^{14}
     int32_t DistScaleFactor = CLIP3(-1024, 1023, (tb * tx + 32) >> 6);
 
+    // 使用时间比例因子 DistScaleFactor 缩放共位宏块的运动矢量 mvCol，得到L0的运动矢量 mvL0。然后通过L0和共位宏块的运动矢量差，计算L1的运动矢量 mvL1
     mvL0[0] = (DistScaleFactor * mvCol[0] + 128) >> 8;
     mvL0[1] = (DistScaleFactor * mvCol[1] + 128) >> 8;
     mvL1[0] = mvL0[0] - mvCol[0];
@@ -943,7 +958,8 @@ int PictureBase::
   }
 
   predFlagL0 = predFlagL1 = true;
-
+  // 如果是第一个子宏块分区，则计算子宏块的运动矢量数量
+  subMvCnt = (subMbPartIdx == 0) ? (predFlagL0 + predFlagL1) : 0;
   return 0;
 }
 
@@ -1106,7 +1122,7 @@ int PictureBase::derivation_macroblock_and_sub_macroblock_partition_indices(
     H264_MB_TYPE mb_type_, H264_MB_TYPE subMbType_[4], int32_t xP, int32_t yP,
     int32_t &mbPartIdxN, int32_t &subMbPartIdxN) {
 
-  if (mb_type_ == MB_TYPE_NA) RET(-1);
+  RET(mb_type_ == MB_TYPE_NA);
   if (mb_type_ >= I_NxN && mb_type_ <= I_PCM)
     mbPartIdxN = 0;
   else {
@@ -1979,7 +1995,7 @@ int PictureBase::default_weighted_sample_prediction(
 
 // 8.4.1.2.3 Derivation process for temporal direct luma motion vector and reference index prediction mode
 //refPicCol 为在对图片 colPic 内的同位宏块 mbAddrCol 进行解码时由参考索引 refIdxCol 引用的帧、字段或互补字段对
-int PictureBase::mapColToList0(int32_t refIdxCol, PictureBase *colPic,
+int PictureBase::MapColToList0(int32_t refIdxCol, PictureBase *colPic,
                                int32_t mbAddrCol, int32_t vertMvScale,
                                bool field_pic_flag) {
 

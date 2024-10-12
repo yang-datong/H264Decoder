@@ -51,7 +51,9 @@ class SPS {
   uint32_t pic_height_in_map_units_minus1 = 0;
 
   uint32_t MaxFrameNum = 0;
-  /* 指示在宏块的直接模式（主要是指B帧，如B_Direct) 下是否可以使用8x8变换 */
+  /* 指示在宏块的直接模式（主要是指B帧，如B_Direct) 下是否可以使用8x8变换：
+   * 1: 可以直接从 8x8 分区推导运动矢量，不需要进一步划分为 4x4 子块
+   * 2: 需要将 8x8 分区进一步划分为 4x4 子块，并为每个 4x4 子块单独推导运动矢量 */
   bool direct_8x8_inference_flag = 0;
 
   /* 等于 1 指定 4:4:4 色度格式的三个颜色分量分别编码（如果为1,说明一定是YUV444);

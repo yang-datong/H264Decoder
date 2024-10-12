@@ -338,7 +338,7 @@ class PictureBase {
   int derivation_the_coLocated_4x4_sub_macroblock_partitions(
       int32_t mbPartIdx, int32_t subMbPartIdx, PictureBase *&colPic,
       int32_t &mbAddrCol, int32_t (&mvCol)[2], int32_t &refIdxCol,
-      int32_t &vertMvScale);
+      int32_t &vertMvScale, bool useRefPicList1);
   int derivation_spatial_direct_luma_motion_vector_and_ref_index_prediction(
       int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
       int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
@@ -364,7 +364,7 @@ class PictureBase {
   int derivation_chroma_motion_vectors(int32_t ChromaArrayType, int32_t mvLX[2],
                                        PictureBase *refPic,
                                        int32_t (&mvCLX)[2]);
-  int mapColToList0(int32_t refIdxCol, PictureBase *colPic, int32_t mbAddrCol,
+  int MapColToList0(int32_t refIdxCol, PictureBase *colPic, int32_t mbAddrCol,
                     int32_t vertMvScale, bool field_pic_flag);
 
   int decoding_inter_prediction_samples(
