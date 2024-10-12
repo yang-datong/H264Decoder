@@ -778,27 +778,26 @@ int PictureBase::derivation_the_coLocated_4x4_sub_macroblock_partitions(
 
 // 8.4.1.2.2 Derivation process for spatial direct luma motion vector and reference index prediction mode
 //空间直接运动矢量预测
+//NOTE: 运动矢量 mvLX 对于调用该过程的宏块的所有 4x4 子宏块分区是相同的，所以只需要传入宏块的首个4x4分区，进行推导
 int PictureBase::
     derivation_spatial_direct_luma_motion_vector_and_ref_index_prediction(
         int32_t mbPartIdx, int32_t subMbPartIdx, int32_t &refIdxL0,
         int32_t &refIdxL1, int32_t (&mvL0)[2], int32_t (&mvL1)[2],
         int32_t &subMvCnt, bool &predFlagL0, bool &predFlagL1) {
 
-  H264_MB_TYPE currSubMbType =
+  const H264_MB_TYPE &currSubMbType =
       m_mbs[CurrMbAddr].m_name_of_sub_mb_type[mbPartIdx];
-
-  /* NOTE: 对于宏块的所有 4x4 子宏块分区，运动矢量 mvL0N、mvL1N 和参考索引 refIdxL0N、refIdxL1N 是相同的 */
 
   int32_t mbAddrA = 0, mbAddrB = 0, mbAddrC = 0;
   int32_t mvL0A[2] = {0}, mvL0B[2] = {0}, mvL0C[2] = {0}, mvL1A[2] = {0},
           mvL1B[2] = {0}, mvL1C[2] = {0};
   int32_t refIdxL0A = 0, refIdxL0B = 0, refIdxL0C = 0, refIdxL1A = 0,
           refIdxL1B = 0, refIdxL1C = 0;
-  //获取相邻宏块的L0运动信息
+  //获取相邻宏块(左边（A）和上边（B）右上方（C））的L0运动信息mvL0
   RET(derivation_motion_data_of_neighbouring_partitions(
       0, 0, currSubMbType, false, mbAddrA, mvL0A, refIdxL0A, mbAddrB, mvL0B,
       refIdxL0B, mbAddrC, mvL0C, refIdxL0C));
-  //获取相邻宏块的L1运动信息
+  //获取相邻宏块(左边（A）和上边（B）右上方（C））的L1运动信息mvL1
   RET(derivation_motion_data_of_neighbouring_partitions(
       0, 0, currSubMbType, true, mbAddrA, mvL1A, refIdxL1A, mbAddrB, mvL1B,
       refIdxL1B, mbAddrC, mvL1C, refIdxL1C));
@@ -807,57 +806,48 @@ int PictureBase::
 #define MinPositive(x, y)                                                      \
   ((x) >= 0 && (y) >= 0) ? (MIN((x), (y))) : (MAX((x), (y)))
 
-  // 计算L0和L1的参考帧索引。选择最小的非负参考帧索引。如果所有参考帧索引都为负，则选择最大的负值
+  // 确定有效的（非负的）最小参考索引。如果所有的参考索引都是负的，则选取最大的那个
   refIdxL0 = MinPositive(refIdxL0A, MinPositive(refIdxL0B, refIdxL0C));
   refIdxL1 = MinPositive(refIdxL1A, MinPositive(refIdxL1B, refIdxL1C));
 
 #undef MinPositive
 
-  // 直接零预测模式
+  // 直接零预测模式，这种情况通常意味着没有有效的运动信息，因此可以假设宏块是静止的
   bool directZeroPredictionFlag = false;
   if (refIdxL0 < 0 && refIdxL1 < 0)
     refIdxL0 = 0, refIdxL1 = 0, directZeroPredictionFlag = true;
 
-  // 获取共位宏块（即与当前宏块在参考帧中相同位置的宏块）的运动信息
+  // 获取共位宏块（即与当前宏块在参考帧中相同位置的宏块）的运动信息（同时间直接模式）
   PictureBase *colPic = nullptr;
   int32_t mvCol[2] = {0}, refIdxCol = 0, mbAddrCol = 0;
   // vertMvScale：垂直运动矢量的缩放因子
   int32_t vertMvScale = 0;
+  /* TODO YangJing 是不是这里也应该传入flase???，现在md5值已经定了，后续再改动吧 <24-10-13 05:56:03> */
   RET(derivation_the_coLocated_4x4_sub_macroblock_partitions(
       mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol, vertMvScale,
       true));
 
-  // 判断共位宏块是否为零运动矢量（colZeroFlag）。如果共位宏块的参考帧索引为0，并且运动矢量的水平和垂直分量都在[-1, 1]之间，则认为共位宏块的运动矢量为零
+  // 判断共位宏块是否为零运动矢量：共位宏块的参考帧索引为0，并且运动矢量的水平和垂直分量都在[-1, 1]之间，则认为共位宏块的运动矢量为零(运动矢量的大小非常小，可以记为忽略)
   bool colZeroFlag = false;
   /* 首个后参考帧，当前被标记为“用于短期参考” */
   if (m_RefPicList1[0]->reference_marked_type ==
-          PICTURE_MARKED_AS_used_short_ref &&
-      refIdxCol == 0) {
-    if (m_mbs[mbAddrCol].mb_field_decoding_flag == 0 &&
-        (mvCol[0] >= -1 && mvCol[0] <= 1) && (mvCol[1] >= -1 && mvCol[1] <= 1))
-      colZeroFlag = true;
-    else if ((m_mbs[mbAddrCol].mb_field_decoding_flag &&
-              (mvCol[0] >= -1 && mvCol[0] <= 1) &&
-              (mvCol[1] >= -1 && mvCol[1] <= 1)))
-      colZeroFlag = true;
-  }
+      PICTURE_MARKED_AS_used_short_ref)
+    if ((mvCol[0] >= -1 && mvCol[0] <= 1) && (mvCol[1] >= -1 && mvCol[1] <= 1))
+      if (refIdxCol == 0) colZeroFlag = true;
 
-  // 当前宏块使用直接零预测模式，或者参考帧索引为负，或者参考帧索引为0且共位宏块的运动矢量为零，则将L0或L1的运动矢量设置为(0, 0)
-  if (directZeroPredictionFlag || refIdxL0 < 0 ||
-      (refIdxL0 == 0 && colZeroFlag))
-    mvL0[0] = 0, mvL0[1] = 0;
-  else
-    // 运动矢量预测
-    RET(derivation_luma_motion_vector_prediction(0, 0, currSubMbType, false,
-                                                 refIdxL0, mvL0));
-  //NOTE:该函数返回的运动矢量 mvLX 对于调用该过程的宏块的所有 4x4 子宏块分区是相同的
+#define derivation_motion_vector(refIdxLX, mvLX, listSuffixFlag)               \
+  if (directZeroPredictionFlag || (refIdxLX) < 0 ||                            \
+      ((refIdxLX) == 0 && colZeroFlag))                                        \
+    (mvLX)[0] = 0, (mvLX)[1] = 0;                                              \
+  else                                                                         \
+    RET(derivation_luma_motion_vector_prediction(                              \
+        0, 0, currSubMbType, (listSuffixFlag), (refIdxLX), (mvLX)));
 
-  if (directZeroPredictionFlag || refIdxL1 < 0 ||
-      (refIdxL1 == 0 && colZeroFlag))
-    mvL1[0] = 0, mvL1[1] = 0;
-  else
-    RET(derivation_luma_motion_vector_prediction(0, 0, currSubMbType, true,
-                                                 refIdxL1, mvL1));
+  // 运动矢量预测：满足直接零运动预测，或者当前宏块的参考索引是零且共位宏块静止，那么将当前宏块的"运动矢量"也设置为零(0, 0)
+  derivation_motion_vector(refIdxL0, mvL0, false);
+  derivation_motion_vector(refIdxL1, mvL1, true);
+
+#undef derivation_motion_vector
 
   // 更新预测标志和子宏块运动矢量数量
   //Table 8-9 – Assignment of prediction utilization flags
@@ -996,6 +986,11 @@ int derivation_mvLXN_and_refIdxLXN(const MacroBlock &mb, int mbAddrN,
 
 // 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
 // mvLXN为 相邻分区的运动向量，refIdxLXN为相邻分区的参考索引
+// listSuffixFlag : 是否为列表的最后一个，即mvL0，还是mvL1
+/*  该过程的输出为（N 被 A、B 或 C 替换）:
+    – mbAddrN\mbPartIdxN\subMbPartIdxN 指定相邻分区，
+    – 相邻分区的运动向量 mvLXN，
+    – 相邻分区的参考索引 refIdxLXN。 */
 int PictureBase::derivation_motion_data_of_neighbouring_partitions(
     int32_t mbPartIdx, int32_t subMbPartIdx, H264_MB_TYPE currSubMbType,
     int32_t listSuffixFlag, int32_t &mbAddrN_A, int32_t (&mvLXN_A)[2],
