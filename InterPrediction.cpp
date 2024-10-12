@@ -306,7 +306,6 @@ int PictureBase::derivation_motion_vector_components_and_reference_indices(
   /* ------------------  End ------------------ */
 
   int32_t mvpL0[2] = {0}, mvpL1[2] = {0};
-  bool listSuffixFlag = false, refPicLSetFlag = false;
   H264_MB_TYPE currSubMbType = MB_TYPE_NA;
 
   /* ---------------------------- P_Skip 宏块的亮度运动矢量 ---------------------------- */
@@ -323,22 +322,22 @@ int PictureBase::derivation_motion_vector_components_and_reference_indices(
   }
   /* ---------------------------- 宏块运动预测 ---------------------------- */
   else {
+    /* 获取当前宏块、子宏块预测模式 */
     int32_t NumSubMbPart = 0, SubMbPartWidth = 0, SubMbPartHeight = 0;
     H264_MB_PART_PRED_MODE mb_pred_mode = MB_PRED_MODE_NA,
                            SubMbPredMode = MB_PRED_MODE_NA;
-
     RET(MacroBlock::MbPartPredMode(mb_type, mbPartIdx,
                                    mb.transform_size_8x8_flag, mb_pred_mode));
     RET(MacroBlock::SubMbPredMode(header->slice_type, mb.sub_mb_type[mbPartIdx],
                                   NumSubMbPart, SubMbPredMode, SubMbPartWidth,
                                   SubMbPartHeight));
 
-    refIdxL0 = -1, predFlagL0 = false;
+    refIdxL0 = -1, predFlagL0 = false, refIdxL1 = -1, predFlagL1 = false;
+
     if (mb_pred_mode == Pred_L0 || mb_pred_mode == BiPred ||
         SubMbPredMode == Pred_L0 || SubMbPredMode == BiPred)
       refIdxL0 = mb.ref_idx_l0[mbPartIdx], predFlagL0 = true;
 
-    refIdxL1 = -1, predFlagL1 = false;
     if (mb_pred_mode == Pred_L1 || mb_pred_mode == BiPred ||
         SubMbPredMode == Pred_L1 || SubMbPredMode == BiPred)
       refIdxL1 = mb.ref_idx_l1[mbPartIdx], predFlagL1 = true;
@@ -348,53 +347,41 @@ int PictureBase::derivation_motion_vector_components_and_reference_indices(
 
     /* 亮度宏块预测 */
     if (predFlagL0) {
-      refPicLSetFlag = true, refPicL0 = NULL;
+      // 1. 负责选择参考帧
       RET(reference_picture_selection(refIdxL0, m_RefPicList0,
                                       m_RefPicList0Length, refPicL0));
-
-      listSuffixFlag = 0;
+      // 2. 计算运动向量
       RET(derivation_luma_motion_vector_prediction(
-          mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, refIdxL0,
-          mvpL0));
+          mbPartIdx, subMbPartIdx, currSubMbType, false, refIdxL0, mvpL0));
+      // 3. 运动矢量 = 预测的运动矢量 + 运动矢量差
       mvL0[0] = mvpL0[0] + mb.mvd_l0[mbPartIdx][subMbPartIdx][0];
       mvL0[1] = mvpL0[1] + mb.mvd_l0[mbPartIdx][subMbPartIdx][1];
     }
 
     if (predFlagL1) {
-      refPicLSetFlag = true, refPicL1 = NULL;
       RET(reference_picture_selection(refIdxL1, m_RefPicList1,
                                       m_RefPicList1Length, refPicL1));
-
-      listSuffixFlag = true;
       RET(derivation_luma_motion_vector_prediction(
-          mbPartIdx, subMbPartIdx, currSubMbType, listSuffixFlag, refIdxL1,
-          mvpL1));
+          mbPartIdx, subMbPartIdx, currSubMbType, true, refIdxL1, mvpL1));
       mvL1[0] = mvpL1[0] + mb.mvd_l1[mbPartIdx][subMbPartIdx][0];
       mvL1[1] = mvpL1[1] + mb.mvd_l1[mbPartIdx][subMbPartIdx][1];
     }
   }
 
   /* 色度宏块预测 */
-  if (refPicLSetFlag == false) {
+  if (ChromaArrayType != 0) {
     if (predFlagL0) {
-      refPicLSetFlag = true, refPicL0 = NULL;
       RET(reference_picture_selection(refIdxL0, m_RefPicList0,
                                       m_RefPicList0Length, refPicL0));
-    }
-    if (predFlagL1) {
-      refPicLSetFlag = true, refPicL1 = NULL;
-      RET(reference_picture_selection(refIdxL1, m_RefPicList1,
-                                      m_RefPicList1Length, refPicL1));
-    }
-  }
-
-  if (ChromaArrayType != 0) {
-    if (predFlagL0)
       RET(derivation_chroma_motion_vectors(ChromaArrayType, mvL0, refPicL0,
                                            mvCL0));
-    if (predFlagL1)
+    }
+    if (predFlagL1) {
+      RET(reference_picture_selection(refIdxL1, m_RefPicList1,
+                                      m_RefPicList1Length, refPicL1));
       RET(derivation_chroma_motion_vectors(ChromaArrayType, mvL1, refPicL1,
                                            mvCL1));
+    }
   }
 
   return 0;
@@ -1325,6 +1312,7 @@ int PictureBase::reference_picture_selection(int32_t refIdxLX,
                                              PictureBase *&refPic) {
   const SliceHeader *header = m_slice->slice_header;
 
+  refPic = nullptr;
   if (refIdxLX < 0 || refIdxLX >= 32) RET(-1);
 
   if (header->field_pic_flag) {

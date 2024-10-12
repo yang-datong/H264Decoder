@@ -533,20 +533,18 @@ int MacroBlock::MbPartPredMode(H264_MB_TYPE name_of_mb_type, int32_t mbPartIdx,
                                H264_MB_PART_PRED_MODE &mb_pred_mode) {
   //Table 7-11 – Macroblock types for I slices
   if (name_of_mb_type == I_NxN) {
-    if (mbPartIdx == 0) {
-      if (transform_size_8x8_flag == 0)
-        mb_pred_mode = mb_type_I_slices_define[0].MbPartPredMode;
-      else
-        mb_pred_mode = mb_type_I_slices_define[1].MbPartPredMode;
-    } else
-      RET(-1);
-
-  } else if (name_of_mb_type >= MIN_MB_TYPE_FOR_I_SLICE &&
-             name_of_mb_type <= MAX_MB_TYPE_FOR_I_SLICE) {
     if (mbPartIdx == 0)
       mb_pred_mode =
-          mb_type_I_slices_define[mbPartIdx - MIN_MB_TYPE_FOR_I_SLICE]
-              .MbPartPredMode;
+          mb_type_I_slices_define[transform_size_8x8_flag].MbPartPredMode;
+    else
+      RET(-1);
+
+  } else if (name_of_mb_type >= I_16x16_0_0_0 &&
+             name_of_mb_type <= I_16x16_3_2_1) {
+    if (mbPartIdx == 0)
+      // FIXME: mbPartIdx -> name_of_mb_type
+      mb_pred_mode = mb_type_I_slices_define[name_of_mb_type - I_16x16_0_0_0]
+                         .MbPartPredMode;
     else
       RET(-1);
 
