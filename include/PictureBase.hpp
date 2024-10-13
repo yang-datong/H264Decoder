@@ -160,12 +160,12 @@ class PictureBase {
       int32_t long_term_pic_num, Frame *(&RefPicListX)[16]);
 
   // 8.2.5 每一张图片解码完成后，都需要标记一次图像参考列表
-  int Decoded_reference_picture_marking_process(Frame *(&dpb)[16]);
-  int Sequence_of_operations_for_decoded_reference_picture_marking_process(
+  int decoded_reference_picture_marking(Frame *(&dpb)[16]);
+  int sequence_of_operations_for_decoded_reference_picture_marking(
       Frame *(&dpb)[16]);
-  int Sliding_window_decoded_reference_picture_marking_process(
+  int sliding_window_decoded_reference_picture_marking(
       Frame *(&dpb)[16]);
-  int Adaptive_memory_control_decoded_reference_picture_marking_process(
+  int adaptive_memory_control_decoded_reference_picture_marking(
       Frame *(&dpb)[16]);
 
   //================= 帧内预测 ========================

@@ -651,7 +651,6 @@ int PictureBase::getOneEmptyPicture(Frame *&pic) {
 
 int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
     Frame *&newEmptyPicture) {
-  int ret = 0;
 
   this->m_is_decode_finished = 1;
   if (m_picture_coded_type == PICTURE_CODED_TYPE_FRAME ||
@@ -659,49 +658,37 @@ int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
     this->m_parent->m_is_decode_finished = 1;
   }
 
+  /* TODO YangJing 这里函数要认真看 <24-10-14 05:44:27> */
   deblocking_filter_process();
 
   //--------标记图像参考列表------------
-  // When the current picture is a reference picture and after all slices of the
-  // current picture have been decoded, the decoded reference picture marking
-  // process in clause 8.2.5 specifies how the current picture is used in the
-  // decoding process of inter prediction in later decoded pictures.
   if (m_slice->slice_header->nal_ref_idc != 0) {
-    // 8.2.5 Decoded reference picture marking process
-    ret = Decoded_reference_picture_marking_process(m_dpb);
-    RETURN_IF_FAILED(ret != 0, ret);
-
-    // When the current picture includes a memory_management_control_operation
-    // equal to 5, after the decoding of the current picture, tempPicOrderCnt is
-    // set equal to PicOrderCnt( CurrPic ), TopFieldOrderCnt of the current
-    // picture (if any) is set equal to TopFieldOrderCnt − tempPicOrderCnt, and
-    // BottomFieldOrderCnt of the current picture (if any) is set equal to
-    // BottomFieldOrderCnt − tempPicOrderCnt.
-    if (memory_management_control_operation_5_flag == 1) {
+    /* TODO YangJing 这里函数要认真看 <24-10-14 05:44:27> */
+    RET(decoded_reference_picture_marking(m_dpb));
+    if (memory_management_control_operation_5_flag) {
       int32_t tempPicOrderCnt = PicOrderCnt; // PicOrderCntFunc(this);
       TopFieldOrderCnt = TopFieldOrderCnt - tempPicOrderCnt;
       BottomFieldOrderCnt = BottomFieldOrderCnt - tempPicOrderCnt;
     }
   }
 
-  //--------------------------------------
-  Frame *emptyPic = NULL;
-  ret = getOneEmptyPicture(emptyPic);
-  RETURN_IF_FAILED(ret != 0, ret);
+  Frame *emptyPic = nullptr;
+  RET(getOneEmptyPicture(emptyPic));
 
+  int ret = 0;
   ret = emptyPic->reset();                        // 重置各个变量的值
   ret = emptyPic->m_picture_frame.reset();        // 重置各个变量的值
   ret = emptyPic->m_picture_top_filed.reset();    // 重置各个变量的值
   ret = emptyPic->m_picture_bottom_filed.reset(); // 重置各个变量的值
+  RET(ret);
 
   emptyPic->m_picture_previous = this;
 
   if (reference_marked_type == PICTURE_MARKED_AS_used_short_ref ||
-      reference_marked_type == PICTURE_MARKED_AS_used_long_ref) {
+      reference_marked_type == PICTURE_MARKED_AS_used_long_ref)
     emptyPic->m_picture_previous_ref = this;
-  } else {
+  else
     emptyPic->m_picture_previous_ref = this->m_parent->m_picture_previous_ref;
-  }
 
   g_PicNumCnt++;
 
@@ -709,10 +696,8 @@ int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
   emptyPic->m_picture_top_filed.m_PicNumCnt = g_PicNumCnt;
   emptyPic->m_picture_bottom_filed.m_PicNumCnt = g_PicNumCnt;
 
-  //----------------------------
   newEmptyPicture = emptyPic;
-
-  return ret;
+  return 0;
 }
 
 // 6.4.1 Inverse macroblock scanning process

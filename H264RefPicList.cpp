@@ -1119,154 +1119,102 @@ int PictureBase::modif_ref_picture_lists_for_long_ref_pictures(
 
   /* 在该伪代码过程中，列表RefPicListX的长度暂时比最终列表所需的长度长一个元素。执行此过程后，仅需要保留列表中的 0 到 num_ref_idx_lX_active_minus1 元素。 */
   /* TODO YangJing 可能会有问题 <24-08-31 16:16:26> */
-  RefPicListX[num_ref_idx_lX_active_minus1 + 1] = NULL;
+  RefPicListX[num_ref_idx_lX_active_minus1 + 1] = nullptr;
   return 0;
 }
 
 // 8.2.5 Decoded reference picture marking process
-// This process is invoked for decoded pictures when nal_ref_idc is not equal to 0.
-int PictureBase::Decoded_reference_picture_marking_process(Frame *(&dpb)[16]) {
-  return Sequence_of_operations_for_decoded_reference_picture_marking_process(
-      dpb);
+int PictureBase::decoded_reference_picture_marking(Frame *(&dpb)[16]) {
+  return sequence_of_operations_for_decoded_reference_picture_marking(dpb);
 }
 
 // 8.2.5.1 Sequence of operations for decoded reference picture marking process
-int PictureBase::
-    Sequence_of_operations_for_decoded_reference_picture_marking_process(
-        Frame *(&dpb)[16]) {
-  int ret = 0;
-  SliceHeader *slice_header = m_slice->slice_header;
+int PictureBase::sequence_of_operations_for_decoded_reference_picture_marking(
+    Frame *(&dpb)[16]) {
+  const SliceHeader *slice_header = m_slice->slice_header;
   int32_t size_dpb = 16;
 
-  // 1. All slices of the current picture are decoded.
-  //    RETURN_IF_FAILED(m_is_decode_finished == 0, -1);
-
-  // 2. Depending on whether the current picture is an IDR picture, the
-  // following applies:
-  if (slice_header->IdrPicFlag == 1) // IDR picture
-  {
+  if (slice_header->IdrPicFlag) {
     // All reference pictures are marked as "unused for reference"
     for (int i = 0; i < size_dpb; i++) {
       dpb[i]->reference_marked_type = PICTURE_MARKED_AS_unused_for_reference;
       dpb[i]->m_picture_coded_type_marked_as_refrence =
           PICTURE_CODED_TYPE_UNKNOWN;
       if (dpb[i] != this->m_parent) {
-        dpb[i]->m_picture_coded_type = PICTURE_CODED_TYPE_UNKNOWN; // FIXME:
+        dpb[i]->m_picture_coded_type = PICTURE_CODED_TYPE_UNKNOWN;
         // 需要先将之前解码的所有帧输出去
       }
     }
 
-    if (slice_header->long_term_reference_flag == 0) // 标记自己为哪一种参考帧
-    {
+    // 标记自己为哪一种参考帧
+    if (slice_header->long_term_reference_flag == 0) {
       reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
       MaxLongTermFrameIdx = NA; //"no long-term frame indices".
       m_parent->reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
 
-      if (m_parent->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
+      if (m_parent->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME)
         m_parent->m_picture_coded_type_marked_as_refrence =
             PICTURE_CODED_TYPE_FRAME;
-      } else {
+      else
         m_parent->m_picture_coded_type_marked_as_refrence =
             PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
-      }
-    } else // if (slice_header->long_term_reference_flag == 1)
-    {
+
+    } else {
       reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
-      LongTermFrameIdx = 0;
-      MaxLongTermFrameIdx = 0;
+      LongTermFrameIdx = 0, MaxLongTermFrameIdx = 0;
       m_parent->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
 
-      if (m_parent->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
+      if (m_parent->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME)
         m_parent->m_picture_coded_type_marked_as_refrence =
             PICTURE_CODED_TYPE_FRAME;
-      } else {
+      else
         m_parent->m_picture_coded_type_marked_as_refrence =
             PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
-      }
     }
-  } else // the current picture is not an IDR picture
-  {
+  }
+  // Not an IDR picture
+  else {
     if (slice_header->adaptive_ref_pic_marking_mode_flag == 0) {
-      // 8.2.5.3 Sliding window decoded reference picture marking process
       // 滑动窗口解码参考图像的标识过程
-      ret = Sliding_window_decoded_reference_picture_marking_process(dpb);
-      RETURN_IF_FAILED(ret != 0, ret);
-    } else // if (slice_header->adaptive_ref_pic_marking_mode_flag == 1)
-    {
-      // 8.2.5.4 Adaptive memory control decoded reference picture marking
-      // process
-      ret = Adaptive_memory_control_decoded_reference_picture_marking_process(
-          dpb);
-      RETURN_IF_FAILED(ret != 0, ret);
+      RET(sliding_window_decoded_reference_picture_marking(dpb));
+    } else {
+      RET(adaptive_memory_control_decoded_reference_picture_marking(dpb));
     }
   }
 
-  // 3. When the current picture is not an IDR picture and it was not marked as
-  // "used for long-term reference" by memory_management_control_operation equal
-  // to 6, it is marked as "used for short-term reference".
-  if (slice_header->IdrPicFlag != 1 // the current picture is not an IDR picture
-      && memory_management_control_operation_6_flag != 6) {
+  // the current picture is not an IDR picture
+  if (slice_header->IdrPicFlag != 1 &&
+      memory_management_control_operation_6_flag != 6) {
     reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
     MaxLongTermFrameIdx = NA; //"no long-term frame indices".
     m_parent->reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
 
-    if (m_parent->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
+    if (m_parent->m_picture_coded_type == PICTURE_CODED_TYPE_FRAME)
       m_parent->m_picture_coded_type_marked_as_refrence =
           PICTURE_CODED_TYPE_FRAME;
-    } else {
+    else
       m_parent->m_picture_coded_type_marked_as_refrence =
           PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
-    }
   }
 
   return 0;
 }
 
-// 8.2.5.2 Decoding process for gaps in frame_num
-// This process is invoked when frame_num is not equal to PrevRefFrameNum and is
-// not equal to ( PrevRefFrameNum + 1 ) % MaxFrameNum. NOTE 1 – Although this
-// process is specified as a subclause within clause 8.2.5 (which defines a
-// process that is invoked only when
-//          nal_ref_idc is not equal to 0), this process may also be invoked
-//          when nal_ref_idc is equal to 0 (as specified in clause 8). The
-//          reasons for the location of this clause within the structure of this
-//          Recommendation | International Standard are historical.
-// NOTE 2 – This process can only be invoked for a conforming bitstream when
-// gaps_in_frame_num_value_allowed_flag is equal to 1.
-//          When gaps_in_frame_num_value_allowed_flag is equal to 0 and
-//          frame_num is not equal to PrevRefFrameNum and is not equal to (
-//          PrevRefFrameNum + 1 ) % MaxFrameNum, the decoding process should
-//          infer an unintentional loss of pictures.
-//int PictureBase::Decoding_process_for_gaps_in_frame_num() { return 0; }
-
 // 8.2.5.3 Sliding window decoded reference picture marking process
-// 滑动窗口解码参考图像的标识过程 This process is invoked when
-// adaptive_ref_pic_marking_mode_flag is equal to 0.
-int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
+// 滑动窗口解码参考图像的标识过程
+int PictureBase::sliding_window_decoded_reference_picture_marking(
     Frame *(&dpb)[16]) {
-  if (m_picture_coded_type ==
-          PICTURE_CODED_TYPE_BOTTOM_FIELD // If the current picture is a
-      // coded field that is the second
-      // field in decoding order of a
-      // complementary reference field
-      // pair
-      && (m_parent->m_picture_top_filed.reference_marked_type ==
-          PICTURE_MARKED_AS_used_short_ref)) // the first field
-  // has been marked
-  // as "used for
-  // short-term
-  // reference"
-  {
-    // the current picture and the complementary reference field pair are also
-    // marked as "used for short-term reference".
+
+  if (m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD &&
+      (m_parent->m_picture_top_filed.reference_marked_type ==
+       PICTURE_MARKED_AS_used_short_ref)) {
     reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
     m_parent->reference_marked_type = PICTURE_MARKED_AS_used_short_ref;
     m_parent->m_picture_coded_type_marked_as_refrence =
         PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
   } else {
     int32_t size_dpb = 16;
-    uint32_t numShortTerm = 0;
-    uint32_t numLongTerm = 0;
+    uint32_t numShortTerm = 0, numLongTerm = 0;
 
     for (int i = 0; i < size_dpb; i++) {
       if (dpb[i]->m_picture_frame.reference_marked_type ==
@@ -1274,18 +1222,16 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
           dpb[i]->m_picture_top_filed.reference_marked_type ==
               PICTURE_MARKED_AS_used_short_ref ||
           dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-              PICTURE_MARKED_AS_used_short_ref) {
+              PICTURE_MARKED_AS_used_short_ref)
         numShortTerm++;
-      }
 
       if (dpb[i]->m_picture_frame.reference_marked_type ==
               PICTURE_MARKED_AS_used_long_ref ||
           dpb[i]->m_picture_top_filed.reference_marked_type ==
               PICTURE_MARKED_AS_used_long_ref ||
           dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-              PICTURE_MARKED_AS_used_long_ref) {
+              PICTURE_MARKED_AS_used_long_ref)
         numLongTerm++;
-      }
     }
 
     if (numShortTerm + numLongTerm ==
@@ -1294,13 +1240,6 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
       PictureBase *refPic = NULL;
       int32_t FrameNumWrap_smallest_index = -1;
 
-      // When numShortTerm + numLongTerm is equal to Max( max_num_ref_frames, 1
-      // ), the condition that numShortTerm is greater than 0 shall be
-      // fulfilled, and the short-term reference frame, complementary reference
-      // field pair or non-paired reference field that has the smallest value of
-      // FrameNumWrap is marked as "unused for reference". When it is a frame or
-      // a complementary field pair, both of its fields are also marked as
-      // "unused for reference".
       for (int i = 0; i < size_dpb; i++) {
         if (dpb[i]->m_picture_frame.reference_marked_type ==
                 PICTURE_MARKED_AS_used_short_ref ||
@@ -1385,35 +1324,26 @@ int PictureBase::Sliding_window_decoded_reference_picture_marking_process(
 }
 
 // 8.2.5.4 Adaptive memory control decoded reference picture marking process
-// This process is invoked when adaptive_ref_pic_marking_mode_flag is equal
-// to 1.
-int PictureBase::
-    Adaptive_memory_control_decoded_reference_picture_marking_process(
-        Frame *(&dpb)[16]) {
-  SliceHeader *slice_header = m_slice->slice_header;
+int PictureBase::adaptive_memory_control_decoded_reference_picture_marking(
+    Frame *(&dpb)[16]) {
+  const SliceHeader *slice_header = m_slice->slice_header;
+  const int32_t size_dpb = 16;
 
-  int32_t size_dpb = 16;
-  int32_t i = 0;
-  int32_t j = 0;
-
-  for (j = 0; j < slice_header->dec_ref_pic_marking_count; j++) {
-    // The memory_management_control_operation command with value of 0 specifies
-    // the end of memory_management_control_operation commands.
+  for (int32_t j = 0; j < slice_header->dec_ref_pic_marking_count; j++) {
     if (slice_header->m_dec_ref_pic_marking[j]
-            .memory_management_control_operation == 0) {
+            .memory_management_control_operation == 0)
       break;
-    }
 
-    // 8.2.5.4.1 Marking process of a short-term reference picture as "unused
-    // for reference" 将短期图像标记为“不用于参考”
+    // 8.2.5.4.1 Marking process of a short-term reference picture as "unused for reference"
+    // 将短期图像标记为“不用于参考”
     if (slice_header->m_dec_ref_pic_marking[j]
             .memory_management_control_operation == 1) {
       int32_t picNumX =
           slice_header->CurrPicNum - (slice_header->m_dec_ref_pic_marking[j]
                                           .difference_of_pic_nums_minus1 +
                                       1);
-      if (slice_header->field_pic_flag == 0) {
-        for (i = 0; i < size_dpb; i++) {
+      if (slice_header->field_pic_flag == false) {
+        for (int32_t i = 0; i < size_dpb; i++) {
           if ((dpb[i]->m_picture_frame.reference_marked_type ==
                    PICTURE_MARKED_AS_used_short_ref &&
                dpb[i]->m_picture_frame.PicNum == picNumX) ||
@@ -1433,9 +1363,8 @@ int PictureBase::
                 PICTURE_MARKED_AS_unused_for_reference;
           }
         }
-      } else // if (field_pic_flag == 1)
-      {
-        for (i = 0; i < size_dpb; i++) {
+      } else {
+        for (int32_t i = 0; i < size_dpb; i++) {
           if (dpb[i]->m_picture_top_filed.reference_marked_type ==
                   PICTURE_MARKED_AS_used_short_ref &&
               dpb[i]->m_picture_top_filed.PicNum == picNumX) {
@@ -1463,12 +1392,12 @@ int PictureBase::
       }
     }
 
-    // 8.2.5.4.2 Marking process of a long-term reference picture as "unused for
-    // reference" 将长期图像标记为“不用于参考”
+    // 8.2.5.4.2 Marking process of a long-term reference picture as "unused for reference"
+    // 将长期图像标记为“不用于参考”
     else if (slice_header->m_dec_ref_pic_marking[j]
                  .memory_management_control_operation == 2) {
       if (slice_header->field_pic_flag == 0) {
-        for (i = 0; i < size_dpb; i++) {
+        for (int32_t i = 0; i < size_dpb; i++) {
           if (dpb[i]->m_picture_frame.reference_marked_type ==
                   PICTURE_MARKED_AS_used_long_ref &&
               dpb[i]->m_picture_frame.LongTermPicNum ==
@@ -1485,11 +1414,8 @@ int PictureBase::
                 PICTURE_MARKED_AS_unused_for_reference;
           }
         }
-      } else // if (field_pic_flag == 1) //FIXME: but the marking of the other
-             // field in the same reference frame or complementary reference
-             // field pair is not changed.
-      {
-        for (i = 0; i < size_dpb; i++) {
+      } else {
+        for (int32_t i = 0; i < size_dpb; i++) {
           if (dpb[i]->m_picture_top_filed.reference_marked_type ==
                   PICTURE_MARKED_AS_used_long_ref &&
               dpb[i]->m_picture_top_filed.LongTermPicNum ==
@@ -1520,20 +1446,15 @@ int PictureBase::
       }
     }
 
-    // 8.2.5.4.3 Assignment process of a LongTermFrameIdx to a short-term
-    // reference picture 分配LongTermFrameIdx给一个短期参考图像
+    // 8.2.5.4.3 Assignment process of a LongTermFrameIdx to a short-term reference picture
+    // 分配LongTermFrameIdx给一个短期参考图像
     else if (slice_header->m_dec_ref_pic_marking[j]
                  .memory_management_control_operation == 3) {
       int32_t picNumX =
           slice_header->CurrPicNum - (slice_header->m_dec_ref_pic_marking[j]
                                           .difference_of_pic_nums_minus1 +
                                       1);
-
-      // When LongTermFrameIdx equal to long_term_frame_idx is already assigned
-      // to a long-term reference frame or a long-term complementary reference
-      // field pair, that frame or complementary field pair and both of its
-      // fields are marked as "unused for reference".
-      for (i = 0; i < size_dpb; i++) {
+      for (int32_t i = 0; i < size_dpb; i++) {
         if (dpb[i]->m_picture_frame.reference_marked_type ==
                 PICTURE_MARKED_AS_used_long_ref &&
             dpb[i]->m_picture_frame.LongTermFrameIdx ==
@@ -1551,12 +1472,8 @@ int PictureBase::
         }
       }
 
-      // When LongTermFrameIdx is already assigned to a reference field, and
-      // that reference field is not part of a complementary field pair that
-      // includes the picture specified by picNumX, that field is marked as
-      // "unused for reference".
       int32_t picNumXIndex = -1;
-      for (i = 0; i < size_dpb; i++) {
+      for (int32_t i = 0; i < size_dpb; i++) {
         if (dpb[i]->m_picture_top_filed.reference_marked_type ==
                 PICTURE_MARKED_AS_used_short_ref &&
             dpb[i]->m_picture_top_filed.PicNum == picNumX) {
@@ -1570,7 +1487,7 @@ int PictureBase::
         }
       }
 
-      for (i = 0; i < size_dpb; i++) {
+      for (int32_t i = 0; i < size_dpb; i++) {
         if (dpb[i]->m_picture_top_filed.reference_marked_type ==
                 PICTURE_MARKED_AS_used_long_ref &&
             dpb[i]->m_picture_top_filed.LongTermFrameIdx ==
@@ -1603,9 +1520,8 @@ int PictureBase::
         }
       }
 
-      //-----------------------------------------
-      if (slice_header->field_pic_flag == 0) {
-        for (i = 0; i < size_dpb; i++) {
+      if (slice_header->field_pic_flag == false) {
+        for (int32_t i = 0; i < size_dpb; i++) {
           if (dpb[i]->m_picture_frame.reference_marked_type ==
                   PICTURE_MARKED_AS_used_short_ref &&
               dpb[i]->m_picture_frame.PicNum == picNumX) {
@@ -1627,11 +1543,8 @@ int PictureBase::
                 slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
           }
         }
-      } else // if (field_pic_flag == 1) //FIXME: What meaning 'When the field
-      // is part of a reference frame or a complementary reference field
-      // pair'
-      {
-        for (i = 0; i < size_dpb; i++) {
+      } else {
+        for (int32_t i = 0; i < size_dpb; i++) {
           if (dpb[i]->m_picture_top_filed.reference_marked_type ==
                   PICTURE_MARKED_AS_used_short_ref &&
               dpb[i]->m_picture_top_filed.PicNum == picNumX) {
@@ -1643,14 +1556,13 @@ int PictureBase::
               dpb[i]->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
 
               if (dpb[i]->m_picture_frame.m_picture_coded_type ==
-                  PICTURE_CODED_TYPE_FRAME) {
+                  PICTURE_CODED_TYPE_FRAME)
                 dpb[i]->m_picture_coded_type_marked_as_refrence =
                     PICTURE_CODED_TYPE_FRAME;
-              } else if (dpb[i]->m_picture_frame.m_picture_coded_type ==
-                         PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+              else if (dpb[i]->m_picture_frame.m_picture_coded_type ==
+                       PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR)
                 dpb[i]->m_picture_coded_type_marked_as_refrence =
                     PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
-              }
 
               dpb[i]->m_picture_frame.reference_marked_type =
                   PICTURE_MARKED_AS_used_long_ref;
@@ -1671,14 +1583,13 @@ int PictureBase::
               dpb[i]->reference_marked_type = PICTURE_MARKED_AS_used_long_ref;
 
               if (dpb[i]->m_picture_frame.m_picture_coded_type ==
-                  PICTURE_CODED_TYPE_FRAME) {
+                  PICTURE_CODED_TYPE_FRAME)
                 dpb[i]->m_picture_coded_type_marked_as_refrence =
                     PICTURE_CODED_TYPE_FRAME;
-              } else if (dpb[i]->m_picture_frame.m_picture_coded_type ==
-                         PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
+              else if (dpb[i]->m_picture_frame.m_picture_coded_type ==
+                       PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR)
                 dpb[i]->m_picture_coded_type_marked_as_refrence =
                     PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR;
-              }
 
               dpb[i]->m_picture_frame.reference_marked_type =
                   PICTURE_MARKED_AS_used_long_ref;
@@ -1697,10 +1608,7 @@ int PictureBase::
     // 基于MaxLongTermFrameIdx的标记过程
     else if (slice_header->m_dec_ref_pic_marking[j]
                  .memory_management_control_operation == 4) {
-      // All pictures for which LongTermFrameIdx is greater than
-      // max_long_term_frame_idx_plus1 − 1 and that are marked as "used for
-      // long-term reference" are marked as "unused for reference".
-      for (i = 0; i < size_dpb; i++) {
+      for (int32_t i = 0; i < size_dpb; i++) {
         if (dpb[i]->m_picture_frame.LongTermFrameIdx >
                 (int)slice_header->m_dec_ref_pic_marking[j]
                         .max_long_term_frame_idx_plus1 -
@@ -1744,20 +1652,18 @@ int PictureBase::
       if (slice_header->m_dec_ref_pic_marking[j]
               .max_long_term_frame_idx_plus1 == 0) {
         MaxLongTermFrameIdx = -1; //"no long-term frame indices"
-      } else                      // if (max_long_term_frame_idx_plus1 > 0)
-      {
+      } else {
         MaxLongTermFrameIdx = slice_header->m_dec_ref_pic_marking[j]
                                   .max_long_term_frame_idx_plus1 -
                               1;
       }
     }
 
-    // 8.2.5.4.5 Marking process of all reference pictures as "unused for
-    // reference" and setting MaxLongTermFrameIdx to "no long-term frame
-    // indices" 所有参考图像标记为“不用于参考”
+    // 8.2.5.4.5 Marking process of all reference pictures as "unused for reference" and setting MaxLongTermFrameIdx to "no long-term frame indices"
+    // 所有参考图像标记为“不用于参考”
     else if (slice_header->m_dec_ref_pic_marking[j]
                  .memory_management_control_operation == 5) {
-      for (i = 0; i < size_dpb; i++) {
+      for (int32_t i = 0; i < size_dpb; i++) {
         dpb[i]->m_picture_coded_type_marked_as_refrence =
             PICTURE_CODED_TYPE_UNKNOWN;
         dpb[i]->reference_marked_type = PICTURE_MARKED_AS_unused_for_reference;
@@ -1773,17 +1679,11 @@ int PictureBase::
       memory_management_control_operation_5_flag = 1;
     }
 
-    // 8.2.5.4.6 Process for assigning a long-term frame index to the current
-    // picture 分配一个长期帧索引给当前图像
+    // 8.2.5.4.6 Process for assigning a long-term frame index to the current picture
+    // 分配一个长期帧索引给当前图像
     else if (slice_header->m_dec_ref_pic_marking[j]
                  .memory_management_control_operation == 6) {
-      //int32_t top_field_index = -1;
-
-      for (i = 0; i < size_dpb; i++) {
-        // When a variable LongTermFrameIdx equal to long_term_frame_idx is
-        // already assigned to a long-term reference frame or a long-term
-        // complementary reference field pair, that frame or complementary field
-        // pair and both of its fields are marked as "unused for reference".
+      for (int32_t i = 0; i < size_dpb; i++) {
         if (dpb[i]->m_picture_frame.LongTermFrameIdx ==
                 (int)slice_header->m_dec_ref_pic_marking[j]
                         .max_long_term_frame_idx_plus1 -
@@ -1806,10 +1706,6 @@ int PictureBase::
           }
         }
 
-        // When LongTermFrameIdx is already assigned to a reference field, and
-        // that reference field is not part of a complementary field pair that
-        // includes the current picture, that field is marked as "unused for
-        // reference".
         if (dpb[i]->m_picture_top_filed.LongTermFrameIdx == LongTermFrameIdx &&
             m_parent->m_picture_coded_type ==
                 PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR &&
@@ -1839,10 +1735,7 @@ int PictureBase::
           slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
       memory_management_control_operation_6_flag = 6;
 
-      // When field_pic_flag is equal to 0, both its fields are also marked as
-      // "used for long-term reference" and assigned LongTermFrameIdx equal to
-      // long_term_frame_idx.
-      if (slice_header->field_pic_flag == 0) {
+      if (slice_header->field_pic_flag == false) {
         // FIXME: what meaning 'both its fields'?
         if (m_parent->m_picture_coded_type ==
             PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR) {
@@ -1857,13 +1750,7 @@ int PictureBase::
         }
       }
 
-      // When field_pic_flag is equal to 1 and the current picture is the second
-      // field (in decoding order) of a complementary reference field pair, and
-      // the first field of the complementary reference field pair is also
-      // currently marked as "used for long-term reference", the complementary
-      // reference field pair is also marked as "used for long-term reference"
-      // and assigned LongTermFrameIdx equal to long_term_frame_idx.
-      if (slice_header->field_pic_flag == 1 &&
+      if (slice_header->field_pic_flag &&
           m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD &&
           m_parent->m_picture_top_filed.reference_marked_type ==
               PICTURE_MARKED_AS_used_long_ref) {
@@ -1871,13 +1758,6 @@ int PictureBase::
         LongTermFrameIdx =
             slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
       }
-
-      // After marking the current decoded reference picture, the total number
-      // of frames with at least one field marked as "used for reference", plus
-      // the number of complementary field pairs with at least one field marked
-      // as "used for reference", plus the number of non-paired fields marked as
-      // "used for reference" shall not be greater than Max( max_num_ref_frames,
-      // 1 ).
     }
   }
 
