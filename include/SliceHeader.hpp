@@ -158,6 +158,7 @@ class SliceHeader {
   /* 图像高度（色度样本） */
   int32_t PicHeightInSamplesC = 0;
 
+  //-------------- 显示加权预测 ---------------
   /* 亮度权重的对数基数 */
   uint32_t luma_log2_weight_denom = 0;
   /* 色度权重的对数基数 */

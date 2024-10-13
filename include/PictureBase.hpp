@@ -411,13 +411,13 @@ class PictureBase {
       int32_t &logWDCb, int32_t &w0Cb, int32_t &w1Cb, int32_t &o0Cb,
       int32_t &o1Cb, int32_t &logWDCr, int32_t &w0Cr, int32_t &w1Cr,
       int32_t &o0Cr, int32_t &o1Cr);
-  int default_weighted_sample_prediction(
+  int no_weighted_sample_prediction(
       bool predFlagL0, bool predFlagL1, int32_t partWidth, int32_t partHeight,
       int32_t partWidthC, int32_t partHeightC, uint8_t *predPartL0L,
       uint8_t *predPartL0Cb, uint8_t *predPartL0Cr, uint8_t *predPartL1L,
       uint8_t *predPartL1Cb, uint8_t *predPartL1Cr, uint8_t *predPartL,
       uint8_t *predPartCb, uint8_t *predPartCr);
-  int weighted_sample_prediction_2(
+  int weighted_sample_prediction_Explicit_or_Implicit(
       int32_t mbPartIdx, int32_t subMbPartIdx, bool predFlagL0, bool predFlagL1,
       int32_t partWidth, int32_t partHeight, int32_t partWidthC,
       int32_t partHeightC, int32_t logWDL, int32_t w0L, int32_t w1L,

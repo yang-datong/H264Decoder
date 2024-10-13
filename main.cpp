@@ -44,6 +44,9 @@ int main(int argc, char *argv[]) {
     //filePath = "./test/demo_10_frames_All_I_Slice.h264";
     //filePath = "./tmp.h264";
     //TODO 造一个单帧多Slice的文件，用于测试 "宏块映射到Slice Group" <24-09-16 00:48:27, YangJing>
+
+    // ffmpeg -i ./test/demo_10_frames.h264 -c:v libx264 -x264-params direct=temporal -c:a copy demo_10_frames_temporal_direct.h264
+    //filePath = "./test/demo_10_frames_temporal_direct.h264";
   }
 
   /* 1. 打开文件、读取NUL、存储NUL的操作 */
