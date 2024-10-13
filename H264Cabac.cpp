@@ -393,7 +393,7 @@ int CH264Cabac::
     int32_t isChroma = 0;
 
     // 6.4.11.2 Derivation process for neighbouring 8x8 luma block
-    ret = picture.Derivation_process_for_neighbouring_8x8_luma_block(
+    ret = picture.derivation_for_neighbouring_8x8_luma_block(
         luma8x8BlkIdx, mbAddrA, mbAddrB, luma8x8BlkIdxA, luma8x8BlkIdxB,
         isChroma);
     RETURN_IF_FAILED(ret != 0, -1);
@@ -1145,7 +1145,7 @@ int CH264Cabac::
     int32_t luma4x4BlkIdxB = 0;
     int32_t isChroma = (iCbCr < 0) ? 0 : 1;
 
-    ret = picture.Derivation_process_for_neighbouring_4x4_luma_blocks(
+    ret = picture.derivation_for_neighbouring_4x4_luma_blocks(
         luma4x4BlkIdx, mbAddrA, mbAddrB, luma4x4BlkIdxA, luma4x4BlkIdxB,
         isChroma);
     RETURN_IF_FAILED(ret != 0, -1);
@@ -1249,7 +1249,7 @@ int CH264Cabac::
     int32_t chroma4x4BlkIdxB = 0;
 
     // 6.4.11.5 Derivation process for neighbouring 4x4 chroma blocks
-    ret = picture.Derivation_process_for_neighbouring_4x4_chroma_blocks(
+    ret = picture.derivation_for_neighbouring_4x4_chroma_blocks(
         chroma4x4BlkIdx, mbAddrA, mbAddrB, chroma4x4BlkIdxA, chroma4x4BlkIdxB);
     RETURN_IF_FAILED(ret != 0, ret);
 
@@ -1288,7 +1288,7 @@ int CH264Cabac::
     int32_t isChroma = 0;
 
     // 6.4.11.2 Derivation process for neighbouring 8x8 luma block
-    ret = picture.Derivation_process_for_neighbouring_8x8_luma_block(
+    ret = picture.derivation_for_neighbouring_8x8_luma_block(
         luma8x8BlkIdx, mbAddrA, mbAddrB, luma8x8BlkIdxA, luma8x8BlkIdxB,
         isChroma);
     RETURN_IF_FAILED(ret != 0, -1);
@@ -1332,7 +1332,7 @@ int CH264Cabac::
     int32_t cb4x4BlkIdxB = 0;
 
     // 6.4.11.5 Derivation process for neighbouring 4x4 chroma blocks
-    ret = picture.Derivation_process_for_neighbouring_4x4_chroma_blocks(
+    ret = picture.derivation_for_neighbouring_4x4_chroma_blocks(
         cb4x4BlkIdx, mbAddrA, mbAddrB, cb4x4BlkIdxA, cb4x4BlkIdxB);
     RETURN_IF_FAILED(ret != 0, ret);
 
@@ -1401,7 +1401,7 @@ int CH264Cabac::
     // ChromaArrayType equal to 3
     ret =
         picture
-            .Derivation_process_for_neighbouring_8x8_chroma_blocks_for_ChromaArrayType_equal_to_3(
+            .derivation_for_neighbouring_8x8_chroma_blocks_for_YUV444(
                 cb8x8BlkIdx, mbAddrA, mbAddrB, cb8x8BlkIdxA, cb8x8BlkIdxB);
     RETURN_IF_FAILED(ret != 0, -1);
 
@@ -1444,7 +1444,7 @@ int CH264Cabac::
     int32_t cr4x4BlkIdxB = 0;
 
     // 6.4.11.5 Derivation process for neighbouring 4x4 chroma blocks
-    ret = picture.Derivation_process_for_neighbouring_4x4_chroma_blocks(
+    ret = picture.derivation_for_neighbouring_4x4_chroma_blocks(
         cr4x4BlkIdx, mbAddrA, mbAddrB, cr4x4BlkIdxA, cr4x4BlkIdxB);
     RETURN_IF_FAILED(ret != 0, ret);
 
@@ -1513,7 +1513,7 @@ int CH264Cabac::
     // ChromaArrayType equal to 3
     ret =
         picture
-            .Derivation_process_for_neighbouring_8x8_chroma_blocks_for_ChromaArrayType_equal_to_3(
+            .derivation_for_neighbouring_8x8_chroma_blocks_for_YUV444(
                 cr8x8BlkIdx, mbAddrA, mbAddrB, cr8x8BlkIdxA, cr8x8BlkIdxB);
     RETURN_IF_FAILED(ret != 0, -1);
 

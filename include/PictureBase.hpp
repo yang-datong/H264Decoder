@@ -231,23 +231,23 @@ class PictureBase {
       int32_t &x, int32_t &y);
 
   //----------------- 相邻宏块地址推导 ------------------------
-  int Derivation_process_of_the_availability_for_macroblock_addresses(
+  int derivation_of_the_availability_for_macroblock_addresses(
       int32_t mbAddr, int32_t &is_mbAddr_available);
   int derivation_for_neighbouring_macroblocks(int32_t MbaffFrameFlag,
                                               int32_t currMbAddr,
                                               int32_t &mbAddrA,
                                               int32_t &mbAddrB,
                                               const int32_t isChroma);
-  int Derivation_process_for_neighbouring_8x8_luma_block(
+  int derivation_for_neighbouring_8x8_luma_block(
       int32_t luma8x8BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
       int32_t &luma8x8BlkIdxA, int32_t &luma8x8BlkIdxB, int32_t isChroma);
-  int Derivation_process_for_neighbouring_8x8_chroma_blocks_for_ChromaArrayType_equal_to_3(
+  int derivation_for_neighbouring_8x8_chroma_blocks_for_YUV444(
       int32_t chroma8x8BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
       int32_t &chroma8x8BlkIdxA, int32_t &chroma8x8BlkIdxB);
-  int Derivation_process_for_neighbouring_4x4_luma_blocks(
+  int derivation_for_neighbouring_4x4_luma_blocks(
       int32_t luma4x4BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
       int32_t &luma4x4BlkIdxA, int32_t &luma4x4BlkIdxB, int32_t isChroma);
-  int Derivation_process_for_neighbouring_4x4_chroma_blocks(
+  int derivation_for_neighbouring_4x4_chroma_blocks(
       int32_t chroma4x4BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
       int32_t &chroma4x4BlkIdxA, int32_t &chroma4x4BlkIdxB);
   int derivation_for_neighbouring_locations(

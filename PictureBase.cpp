@@ -933,38 +933,21 @@ int PictureBase::inverse_sub_macroblock_partition_scanning_process(
 }
 
 // 6.4.8 Derivation process of the availability for macroblock addresses
-int PictureBase::
-    Derivation_process_of_the_availability_for_macroblock_addresses(
-        int32_t mbAddr, int32_t &is_mbAddr_available) {
+int PictureBase::derivation_of_the_availability_for_macroblock_addresses(
+    int32_t mbAddr, int32_t &is_mbAddr_available) {
+  is_mbAddr_available = 1;
   if (mbAddr < 0 || mbAddr > CurrMbAddr ||
-      m_mbs[mbAddr].slice_number != m_mbs[CurrMbAddr].slice_number) {
+      m_mbs[mbAddr].slice_number != m_mbs[CurrMbAddr].slice_number)
     is_mbAddr_available = 0;
-  } else {
-    is_mbAddr_available = 1;
-  }
-
   return 0;
 }
 
 // 6.4.11.2 Derivation process for neighbouring 8x8 luma block
-int PictureBase::Derivation_process_for_neighbouring_8x8_luma_block(
+int PictureBase::derivation_for_neighbouring_8x8_luma_block(
     int32_t luma8x8BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
     int32_t &luma8x8BlkIdxA, int32_t &luma8x8BlkIdxB, int32_t isChroma) {
-  int ret = 0;
 
-  int32_t xW = 0;
-  int32_t yW = 0;
-
-  // 1. The difference of luma location ( xD, yD ) is set according to Table
-  // 6-2.
-
-  // 2. The luma location ( xN, yN ) is specified by
-  // xN = ( luma8x8BlkIdx % 2 ) * 8 + xD;
-  // yN = ( luma8x8BlkIdx / 2 ) * 8 + yD;
-
-  // 3. The derivation process for neighbouring locations as specified in
-  // clause 6.4.12 is invoked for luma locations with ( xN, yN ) as the input
-  // and the output is assigned to mbAddrN and ( xW, yW ).
+  int32_t xW = 0, yW = 0;
 
   //---------------mbAddrA---------------------
   MB_ADDR_TYPE mbAddrA_type = MB_ADDR_TYPE_UNKOWN;
@@ -973,10 +956,9 @@ int PictureBase::Derivation_process_for_neighbouring_8x8_luma_block(
   int32_t yA = (luma8x8BlkIdx / 2) * 8 + 0;
 
   // 6.4.12 Derivation process for neighbouring locations
-  ret = derivation_for_neighbouring_locations(
+  RET(derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xA, yA, CurrMbAddr, mbAddrA_type,
-      mbAddrA, luma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma);
-  RETURN_IF_FAILED(ret != 0, ret);
+      mbAddrA, luma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma));
 
   if (mbAddrA < 0) {
     luma8x8BlkIdxA = -2; // marked as not available
@@ -992,10 +974,9 @@ int PictureBase::Derivation_process_for_neighbouring_8x8_luma_block(
   int32_t yB = (luma8x8BlkIdx / 2) * 8 - 1;
 
   // 6.4.12 Derivation process for neighbouring locations
-  ret = derivation_for_neighbouring_locations(
+  RET(derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xB, yB, CurrMbAddr, mbAddrB_type,
-      mbAddrB, luma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma);
-  RETURN_IF_FAILED(ret != 0, ret);
+      mbAddrB, luma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma));
 
   if (mbAddrB < 0) {
     luma8x8BlkIdxB = -2; // marked as not available
@@ -1009,71 +990,42 @@ int PictureBase::Derivation_process_for_neighbouring_8x8_luma_block(
 
 // 6.4.11.3 Derivation process for neighbouring 8x8 chroma blocks for
 // ChromaArrayType equal to 3
-int PictureBase::
-    Derivation_process_for_neighbouring_8x8_chroma_blocks_for_ChromaArrayType_equal_to_3(
-        int32_t chroma8x8BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
-        int32_t &chroma8x8BlkIdxA, int32_t &chroma8x8BlkIdxB) {
-  int ret = 0;
-
-  int32_t isChroma = 1;
-
+int PictureBase::derivation_for_neighbouring_8x8_chroma_blocks_for_YUV444(
+    int32_t chroma8x8BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
+    int32_t &chroma8x8BlkIdxA, int32_t &chroma8x8BlkIdxB) {
+  const int32_t isChroma = 1;
   // 6.4.11.2 Derivation process for neighbouring 8x8 luma block
-  ret = Derivation_process_for_neighbouring_8x8_luma_block(
-      chroma8x8BlkIdx, mbAddrA, mbAddrB, chroma8x8BlkIdxA, chroma8x8BlkIdxB,
-      isChroma);
-  RETURN_IF_FAILED(ret != 0, -1);
-
-  return 0;
+  return derivation_for_neighbouring_8x8_luma_block(chroma8x8BlkIdx, mbAddrA,
+                                                    mbAddrB, chroma8x8BlkIdxA,
+                                                    chroma8x8BlkIdxB, isChroma);
 }
 
 // 6.4.11.4 Derivation process for neighbouring 4x4 luma blocks
-int PictureBase::Derivation_process_for_neighbouring_4x4_luma_blocks(
+int PictureBase::derivation_for_neighbouring_4x4_luma_blocks(
     int32_t luma4x4BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
     int32_t &luma4x4BlkIdxA, int32_t &luma4x4BlkIdxB, int32_t isChroma) {
-  int ret = 0;
 
-  int32_t xW = 0;
-  int32_t yW = 0;
-
-  // 1. The difference of luma location ( xD, yD ) is set according to Table
-  // 6-2.
-
-  // 2. The inverse 4x4 luma block scanning process as specified in clause 6.4.3
-  // is invoked with luma4x4BlkIdx as the input and ( x, y ) as the output.
-
-  // 6.4.3 Inverse 4x4 luma block scanning process
+  int32_t xW = 0, yW = 0;
   int32_t x = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 0) +
               InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 0);
   int32_t y = InverseRasterScan(luma4x4BlkIdx / 4, 8, 8, 16, 1) +
               InverseRasterScan(luma4x4BlkIdx % 4, 4, 4, 8, 1);
 
-  // 3. The luma location ( xN, yN ) is specified by:
-  // xN = x + xD (6-25)
-  // yN = y + yD (6-26)
-
-  // 4. The derivation process for neighbouring locations as specified in
-  // clause 6.4.12 is invoked for luma locations with ( xN, yN ) as the input
-  // and the output is assigned to mbAddrN and ( xW, yW ).
-
   //---------------mbAddrA---------------------
   MB_ADDR_TYPE mbAddrA_type = MB_ADDR_TYPE_UNKOWN;
   int32_t luma8x8BlkIdxA = 0;
 
-  int32_t xA = x - 1;
-  int32_t yA = y + 0;
+  int32_t xA = x - 1, yA = y + 0;
 
-  // 6.4.12 Derivation process for neighbouring locations
-  ret = derivation_for_neighbouring_locations(
+  RET(derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xA, yA, CurrMbAddr, mbAddrA_type,
-      mbAddrA, luma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma);
-  RETURN_IF_FAILED(ret != 0, ret);
+      mbAddrA, luma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma));
 
   if (mbAddrA < 0) {
     luma4x4BlkIdxA = -2; // marked as not available
   } else {
     // 6.4.13.1 Derivation process for 4x4 luma block indices
-    // ret = Derivation_process_for_4x4_luma_block_indices(xW, yW, (uint8_t
-    // &)luma4x4BlkIdxA);
+    // ret = Derivation_process_for_4x4_luma_block_indices(xW, yW, (uint8_t &)luma4x4BlkIdxA);
     luma4x4BlkIdxA =
         8 * (yW / 8) + 4 * (xW / 8) + 2 * ((yW % 8) / 4) + ((xW % 8) / 4);
   }
@@ -1081,22 +1033,16 @@ int PictureBase::Derivation_process_for_neighbouring_4x4_luma_blocks(
   //---------------mbAddrB---------------------
   MB_ADDR_TYPE mbAddrB_type = MB_ADDR_TYPE_UNKOWN;
   int32_t luma8x8BlkIdxB = 0;
-
-  int32_t xB = x + 0;
-  int32_t yB = y - 1;
+  int32_t xB = x + 0, yB = y - 1;
 
   // 6.4.12 Derivation process for neighbouring locations
-  ret = derivation_for_neighbouring_locations(
+  RET(derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xB, yB, CurrMbAddr, mbAddrB_type,
-      mbAddrB, luma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma);
-  RETURN_IF_FAILED(ret != 0, ret);
+      mbAddrB, luma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma));
 
   if (mbAddrB < 0) {
     luma4x4BlkIdxB = -2; // marked as not available
   } else {
-    // 6.4.13.1 Derivation process for 4x4 luma block indices
-    // ret = Derivation_process_for_4x4_luma_block_indices(xW, yW, (uint8_t
-    // &)luma4x4BlkIdxB);
     luma4x4BlkIdxB =
         8 * (yW / 8) + 4 * (xW / 8) + 2 * ((yW % 8) / 4) + ((xW % 8) / 4);
   }
@@ -1106,53 +1052,32 @@ int PictureBase::Derivation_process_for_neighbouring_4x4_luma_blocks(
 
 // 6.4.11.5 Derivation process for neighbouring 4x4 chroma blocks
 // This clause is only invoked when ChromaArrayType is equal to 1 or 2.
-int PictureBase::Derivation_process_for_neighbouring_4x4_chroma_blocks(
+int PictureBase::derivation_for_neighbouring_4x4_chroma_blocks(
     int32_t chroma4x4BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
     int32_t &chroma4x4BlkIdxA, int32_t &chroma4x4BlkIdxB) {
-  int ret = 0;
 
   int32_t isChroma = 1;
-  int32_t xW = 0;
-  int32_t yW = 0;
-
-  // 1. The difference of chroma location ( xD, yD ) is set according to Table
-  // 6-2.
-
-  // 2. The inverse 4x4 chroma block scanning process as specified in
-  // clause 6.4.7 is
-  //    invoked with chroma4x4BlkIdx as the input and ( x, y ) as the output
+  int32_t xW = 0, yW = 0;
 
   // 6.4.7 Inverse 4x4 chroma block scanning process
   int32_t x = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 0);
   int32_t y = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 1);
 
-  // 3. The chroma location ( xN, yN ) is specified by
-  // xN = x + xD
-  // yN = y + yD
-
-  // 4. The derivation process for neighbouring locations as specified in
-  // clause 6.4.12 is invoked for chroma locations with ( xN, yN ) as the input
-  // and the output is assigned to mbAddrN and ( xW, yW ).
-
   //---------------mbAddrA---------------------
   MB_ADDR_TYPE mbAddrA_type = MB_ADDR_TYPE_UNKOWN;
   int32_t luma8x8BlkIdxA = 0;
-
-  int32_t xA = x - 1;
-  int32_t yA = y + 0;
+  int32_t xA = x - 1, yA = y + 0;
 
   // 6.4.12 Derivation process for neighbouring locations
-  ret = derivation_for_neighbouring_locations(
+  RET(derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xA, yA, CurrMbAddr, mbAddrA_type,
-      mbAddrA, chroma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma);
-  RETURN_IF_FAILED(ret != 0, ret);
+      mbAddrA, chroma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma));
 
   if (mbAddrA < 0) {
     chroma4x4BlkIdxA = -2; // marked as not available
   } else {
     // 6.4.13.2 Derivation process for 4x4 chroma block indices
-    // ret = Derivation_process_for_4x4_chroma_block_indices(xW, yW, (uint8_t
-    // &)chroma4x4BlkIdxA);
+    // ret = Derivation_process_for_4x4_chroma_block_indices(xW, yW, (uint8_t &)chroma4x4BlkIdxA);
     chroma4x4BlkIdxA = 2 * (yW / 4) + (xW / 4);
   }
 
@@ -1160,21 +1085,18 @@ int PictureBase::Derivation_process_for_neighbouring_4x4_chroma_blocks(
   MB_ADDR_TYPE mbAddrB_type = MB_ADDR_TYPE_UNKOWN;
   int32_t luma8x8BlkIdxB = 0;
 
-  int32_t xB = x + 0;
-  int32_t yB = y - 1;
+  int32_t xB = x + 0, yB = y - 1;
 
   // 6.4.12 Derivation process for neighbouring locations
-  ret = derivation_for_neighbouring_locations(
+  RET(derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xB, yB, CurrMbAddr, mbAddrB_type,
-      mbAddrB, chroma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma);
-  RETURN_IF_FAILED(ret != 0, ret);
+      mbAddrB, chroma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma));
 
   if (mbAddrB < 0) {
     chroma4x4BlkIdxB = -2; // marked as not available
   } else {
     // 6.4.13.2 Derivation process for 4x4 chroma block indices
-    // ret = Derivation_process_for_4x4_chroma_block_indices(xW, yW, (uint8_t
-    // &)chroma4x4BlkIdxB);
+    // ret = Derivation_process_for_4x4_chroma_block_indices(xW, yW, (uint8_t &)chroma4x4BlkIdxB);
     chroma4x4BlkIdxB = 2 * (yW / 4) + (xW / 4);
   }
 
