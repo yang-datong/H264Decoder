@@ -83,16 +83,7 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
     }
     /* 计算下一个宏块的地址 */
     CurrMbAddr = NextMbAddress(CurrMbAddr, header);
-
-    //cout << "CurrMbAddr:" << CurrMbAddr << endl;
-    //cout << "m_sps->PicSizeInMapUnits:" << m_sps->PicSizeInMapUnits << endl;
-    //cout << "header->PicSizeInMbs:" << header->PicSizeInMbs << endl;
   } while (moreDataFlag);
-
-  /* TODO YangJing 这里暂时用不上 <24-09-03 00:46:48> */
-  //if (picture->mb_cnt == picture->PicSizeInMbs) picture->m_is_decode_finished = 1;
-  //cout << "picture->mb_cnt:" << picture->mb_cnt << endl;
-
   slice_number++;
   return 0;
 }
@@ -454,6 +445,7 @@ int SliceData::decoding_process() {
   }
   //----------------------------------- 帧间预测 -----------------------------------
   else {
+    // 对于帧间预测而言，过程中不需要调用帧内预测
     isNeedIntraPrediction = false;
     pic->inter_prediction_process();
     /* 选择 4x4 或 8x8 的残差块解码函数来处理亮度残差块 */

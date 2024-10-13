@@ -7,11 +7,6 @@
 #include <cstdint>
 #include <cstring>
 
-//Table 8-7 – Specification of PicCodingStruct( X )
-#define FLD 0
-#define FRM 1
-#define AFRM 2
-
 // 8.4 Inter prediction process
 // This process is invoked when decoding P and B macroblock types.
 /* 该过程的输出是当前宏块的帧间预测样本，它们是亮度样本的 16x16 数组 predL，并且当 ChromaArrayType 不等于 0 时，是色度样本的两个 (MbWidthC)x(MbHeightC) 数组 predCb 和 predCr，每个数组对应一个色度分量 Cb 和 Cr。*/
@@ -549,6 +544,11 @@ int PictureBase::derivation_median_luma_motion_vector_prediction(
   return 0;
 }
 
+//Table 8-7 – Specification of PicCodingStruct( X )
+#define FLD 0
+#define FRM 1
+#define AFRM 2
+
 // 8.4.1.2.1 Derivation process for the co-located 4x4 sub-macroblock partitions
 // 共置 4x4 子宏块分区的推导过程
 int PictureBase::derivation_the_coLocated_4x4_sub_macroblock_partitions(
@@ -750,6 +750,10 @@ int PictureBase::derivation_the_coLocated_4x4_sub_macroblock_partitions(
 
   return 0;
 }
+
+#undef FLD
+#undef FRM
+#undef AFRM
 
 // 8.4.1.2.2 Derivation process for spatial direct luma motion vector and reference index prediction mode
 //空间直接运动矢量预测
@@ -1637,7 +1641,7 @@ int PictureBase::weighted_sample_prediction(
   if (predFlagL0 && (slice_type == SLICE_P || slice_type == SLICE_SP)) {
     if (header->m_pps->weighted_pred_flag == 0) {
       // 默认加权样本预测
-      RET(no_weighted_sample_prediction(
+      RET(weighted_sample_prediction_default(
           predFlagL0, predFlagL1, partWidth, partHeight, partWidthC,
           partHeightC, predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L,
           predPartL1Cb, predPartL1Cr, predPartL, predPartCb, predPartCr));
@@ -1657,7 +1661,7 @@ int PictureBase::weighted_sample_prediction(
   if ((predFlagL0 || predFlagL1) && slice_type == SLICE_B) {
     // 1. 不使用加权双向预测
     if (header->m_pps->weighted_bipred_idc == 0) {
-      RET(no_weighted_sample_prediction(
+      RET(weighted_sample_prediction_default(
           predFlagL0, predFlagL1, partWidth, partHeight, partWidthC,
           partHeightC, predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L,
           predPartL1Cb, predPartL1Cr, predPartL, predPartCb, predPartCr));
@@ -1681,11 +1685,75 @@ int PictureBase::weighted_sample_prediction(
             predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L, predPartL1Cb,
             predPartL1Cr, predPartL, predPartCb, predPartCr));
       } else /* 单向预测 */
-        RET(no_weighted_sample_prediction(
+        RET(weighted_sample_prediction_default(
             predFlagL0, predFlagL1, partWidth, partHeight, partWidthC,
             partHeightC, predPartL0L, predPartL0Cb, predPartL0Cr, predPartL1L,
             predPartL1Cb, predPartL1Cr, predPartL, predPartCb, predPartCr));
     }
+  }
+
+  return 0;
+}
+
+// 8.4.2.3.1 Default weighted sample prediction process
+/* 输入、输出同weighted_sample_prediction() */
+// NOTE: 无加权
+int PictureBase::weighted_sample_prediction_default(
+    bool predFlagL0, bool predFlagL1, int32_t partWidth, int32_t partHeight,
+    int32_t partWidthC, int32_t partHeightC, uint8_t *predPartL0L,
+    uint8_t *predPartL0Cb, uint8_t *predPartL0Cr, uint8_t *predPartL1L,
+    uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
+    /* Output: */
+    uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
+
+  const uint32_t ChromaArrayType =
+      m_slice->slice_header->m_sps->ChromaArrayType;
+
+#define single_prediction(predPartLXL, predPartLXCb, predPartLXCr, n)          \
+  for (int y = 0; y < partHeight; y++)                                         \
+    for (int x = 0; x < partWidth; x++)                                        \
+      predPartL[y * partWidth + x] = predPartLXL[y * partWidth + x];           \
+  if (ChromaArrayType != 0)                                                    \
+    for (int y = 0; y < partHeightC; y++)                                      \
+      for (int x = 0; x < partWidthC; x++) {                                   \
+        predPartCb[y * partWidthC + x] =                                       \
+            (predPartLXCb[y * partWidthC + x] + n) >> n;                       \
+        predPartCr[y * partWidthC + x] =                                       \
+            (predPartLXCr[y * partWidthC + x] + n) >> n;                       \
+      }
+
+  // 向前预测
+  if (predFlagL0 && predFlagL1 == false) {
+    single_prediction(predPartL0L, predPartL0Cb, predPartL0Cr, 0);
+  }
+  // 向后预测
+  else if (predFlagL0 == false && predFlagL1) {
+    single_prediction(predPartL1L, predPartL1Cb, predPartL1Cr, 0);
+  }
+
+#undef single_prediction
+  // 双向预测（外部调用已经排除了无预测情况）
+  else {
+    for (int y = 0; y < partHeight; y++)
+      for (int x = 0; x < partWidth; x++)
+        //(前预测的样本 + 后预测的样本)取平均值
+        predPartL[y * partWidth + x] = (predPartL0L[y * partWidth + x] +
+                                        predPartL1L[y * partWidth + x] + 1) >>
+                                       1;
+
+    if (ChromaArrayType != 0)
+      for (int y = 0; y < partHeightC; y++)
+        for (int x = 0; x < partWidthC; x++) {
+          //(前预测的样本 + 后预测的样本)取平均值
+          predPartCb[y * partWidthC + x] =
+              (predPartL0Cb[y * partWidthC + x] +
+               predPartL1Cb[y * partWidthC + x] + 1) >>
+              1;
+          predPartCr[y * partWidthC + x] =
+              (predPartL0Cr[y * partWidthC + x] +
+               predPartL1Cr[y * partWidthC + x] + 1) >>
+              1;
+        }
   }
 
   return 0;
@@ -1796,70 +1864,6 @@ int PictureBase::weighted_sample_prediction_Explicit_or_Implicit(
         }
       }
     }
-  }
-
-  return 0;
-}
-
-// 8.4.2.3.1 Default weighted sample prediction process
-/* 输入、输出同weighted_sample_prediction() */
-// NOTE: 无加权
-int PictureBase::no_weighted_sample_prediction(
-    bool predFlagL0, bool predFlagL1, int32_t partWidth, int32_t partHeight,
-    int32_t partWidthC, int32_t partHeightC, uint8_t *predPartL0L,
-    uint8_t *predPartL0Cb, uint8_t *predPartL0Cr, uint8_t *predPartL1L,
-    uint8_t *predPartL1Cb, uint8_t *predPartL1Cr,
-    /* Output: */
-    uint8_t *predPartL, uint8_t *predPartCb, uint8_t *predPartCr) {
-
-  const uint32_t ChromaArrayType =
-      m_slice->slice_header->m_sps->ChromaArrayType;
-
-#define single_prediction(predPartLXL, predPartLXCb, predPartLXCr, n)          \
-  for (int y = 0; y < partHeight; y++)                                         \
-    for (int x = 0; x < partWidth; x++)                                        \
-      predPartL[y * partWidth + x] = predPartLXL[y * partWidth + x];           \
-  if (ChromaArrayType != 0)                                                    \
-    for (int y = 0; y < partHeightC; y++)                                      \
-      for (int x = 0; x < partWidthC; x++) {                                   \
-        predPartCb[y * partWidthC + x] =                                       \
-            (predPartLXCb[y * partWidthC + x] + n) >> n;                       \
-        predPartCr[y * partWidthC + x] =                                       \
-            (predPartLXCr[y * partWidthC + x] + n) >> n;                       \
-      }
-
-  // 向前预测
-  if (predFlagL0 && predFlagL1 == false) {
-    single_prediction(predPartL0L, predPartL0Cb, predPartL0Cr, 0);
-  }
-  // 向后预测
-  else if (predFlagL0 == false && predFlagL1) {
-    single_prediction(predPartL1L, predPartL1Cb, predPartL1Cr, 0);
-  }
-
-#undef single_prediction
-  // 双向预测（外部调用已经排除了无预测情况）
-  else {
-    for (int y = 0; y < partHeight; y++)
-      for (int x = 0; x < partWidth; x++)
-        //(前预测的样本 + 后预测的样本)取平均值
-        predPartL[y * partWidth + x] = (predPartL0L[y * partWidth + x] +
-                                        predPartL1L[y * partWidth + x] + 1) >>
-                                       1;
-
-    if (ChromaArrayType != 0)
-      for (int y = 0; y < partHeightC; y++)
-        for (int x = 0; x < partWidthC; x++) {
-          //(前预测的样本 + 后预测的样本)取平均值
-          predPartCb[y * partWidthC + x] =
-              (predPartL0Cb[y * partWidthC + x] +
-               predPartL1Cb[y * partWidthC + x] + 1) >>
-              1;
-          predPartCr[y * partWidthC + x] =
-              (predPartL0Cr[y * partWidthC + x] +
-               predPartL1Cr[y * partWidthC + x] + 1) >>
-              1;
-        }
   }
 
   return 0;

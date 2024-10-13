@@ -659,18 +659,7 @@ int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
     this->m_parent->m_is_decode_finished = 1;
   }
 
-  //    char filename[600] = {0};
-  //    sprintf(filename, "./out_%dx%d.%d.no_loop_filter.yuv",
-  //    PicWidthInSamplesL, PicHeightInSamplesL, m_PicNumCnt); ret =
-  //    writeYUV(filename); //将环路滤波前的数据保存到磁盘
-
-  //--------环路滤波------------
-  ret = this->Deblocking_filter_process();
-  // RETURN_IF_FAILED(ret != 0, ret); //环路滤波在码流有问题时，基本上会返回失败
-
-  //    sprintf(filename, "./out_%dx%d.%d.yuv", PicWidthInSamplesL,
-  //    PicHeightInSamplesL, m_PicNumCnt); ret = writeYUV(filename);
-  //    //将解码后的数据保存到磁盘
+  deblocking_filter_process();
 
   //--------标记图像参考列表------------
   // When the current picture is a reference picture and after all slices of the

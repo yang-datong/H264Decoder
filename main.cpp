@@ -211,6 +211,7 @@ int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
                OUTPUT_FILE_TYPE output_file_type) {
   if (frame != NULL && frame->m_current_picture_ptr != NULL) {
     Frame *newEmptyPicture = nullptr;
+    // 去块滤波器
     frame->m_current_picture_ptr
         ->end_decode_the_picture_and_get_a_new_empty_picture(newEmptyPicture);
 
