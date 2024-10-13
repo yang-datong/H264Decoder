@@ -305,9 +305,6 @@ int PictureBase::derivation_motion_vector_components_and_reference_indices(
   const uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
   /* ------------------  End ------------------ */
 
-  int32_t mvpL0[2] = {0}, mvpL1[2] = {0};
-  H264_MB_TYPE currSubMbType = MB_TYPE_NA;
-
   /* ---------------------------- P_Skip 宏块的亮度运动矢量 ---------------------------- */
   if (mb_type == P_Skip) {
     RET(derivation_luma_motion_vectors_for_P_Skip(
@@ -334,16 +331,21 @@ int PictureBase::derivation_motion_vector_components_and_reference_indices(
 
     refIdxL0 = -1, predFlagL0 = false, refIdxL1 = -1, predFlagL1 = false;
 
+    // 当前预测模式为：向前帧间预测或双向帧间预测，则获取编码器提供的对应参考帧索引
     if (mb_pred_mode == Pred_L0 || mb_pred_mode == BiPred ||
         SubMbPredMode == Pred_L0 || SubMbPredMode == BiPred)
       refIdxL0 = mb.ref_idx_l0[mbPartIdx], predFlagL0 = true;
 
+    // 当前预测模式为：向后帧间预测或双向帧间预测，则获取编码器提供的对应参考帧索引
     if (mb_pred_mode == Pred_L1 || mb_pred_mode == BiPred ||
         SubMbPredMode == Pred_L1 || SubMbPredMode == BiPred)
       refIdxL1 = mb.ref_idx_l1[mbPartIdx], predFlagL1 = true;
 
     subMvCnt = predFlagL0 + predFlagL1;
-    currSubMbType = (mb_type == B_8x8) ? sub_mb_type : MB_TYPE_NA;
+
+    //对于B_8x8类型，在子宏块中可能的类型有：B_Direct_8x8, B_L0/L1/Bi_8x8，所以需要通过sub_mb_type进确定。比如说：predPartWidth = (currSubMbType == B_Direct_8x8) ? 16 : SubMbPartWidth
+    H264_MB_TYPE currSubMbType = (mb_type == B_8x8) ? sub_mb_type : MB_TYPE_NA;
+    int32_t mvpL0[2] = {0}, mvpL1[2] = {0};
 
     /* 亮度宏块预测 */
     if (predFlagL0) {
@@ -1305,37 +1307,30 @@ int PictureBase::derivation_prediction_weights(
 }
 
 // 8.4.2.1 Reference picture selection process
-//  Page 164/186/812
 int PictureBase::reference_picture_selection(int32_t refIdxLX,
                                              Frame *RefPicListX[16],
                                              int32_t RefPicListXLength,
                                              PictureBase *&refPic) {
   const SliceHeader *header = m_slice->slice_header;
-
   refPic = nullptr;
-  if (refIdxLX < 0 || refIdxLX >= 32) RET(-1);
+  RET(refIdxLX < 0 || refIdxLX >= 32);
 
-  if (header->field_pic_flag) {
-    // each entry of RefPicListX is a reference field or a field of a reference frame.
-    for (int i = 0; i < RefPicListXLength; i++) {
-      if (!(RefPicListX[i]->m_picture_coded_type_marked_as_refrence ==
-                PICTURE_CODED_TYPE_TOP_FIELD ||
-            RefPicListX[i]->m_picture_coded_type_marked_as_refrence ==
-                PICTURE_CODED_TYPE_BOTTOM_FIELD))
-        RET(-1);
-    }
-  } else {
-    // each entry of RefPicListX is a reference frame or a complementary reference field pair.
-    for (int i = 0; i < RefPicListXLength; i++) {
-      if (!(RefPicListX[i]->m_picture_coded_type_marked_as_refrence ==
-                PICTURE_CODED_TYPE_FRAME ||
-            RefPicListX[i]->m_picture_coded_type_marked_as_refrence ==
-                PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR))
-        RET(-1);
+  // RefPicListX的每个条目是参考场或参考帧的场 或者 都是参考帧或互补参考场对，不存在混合情况。
+  for (int i = 0; i < RefPicListXLength; i++) {
+    if (header->field_pic_flag) {
+      RET((RefPicListX[i]->m_picture_coded_type_marked_as_refrence !=
+               PICTURE_CODED_TYPE_TOP_FIELD &&
+           RefPicListX[i]->m_picture_coded_type_marked_as_refrence !=
+               PICTURE_CODED_TYPE_BOTTOM_FIELD));
+    } else {
+      RET((RefPicListX[i]->m_picture_coded_type_marked_as_refrence !=
+               PICTURE_CODED_TYPE_FRAME &&
+           RefPicListX[i]->m_picture_coded_type_marked_as_refrence !=
+               PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR));
     }
   }
 
-  if (header->field_pic_flag) {
+  if (header->field_pic_flag) { // Field
     if (RefPicListX[refIdxLX]->m_picture_coded_type_marked_as_refrence ==
         PICTURE_CODED_TYPE_TOP_FIELD)
       refPic = &(RefPicListX[refIdxLX]->m_picture_top_filed);
@@ -1344,37 +1339,21 @@ int PictureBase::reference_picture_selection(int32_t refIdxLX,
       refPic = &(RefPicListX[refIdxLX]->m_picture_bottom_filed);
     else
       RET(-1);
-  } else {
+  } else { // Frame
     if (m_mbs[CurrMbAddr].mb_field_decoding_flag == 0)
       refPic = &(RefPicListX[refIdxLX]->m_picture_frame);
-    else {
-      if (refIdxLX % 2 == 0) {
-        if (mb_y % 2 == 0)
-          refPic = &(RefPicListX[refIdxLX / 2]->m_picture_top_filed);
-        else
-          refPic = &(RefPicListX[refIdxLX / 2]->m_picture_bottom_filed);
-
-      } else {
-        if (mb_y % 2 == 0)
-          refPic = &(RefPicListX[refIdxLX / 2]->m_picture_bottom_filed);
-        else
-          refPic = &(RefPicListX[refIdxLX / 2]->m_picture_top_filed);
-      }
+    else { //MBAFF
+      Frame *ref = RefPicListX[refIdxLX / 2];
+      if (refIdxLX % 2 == 0)
+        refPic = (mb_y % 2) ? &(ref->m_picture_bottom_filed)
+                            : &(ref->m_picture_top_filed);
+      else
+        refPic = (mb_y % 2) ? &(ref->m_picture_top_filed)
+                            : &(ref->m_picture_bottom_filed);
     }
   }
 
-  //  if (header->m_sps->separate_colour_plane_flag == 0) {
-  //    // FIXME: 8.7 Deblocking filter process
-  //  } else {
-  //    if (header->colour_plane_id == 0) {
-  //
-  //    } else if (header->colour_plane_id == 1) {
-  //
-  //    } else {
-  //    }
-  //  }
-
-  if (refPic == nullptr) RET(-1);
+  RET(refPic == nullptr);
   return 0;
 }
 
