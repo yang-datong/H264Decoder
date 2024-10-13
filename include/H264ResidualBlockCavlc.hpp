@@ -26,10 +26,8 @@ class CH264ResidualBlockCavlc {
   BitStream *_bs = nullptr;
 
  public:
-  CH264ResidualBlockCavlc(PictureBase *picture, BitStream *bs);
-  ~CH264ResidualBlockCavlc();
-
-  int printInfo();
+  CH264ResidualBlockCavlc(PictureBase *picture, BitStream *bs)
+      : _picture(picture), _bs(bs){};
 
   int residual_block_cavlc(int32_t *coeffLevel, int32_t startIdx,
                            int32_t endIdx, int32_t maxNumCoeff,

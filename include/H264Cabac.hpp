@@ -39,27 +39,27 @@ class CH264Cabac {
                                                int32_t &ctxIdxInc);
   int derivation_of_ctxIdxInc_for_mb_field_decoding_flag(
       int32_t &ctxIdxInc); // 9.3.3.1.1.2
-  int Derivation_process_of_ctxIdxInc_for_the_syntax_element_mb_type(
+  int derivation_of_ctxIdxInc_for_the_syntax_element_mb_type(
       int32_t ctxIdxOffset,
       int32_t &ctxIdxInc); // 9.3.3.1.1.3
-  int Derivation_process_of_ctxIdxInc_for_the_syntax_element_coded_block_pattern(
+  int derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_pattern(
       int32_t binIdx, int32_t binValues, int32_t ctxIdxOffset,
       int32_t &ctxIdxInc); // 9.3.3.1.1.4
   int derivation_ctxIdxInc_for_the_syntax_element_mb_qp_delta(
       int32_t &ctxIdxInc); // 9.3.3.1.1.5
-  int Derivation_process_of_ctxIdxInc_for_the_syntax_elements_ref_idx_l0_and_ref_idx_l1(
+  int derivation_of_ctxIdxInc_for_the_syntax_elements_ref_idx_l0_and_ref_idx_l1(
       int32_t is_ref_idx_10, int32_t mbPartIdx,
       int32_t &ctxIdxInc); // 9.3.3.1.1.6
-  int Derivation_process_of_ctxIdxInc_for_the_syntax_elements_mvd_l0_and_mvd_l1(
+  int derivation_of_ctxIdxInc_for_the_syntax_elements_mvd_l0_and_mvd_l1(
       int32_t is_mvd_10, int32_t mbPartIdx, int32_t subMbPartIdx,
       int32_t isChroma, int32_t ctxIdxOffset,
       int32_t &ctxIdxInc); // 9.3.3.1.1.7
-  int Derivation_process_of_ctxIdxInc_for_the_syntax_element_intra_chroma_pred_mode(
+  int derivation_of_ctxIdxInc_for_the_syntax_element_intra_chroma_pred_mode(
       int32_t &ctxIdxInc); // 9.3.3.1.1.8
-  int Derivation_process_of_ctxIdxInc_for_the_syntax_element_coded_block_flag(
+  int derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_flag(
       int32_t ctxBlockCat, int32_t BlkIdx, int32_t iCbCr,
       int32_t &ctxIdxInc); // 9.3.3.1.1.9
-  int Derivation_process_of_ctxIdxInc_for_the_syntax_element_transform_size_8x8_flag(
+  int derivation_of_ctxIdxInc_for_the_syntax_element_transform_size_8x8_flag(
       int32_t &ctxIdxInc); // 9.3.3.1.1.10
 
   int DecodeBin(const int32_t bypassFlag, const int32_t ctxIdx, int32_t &bin);
