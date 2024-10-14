@@ -1,8 +1,8 @@
 ﻿#include "MacroBlock.hpp"
 #include "BitStream.hpp"
 #include "CH264Golomb.hpp"
-#include "Constants.hpp"
 #include "Cabac.hpp"
+#include "Constants.hpp"
 #include "H264ResidualBlockCavlc.hpp"
 #include "PictureBase.hpp"
 #include "SliceHeader.hpp"
@@ -758,7 +758,7 @@ int MacroBlock::residual_block2(int32_t coeffLevel[], int32_t startIdx,
 /* 对于帧内预测（I帧）：相邻的已解码像素生成预测值 -> 残差解码 -> 重建块 -> 去块效应滤波，其中残差解码有反量化残差系数，逆变换残差系数（DCT）*/
 /* 对于帧间预测（B、P帧）：运动补偿预测 -> 残差解码 -> 重建块，其中残差数据用于修正预测值 */
 int MacroBlock::residual(int32_t startIdx, int32_t endIdx) {
-  if (!_cavlc) _cavlc = new CH264ResidualBlockCavlc(_pic, _bs);
+  if (!_cavlc) _cavlc = new Cavlc(_pic, _bs);
   const uint32_t ChromaArrayType =
       _pic->m_slice->slice_header->m_sps->ChromaArrayType;
   const int32_t SubWidthC = _pic->m_slice->slice_header->m_sps->SubWidthC;

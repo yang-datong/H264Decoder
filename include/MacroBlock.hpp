@@ -7,7 +7,7 @@
 #include "Type.hpp"
 #include <cstdint>
 
-class CH264ResidualBlockCavlc;
+class Cavlc;
 class PictureBase;
 class SliceData;
 
@@ -234,7 +234,7 @@ class MacroBlock {
   CH264Golomb *_gb = nullptr;
   Cabac *_cabac = nullptr;
   BitStream *_bs = nullptr;
-  CH264ResidualBlockCavlc *_cavlc = nullptr;
+  Cavlc *_cavlc = nullptr;
   PictureBase *_pic = nullptr;
   MB_RESIDUAL_LEVEL _mb_residual_level_dc = MB_RESIDUAL_UNKOWN;
   MB_RESIDUAL_LEVEL _mb_residual_level_ac = MB_RESIDUAL_UNKOWN;
