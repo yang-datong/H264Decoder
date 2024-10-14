@@ -1,6 +1,6 @@
 #include "Common.hpp"
-#include <assert.h>
 #include "BitStream.hpp"
+#include <assert.h>
 
 int h264_log2(int32_t value) {
   assert(value > 0);
@@ -11,13 +11,6 @@ int h264_log2(int32_t value) {
   }
   return log2;
 }
-
-void *my_malloc(size_t size) {
-  void *ptr = malloc(size);
-  return ptr;
-}
-
-void my_free(void *ptr) { return free(ptr); }
 
 int32_t h264_power2(int32_t value) {
   int32_t power2 = 1;

@@ -129,7 +129,7 @@ int PictureBase::init(Slice *slice) {
 
   //----------------------------
   if (m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
-    m_mbs = (MacroBlock *)my_malloc(sizeof(MacroBlock) * PicSizeInMbs);
+    m_mbs = (MacroBlock *)malloc(sizeof(MacroBlock) * PicSizeInMbs);
     // 因为MacroBlock构造函数中，有对变量初始化，可以考虑使用C++/new申请内存，此处使用C/my_malloc
     RETURN_IF_FAILED(m_mbs == NULL, -1);
     memset(m_mbs, 0, sizeof(MacroBlock) * PicSizeInMbs);
@@ -141,7 +141,7 @@ int PictureBase::init(Slice *slice) {
 
     int totalSzie = sizeY + sizeU + sizeV;
 
-    uint8_t *pic_buff = (uint8_t *)my_malloc(
+    uint8_t *pic_buff = (uint8_t *)malloc(
         sizeof(uint8_t) *
         totalSzie); // Y,U,V 这3个通道数据存储在一块连续的内存中
     RETURN_IF_FAILED(pic_buff == NULL, -1);
@@ -210,8 +210,8 @@ int PictureBase::init(Slice *slice) {
 
 int PictureBase::unInit() {
   if (m_is_malloc_mem_by_myself == 1) {
-    SAFE_FREE(m_mbs);
-    SAFE_FREE(m_pic_buff_luma);
+    FREE(m_mbs);
+    FREE(m_pic_buff_luma);
   } else {
     m_mbs = NULL;
     m_pic_buff_luma = NULL;
@@ -473,7 +473,7 @@ int PictureBase::createEmptyImage(MY_BITMAP &bitmap, int32_t width,
   bitmap.bmWidthBytes = (width * bmBitsPixel / 8 + 3) / 4 * 4;
 
   uint8_t *pBits =
-      (uint8_t *)my_malloc(bitmap.bmHeight * bitmap.bmWidthBytes); // 在堆上申请
+      (uint8_t *)malloc(bitmap.bmHeight * bitmap.bmWidthBytes); // 在堆上申请
   if (pBits == NULL) {
     printf("CreateEmptyImage: pBits == NULL\n");
     return -1;
@@ -507,7 +507,7 @@ int PictureBase::saveToBmpFile(const char *filename) {
     return -1;
   }
 
-  my_free(bitmap.bmBits);
+  free(bitmap.bmBits);
   bitmap.bmBits = NULL;
 
   return 0;

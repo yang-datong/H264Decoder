@@ -4,10 +4,6 @@ class BitStream;
 
 int h264_log2(int32_t value);
 
-void *my_malloc(size_t size);
-
-void my_free(void *ptr);
-
 int32_t h264_power2(int32_t value);
 
 #define RET(ret)                                                               \
@@ -22,14 +18,6 @@ int32_t h264_power2(int32_t value);
     delete ptr;                                                                \
     ptr = nullptr;                                                             \
   }
-
-#define SAFE_FREE(x)                                                           \
-  do {                                                                         \
-    if (x) {                                                                   \
-      my_free(x);                                                              \
-      x = NULL;                                                                \
-    }                                                                          \
-  } while (0)
 
 #define IS_INTRA_Prediction_Mode(v)                                            \
   (v != MB_PRED_MODE_NA &&                                                     \
