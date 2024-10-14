@@ -242,15 +242,78 @@ int CH264Cabac::decode_mb_skip_flag(const int32_t currMbAddr,
   return 0;
 }
 
+/* 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element mb_skip_flag */
+/* 输出: ctxIdxInc */
+int CH264Cabac::derivation_of_ctxIdxInc_for_mb_skip_flag(int32_t currMbAddr,
+                                                         int32_t &ctxIdxInc) {
+  const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
+  int32_t mbAddrA = 0, mbAddrB = 0;
+  RET(picture.derivation_for_neighbouring_macroblocks(
+      MbaffFrameFlag, currMbAddr, mbAddrA, mbAddrB, 0));
+
+  int32_t condTermFlagA =
+      (mbAddrA < 0 || picture.m_mbs[mbAddrA].mb_skip_flag) ? 0 : 1;
+  int32_t condTermFlagB =
+      (mbAddrB < 0 || picture.m_mbs[mbAddrB].mb_skip_flag) ? 0 : 1;
+
+  // ctxIdxInc = [0,2]
+  ctxIdxInc = condTermFlagA + condTermFlagB;
+
+  return 0;
+}
+
+// 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element mb_field_decoding_flag
+int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
+  int ctxIdxInc = 0;
+  RET(derivation_of_ctxIdxInc_for_mb_field_decoding_flag(ctxIdxInc));
+
+  int ctxIdxOffset = 70;
+  int bypassFlag = (ctxIdxOffset == -1) ? 1 : 0;
+  int ctxIdx = ctxIdxOffset + ctxIdxInc;
+
+  int &bin = synElVal;
+  RET(decodeBin(bypassFlag, ctxIdx, bin)); // binIdx = 0;
+  return 0;
+}
+
+// 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element mb_field_decoding_flag
+int CH264Cabac::derivation_of_ctxIdxInc_for_mb_field_decoding_flag(
+    int32_t &ctxIdxInc) {
+
+  /* Table 6-4 – Specification of mbAddrN and yM */
+  int32_t mbAddrA, mbAddrB, mbAddrC, mbAddrD;
+  /* 调用第 6.4.10 节中指定的相邻宏块地址及其在 MBAFF 帧中的可用性的导出过程，并将输出分配给 mbAddrA 和 mbAddrB。  */
+  picture.derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
+      mbAddrA, mbAddrB, mbAddrC, mbAddrD);
+
+  /* 当宏块mbAddrN和mbAddrN+1两者都具有等于P_Skip或B_Skip的mb_type时，将如第7.4.4节中指定的语法元素mb_field_decoding_flag的推断规则应用于宏块mbAddrN。  
+   * 让变量 condTermFlagN（N 为 A 或 B）按如下方式导出： 
+   * — 如果以下任一条件为真，则 condTermFlagN 设置为等于 0： 
+      * — mbAddrN 不可用， 
+      * — 宏块 mbAddrN 是帧宏块。  
+   * – 否则，condTermFlagN 设置为等于 1。*/
+
+  int32_t condTermFlagA = 1, condTermFlagB = 1;
+  if (mbAddrA < 0 || picture.m_mbs[mbAddrA].mb_field_decoding_flag == 0)
+    condTermFlagA = 0;
+
+  if (mbAddrB < 0 || picture.m_mbs[mbAddrB].mb_field_decoding_flag == 0)
+    condTermFlagB = 0;
+
+  // 变量 ctxIdxInc 由以下公式得出： ctxIdxInc = condTermFlagA + condTermFlagB
+  ctxIdxInc = condTermFlagA + condTermFlagB;
+
+  return 0;
+}
+
+// 9.3.3.1.1.3 Derivation process of ctxIdxInc for the syntax element mb_type
 int CH264Cabac::decode_mb_type(int32_t &synElVal) {
   H264_SLICE_TYPE slice_type =
       (H264_SLICE_TYPE)picture.m_slice->slice_header->slice_type;
-
-  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
   int ret = 0;
   if ((slice_type % 5) == SLICE_SI)
     ret = decode_mb_type_in_SI_slices(synElVal);
-  else if ((slice_type % 5) == SLICE_I) // Table 9-34
+  else if ((slice_type % 5) == SLICE_I)
     ret = decode_mb_type_in_I_slices(3, synElVal);
   else if ((slice_type % 5) == SLICE_P || (slice_type % 5) == SLICE_SP)
     ret = decode_mb_type_in_P_SP_slices(synElVal);
@@ -262,62 +325,54 @@ int CH264Cabac::decode_mb_type(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::decode_sub_mb_type(int32_t &synElVal) {
+int CH264Cabac::decode_mb_type_in_SI_slices(int32_t &synElVal) {
   H264_SLICE_TYPE slice_type =
       (H264_SLICE_TYPE)picture.m_slice->slice_header->slice_type;
+  RET((slice_type % 5) != SLICE_SI);
 
-  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
-  int ret = 0;
-  if ((slice_type % 5) == SLICE_P || (slice_type % 5) == SLICE_SP)
-    ret = decode_sub_mb_type_in_P_SP_slices(synElVal);
-  else if ((slice_type % 5) == SLICE_B)
-    ret = decode_sub_mb_type_in_B_slices(synElVal);
-  else
-    RET(-1);
-  RET(ret);
+  int32_t ctxIdxOffset = 0, ctxIdxInc = 0;
+  RET(derivation_of_ctxIdxInc_for_the_syntax_element_mb_type(ctxIdxOffset,
+                                                             ctxIdxInc));
+  int32_t binVal = 0;
+  RET(decodeBin((ctxIdxOffset == NA), ctxIdxOffset + ctxIdxInc, binVal));
+
+  if (binVal == 0)
+    synElVal = 0;
+  else {
+    RET(decode_mb_type_in_I_slices(3, synElVal));
+    synElVal += 1;
+  }
+
   return 0;
 }
 
 int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
                                            int32_t &synElVal) {
-  int32_t ctxIdxInc = 0, ctxIdx = 0, binVal = 0;
-  int32_t bypassFlag = 0;
-
-  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
-
-  //------Table 9-34: ctxIdxOffset--------
-  // 如果是I片中的intra宏块，则ctxIdxOffset = 3;
-  // 如果是P/SP片中的intra宏块，则ctxIdxOffset = 17;
-  // 如果是B片中的intra宏块，则ctxIdxOffset = 32;
-
-  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
-
-  // 0,1,2 (clause 9.3.3.1.1.3)
-  if (ctxIdxOffset == 3) { // I slice
+  int32_t ctxIdxInc = 0;
+  if (ctxIdxOffset == 3) {
     RET(derivation_of_ctxIdxInc_for_the_syntax_element_mb_type(ctxIdxOffset,
                                                                ctxIdxInc));
   }
 
-  ctxIdx = ctxIdxOffset + ctxIdxInc;
-
-  //---------DecodeBin------------------
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
+  int32_t binVal = 0;
+  int32_t ctxIdx = ctxIdxOffset + ctxIdxInc;
+  RET(decodeBin(false, ctxIdx, binVal));
 
   if (binVal == 0)
     synElVal = 0;
   else {
     ctxIdx = 276;
-    RET(decodeBin(bypassFlag, ctxIdx, binVal));
+    RET(decodeBin(false, ctxIdx, binVal));
 
     if (binVal == 0) //(10)b
     {
       ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 3 : 1);
-      RET(decodeBin(bypassFlag, ctxIdx, binVal));
+      RET(decodeBin(false, ctxIdx, binVal));
 
       if (binVal == 0) //(100)b
       {
         ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 4 : 2);
-        RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 3; b3 = binVal;
+        RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 3; b3 = binVal;
 
         if (binVal == 0) //(1000)b //b3=0
         {
@@ -329,13 +384,13 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
             ctxIdx = ctxIdxOffset + 3; //(b3 != 0) ? 2: 3; b3=0; //Table 9-41
           }
 
-          RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 4;
+          RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 4;
 
           if (binVal == 0) //(10000)b
           {
             //(b3 != 0) ? 6: 7; b3=0; //Table 9-41
             ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 7 : 3);
-            RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 5;
+            RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 5;
 
             if (binVal == 0) //(100000)b
             {
@@ -348,7 +403,7 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
           {
             //(b3 != 0) ? 6: 7; b3=0; //Table 9-41
             ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 7 : 3);
-            RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 5;
+            RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 5;
 
             if (binVal == 0) //(100010)b
             {
@@ -368,18 +423,18 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
             ctxIdx = ctxIdxOffset + 2; //(b3 != 0) ? 2: 3; b3=1; //Table 9-41
           }
 
-          RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 4;
+          RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 4;
 
           if (binVal == 0) //(10010)b
           {
             //(b3 != 0) ? 6: 7; b3=1; //Table 9-41
             ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 6 : 3);
-            RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 5;
+            RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 5;
 
             if (binVal == 0) //(100100)b
             {
               ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 7 : 3);
-              RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 6;
+              RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 6;
 
               if (binVal == 0) //(1001000)b
               {
@@ -391,7 +446,7 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
             } else if (binVal == 1) //(100101)b
             {
               ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 7 : 3);
-              RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 6;
+              RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 6;
 
               if (binVal == 0) //(1001010)b
               {
@@ -405,12 +460,12 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
           {
             //(b3 != 0) ? 6: 7; b3=1; //Table 9-41
             ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 6 : 3);
-            RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 5;
+            RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 5;
 
             if (binVal == 0) //(100110)b
             {
               ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 7 : 3);
-              RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 6;
+              RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 6;
 
               if (binVal == 0) //(1001100)b
               {
@@ -422,7 +477,7 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
             } else if (binVal == 1) //(100111)b
             {
               ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 7 : 3);
-              RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 6;
+              RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 6;
 
               if (binVal == 0) //(1001110)b
               {
@@ -437,7 +492,7 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
       } else if (binVal == 1) //(101)b
       {
         ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 4 : 2);
-        RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 3; b3=binVal;
+        RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 3; b3=binVal;
 
         if (binVal == 0) //(1010)b //b3=0
         {
@@ -449,13 +504,13 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
             ctxIdx = ctxIdxOffset + 3; //(b3 != 0) ? 2: 3; b3=0; //Table 9-41
           }
 
-          RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 4;
+          RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 4;
 
           if (binVal == 0) //(10100)b
           {
             //(b3 != 0) ? 6: 7; b3=0; //Table 9-41
             ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 7 : 3);
-            RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 5;
+            RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 5;
 
             if (binVal == 0) //(101000)b
             {
@@ -468,7 +523,7 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
           {
             //(b3 != 0) ? 6: 7; b3=0; //Table 9-41
             ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 7 : 3);
-            RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 5;
+            RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 5;
 
             if (binVal == 0) //(101010)b
             {
@@ -488,18 +543,18 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
             ctxIdx = ctxIdxOffset + 2; //(b3 != 0) ? 2: 3; b3=1; //Table 9-41
           }
 
-          RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 4;
+          RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 4;
 
           if (binVal == 0) //(10110)b
           {
             //(b3 != 0) ? 6: 7; b3=1; //Table 9-41
             ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 6 : 3);
-            RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 5;
+            RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 5;
 
             if (binVal == 0) //(101100)b
             {
               ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 7 : 3);
-              RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 6;
+              RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 6;
 
               if (binVal == 0) //(1011000)b
               {
@@ -511,7 +566,7 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
             } else if (binVal == 1) //(101101)b
             {
               ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 7 : 3);
-              RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 6;
+              RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 6;
 
               if (binVal == 0) //(1011010)b
               {
@@ -525,12 +580,12 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
           {
             //(b3 != 0) ? 6: 7; b3=1; //Table 9-41
             ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 6 : 3);
-            RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 5;
+            RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 5;
 
             if (binVal == 0) //(101110)b
             {
               ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 7 : 3);
-              RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 6;
+              RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 6;
 
               if (binVal == 0) //(1011100)b
               {
@@ -542,7 +597,7 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
             } else if (binVal == 1) //(101111)b
             {
               ctxIdx = ctxIdxOffset + ((ctxIdxOffset == 3) ? 7 : 3);
-              RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 6;
+              RET(decodeBin(false, ctxIdx, binVal)); // binIdx = 6;
 
               if (binVal == 0) //(1011110)b
               {
@@ -561,38 +616,6 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
 
   if (synElVal == 25) //&& value(b0,b1,...,bbinIdx) == I_PCM = 25
     init_of_decoding_engine();
-
-  return 0;
-}
-
-int CH264Cabac::decode_mb_type_in_SI_slices(int32_t &synElVal) {
-
-  H264_SLICE_TYPE slice_type =
-      (H264_SLICE_TYPE)picture.m_slice->slice_header->slice_type;
-  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
-  int32_t binVal = 0;
-  int32_t bypassFlag = 0;
-
-  RET((slice_type % 5) != SLICE_SI);
-
-  //------Table 9-34: ctxIdxOffset-prefix: 0--------
-  ctxIdxOffset = 0;
-
-  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
-
-  // 0,1,2 (clause 9.3.3.1.1.3)
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_mb_type(ctxIdxOffset,
-                                                             ctxIdxInc));
-  ctxIdx = ctxIdxOffset + ctxIdxInc;
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
-
-  if (binVal == 0)
-    synElVal = 0;
-  else {
-    //------Table 9-34: ctxIdxOffset-suffix: 3--------
-    RET(decode_mb_type_in_I_slices(3, synElVal));
-    synElVal += 1;
-  }
 
   return 0;
 }
@@ -889,6 +912,56 @@ int CH264Cabac::decode_mb_type_in_B_slices(int32_t &synElVal) {
   return 0;
 }
 
+// 9.3.3.1.1.3 Derivation process of ctxIdxInc for the syntax element mb_type
+int CH264Cabac::derivation_of_ctxIdxInc_for_the_syntax_element_mb_type(
+    int32_t ctxIdxOffset, int32_t &ctxIdxInc) {
+  const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
+
+  int32_t mbAddrA = 0, mbAddrB = 0;
+
+  // 6.4.11.1 Derivation process for neighbouring macroblocks
+  RET(picture.derivation_for_neighbouring_macroblocks(
+      MbaffFrameFlag, picture.CurrMbAddr, mbAddrA, mbAddrB, 0));
+
+  int32_t condTermFlagA = 1, condTermFlagB = 1;
+
+  if (mbAddrA < 0 ||
+      (ctxIdxOffset == 0 && picture.m_mbs[mbAddrA].m_name_of_mb_type == SI) ||
+      (ctxIdxOffset == 3 &&
+       picture.m_mbs[mbAddrA].m_name_of_mb_type == I_NxN) ||
+      (ctxIdxOffset == 27 &&
+       (picture.m_mbs[mbAddrA].m_name_of_mb_type == B_Skip ||
+        picture.m_mbs[mbAddrA].m_name_of_mb_type == B_Direct_16x16)))
+    condTermFlagA = 0;
+
+  if (mbAddrB < 0 ||
+      (ctxIdxOffset == 0 && picture.m_mbs[mbAddrB].m_name_of_mb_type == SI) ||
+      (ctxIdxOffset == 3 &&
+       picture.m_mbs[mbAddrB].m_name_of_mb_type == I_NxN) ||
+      (ctxIdxOffset == 27 &&
+       (picture.m_mbs[mbAddrB].m_name_of_mb_type == B_Skip ||
+        picture.m_mbs[mbAddrB].m_name_of_mb_type == B_Direct_16x16)))
+    condTermFlagB = 0;
+
+  ctxIdxInc = condTermFlagA + condTermFlagB;
+
+  return 0;
+}
+
+int CH264Cabac::decode_sub_mb_type(int32_t &synElVal) {
+  H264_SLICE_TYPE slice_type =
+      (H264_SLICE_TYPE)picture.m_slice->slice_header->slice_type;
+  int ret = 0;
+  if ((slice_type % 5) == SLICE_P || (slice_type % 5) == SLICE_SP)
+    ret = decode_sub_mb_type_in_P_SP_slices(synElVal);
+  else if ((slice_type % 5) == SLICE_B)
+    ret = decode_sub_mb_type_in_B_slices(synElVal);
+  else
+    RET(-1);
+  RET(ret);
+  return 0;
+}
+
 int CH264Cabac::decode_sub_mb_type_in_P_SP_slices(int32_t &synElVal) {
 
   H264_SLICE_TYPE slice_type =
@@ -1041,282 +1114,7 @@ int CH264Cabac::decode_sub_mb_type_in_B_slices(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
-                              int32_t subMbPartIdx, int32_t isChroma,
-                              int32_t &synElVal) {
-  int32_t ctxIdxOffset = 47, ctxIdxInc = 0, ctxIdx = 0;
-  int32_t binVal = 0;
-  int32_t bypassFlag = 0;
-  const int32_t uCoff = 9;
-
-  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
-  //------Table 9-34: ctxIdxOffset-prefix: --------
-  if (mvd_flag == 0 || mvd_flag == 2) ctxIdxOffset = 40;
-
-  // 9.3.3.1.1.7 Derivation process of ctxIdxInc for the syntax elements mvd_l0 and mvd_l1
-  int32_t is_mvd_10 = (mvd_flag == 0 || mvd_flag == 1) ? 1 : 0;
-  RET(derivation_of_ctxIdxInc_for_the_syntax_elements_mvd_l0_and_mvd_l1(
-      is_mvd_10, mbPartIdx, subMbPartIdx, isChroma, ctxIdxOffset, ctxIdxInc));
-
-  //---------------注意是：UEG3------------------------
-  // UEG3编码是由 prefix(TU binarization) + suffix(Exp-Golomb) + signedValFlag,三部分组成
-
-  //-----1. 先解码前缀(TU)--------
-  ctxIdx = ctxIdxOffset + ctxIdxInc;
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
-
-  if (binVal == 0) // signedValFlag=1
-    synElVal = 0;  // synElVal consists only of a prefix bit string
-  else {
-    synElVal = 1;
-    // ctxIdxOffset + ctxIdxInc = 40(47) + 3; //Table 9-39
-    ctxIdx = ctxIdxOffset + 3;
-
-    while (binVal == 1 && synElVal < uCoff) //(11...1)b
-    {
-      RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1,2,3,4.,..,k;
-      if (binVal == 0) break;
-      synElVal++; // binIdx=[0,1,2,3,4,5,6,7,8] --> ctxIdxInc= [?,3,4,5,6,6,6,6,6]
-          // ctxIdx = ctxIdxOffset + ctxIdxInc = 40(47) + [?,3,4,5,6,6,6,6,6]; //Table 9-39
-      if (synElVal <= 4) ctxIdx++;
-    }
-
-    //-----2. 再解码后缀(Exp-Golomb)--------
-    // 注意：9.3.2.3 Concatenated unary/ k-th order Exp-Golomb (UEGk) binarization process 中的伪代码表示是UEGk的编码过程，解码需要逆向过来
-    // 重点是：此处的 Exp-Golomb 和9.1 Parsing process for Exp-Golomb codes中的意思不一样（NOTE：这是一个坑）
-
-    //------Table 9-34: ctxIdxOffset-suffix: na (uses DecodeBypass)--------
-    int32_t k = 3; // k取值为UEG3中的3
-
-    if (synElVal >= uCoff) {
-      RET(decodeBypass(binVal));
-
-      while (binVal == 1) {
-        synElVal += 1 << k;
-        ++k;
-        RET(k >= 32 - uCoff); // error: mv值过大
-        RET(decodeBypass(binVal));
-      }
-
-      while (k--) {
-        RET(decodeBypass(binVal));
-        synElVal += binVal << k;
-      }
-    }
-
-    // //signedValFlag=1代表结果是有符号整数
-    if (synElVal != 0) {
-      RET(decodeBypass(binVal));
-      if (binVal == 1) synElVal = -synElVal; // 结果为负数
-    }
-  }
-
-  return 0;
-}
-
-int CH264Cabac::decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
-                                  int32_t &synElVal) {
-  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
-  int32_t binIdx = -1, binVal = 0;
-  int32_t bypassFlag = 0;
-
-  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
-  //------Table 9-34: ctxIdxOffset: 54--------
-  ctxIdxOffset = 54;
-
-  // 0,1,2,3 (clause 9.3.3.1.1.6)
-  int32_t is_ref_idx_10 = (ref_idx_flag == 0) ? 1 : 0;
-  RET(derivation_of_ctxIdxInc_for_the_syntax_elements_ref_idx_l0_and_ref_idx_l1(
-      is_ref_idx_10, mbPartIdx, ctxIdxInc));
-
-  //---------------注意是：U binarization------------------------
-  ctxIdx = ctxIdxOffset + ctxIdxInc;
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
-
-  // unary (U) binarization即一元二值化，就是类似 (111...1110)b这样的二进制字符串，最后一个二进制值为0，其他都是1，其中1的个数就是对应的语法元素的值
-
-  // binIdx=[0,1,2,3,4,5,6,...,k] --> ctxIdx = ctxIdxOffset + ctxIdxInc = 54 + [?,4,5,5,5,5,5,...,5]
-
-  if (binVal == 0) //(0)b
-    synElVal = 0;
-  else {
-    ctxIdx = ctxIdxOffset + 4;                  // Table 9-39
-    RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1;
-    binIdx = 1;
-    ctxIdx = ctxIdxOffset + 5; // Table 9-39
-    while (binVal == 1)        //(11...1)b
-    {
-      RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 2,3,4.,..,k;
-      binIdx++;
-      RET(binIdx > 32); // error: ref_idx 值太大了
-    }
-    synElVal = binIdx;
-  }
-
-  return 0;
-}
-
-//9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element mb_qp_delta
-int CH264Cabac::decode_mb_qp_delta(int32_t &synElVal) {
-  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
-  int32_t binIdx = -1, binVal = 0;
-  int32_t bypassFlag = 0;
-  int32_t bit_depth_luma = 8;
-
-  //------Table 9-34: ctxIdxOffset: 60--------
-  ctxIdxOffset = 60;
-
-  // 9.3.2.7 Binarization process for mb_qp_delta
-
-  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
-
-  // 9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element
-  RET(derivation_ctxIdxInc_for_the_syntax_element_mb_qp_delta(ctxIdxInc));
-
-  //---------------注意是：U binarization------------------------
-  ctxIdx = ctxIdxOffset + ctxIdxInc;
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
-
-  // unary (U) binarization即一元二值化，就是类似 (111...1110)b这样的二进制字符串，最后一个二进制值为0，其他都是1，其中1的个数就是对应的语法元素的值
-  if (binVal == 0) //(0)b
-    synElVal = 0;
-  else {
-    ctxIdx = ctxIdxOffset + 2;                  // Table 9-39
-    RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1;
-
-    int mb_qp_max = 51 + 6 * (bit_depth_luma - 8);
-    binIdx = 1;
-
-    while (binVal == 1) //(11...1)b
-    {
-      ctxIdx = ctxIdxOffset + 3;                  // Table 9-39
-      RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 2,3,4.,..,k;
-
-      binIdx++;
-
-      if (binIdx > 2 * mb_qp_max) {
-        // mb_qp_delta值太大了
-        std::cerr << "An error occurred on binIdx:" << binIdx << " > "
-                  << 2 * mb_qp_max << " ," << __FUNCTION__ << "():" << __LINE__
-                  << std::endl;
-        binIdx = 2 * mb_qp_max;
-        break;
-      }
-    }
-
-    //----------Table 9-3 se(v)-------------
-    if (binIdx & 0x01)               // 奇数
-      binIdx = (binIdx + 1) >> 1;    //(−1)^(k+1) * Ceil(k÷2)
-    else                             // 偶数
-      binIdx = -((binIdx + 1) >> 1); //(−1)^(k+1) * Ceil(k÷2)
-
-    synElVal = binIdx;
-  }
-
-  return 0;
-}
-
-int CH264Cabac::decode_intra_chroma_pred_mode(int32_t &synElVal) {
-  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
-  int32_t binVal = 0;
-  int32_t bypassFlag = 0;
-
-  //------Table 9-34: ctxIdxOffset: 64--------
-  ctxIdxOffset = 64;
-
-  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
-
-  // 0,1,2 (clause 9.3.3.1.1.8)
-  // 9.3.3.1.1.8 Derivation process of ctxIdxInc for the syntax element intra_chroma_pred_mode
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_intra_chroma_pred_mode(
-      ctxIdxInc));
-
-  //---------------注意是：TU, cMax=3------------------------
-  ctxIdx = ctxIdxOffset + ctxIdxInc;
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
-
-  if (binVal == 0) //(0)b
-    synElVal = 0;
-  else {
-    ctxIdx = ctxIdxOffset + 3;                  // Table 9-39
-    RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1;
-
-    if (binVal == 0) //(10)b
-      synElVal = 1;
-    else {
-      ctxIdx = ctxIdxOffset + 3;                  // Table 9-39
-      RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 2;
-
-      if (binVal == 0) //(110)b
-        synElVal = 2;
-      else
-        // 9.3.2.2 Truncated unary (TU) binarization process the syntax element value equal to cMax the bin string is a bit string of length cMax with all bins being equal to 1.
-        synElVal = 3; // TU, cMax=3
-    }
-  }
-
-  return 0;
-}
-
-int CH264Cabac::decode_prev_intra4x4_or_intra8x8_pred_mode_flag(
-    int32_t &synElVal) {
-  int32_t ctxIdxOffset = 0, ctxIdx = 0;
-  int32_t binVal = 0;
-  int32_t bypassFlag = 0;
-
-  //------Table 9-34: ctxIdxOffset: 68--------
-  ctxIdxOffset = 68;
-
-  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
-
-  //---------------注意是：FL, cMax=1------------------------
-  ctxIdx = ctxIdxOffset + 0;                  // ctxIdxInc = 0;
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
-  synElVal = binVal;
-  return 0;
-}
-
-int CH264Cabac::decode_rem_intra4x4_or_intra8x8_pred_mode(int32_t &synElVal) {
-  int32_t ctxIdxOffset = 0, ctxIdx = 0;
-  int32_t binVal = 0;
-  int32_t bypassFlag = 0;
-
-  //------Table 9-34: ctxIdxOffset: 69--------
-  ctxIdxOffset = 69;
-
-  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
-
-  //---------------注意是：FL, cMax=7------------------------
-  ctxIdx = ctxIdxOffset + 0; // ctxIdxInc = 0;
-
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
-  synElVal = binVal;
-
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1;
-  synElVal += binVal << 1;
-
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 2;
-  synElVal += binVal << 2;
-
-  return 0;
-}
-
-/* 9.3.3 Decoding process flow */
-int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
-  int ctxIdxInc = 0;
-  // 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element mb_field_decoding_flag
-  RET(derivation_of_ctxIdxInc_for_mb_field_decoding_flag(ctxIdxInc));
-
-  // Table 9-34 – Syntax elements and associated types of binarization,maxBinIdxCtx, and ctxIdxOffset
-  int ctxIdxOffset = 70;
-  int bypassFlag = (ctxIdxOffset == -1) ? 1 : 0;
-  int ctxIdx = ctxIdxOffset + ctxIdxInc;
-
-  int &bin = synElVal;
-  RET(decodeBin(bypassFlag, ctxIdx, bin)); // binIdx = 0;
-  return 0;
-}
-
+// 9.3.3.1.1.4 Derivation process of ctxIdxInc for the syntax element coded_block_pattern
 int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
   int32_t ChromaArrayType =
       picture.m_slice->slice_header->m_sps->ChromaArrayType;
@@ -1326,8 +1124,6 @@ int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
 
   //------Table 9-34: ctxIdxOffset-prefix: 73--------
   ctxIdxOffset = 73;
-
-  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
 
   //------b0--------
   binIdx = 0;
@@ -1402,398 +1198,12 @@ int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
-                                        int32_t BlkIdx, int32_t iCbCr,
-                                        int32_t &synElVal) {
-  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
-  int32_t binVal = 0;
-  int32_t bypassFlag = 0;
-  int32_t ctxBlockCat = 0;
-
-  //--------1.先计算出ctxBlockCat的值------------
-  // Table 9-42 – Specification of ctxBlockCat for the different blocks
-  ctxBlockCat = mb_block_level;
-
-  //--------2.获取ctxIdxOffset的值-----------
-  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
-  if (ctxBlockCat < 5) //(blocks with ctxBlockCat < 5) FL, cMax=1
-    ctxIdxOffset = 85;
-  else if (ctxBlockCat > 5 && ctxBlockCat < 9)
-    ctxIdxOffset = 460;
-  else if (ctxBlockCat > 9 && ctxBlockCat < 13)
-    ctxIdxOffset = 472;
-  else
-    ctxIdxOffset = 1012;
-
-  // Table 9-40 – Assignment of ctxIdxBlockCatOffset to ctxBlockCat for syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
-
-  const int32_t ctxIdxBlockCatOffset_arr[14] = {0, 4, 8, 12, 16, 0, 0,
-                                                4, 8, 4, 0,  4,  8, 8};
-  int32_t ctxIdxBlockCatOffset = ctxIdxBlockCatOffset_arr[ctxBlockCat];
-
-  // 9.3.3.1.1.9
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_flag(
-      ctxBlockCat, BlkIdx, iCbCr, ctxIdxInc));
-
-  //--------3.计算出ctxIdx的值-----------
-  ctxIdx = ctxIdxOffset + ctxIdxBlockCatOffset + ctxIdxInc;
-
-  //--------4.进行处理 FL, cMax=1-----------
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
-
-  synElVal = binVal;
-
-  return 0;
-}
-
-// 如果last_flag=1,则表示 CABAC_decode_last_significant_coeff_flag(...)
-int CH264Cabac::decode_significant_coeff_flag(MB_RESIDUAL_LEVEL mb_block_level,
-                                              int32_t levelListIdx,
-                                              int32_t last_flag,
-                                              int32_t &synElVal) {
-  int32_t NumC8x8 = 4 / (picture.m_slice->slice_header->m_sps->SubWidthC *
-                         picture.m_slice->slice_header->m_sps->SubHeightC);
-  int32_t mb_field_decoding_flag =
-      picture.m_mbs[picture.CurrMbAddr].mb_field_decoding_flag;
-  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
-  int32_t binVal = 0;
-  int32_t bypassFlag = 0;
-  int32_t ctxBlockCat = 0;
-
-  //--------1.先计算出ctxBlockCat的值------------
-  // Table 9-42 – Specification of ctxBlockCat for the different blocks
-
-  ctxBlockCat = mb_block_level;
-
-  //--------2.获取ctxIdxOffset的值-----------
-  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
-  if (ctxBlockCat < 5) //(frame coded blocks with ctxBlockCat < 5) FL, cMax=1
-  {
-    if (last_flag == 0) // significant_coeff_flag
-      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 105 : 277;
-    else // last_significant_coeff_flag
-      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 166 : 338;
-  } else if (ctxBlockCat == 5) {
-    if (last_flag == 0) // significant_coeff_flag
-      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 402 : 436;
-    else // last_significant_coeff_flag
-      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 417 : 451;
-  } else if (ctxBlockCat > 5 && ctxBlockCat < 9) {
-    if (last_flag == 0) // significant_coeff_flag
-      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 484 : 776;
-    else // last_significant_coeff_flag
-      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 572 : 864;
-  } else if (ctxBlockCat > 9 && ctxBlockCat < 13) {
-    if (last_flag == 0) // significant_coeff_flag
-      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 528 : 820;
-    else // last_significant_coeff_flag
-      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 616 : 908;
-  } else if (ctxBlockCat == 9) {
-    if (last_flag == 0) // significant_coeff_flag
-      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 660 : 675;
-    else // last_significant_coeff_flag
-      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 690 : 699;
-  } else // if (ctxBlockCat == 13)
-  {
-    if (last_flag == 0) // significant_coeff_flag
-      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 718 : 733;
-    else // last_significant_coeff_flag
-      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 748 : 757;
-  }
-
-  // Table 9-40 – Assignment of ctxIdxBlockCatOffset to ctxBlockCat for syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
-
-  const int32_t ctxIdxBlockCatOffset_arr[14] = {0,  15, 29, 44, 47, 0,  0,
-                                                15, 29, 0,  0,  15, 29, 0};
-  int32_t ctxIdxBlockCatOffset = ctxIdxBlockCatOffset_arr[ctxBlockCat];
-
-  // 9.3.3.1.3 Assignment process of ctxIdxInc for syntax elements significant_coeff_flag, last_significant_coeff_flag Let the variable levelListIdx be set equal to the index of the list of transform coefficient levels as specified in clause 7.4.5.3.
-
-  //------------------------------
-  if (ctxBlockCat != 3 && ctxBlockCat != 5 && ctxBlockCat != 9 &&
-      ctxBlockCat != 13) {
-    // levelListIdx ranges from 0 to maxNumCoeff - 2, inclusive.
-    ctxIdxInc = levelListIdx;
-  } else if (ctxBlockCat == 3) {
-    RET(levelListIdx < 0 || levelListIdx > 4 * NumC8x8 - 2);
-    // levelListIdx ranges from 0 to 4 * NumC8x8 - 2, inclusive
-    ctxIdxInc = MIN(levelListIdx / NumC8x8, 2);
-  } else if (ctxBlockCat == 5 || ctxBlockCat == 9 || ctxBlockCat == 13) {
-    // Table 9-43 – Mapping of scanning position to ctxIdxInc for ctxBlockCat = = 5, 9, or 13
-
-    const int32_t ctxIdxInc_coeff[63][3] = {
-        {0, 0, 0},   {1, 1, 1},   {2, 1, 1},   {3, 2, 1},   {4, 2, 1},
-        {5, 3, 1},   {5, 3, 1},   {4, 4, 1},   {4, 5, 1},   {3, 6, 1},
-        {3, 7, 1},   {4, 7, 1},   {4, 7, 1},   {4, 8, 1},   {5, 4, 1},
-        {5, 5, 1},   {4, 6, 2},   {4, 9, 2},   {4, 10, 2},  {4, 10, 2},
-        {3, 8, 2},   {3, 11, 2},  {6, 12, 2},  {7, 11, 2},  {7, 9, 2},
-        {7, 9, 2},   {8, 10, 2},  {9, 10, 2},  {10, 8, 2},  {9, 11, 2},
-        {8, 12, 2},  {7, 11, 2},  {7, 9, 3},   {6, 9, 3},   {11, 10, 3},
-        {12, 10, 3}, {13, 8, 3},  {11, 11, 3}, {6, 12, 3},  {7, 11, 3},
-        {8, 9, 4},   {9, 9, 4},   {14, 10, 4}, {10, 10, 4}, {9, 8, 4},
-        {8, 13, 4},  {6, 13, 4},  {11, 9, 4},  {12, 9, 5},  {13, 10, 5},
-        {11, 10, 5}, {6, 8, 5},   {9, 13, 6},  {14, 13, 6}, {10, 9, 6},
-        {9, 9, 6},   {11, 10, 7}, {12, 10, 7}, {13, 14, 7}, {11, 14, 7},
-        {14, 14, 8}, {10, 14, 8}, {12, 14, 8}};
-
-    RET(levelListIdx < 0 || levelListIdx > 63);
-
-    if (last_flag == 0) // significant_coeff_flag
-      ctxIdxInc = ctxIdxInc_coeff[levelListIdx][mb_field_decoding_flag];
-    else // last_significant_coeff_flag
-      ctxIdxInc = ctxIdxInc_coeff[levelListIdx][2];
-  }
-
-  //--------3.计算出ctxIdx的值-----------
-  ctxIdx = ctxIdxOffset + ctxIdxBlockCatOffset + ctxIdxInc;
-
-  //---------------注意是：FL, cMax=1------------------------
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
-
-  synElVal = binVal;
-
-  return 0;
-}
-
-int CH264Cabac::decode_coeff_abs_level_minus1(MB_RESIDUAL_LEVEL mb_block_level,
-                                              int32_t numDecodAbsLevelEq1,
-                                              int32_t numDecodAbsLevelGt1,
-                                              int32_t &synElVal) {
-  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
-  int32_t binVal = 0;
-  int32_t bypassFlag = 0;
-  int32_t ctxBlockCat = 0;
-
-  //--------1.先计算出ctxBlockCat的值------------
-  // Table 9-42 – Specification of ctxBlockCat for the different blocks
-  ctxBlockCat = mb_block_level;
-
-  //--------2.获取ctxIdxOffset-prefix的值-----------
-
-  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
-  if (ctxBlockCat < 5) //(blocks with ctxBlockCat < 5)
-    ctxIdxOffset = 227;
-  else if (ctxBlockCat == 5)
-    ctxIdxOffset = 426;
-  else if (ctxBlockCat > 5 && ctxBlockCat < 9)
-    ctxIdxOffset = 952;
-  else if (ctxBlockCat > 9 && ctxBlockCat < 13)
-    ctxIdxOffset = 982;
-  else if (ctxBlockCat == 9)
-    ctxIdxOffset = 708;
-  else // if (ctxBlockCat == 13)
-    ctxIdxOffset = 766;
-
-  // Table 9-40 – Assignment of ctxIdxBlockCatOffset to ctxBlockCat for syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
-
-  const int32_t ctxIdxBlockCatOffset_arr[14] = {0,  10, 20, 30, 39, 0,  0,
-                                                10, 20, 0,  0,  10, 20, 0};
-  int32_t ctxIdxBlockCatOffset = ctxIdxBlockCatOffset_arr[ctxBlockCat];
-
-  ctxIdxInc =
-      ((numDecodAbsLevelGt1 != 0) ? 0 : MIN(4, 1 + numDecodAbsLevelEq1));
-
-  //--------3.计算出ctxIdx的值-----------
-  ctxIdx = ctxIdxOffset + ctxIdxBlockCatOffset + ctxIdxInc;
-
-  //--------4.进行处理 UEG0 with signedValFlag=0, uCoff=14-----------
-
-  // UEGk编码是由 prefix(TU binarization) + suffix(Exp-Golomb) + signedValFlag,三部分组成
-
-  //-----4.1. 先解码前缀(TU)--------
-  const int32_t uCoff = 14;
-
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
-
-  synElVal = 0;
-  ctxIdxInc = 5 + MIN(4 - ((ctxBlockCat == 3) ? 1 : 0),
-                      numDecodAbsLevelGt1); // if (binIdx > 0)
-  ctxIdx = ctxIdxOffset + ctxIdxBlockCatOffset + ctxIdxInc;
-
-  // TU, cMax=uCoff=14;
-  while (binVal == 1) //(11...1)b
-  {
-    synElVal++;
-    if (synElVal >= uCoff) break;
-
-    RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1,2,3,4.,..,k;
-  }
-
-  //-----4.2. 再解码后缀(Exp-Golomb)--------
-  if (synElVal != uCoff) // signedValFlag=0
-  {
-    // synElVal为prefix(TU)的值 //synElVal consists only of a prefix bit string
-  } else {
-    // 注意：9.3.2.3 Concatenated unary/ k-th order Exp-Golomb (UEGk)
-    // binarization process 中的伪代码表示是UEGk的编码过程，解码需要逆向过来
-
-    //------Table 9-34: ctxIdxOffset-suffix: na (uses DecodeBypass)--------
-    int32_t k = 0; // k取值为UEG0中的0
-
-    if (synElVal >= uCoff) // if ( Abs( synElVal ) >= uCoff ) //uCoff=14
-    {
-      RET(decodeBypass(binVal));
-
-      while (binVal == 1) {
-        synElVal += 1 << k;
-        ++k;
-        RET(k >= 32 - uCoff); // error: coeff_abs_level_minus1值过大
-        RET(decodeBypass(binVal));
-      }
-
-      while (k--) {
-        RET(decodeBypass(binVal));
-        synElVal += binVal << k;
-      }
-    }
-
-    // signedValFlag=0代表结果是无符号整数，所以不需要处理最后一个符号位
-  }
-
-  return 0;
-}
-
-int CH264Cabac::decode_coeff_sign_flag(int32_t &synElVal) {
-  int32_t binVal = 0;
-
-  //------Table 9-34: ctxIdxOffset: (uses DecodeBypass)--------
-
-  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
-
-  //---------------注意是：FL, cMax=1------------------------
-  RET(decodeBypass(binVal)); // binIdx = 0;
-  synElVal = binVal;
-  return 0;
-}
-
-int CH264Cabac::decode_end_of_slice_flag(int32_t &synElVal) {
-  int32_t ctxIdxOffset = 0, binVal = 0, ctxIdx = 0, bypassFlag = 0;
-  //------Table 9-34: ctxIdxOffset: 276--------
-  ctxIdxOffset = 276;
-
-  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
-  //---------------注意是：FL, cMax=1------------------------
-  ctxIdx = ctxIdxOffset + 0;                  // ctxIdxOffset + ctxIdxInc;
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
-  synElVal = binVal;
-  return 0;
-}
-
-int CH264Cabac::decode_transform_size_8x8_flag(int32_t &synElVal) {
-  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
-  int32_t binVal = 0;
-  int32_t bypassFlag = 0;
-
-  //------Table 9-34: ctxIdxOffset: 399--------
-  ctxIdxOffset = 399;
-
-  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
-
-  // 0,1,2 (clause 9.3.3.1.1.10)
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_transform_size_8x8_flag(
-      ctxIdxInc));
-
-  //---------------注意是：FL, cMax=1------------------------
-  ctxIdx = ctxIdxOffset + ctxIdxInc;
-  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
-  synElVal = binVal;
-  return 0;
-}
-
-/* 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element mb_skip_flag */
-/* 输出: ctxIdxInc */
-int CH264Cabac::derivation_of_ctxIdxInc_for_mb_skip_flag(int32_t currMbAddr,
-                                                         int32_t &ctxIdxInc) {
-
-  int32_t mbAddrA = 0, mbAddrB = 0;
-  RET(picture.derivation_for_neighbouring_macroblocks(
-      picture.m_slice->slice_header->MbaffFrameFlag, currMbAddr, mbAddrA,
-      mbAddrB, 0));
-
-  int32_t condTermFlagA =
-      (mbAddrA < 0 || picture.m_mbs[mbAddrA].mb_skip_flag) ? 0 : 1;
-  int32_t condTermFlagB =
-      (mbAddrB < 0 || picture.m_mbs[mbAddrB].mb_skip_flag) ? 0 : 1;
-
-  // ctxIdxInc = [0,2]
-  ctxIdxInc = condTermFlagA + condTermFlagB;
-
-  return 0;
-}
-
-// 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element mb_field_decoding_flag
-int CH264Cabac::derivation_of_ctxIdxInc_for_mb_field_decoding_flag(
-    int32_t &ctxIdxInc) {
-
-  /* Table 6-4 – Specification of mbAddrN and yM */
-  int32_t mbAddrA, mbAddrB, mbAddrC, mbAddrD;
-  /* 调用第 6.4.10 节中指定的相邻宏块地址及其在 MBAFF 帧中的可用性的导出过程，并将输出分配给 mbAddrA 和 mbAddrB。  */
-  picture.derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
-      mbAddrA, mbAddrB, mbAddrC, mbAddrD);
-
-  /* 当宏块mbAddrN和mbAddrN+1两者都具有等于P_Skip或B_Skip的mb_type时，将如第7.4.4节中指定的语法元素mb_field_decoding_flag的推断规则应用于宏块mbAddrN。  
-   * 让变量 condTermFlagN（N 为 A 或 B）按如下方式导出： 
-   * — 如果以下任一条件为真，则 condTermFlagN 设置为等于 0： 
-      * — mbAddrN 不可用， 
-      * — 宏块 mbAddrN 是帧宏块。  
-   * – 否则，condTermFlagN 设置为等于 1。*/
-
-  int32_t condTermFlagA = 1, condTermFlagB = 1;
-  if (mbAddrA < 0 || picture.m_mbs[mbAddrA].mb_field_decoding_flag == 0)
-    condTermFlagA = 0;
-
-  if (mbAddrB < 0 || picture.m_mbs[mbAddrB].mb_field_decoding_flag == 0)
-    condTermFlagB = 0;
-
-  // 变量 ctxIdxInc 由以下公式得出： ctxIdxInc = condTermFlagA + condTermFlagB
-  ctxIdxInc = condTermFlagA + condTermFlagB;
-
-  return 0;
-}
-
-// 9.3.3.1.1.3 Derivation process of ctxIdxInc for the syntax element mb_type
-int CH264Cabac::derivation_of_ctxIdxInc_for_the_syntax_element_mb_type(
-    int32_t ctxIdxOffset, int32_t &ctxIdxInc) {
-
-  int32_t mbAddrA = 0, mbAddrB = 0;
-  int32_t isChroma = 0;
-
-  // 6.4.11.1 Derivation process for neighbouring macroblocks
-  RET(picture.derivation_for_neighbouring_macroblocks(
-      picture.m_slice->slice_header->MbaffFrameFlag, picture.CurrMbAddr,
-      mbAddrA, mbAddrB, isChroma));
-
-  int32_t condTermFlagA = 1, condTermFlagB = 1;
-
-  if (mbAddrA < 0 ||
-      (ctxIdxOffset == 0 && picture.m_mbs[mbAddrA].m_name_of_mb_type == SI) ||
-      (ctxIdxOffset == 3 &&
-       picture.m_mbs[mbAddrA].m_name_of_mb_type == I_NxN) ||
-      (ctxIdxOffset == 27 &&
-       (picture.m_mbs[mbAddrA].m_name_of_mb_type == B_Skip ||
-        picture.m_mbs[mbAddrA].m_name_of_mb_type == B_Direct_16x16)))
-    condTermFlagA = 0;
-
-  if (mbAddrB < 0 ||
-      (ctxIdxOffset == 0 && picture.m_mbs[mbAddrB].m_name_of_mb_type == SI) ||
-      (ctxIdxOffset == 3 &&
-       picture.m_mbs[mbAddrB].m_name_of_mb_type == I_NxN) ||
-      (ctxIdxOffset == 27 &&
-       (picture.m_mbs[mbAddrB].m_name_of_mb_type == B_Skip ||
-        picture.m_mbs[mbAddrB].m_name_of_mb_type == B_Direct_16x16)))
-    condTermFlagB = 0;
-
-  ctxIdxInc = condTermFlagA + condTermFlagB;
-
-  return 0;
-}
-
-// 9.3.3.1.1.4 Derivation process of ctxIdxInc for the syntax element
-// coded_block_pattern
+// 9.3.3.1.1.4 Derivation process of ctxIdxInc for the syntax element coded_block_pattern
 int CH264Cabac::
     derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_pattern(
         int32_t binIdx, int32_t binValues, int32_t ctxIdxOffset,
         int32_t &ctxIdxInc) {
+  const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
 
   if (ctxIdxOffset == 73) {
     int32_t luma8x8BlkIdx = binIdx;
@@ -1837,8 +1247,7 @@ int CH264Cabac::
 
     // 6.4.11.1 Derivation process for neighbouring macroblocks
     RET(picture.derivation_for_neighbouring_macroblocks(
-        picture.m_slice->slice_header->MbaffFrameFlag, picture.CurrMbAddr,
-        mbAddrA, mbAddrB, isChroma));
+        MbaffFrameFlag, picture.CurrMbAddr, mbAddrA, mbAddrB, isChroma));
 
     int32_t condTermFlagA = 1, condTermFlagB = 1;
     //-----------A----------------
@@ -1866,6 +1275,64 @@ int CH264Cabac::
       condTermFlagB = 0;
 
     ctxIdxInc = condTermFlagA + 2 * condTermFlagB + ((binIdx == 1) ? 4 : 0);
+  }
+
+  return 0;
+}
+
+//9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element mb_qp_delta
+int CH264Cabac::decode_mb_qp_delta(int32_t &synElVal) {
+  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
+  int32_t binIdx = -1, binVal = 0;
+  int32_t bypassFlag = 0;
+  int32_t bit_depth_luma = 8;
+
+  //------Table 9-34: ctxIdxOffset: 60--------
+  ctxIdxOffset = 60;
+
+  // 9.3.2.7 Binarization process for mb_qp_delta
+
+  // 9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element
+  RET(derivation_ctxIdxInc_for_the_syntax_element_mb_qp_delta(ctxIdxInc));
+
+  //---------------注意是：U binarization------------------------
+  ctxIdx = ctxIdxOffset + ctxIdxInc;
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
+
+  // unary (U) binarization即一元二值化，就是类似 (111...1110)b这样的二进制字符串，最后一个二进制值为0，其他都是1，其中1的个数就是对应的语法元素的值
+  if (binVal == 0) //(0)b
+    synElVal = 0;
+  else {
+    ctxIdx = ctxIdxOffset + 2;                  // Table 9-39
+    RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1;
+
+    int mb_qp_max = 51 + 6 * (bit_depth_luma - 8);
+    binIdx = 1;
+
+    while (binVal == 1) //(11...1)b
+    {
+      ctxIdx = ctxIdxOffset + 3;                  // Table 9-39
+      RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 2,3,4.,..,k;
+
+      binIdx++;
+
+      if (binIdx > 2 * mb_qp_max) {
+        // mb_qp_delta值太大了
+        std::cerr << "An error occurred on binIdx:" << binIdx << " > "
+                  << 2 * mb_qp_max << " ," << __FUNCTION__ << "():" << __LINE__
+                  << std::endl;
+        binIdx = 2 * mb_qp_max;
+        break;
+      }
+    }
+
+    //----------Table 9-3 se(v)-------------
+    if (binIdx & 0x01)               // 奇数
+      binIdx = (binIdx + 1) >> 1;    //(−1)^(k+1) * Ceil(k÷2)
+    else                             // 偶数
+      binIdx = -((binIdx + 1) >> 1); //(−1)^(k+1) * Ceil(k÷2)
+
+    synElVal = binIdx;
   }
 
   return 0;
@@ -1907,8 +1374,49 @@ int CH264Cabac::derivation_ctxIdxInc_for_the_syntax_element_mb_qp_delta(
   return 0;
 }
 
-// 9.3.3.1.1.6 Derivation process of ctxIdxInc for the syntax elements
-// ref_idx_l0 and ref_idx_l1
+int CH264Cabac::decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
+                                  int32_t &synElVal) {
+  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
+  int32_t binIdx = -1, binVal = 0;
+  int32_t bypassFlag = 0;
+
+  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
+  //------Table 9-34: ctxIdxOffset: 54--------
+  ctxIdxOffset = 54;
+
+  // 0,1,2,3 (clause 9.3.3.1.1.6)
+  int32_t is_ref_idx_10 = (ref_idx_flag == 0) ? 1 : 0;
+  RET(derivation_of_ctxIdxInc_for_the_syntax_elements_ref_idx_l0_and_ref_idx_l1(
+      is_ref_idx_10, mbPartIdx, ctxIdxInc));
+
+  //---------------注意是：U binarization------------------------
+  ctxIdx = ctxIdxOffset + ctxIdxInc;
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
+
+  // unary (U) binarization即一元二值化，就是类似 (111...1110)b这样的二进制字符串，最后一个二进制值为0，其他都是1，其中1的个数就是对应的语法元素的值
+
+  // binIdx=[0,1,2,3,4,5,6,...,k] --> ctxIdx = ctxIdxOffset + ctxIdxInc = 54 + [?,4,5,5,5,5,5,...,5]
+
+  if (binVal == 0) //(0)b
+    synElVal = 0;
+  else {
+    ctxIdx = ctxIdxOffset + 4;                  // Table 9-39
+    RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1;
+    binIdx = 1;
+    ctxIdx = ctxIdxOffset + 5; // Table 9-39
+    while (binVal == 1)        //(11...1)b
+    {
+      RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 2,3,4.,..,k;
+      binIdx++;
+      RET(binIdx > 32); // error: ref_idx 值太大了
+    }
+    synElVal = binIdx;
+  }
+
+  return 0;
+}
+
+// 9.3.3.1.1.6 Derivation process of ctxIdxInc for the syntax elements ref_idx_l0 and ref_idx_l1
 int CH264Cabac::
     derivation_of_ctxIdxInc_for_the_syntax_elements_ref_idx_l0_and_ref_idx_l1(
         int32_t is_ref_idx_10, int32_t mbPartIdx, int32_t &ctxIdxInc) {
@@ -2079,6 +1587,80 @@ int CH264Cabac::
     condTermFlagB = 1;
 
   ctxIdxInc = condTermFlagA + 2 * condTermFlagB;
+
+  return 0;
+}
+
+// 9.3.3.1.1.7 Derivation process of ctxIdxInc for the syntax elements mvd_l0 and mvd_l1
+int CH264Cabac::decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
+                              int32_t subMbPartIdx, int32_t isChroma,
+                              int32_t &synElVal) {
+  int32_t ctxIdxOffset = 47, ctxIdxInc = 0, ctxIdx = 0;
+  int32_t binVal = 0;
+  int32_t bypassFlag = 0;
+  const int32_t uCoff = 9;
+
+  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
+  //------Table 9-34: ctxIdxOffset-prefix: --------
+  if (mvd_flag == 0 || mvd_flag == 2) ctxIdxOffset = 40;
+
+  // 9.3.3.1.1.7 Derivation process of ctxIdxInc for the syntax elements mvd_l0 and mvd_l1
+  int32_t is_mvd_10 = (mvd_flag == 0 || mvd_flag == 1) ? 1 : 0;
+  RET(derivation_of_ctxIdxInc_for_the_syntax_elements_mvd_l0_and_mvd_l1(
+      is_mvd_10, mbPartIdx, subMbPartIdx, isChroma, ctxIdxOffset, ctxIdxInc));
+
+  //---------------注意是：UEG3------------------------
+  // UEG3编码是由 prefix(TU binarization) + suffix(Exp-Golomb) + signedValFlag,三部分组成
+
+  //-----1. 先解码前缀(TU)--------
+  ctxIdx = ctxIdxOffset + ctxIdxInc;
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
+
+  if (binVal == 0) // signedValFlag=1
+    synElVal = 0;  // synElVal consists only of a prefix bit string
+  else {
+    synElVal = 1;
+    // ctxIdxOffset + ctxIdxInc = 40(47) + 3; //Table 9-39
+    ctxIdx = ctxIdxOffset + 3;
+
+    while (binVal == 1 && synElVal < uCoff) //(11...1)b
+    {
+      RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1,2,3,4.,..,k;
+      if (binVal == 0) break;
+      synElVal++; // binIdx=[0,1,2,3,4,5,6,7,8] --> ctxIdxInc= [?,3,4,5,6,6,6,6,6]
+          // ctxIdx = ctxIdxOffset + ctxIdxInc = 40(47) + [?,3,4,5,6,6,6,6,6]; //Table 9-39
+      if (synElVal <= 4) ctxIdx++;
+    }
+
+    //-----2. 再解码后缀(Exp-Golomb)--------
+    // 注意：9.3.2.3 Concatenated unary/ k-th order Exp-Golomb (UEGk) binarization process 中的伪代码表示是UEGk的编码过程，解码需要逆向过来
+    // 重点是：此处的 Exp-Golomb 和9.1 Parsing process for Exp-Golomb codes中的意思不一样（NOTE：这是一个坑）
+
+    //------Table 9-34: ctxIdxOffset-suffix: na (uses DecodeBypass)--------
+    int32_t k = 3; // k取值为UEG3中的3
+
+    if (synElVal >= uCoff) {
+      RET(decodeBypass(binVal));
+
+      while (binVal == 1) {
+        synElVal += 1 << k;
+        ++k;
+        RET(k >= 32 - uCoff); // error: mv值过大
+        RET(decodeBypass(binVal));
+      }
+
+      while (k--) {
+        RET(decodeBypass(binVal));
+        synElVal += binVal << k;
+      }
+    }
+
+    // //signedValFlag=1代表结果是有符号整数
+    if (synElVal != 0) {
+      RET(decodeBypass(binVal));
+      if (binVal == 1) synElVal = -synElVal; // 结果为负数
+    }
+  }
 
   return 0;
 }
@@ -2283,15 +1865,58 @@ int CH264Cabac::
 }
 
 // 9.3.3.1.1.8 Derivation process of ctxIdxInc for the syntax element intra_chroma_pred_mode
+int CH264Cabac::decode_intra_chroma_pred_mode(int32_t &synElVal) {
+  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
+  int32_t binVal = 0;
+  int32_t bypassFlag = 0;
+
+  //------Table 9-34: ctxIdxOffset: 64--------
+  ctxIdxOffset = 64;
+
+  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
+
+  // 0,1,2 (clause 9.3.3.1.1.8)
+  // 9.3.3.1.1.8 Derivation process of ctxIdxInc for the syntax element intra_chroma_pred_mode
+  RET(derivation_of_ctxIdxInc_for_the_syntax_element_intra_chroma_pred_mode(
+      ctxIdxInc));
+
+  //---------------注意是：TU, cMax=3------------------------
+  ctxIdx = ctxIdxOffset + ctxIdxInc;
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
+
+  if (binVal == 0) //(0)b
+    synElVal = 0;
+  else {
+    ctxIdx = ctxIdxOffset + 3;                  // Table 9-39
+    RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1;
+
+    if (binVal == 0) //(10)b
+      synElVal = 1;
+    else {
+      ctxIdx = ctxIdxOffset + 3;                  // Table 9-39
+      RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 2;
+
+      if (binVal == 0) //(110)b
+        synElVal = 2;
+      else
+        // 9.3.2.2 Truncated unary (TU) binarization process the syntax element value equal to cMax the bin string is a bit string of length cMax with all bins being equal to 1.
+        synElVal = 3; // TU, cMax=3
+    }
+  }
+
+  return 0;
+}
+
+// 9.3.3.1.1.8 Derivation process of ctxIdxInc for the syntax element intra_chroma_pred_mode
 int CH264Cabac::
     derivation_of_ctxIdxInc_for_the_syntax_element_intra_chroma_pred_mode(
         int32_t &ctxIdxInc) {
+  const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
   const int32_t isChroma = 0;
 
   int32_t mbAddrA = 0, mbAddrB = 0;
   RET(picture.derivation_for_neighbouring_macroblocks(
-      picture.m_slice->slice_header->MbaffFrameFlag, picture.CurrMbAddr,
-      mbAddrA, mbAddrB, isChroma));
+      MbaffFrameFlag, picture.CurrMbAddr, mbAddrA, mbAddrB, isChroma));
 
   int32_t condTermFlagA = 1, condTermFlagB = 1;
   //----------A------------
@@ -2315,9 +1940,55 @@ int CH264Cabac::
   return 0;
 }
 
+// 9.3.3.1.1.9 Derivation process of ctxIdxInc for the syntax element coded_block_flag
+int CH264Cabac::decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
+                                        int32_t BlkIdx, int32_t iCbCr,
+                                        int32_t &synElVal) {
+  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
+  int32_t binVal = 0;
+  int32_t bypassFlag = 0;
+  int32_t ctxBlockCat = 0;
+
+  //--------1.先计算出ctxBlockCat的值------------
+  // Table 9-42 – Specification of ctxBlockCat for the different blocks
+  ctxBlockCat = mb_block_level;
+
+  //--------2.获取ctxIdxOffset的值-----------
+  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
+  if (ctxBlockCat < 5) //(blocks with ctxBlockCat < 5) FL, cMax=1
+    ctxIdxOffset = 85;
+  else if (ctxBlockCat > 5 && ctxBlockCat < 9)
+    ctxIdxOffset = 460;
+  else if (ctxBlockCat > 9 && ctxBlockCat < 13)
+    ctxIdxOffset = 472;
+  else
+    ctxIdxOffset = 1012;
+
+  // Table 9-40 – Assignment of ctxIdxBlockCatOffset to ctxBlockCat for syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
+
+  const int32_t ctxIdxBlockCatOffset_arr[14] = {0, 4, 8, 12, 16, 0, 0,
+                                                4, 8, 4, 0,  4,  8, 8};
+  int32_t ctxIdxBlockCatOffset = ctxIdxBlockCatOffset_arr[ctxBlockCat];
+
+  // 9.3.3.1.1.9
+  RET(derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_flag(
+      ctxBlockCat, BlkIdx, iCbCr, ctxIdxInc));
+
+  //--------3.计算出ctxIdx的值-----------
+  ctxIdx = ctxIdxOffset + ctxIdxBlockCatOffset + ctxIdxInc;
+
+  //--------4.进行处理 FL, cMax=1-----------
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
+
+  synElVal = binVal;
+
+  return 0;
+}
+
 // 9.3.3.1.1.9 Derivation process of ctxIdxInc for the syntax element coded_block_flag ctxIdxInc( ctxBlockCat )
 int CH264Cabac::derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_flag(
     int32_t ctxBlockCat, int32_t BlkIdx, int32_t iCbCr, int32_t &ctxIdxInc) {
+  const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
 
   int32_t mbAddrA = 0, mbAddrB = 0;
   int32_t transBlockA = -1, transBlockB = -1;
@@ -2326,8 +1997,7 @@ int CH264Cabac::derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_flag(
   if (ctxBlockCat == 0 || ctxBlockCat == 6 || ctxBlockCat == 10) {
     int32_t isChroma = (iCbCr < 0) ? 0 : 1;
     RET(picture.derivation_for_neighbouring_macroblocks(
-        picture.m_slice->slice_header->MbaffFrameFlag, picture.CurrMbAddr,
-        mbAddrA, mbAddrB, isChroma));
+        MbaffFrameFlag, picture.CurrMbAddr, mbAddrA, mbAddrB, isChroma));
 
     //----------A------------
     if (mbAddrA >= 0 && picture.m_mbs[mbAddrA].m_mb_pred_mode == Intra_16x16) {
@@ -2412,8 +2082,7 @@ int CH264Cabac::derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_flag(
   } else if (ctxBlockCat == 3) {
     int32_t isChroma = 1;
     RET(picture.derivation_for_neighbouring_macroblocks(
-        picture.m_slice->slice_header->MbaffFrameFlag, picture.CurrMbAddr,
-        mbAddrA, mbAddrB, isChroma));
+        MbaffFrameFlag, picture.CurrMbAddr, mbAddrA, mbAddrB, isChroma));
 
     //----------A------------
     if (mbAddrA >= 0 && picture.m_mbs[mbAddrA].m_name_of_mb_type != P_Skip &&
@@ -2752,13 +2421,35 @@ int CH264Cabac::derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_flag(
 }
 
 // 9.3.3.1.1.10 Derivation process of ctxIdxInc for the syntax element transform_size_8x8_flag
+int CH264Cabac::decode_transform_size_8x8_flag(int32_t &synElVal) {
+  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
+  int32_t binVal = 0;
+  int32_t bypassFlag = 0;
+
+  //------Table 9-34: ctxIdxOffset: 399--------
+  ctxIdxOffset = 399;
+
+  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
+
+  // 0,1,2 (clause 9.3.3.1.1.10)
+  RET(derivation_of_ctxIdxInc_for_the_syntax_element_transform_size_8x8_flag(
+      ctxIdxInc));
+
+  //---------------注意是：FL, cMax=1------------------------
+  ctxIdx = ctxIdxOffset + ctxIdxInc;
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
+  synElVal = binVal;
+  return 0;
+}
+
+// 9.3.3.1.1.10 Derivation process of ctxIdxInc for the syntax element transform_size_8x8_flag
 int CH264Cabac::
     derivation_of_ctxIdxInc_for_the_syntax_element_transform_size_8x8_flag(
         int32_t &ctxIdxInc) {
+  const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
   int32_t mbAddrA = 0, mbAddrB = 0, isChroma = 0;
   RET(picture.derivation_for_neighbouring_macroblocks(
-      picture.m_slice->slice_header->MbaffFrameFlag, picture.CurrMbAddr,
-      mbAddrA, mbAddrB, isChroma));
+      MbaffFrameFlag, picture.CurrMbAddr, mbAddrA, mbAddrB, isChroma));
 
   int32_t condTermFlagA = 1, condTermFlagB = 1;
   if (mbAddrA < 0 || picture.m_mbs[mbAddrA].transform_size_8x8_flag == 0)
@@ -2768,94 +2459,6 @@ int CH264Cabac::
 
   ctxIdxInc = condTermFlagA + condTermFlagB;
   return 0;
-}
-
-// 9.3.3.2 Arithmetic decoding process
-/* 输入：在第9.3.3.1节中导出的bypassFlag、ctxIdx以及算术解码引擎的状态变量codIRange和codIOffset 
- * 输出：bin 的值*/
-int CH264Cabac::decodeBin(int32_t bypassFlag, int32_t ctxIdx, int32_t &bin) {
-  int ret = 0;
-  // 解码不依赖于上下文模型的状态，简单地从比特流中直接读取下一个比特
-  if (bypassFlag) ret = decodeBypass(bin);
-  // 解码数据流的结尾，解码终止符号
-  else if (ctxIdx == 276)
-    ret = decodeTerminate(bin);
-  // 根据指定的上下文索引 ctxIdx 解码二进制符号
-  else
-    ret = decodeDecision(ctxIdx, bin);
-  return ret;
-}
-
-// 9.3.3.2.3 Bypass decoding process for binary decisions
-/* 输入: 切片数据的位以及变量 codIRange 和 codIOffset。  
- * 输出: 更新的变量 codIOffset 和解码值 binVal。 */
-int CH264Cabac::decodeBypass(int32_t &binVal) {
-  // 1. 默认为0比特值
-  binVal = 0;
-  // 2. 将已经解码的位流中添加一个新的比特，在已累积的已经编码位流中进行累加
-  codIOffset = (codIOffset << 1) | bs.readUn(1);
-  // 3. 进行范围调整，以保持编码过程的精度和避免溢出
-  if (codIOffset >= codIRange) binVal = 1, codIOffset -= codIRange;
-  //RET(codIOffset >= codIRange);
-  return 0;
-}
-
-// 9.3.3.2.4 Decoding process for binary decisions before termination
-/* 输入: 来自切片数据的位以及变量 codIRange 和 codIOffset。  
- * 输出: 更新的变量 codIRange 和 codIOffset 以及解码值 binVal。 */
-int CH264Cabac::decodeTerminate(int32_t &binVal) {
-  // 1. 默认为0比特值
-  binVal = 0;
-  // 2. 准备检测终止符号。对于终止符，通常会有一个特定的概率设置（此处通过减去2来调整）。
-  codIRange -= 2;
-  // 3-1. 不进行重整化，终止CABAC解码, codIOffset中插入的最后一位等于1。 NOTE:当解码end_of_slice_flag 时，寄存器codIOffset 中插入的最后一位被解释为rbsp_stop_one_bit。
-  if (codIOffset >= codIRange)
-    binVal = 1;
-  else // 执行范围重归一化
-    return renormD();
-
-  return 0;
-}
-
-// 9.3.3.2.2 Renormalization process in the arithmetic decoding engine
-/* 输入: 来自切片数据的位以及变量 codIRange 和 codIOffset。  
- * 输出: 更新后的变量 codIRange 和 codIOffset。 */
-int CH264Cabac::renormD() {
-  /* 如果codIRange大于或等于256，则不需要重新归一化，并且RenormD过程结束；  
-   * 否则（codIRange 小于 256），进入重整化循环。在此循环中，codIRange 的值加倍，即左移 1，并使用 read_bits( 1 ) 将一位移入 codIOffset 中。  */
-  while (codIRange < 256) {
-    codIRange = codIRange << 1;
-    codIOffset = (codIOffset << 1) | bs.readUn(1);
-  }
-  return (codIOffset >= codIRange);
-}
-
-// 9.3.3.2.1 Arithmetic decoding process for a binary decision
-/* 输入: ctxIdx、codIRange 和 codIOffset。  
- * 输出: 解码值 binVal 以及更新的变量 codIRange 和 codIOffset。*/
-int CH264Cabac::decodeDecision(int32_t ctxIdx, int32_t &binVal) {
-  int32_t qCodIRangeIdx = (codIRange >> 6) & 3;
-  int32_t pStateIdx = pStateIdxs[ctxIdx];
-  int32_t codIRangeLPS = rangeTabLPS[pStateIdx][qCodIRangeIdx];
-
-  codIRange -= codIRangeLPS;
-  bool valMPS = valMPSs[ctxIdx];
-  if (codIOffset >= codIRange) {
-    binVal = 1 - valMPS;
-    codIOffset -= codIRange;
-    codIRange = codIRangeLPS;
-
-    // 给定 binVal 的值，状态转换按照第 9.3.3.2.1.1 节中的规定执行。
-    if (pStateIdx == 0) valMPSs[ctxIdx] = 1 - valMPS;
-    pStateIdxs[ctxIdx] = transIdxLPS[pStateIdx];
-  } else {
-    binVal = valMPS;
-
-    // 给定 binVal 的值，状态转换按照第 9.3.3.2.1.1 节中的规定执行。
-    pStateIdxs[ctxIdx] = transIdxMPS[pStateIdx];
-  }
-  // 执行范围重归一化
-  return renormD();
 }
 
 // 7.3.5.3.3 Residual block CABAC syntax
@@ -2950,4 +2553,380 @@ int CH264Cabac::residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
     picture.m_mbs[picture.CurrMbAddr].coded_block_flag_AC_pattern[iCbCr + 1] ^=
         1 << BlkIdx;
   return 0;
+}
+
+// 如果last_flag=1,则表示 CABAC_decode_last_significant_coeff_flag(...)
+int CH264Cabac::decode_significant_coeff_flag(MB_RESIDUAL_LEVEL mb_block_level,
+                                              int32_t levelListIdx,
+                                              int32_t last_flag,
+                                              int32_t &synElVal) {
+  int32_t NumC8x8 = 4 / (picture.m_slice->slice_header->m_sps->SubWidthC *
+                         picture.m_slice->slice_header->m_sps->SubHeightC);
+  int32_t mb_field_decoding_flag =
+      picture.m_mbs[picture.CurrMbAddr].mb_field_decoding_flag;
+  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
+  int32_t binVal = 0;
+  int32_t bypassFlag = 0;
+  int32_t ctxBlockCat = 0;
+
+  //--------1.先计算出ctxBlockCat的值------------
+  // Table 9-42 – Specification of ctxBlockCat for the different blocks
+
+  ctxBlockCat = mb_block_level;
+
+  //--------2.获取ctxIdxOffset的值-----------
+  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
+  if (ctxBlockCat < 5) //(frame coded blocks with ctxBlockCat < 5) FL, cMax=1
+  {
+    if (last_flag == 0) // significant_coeff_flag
+      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 105 : 277;
+    else // last_significant_coeff_flag
+      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 166 : 338;
+  } else if (ctxBlockCat == 5) {
+    if (last_flag == 0) // significant_coeff_flag
+      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 402 : 436;
+    else // last_significant_coeff_flag
+      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 417 : 451;
+  } else if (ctxBlockCat > 5 && ctxBlockCat < 9) {
+    if (last_flag == 0) // significant_coeff_flag
+      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 484 : 776;
+    else // last_significant_coeff_flag
+      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 572 : 864;
+  } else if (ctxBlockCat > 9 && ctxBlockCat < 13) {
+    if (last_flag == 0) // significant_coeff_flag
+      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 528 : 820;
+    else // last_significant_coeff_flag
+      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 616 : 908;
+  } else if (ctxBlockCat == 9) {
+    if (last_flag == 0) // significant_coeff_flag
+      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 660 : 675;
+    else // last_significant_coeff_flag
+      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 690 : 699;
+  } else // if (ctxBlockCat == 13)
+  {
+    if (last_flag == 0) // significant_coeff_flag
+      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 718 : 733;
+    else // last_significant_coeff_flag
+      ctxIdxOffset = (mb_field_decoding_flag == 0) ? 748 : 757;
+  }
+
+  // Table 9-40 – Assignment of ctxIdxBlockCatOffset to ctxBlockCat for syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
+
+  const int32_t ctxIdxBlockCatOffset_arr[14] = {0,  15, 29, 44, 47, 0,  0,
+                                                15, 29, 0,  0,  15, 29, 0};
+  int32_t ctxIdxBlockCatOffset = ctxIdxBlockCatOffset_arr[ctxBlockCat];
+
+  // 9.3.3.1.3 Assignment process of ctxIdxInc for syntax elements significant_coeff_flag, last_significant_coeff_flag Let the variable levelListIdx be set equal to the index of the list of transform coefficient levels as specified in clause 7.4.5.3.
+
+  //------------------------------
+  if (ctxBlockCat != 3 && ctxBlockCat != 5 && ctxBlockCat != 9 &&
+      ctxBlockCat != 13) {
+    // levelListIdx ranges from 0 to maxNumCoeff - 2, inclusive.
+    ctxIdxInc = levelListIdx;
+  } else if (ctxBlockCat == 3) {
+    RET(levelListIdx < 0 || levelListIdx > 4 * NumC8x8 - 2);
+    // levelListIdx ranges from 0 to 4 * NumC8x8 - 2, inclusive
+    ctxIdxInc = MIN(levelListIdx / NumC8x8, 2);
+  } else if (ctxBlockCat == 5 || ctxBlockCat == 9 || ctxBlockCat == 13) {
+    // Table 9-43 – Mapping of scanning position to ctxIdxInc for ctxBlockCat = = 5, 9, or 13
+
+    const int32_t ctxIdxInc_coeff[63][3] = {
+        {0, 0, 0},   {1, 1, 1},   {2, 1, 1},   {3, 2, 1},   {4, 2, 1},
+        {5, 3, 1},   {5, 3, 1},   {4, 4, 1},   {4, 5, 1},   {3, 6, 1},
+        {3, 7, 1},   {4, 7, 1},   {4, 7, 1},   {4, 8, 1},   {5, 4, 1},
+        {5, 5, 1},   {4, 6, 2},   {4, 9, 2},   {4, 10, 2},  {4, 10, 2},
+        {3, 8, 2},   {3, 11, 2},  {6, 12, 2},  {7, 11, 2},  {7, 9, 2},
+        {7, 9, 2},   {8, 10, 2},  {9, 10, 2},  {10, 8, 2},  {9, 11, 2},
+        {8, 12, 2},  {7, 11, 2},  {7, 9, 3},   {6, 9, 3},   {11, 10, 3},
+        {12, 10, 3}, {13, 8, 3},  {11, 11, 3}, {6, 12, 3},  {7, 11, 3},
+        {8, 9, 4},   {9, 9, 4},   {14, 10, 4}, {10, 10, 4}, {9, 8, 4},
+        {8, 13, 4},  {6, 13, 4},  {11, 9, 4},  {12, 9, 5},  {13, 10, 5},
+        {11, 10, 5}, {6, 8, 5},   {9, 13, 6},  {14, 13, 6}, {10, 9, 6},
+        {9, 9, 6},   {11, 10, 7}, {12, 10, 7}, {13, 14, 7}, {11, 14, 7},
+        {14, 14, 8}, {10, 14, 8}, {12, 14, 8}};
+
+    RET(levelListIdx < 0 || levelListIdx > 63);
+
+    if (last_flag == 0) // significant_coeff_flag
+      ctxIdxInc = ctxIdxInc_coeff[levelListIdx][mb_field_decoding_flag];
+    else // last_significant_coeff_flag
+      ctxIdxInc = ctxIdxInc_coeff[levelListIdx][2];
+  }
+
+  //--------3.计算出ctxIdx的值-----------
+  ctxIdx = ctxIdxOffset + ctxIdxBlockCatOffset + ctxIdxInc;
+
+  //---------------注意是：FL, cMax=1------------------------
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
+
+  synElVal = binVal;
+
+  return 0;
+}
+
+int CH264Cabac::decode_coeff_abs_level_minus1(MB_RESIDUAL_LEVEL mb_block_level,
+                                              int32_t numDecodAbsLevelEq1,
+                                              int32_t numDecodAbsLevelGt1,
+                                              int32_t &synElVal) {
+  int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
+  int32_t binVal = 0;
+  int32_t bypassFlag = 0;
+  int32_t ctxBlockCat = 0;
+
+  //--------1.先计算出ctxBlockCat的值------------
+  // Table 9-42 – Specification of ctxBlockCat for the different blocks
+  ctxBlockCat = mb_block_level;
+
+  //--------2.获取ctxIdxOffset-prefix的值-----------
+
+  // Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
+  if (ctxBlockCat < 5) //(blocks with ctxBlockCat < 5)
+    ctxIdxOffset = 227;
+  else if (ctxBlockCat == 5)
+    ctxIdxOffset = 426;
+  else if (ctxBlockCat > 5 && ctxBlockCat < 9)
+    ctxIdxOffset = 952;
+  else if (ctxBlockCat > 9 && ctxBlockCat < 13)
+    ctxIdxOffset = 982;
+  else if (ctxBlockCat == 9)
+    ctxIdxOffset = 708;
+  else // if (ctxBlockCat == 13)
+    ctxIdxOffset = 766;
+
+  // Table 9-40 – Assignment of ctxIdxBlockCatOffset to ctxBlockCat for syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
+
+  const int32_t ctxIdxBlockCatOffset_arr[14] = {0,  10, 20, 30, 39, 0,  0,
+                                                10, 20, 0,  0,  10, 20, 0};
+  int32_t ctxIdxBlockCatOffset = ctxIdxBlockCatOffset_arr[ctxBlockCat];
+
+  ctxIdxInc =
+      ((numDecodAbsLevelGt1 != 0) ? 0 : MIN(4, 1 + numDecodAbsLevelEq1));
+
+  //--------3.计算出ctxIdx的值-----------
+  ctxIdx = ctxIdxOffset + ctxIdxBlockCatOffset + ctxIdxInc;
+
+  //--------4.进行处理 UEG0 with signedValFlag=0, uCoff=14-----------
+
+  // UEGk编码是由 prefix(TU binarization) + suffix(Exp-Golomb) + signedValFlag,三部分组成
+
+  //-----4.1. 先解码前缀(TU)--------
+  const int32_t uCoff = 14;
+
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
+
+  synElVal = 0;
+  ctxIdxInc = 5 + MIN(4 - ((ctxBlockCat == 3) ? 1 : 0),
+                      numDecodAbsLevelGt1); // if (binIdx > 0)
+  ctxIdx = ctxIdxOffset + ctxIdxBlockCatOffset + ctxIdxInc;
+
+  // TU, cMax=uCoff=14;
+  while (binVal == 1) //(11...1)b
+  {
+    synElVal++;
+    if (synElVal >= uCoff) break;
+
+    RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1,2,3,4.,..,k;
+  }
+
+  //-----4.2. 再解码后缀(Exp-Golomb)--------
+  if (synElVal != uCoff) // signedValFlag=0
+  {
+    // synElVal为prefix(TU)的值 //synElVal consists only of a prefix bit string
+  } else {
+    // 注意：9.3.2.3 Concatenated unary/ k-th order Exp-Golomb (UEGk)
+    // binarization process 中的伪代码表示是UEGk的编码过程，解码需要逆向过来
+
+    //------Table 9-34: ctxIdxOffset-suffix: na (uses DecodeBypass)--------
+    int32_t k = 0; // k取值为UEG0中的0
+
+    if (synElVal >= uCoff) // if ( Abs( synElVal ) >= uCoff ) //uCoff=14
+    {
+      RET(decodeBypass(binVal));
+
+      while (binVal == 1) {
+        synElVal += 1 << k;
+        ++k;
+        RET(k >= 32 - uCoff); // error: coeff_abs_level_minus1值过大
+        RET(decodeBypass(binVal));
+      }
+
+      while (k--) {
+        RET(decodeBypass(binVal));
+        synElVal += binVal << k;
+      }
+    }
+
+    // signedValFlag=0代表结果是无符号整数，所以不需要处理最后一个符号位
+  }
+
+  return 0;
+}
+
+int CH264Cabac::decode_coeff_sign_flag(int32_t &synElVal) {
+  int32_t binVal = 0;
+
+  //------Table 9-34: ctxIdxOffset: (uses DecodeBypass)--------
+
+  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
+
+  //---------------注意是：FL, cMax=1------------------------
+  RET(decodeBypass(binVal)); // binIdx = 0;
+  synElVal = binVal;
+  return 0;
+}
+
+int CH264Cabac::decode_end_of_slice_flag(int32_t &synElVal) {
+  int32_t ctxIdxOffset = 0, binVal = 0, ctxIdx = 0, bypassFlag = 0;
+  //------Table 9-34: ctxIdxOffset: 276--------
+  ctxIdxOffset = 276;
+
+  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
+  //---------------注意是：FL, cMax=1------------------------
+  ctxIdx = ctxIdxOffset + 0;                  // ctxIdxOffset + ctxIdxInc;
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
+  synElVal = binVal;
+  return 0;
+}
+
+int CH264Cabac::decode_prev_intra4x4_or_intra8x8_pred_mode_flag(
+    int32_t &synElVal) {
+  int32_t ctxIdxOffset = 0, ctxIdx = 0;
+  int32_t binVal = 0;
+  int32_t bypassFlag = 0;
+
+  //------Table 9-34: ctxIdxOffset: 68--------
+  ctxIdxOffset = 68;
+
+  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
+
+  //---------------注意是：FL, cMax=1------------------------
+  ctxIdx = ctxIdxOffset + 0;                  // ctxIdxInc = 0;
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
+  synElVal = binVal;
+  return 0;
+}
+
+int CH264Cabac::decode_rem_intra4x4_or_intra8x8_pred_mode(int32_t &synElVal) {
+  int32_t ctxIdxOffset = 0, ctxIdx = 0;
+  int32_t binVal = 0;
+  int32_t bypassFlag = 0;
+
+  //------Table 9-34: ctxIdxOffset: 69--------
+  ctxIdxOffset = 69;
+
+  // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
+
+  //---------------注意是：FL, cMax=7------------------------
+  ctxIdx = ctxIdxOffset + 0; // ctxIdxInc = 0;
+
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
+  synElVal = binVal;
+
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1;
+  synElVal += binVal << 1;
+
+  RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 2;
+  synElVal += binVal << 2;
+
+  return 0;
+}
+
+// 9.3.3.2 Arithmetic decoding process
+/* 输入：在第9.3.3.1节中导出的bypassFlag、ctxIdx以及算术解码引擎的状态变量codIRange和codIOffset 
+ * 输出：bin 的值*/
+int CH264Cabac::decodeBin(int32_t bypassFlag, int32_t ctxIdx, int32_t &bin) {
+  int ret = 0;
+  // 解码不依赖于上下文模型的状态，简单地从比特流中直接读取下一个比特
+  if (bypassFlag) ret = decodeBypass(bin);
+  // 解码数据流的结尾，解码终止符号
+  else if (ctxIdx == 276)
+    ret = decodeTerminate(bin);
+  // 根据指定的上下文索引 ctxIdx 解码二进制符号
+  else
+    ret = decodeDecision(ctxIdx, bin);
+  return ret;
+}
+
+// 9.3.3.2.3 Bypass decoding process for binary decisions
+/* 输入: 切片数据的位以及变量 codIRange 和 codIOffset。  
+ * 输出: 更新的变量 codIOffset 和解码值 binVal。 */
+int CH264Cabac::decodeBypass(int32_t &binVal) {
+  // 1. 默认为0比特值
+  binVal = 0;
+  // 2. 将已经解码的位流中添加一个新的比特，在已累积的已经编码位流中进行累加
+  codIOffset = (codIOffset << 1) | bs.readUn(1);
+  // 3. 进行范围调整，以保持编码过程的精度和避免溢出
+  if (codIOffset >= codIRange) binVal = 1, codIOffset -= codIRange;
+  //RET(codIOffset >= codIRange);
+  return 0;
+}
+
+// 9.3.3.2.4 Decoding process for binary decisions before termination
+/* 输入: 来自切片数据的位以及变量 codIRange 和 codIOffset。  
+ * 输出: 更新的变量 codIRange 和 codIOffset 以及解码值 binVal。 */
+int CH264Cabac::decodeTerminate(int32_t &binVal) {
+  // 1. 默认为0比特值
+  binVal = 0;
+  // 2. 准备检测终止符号。对于终止符，通常会有一个特定的概率设置（此处通过减去2来调整）。
+  codIRange -= 2;
+  // 3-1. 不进行重整化，终止CABAC解码, codIOffset中插入的最后一位等于1。 NOTE:当解码end_of_slice_flag 时，寄存器codIOffset 中插入的最后一位被解释为rbsp_stop_one_bit。
+  if (codIOffset >= codIRange)
+    binVal = 1;
+  else // 执行范围重归一化
+    return renormD();
+
+  return 0;
+}
+
+// 9.3.3.2.2 Renormalization process in the arithmetic decoding engine
+/* 输入: 来自切片数据的位以及变量 codIRange 和 codIOffset。  
+ * 输出: 更新后的变量 codIRange 和 codIOffset。 */
+int CH264Cabac::renormD() {
+  /* 如果codIRange大于或等于256，则不需要重新归一化，并且RenormD过程结束；  
+   * 否则（codIRange 小于 256），进入重整化循环。在此循环中，codIRange 的值加倍，即左移 1，并使用 read_bits( 1 ) 将一位移入 codIOffset 中。  */
+  while (codIRange < 256) {
+    codIRange = codIRange << 1;
+    codIOffset = (codIOffset << 1) | bs.readUn(1);
+  }
+  return (codIOffset >= codIRange);
+}
+
+// 9.3.3.2.1 Arithmetic decoding process for a binary decision
+/* 输入: ctxIdx、codIRange 和 codIOffset。  
+ * 输出: 解码值 binVal 以及更新的变量 codIRange 和 codIOffset。*/
+int CH264Cabac::decodeDecision(int32_t ctxIdx, int32_t &binVal) {
+  // 1. 取第7,8位得到查询 LPS 表的索引，这里通过量化 codIRange 来选择不同的 LPS 概率区间
+  int32_t qCodIRangeIdx = (codIRange >> 6) & 0b11;
+  // 2. 给定上下文 ctxIdx 相关联的状态索引 pStateIdx，决定 MPS 和 LPS 的概率模型
+  int32_t pStateIdx = pStateIdxs[ctxIdx];
+  // 3. 通过查表（rangeTabLPS）获得 LPS 对应的范围值 codIRangeLPS。
+  int32_t codIRangeLPS = rangeTabLPS[pStateIdx][qCodIRangeIdx];
+
+  // 4. 逐步缩小范围来逼近当前符号的概率区间
+  codIRange -= codIRangeLPS;
+  // 5. 取得当前上下文的 MPS（最可能符号），表明此上下文中编码符号是 0 还是 1 的概率更大。
+  bool valMPS = valMPSs[ctxIdx];
+  // 6. 如果当前偏移量 codIOffset 大于等于 codIRange，则说明发生了 LPS 事件（即发生了最不可能的符号）
+  if (codIOffset >= codIRange) {
+    // a. 将 binVal 设置为与 valMPS 相反的值
+    binVal = !valMPS;
+    // b. 更新 codIOffset，以便进入下一步解码
+    codIOffset -= codIRange;
+    // c. 更新 codIRange，以便解码新的符号
+    codIRange = codIRangeLPS;
+
+    // d. pStateIdx 为 0，反转当前上下文的 valMPS 值。状态索引为 0 时，表示 MPS 的概率非常低，因此有可能会发生 MPS 和 LPS 反转。
+    if (pStateIdx == 0) valMPSs[ctxIdx] = !valMPS;
+    // e. 根据 pStateIdx 使用 LPS 转移表 transIdxLPS 更新当前上下文的状态索引。这是 CABAC 中的自适应概率更新机制的一部分，根据当前符号的发生情况动态调整状态。
+    pStateIdxs[ctxIdx] = transIdxLPS[pStateIdx];
+  }
+  // 7. 如果发生的是 MPS（最可能符号）
+  else {
+    // a. 直接将 binVal 设置为当前上下文的 MPS 值
+    binVal = valMPS;
+    // b. 根据 pStateIdx 使用 MPS 转移表 transIdxMPS 更新当前上下文的状态索引。
+    pStateIdxs[ctxIdx] = transIdxMPS[pStateIdx];
+  }
+  // 8. 执行范围重归一化
+  return renormD();
 }
