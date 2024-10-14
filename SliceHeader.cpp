@@ -189,8 +189,16 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
 
   if (m_pps->deblocking_filter_control_present_flag) {
     disable_deblocking_filter_idc = _bs->readUE();
-    cout << "\t禁用去块效应滤波器标志:" << disable_deblocking_filter_idc
-         << endl;
+    if (disable_deblocking_filter_idc == 0)
+      cout << "\t去块效应滤波器:开启" << endl;
+    else if (disable_deblocking_filter_idc == 1)
+      cout << "\t去块效应滤波器:禁用" << endl;
+    else if (disable_deblocking_filter_idc == 2)
+      cout << "\t去块效应滤波器:"
+              "只应用于slice内部的宏块边缘，不应用于slice边界的宏块边缘"
+           << endl;
+    else
+      direct_spatial_mv_pred_flag = 1;
     if (disable_deblocking_filter_idc != 1) {
       slice_alpha_c0_offset_div2 = _bs->readSE();
       slice_beta_offset_div2 = _bs->readSE();

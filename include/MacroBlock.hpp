@@ -161,8 +161,7 @@ class MacroBlock {
   int32_t mb_field_decoding_flag;
   /* 宏块自适应帧场编码标志，指示是否使用宏块自适应帧场编码 */
   int32_t MbaffFrameFlag;
-  /* 去块效应滤波器禁用标志，指示是否禁用去块效应滤波器。 */
-  int32_t disable_deblocking_filter_idc;
+
   /* 当前正在处理的宏块 */
   int32_t CurrMbAddr;
   /* 指示当前宏块所属的片的ID */
@@ -171,7 +170,9 @@ class MacroBlock {
   uint32_t slice_number;
   /* 当前片的类型（如I片、P片、B片等） */
   int32_t m_slice_type;
-  /* 滤波器偏移A,B，用于去块效应滤波器的参数 */
+
+  /* 滤波器，见Slice Header */
+  int32_t disable_deblocking_filter_idc;
   int32_t FilterOffsetA;
   int32_t FilterOffsetB;
   //是否允许使用邻近样本作为当前样本预测

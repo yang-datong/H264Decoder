@@ -1,17 +1,47 @@
 ﻿#include "PictureBase.hpp"
 #include <cstdint>
 
+bool UseMacroblockLeftEdgeFiltering(bool MbaffFrameFlag, int32_t mbAddr,
+                                    int32_t mbAddrA, int32_t PicWidthInMbs,
+                                    int32_t disable_deblocking_filter_idc) {
+  bool filterLeftMbEdgeFlag = true;
+  if (MbaffFrameFlag == false && mbAddr % PicWidthInMbs == 0)
+    filterLeftMbEdgeFlag = false;
+  else if (MbaffFrameFlag && (mbAddr >> 1) % PicWidthInMbs == 0)
+    filterLeftMbEdgeFlag = false;
+  else if (disable_deblocking_filter_idc == 1)
+    filterLeftMbEdgeFlag = false;
+  else if (disable_deblocking_filter_idc == 2 && mbAddrA < 0)
+    filterLeftMbEdgeFlag = false;
+  return filterLeftMbEdgeFlag;
+}
+
+bool UseMacroblockTopEdgeFiltering(bool MbaffFrameFlag, int32_t mbAddr,
+                                   int32_t mbAddrB, int32_t PicWidthInMbs,
+                                   int32_t disable_deblocking_filter_idc,
+                                   bool mb_field_decoding_flag) {
+  bool filterTopMbEdgeFlag = true;
+  if (MbaffFrameFlag == false && mbAddr < PicWidthInMbs)
+    filterTopMbEdgeFlag = false;
+  else if (MbaffFrameFlag && (mbAddr >> 1) < PicWidthInMbs &&
+           mb_field_decoding_flag)
+    filterTopMbEdgeFlag = false;
+  else if (MbaffFrameFlag && (mbAddr >> 1) < PicWidthInMbs &&
+           mb_field_decoding_flag == 0 && (mbAddr % 2) == 0)
+    filterTopMbEdgeFlag = false;
+  else if (disable_deblocking_filter_idc == 1)
+    filterTopMbEdgeFlag = false;
+  else if (disable_deblocking_filter_idc == 2 && mbAddrB < 0)
+    filterTopMbEdgeFlag = false;
+  return filterTopMbEdgeFlag;
+}
+
 // 8.7 Deblocking filter process
 int PictureBase::deblocking_filter_process() {
   const uint32_t ChromaArrayType =
       m_slice->slice_header->m_sps->ChromaArrayType;
 
-  // 宏块是场编码的一部分还是帧编码的一部分
-  bool fieldMbInFrameFlag = false;
   // 宏块内部的,左,上边缘进行滤波
-  bool filterInternalEdgesFlag = false, filterLeftMbEdgeFlag = false,
-       filterTopMbEdgeFlag = false;
-
   for (int32_t mbAddr = 0; mbAddr < PicSizeInMbs; mbAddr++) {
     const MacroBlock &mb = m_mbs[mbAddr];
     const bool MbaffFrameFlag = mb.MbaffFrameFlag;
@@ -20,57 +50,37 @@ int PictureBase::deblocking_filter_process() {
     RET(derivation_for_neighbouring_macroblocks(MbaffFrameFlag, mbAddr, mbAddrA,
                                                 mbAddrB, 0));
 
-    filterLeftMbEdgeFlag = true;
-    if ((MbaffFrameFlag == false && mbAddr % PicWidthInMbs == 0) ||
-        (MbaffFrameFlag && (mbAddr >> 1) % PicWidthInMbs == 0) ||
-        (mb.disable_deblocking_filter_idc == 1) ||
-        (mb.disable_deblocking_filter_idc == 2 && mbAddrA < 0)) {
-      filterLeftMbEdgeFlag = false;
-    }
+    // 是否对宏块左边缘进行滤波
+    bool filterLeftMbEdgeFlag = UseMacroblockLeftEdgeFiltering(
+        MbaffFrameFlag, mbAddr, mbAddrA, PicWidthInMbs,
+        mb.disable_deblocking_filter_idc);
+    // 是否对宏块上边缘进行滤波
+    bool filterTopMbEdgeFlag = UseMacroblockTopEdgeFiltering(
+        MbaffFrameFlag, mbAddr, mbAddrB, PicWidthInMbs,
+        mb.disable_deblocking_filter_idc, mb.mb_field_decoding_flag);
+    // 是否对宏块的内部的边缘进行滤波
+    bool filterInternalEdgesFlag = (mb.disable_deblocking_filter_idc != 1);
 
-    filterTopMbEdgeFlag = true;
-    if ((MbaffFrameFlag == false && mbAddr < PicWidthInMbs) ||
-        (MbaffFrameFlag && (mbAddr >> 1) < PicWidthInMbs &&
-         mb.mb_field_decoding_flag == 1) ||
-        (MbaffFrameFlag == 1 && (mbAddr >> 1) < PicWidthInMbs &&
-         mb.mb_field_decoding_flag == 0 && (mbAddr % 2) == 0) ||
-        (mb.disable_deblocking_filter_idc == 1) ||
-        (mb.disable_deblocking_filter_idc == 2 && mbAddrB < 0)) {
-      filterTopMbEdgeFlag = false;
-    }
+    // 在场模式下是否应用帧内滤波
+    bool fieldModeInFrameFilteringFlag = false;
+    // 宏块是场编码的一部分还是帧编码的一部分
+    bool fieldMbInFrameFlag = (MbaffFrameFlag && mb.mb_field_decoding_flag);
+
+    // 垂直边缘(1)或水平边缘(0)
+    bool verticalEdgeFlag = false;
+    // 对宏块的左边缘进行滤波
+    bool leftMbEdgeFlag = false;
 
     // 色度（U和V）边缘进行滤波
     bool chromaEdgeFlag = false;
-    // 当前处理的是垂直边缘还是水平边缘,true:处理垂直边缘,false:处理水平边缘
-    bool verticalEdgeFlag = false;
-    // 在场模式下是否应用帧内滤波
-    bool fieldModeInFrameFilteringFlag = false;
-    // 对宏块的左边缘进行滤波
-    bool leftMbEdgeFlag = false;
     int32_t E[16][2] = {{0}};
 
-    // 对宏块的左边缘进行滤波
-    fieldMbInFrameFlag = (MbaffFrameFlag && mb.mb_field_decoding_flag);
-    if (filterLeftMbEdgeFlag) {
-      leftMbEdgeFlag = false;
-      if (MbaffFrameFlag && mbAddr >= 2 && mb.mb_field_decoding_flag == false &&
-          m_mbs[(mbAddr - 2)].mb_field_decoding_flag) {
-        leftMbEdgeFlag = true;
-      }
-      chromaEdgeFlag = false, verticalEdgeFlag = true;
-      fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
+    if (filterLeftMbEdgeFlag)
+      process_filterLeftMbEdge(leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
+                               fieldModeInFrameFilteringFlag, MbaffFrameFlag,
+                               fieldMbInFrameFlag, false, mbAddr,
+                               mb.mb_field_decoding_flag, 0, mbAddrA, E, 16);
 
-      for (int32_t k = 0; k < 16; k++)
-        E[k][0] = 0, E[k][1] = k;
-
-      RET(filtering_for_block_edges(
-          MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag, 0,
-          mbAddrA, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-          leftMbEdgeFlag, E));
-    }
-
-    // 对宏块的内部的边缘进行滤波
-    filterInternalEdgesFlag = (mb.disable_deblocking_filter_idc != 1);
     if (filterInternalEdgesFlag) {
       chromaEdgeFlag = false, verticalEdgeFlag = true, leftMbEdgeFlag = false;
       fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
@@ -180,29 +190,11 @@ int PictureBase::deblocking_filter_process() {
 
     if (ChromaArrayType != 0) {
       // 对宏块的左边缘进行滤波
-      if (filterLeftMbEdgeFlag) {
-        leftMbEdgeFlag = false;
-        if (MbaffFrameFlag && mbAddr >= 2 &&
-            mb.mb_field_decoding_flag == false &&
-            m_mbs[(mbAddr - 2)].mb_field_decoding_flag)
-          leftMbEdgeFlag = true;
-
-        chromaEdgeFlag = true, verticalEdgeFlag = true;
-        fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
-
-        for (int32_t k = 0; k < MbHeightC; k++)
-          E[k][0] = 0, E[k][1] = k;
-
-        RET(filtering_for_block_edges(
-            MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-            0, mbAddrA, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-            leftMbEdgeFlag, E));
-
-        RET(filtering_for_block_edges(
-            MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-            1, mbAddrA, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-            leftMbEdgeFlag, E));
-      }
+      if (filterLeftMbEdgeFlag)
+        process_filterLeftMbEdge(
+            leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
+            fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
+            true, mbAddr, mb.mb_field_decoding_flag, 0, mbAddrA, E, MbHeightC);
 
       // 对宏块的内部的边缘进行滤波
       if (filterInternalEdgesFlag) {
@@ -377,6 +369,37 @@ int PictureBase::deblocking_filter_process() {
     }
   }
 
+  return 0;
+}
+
+int PictureBase::process_filterLeftMbEdge(
+    bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
+    bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
+    bool fieldMbInFrameFlag, bool _chromaEdgeFlag, int32_t _CurrMbAddr,
+    int32_t mb_field_decoding_flag, int32_t iCbCr, int32_t mbAddrN,
+    int32_t (&E)[16][2], int32_t n) {
+
+  leftMbEdgeFlag = false;
+  if (MbaffFrameFlag && _CurrMbAddr >= 2 && mb_field_decoding_flag == false &&
+      m_mbs[(_CurrMbAddr - 2)].mb_field_decoding_flag)
+    leftMbEdgeFlag = true;
+
+  chromaEdgeFlag = _chromaEdgeFlag, verticalEdgeFlag = true;
+  fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
+
+  for (int32_t k = 0; k < n; k++)
+    E[k][0] = 0, E[k][1] = k;
+
+  RET(filtering_for_block_edges(
+      MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
+      mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag, leftMbEdgeFlag,
+      E));
+  if (chromaEdgeFlag) {
+    RET(filtering_for_block_edges(
+        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 1,
+        mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+        leftMbEdgeFlag, E));
+  }
   return 0;
 }
 

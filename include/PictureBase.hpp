@@ -163,8 +163,7 @@ class PictureBase {
   int decoded_reference_picture_marking(Frame *(&dpb)[16]);
   int sequence_of_operations_for_decoded_reference_picture_marking(
       Frame *(&dpb)[16]);
-  int sliding_window_decoded_reference_picture_marking(
-      Frame *(&dpb)[16]);
+  int sliding_window_decoded_reference_picture_marking(Frame *(&dpb)[16]);
   int adaptive_memory_control_decoded_reference_picture_marking(
       Frame *(&dpb)[16]);
 
@@ -247,9 +246,11 @@ class PictureBase {
   int derivation_for_neighbouring_4x4_luma_blocks(
       int32_t luma4x4BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
       int32_t &luma4x4BlkIdxA, int32_t &luma4x4BlkIdxB, int32_t isChroma);
-  int derivation_for_neighbouring_4x4_chroma_blocks(
-      int32_t chroma4x4BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
-      int32_t &chroma4x4BlkIdxA, int32_t &chroma4x4BlkIdxB);
+  int derivation_for_neighbouring_4x4_chroma_blocks(int32_t chroma4x4BlkIdx,
+                                                    int32_t &mbAddrA,
+                                                    int32_t &mbAddrB,
+                                                    int32_t &chroma4x4BlkIdxA,
+                                                    int32_t &chroma4x4BlkIdxB);
   int derivation_for_neighbouring_locations(
       int32_t MbaffFrameFlag, int32_t xN, int32_t yN, int32_t currMbAddr,
       MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN, int32_t &b4x4BlkIdxN,
@@ -274,11 +275,11 @@ class PictureBase {
   int derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
       int32_t &mbAddrA, int32_t &mbAddrB, int32_t &mbAddrC, int32_t &mbAddrD);
   int derivation_for_4x4_luma_block_indices(uint8_t xP, uint8_t yP,
-                                                    uint8_t &luma4x4BlkIdx);
+                                            uint8_t &luma4x4BlkIdx);
   int derivation_for_4x4_chroma_block_indices(uint8_t xP, uint8_t yP,
-                                                      uint8_t &chroma4x4BlkIdx);
+                                              uint8_t &chroma4x4BlkIdx);
   int derivation_for_8x8_luma_block_indices(uint8_t xP, uint8_t yP,
-                                                    uint8_t &luma8x8BlkIdx);
+                                            uint8_t &luma8x8BlkIdx);
 
   //----------------- 量化 ------------------------
   int inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
@@ -443,12 +444,12 @@ class PictureBase {
   int picture_construction_process_prior_to_deblocking_filter(
       int32_t *u, int32_t nW, int32_t nH, int32_t BlkIdx, int32_t isChroma,
       int32_t PicWidthInSamples, uint8_t *pic_buff);
-  int filtering_for_block_edges(
-      int32_t MbaffFrameFlag, int32_t _CurrMbAddr,
-      int32_t mb_field_decoding_flag, int32_t chromaEdgeFlag, int32_t iCbCr,
-      int32_t mbAddrN, int32_t verticalEdgeFlag,
-      int32_t fieldModeInFrameFilteringFlag, int32_t leftMbEdgeFlag,
-      int32_t (&E)[16][2]);
+  int filtering_for_block_edges(int32_t MbaffFrameFlag, int32_t _CurrMbAddr,
+                                int32_t mb_field_decoding_flag,
+                                int32_t chromaEdgeFlag, int32_t iCbCr,
+                                int32_t mbAddrN, int32_t verticalEdgeFlag,
+                                int32_t fieldModeInFrameFilteringFlag,
+                                int32_t leftMbEdgeFlag, int32_t (&E)[16][2]);
   int filtering_for_a_set_of_samples_across_a_horizontal_or_vertical_block_edge(
       int32_t MbaffFrameFlag, int32_t _CurrMbAddr, int32_t chromaEdgeFlag,
       int32_t isChromaCb, uint8_t mb_x_p0, uint8_t mb_y_p0, uint8_t mb_x_q0,
@@ -468,10 +469,20 @@ class PictureBase {
       const uint8_t (&p)[4], const uint8_t (&q)[4], int32_t chromaEdgeFlag,
       int32_t chromaStyleFilteringFlag, int32_t bS, int32_t beta,
       int32_t indexA, uint8_t (&pp)[3], uint8_t (&qq)[3]);
-  int filtering_for_edges_for_bS_equal_to_4(
-      const uint8_t (&p)[4], const uint8_t (&q)[4], int32_t chromaEdgeFlag,
-      int32_t chromaStyleFilteringFlag, int32_t alpha, int32_t beta,
-      uint8_t (&pp)[3], uint8_t (&qq)[3]);
+  int filtering_for_edges_for_bS_equal_to_4(const uint8_t (&p)[4],
+                                            const uint8_t (&q)[4],
+                                            int32_t chromaEdgeFlag,
+                                            int32_t chromaStyleFilteringFlag,
+                                            int32_t alpha, int32_t beta,
+                                            uint8_t (&pp)[3], uint8_t (&qq)[3]);
+
+  int process_filterLeftMbEdge(bool &leftMbEdgeFlag, bool &chromaEdgeFlag,
+                               bool &verticalEdgeFlag,
+                               bool &fieldModeInFrameFilteringFlag,
+                               bool MbaffFrameFlag, bool fieldMbInFrameFlag,
+                               bool _chromaEdgeFlag, int32_t _CurrMbAddr,
+                               int32_t mb_field_decoding_flag, int32_t iCbCr,
+                               int32_t mbAddrN, int32_t (&E)[16][2], int32_t n);
 };
 
 #endif /* end of include guard: PICTUREBASE_HPP_ZGHBMJIH */

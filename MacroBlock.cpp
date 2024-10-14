@@ -28,9 +28,12 @@ void MacroBlock::initFromSlice(const SliceHeader &header,
   m_slice_type = header.slice_type;
   mb_skip_flag = slice_data.mb_skip_flag;
   bottom_field_flag = header.bottom_field_flag;
+
+  //去块滤波器是否使用，应该是与宏块为单位进行判断，因为去块滤波器可能只会应用于Slice内部的宏块边缘，而不应用与slice外部的宏块边缘
+  disable_deblocking_filter_idc = header.disable_deblocking_filter_idc;
   FilterOffsetA = header.FilterOffsetA;
   FilterOffsetB = header.FilterOffsetB;
-  disable_deblocking_filter_idc = header.disable_deblocking_filter_idc;
+
   constrained_intra_pred_flag = header.m_pps->constrained_intra_pred_flag;
 }
 

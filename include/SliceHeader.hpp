@@ -84,11 +84,6 @@ class SliceHeader {
   /* 内存分配标志 */
   int m_is_malloc_mem_self = 0;
 
-  /* 去块效应滤波器的Alpha偏移值 */
-  int32_t slice_alpha_c0_offset_div2 = 0;
-  /* 去块效应滤波器的Beta偏移值 */
-  int32_t slice_beta_offset_div2 = 0;
-
  public:
   /* 直接空间运动矢量预测标志 */
   bool direct_spatial_mv_pred_flag = 0;
@@ -110,8 +105,15 @@ class SliceHeader {
   uint32_t slice_group_change_cycle = 0;
 
  public:
-  /* 禁用去块效应滤波器标志 */
+  /* 禁用去块效应滤波器标志：
+   * 0：应用去块滤波器
+   * 1：禁用去块滤波器
+   * 2：部分应用去块滤波器：只应用于slice内部的宏块边缘，而不应用于slice边界的宏块边缘。这可以用于当多个slice被并行处理时，以减少并行处理边界上的潜在视觉不一致。*/
   uint32_t disable_deblocking_filter_idc = 0;
+  /* 去块效应滤波器的Alpha偏移值：控制着去块滤波器是否启动的阈值 */
+  int32_t slice_alpha_c0_offset_div2 = 0;
+  /* 去块效应滤波器的Beta偏移值：决定滤波器强度的阈值 */
+  int32_t slice_beta_offset_div2 = 0;
   /* 前一个Slice的量化参数（这里的Y表示亮度块，一般来说QP也以QPY为准） */
   int32_t QPY_prev = 0;
   /* Slice的量化参数（色度） */

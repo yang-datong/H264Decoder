@@ -60,7 +60,7 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
 
       /* 在宏块层解码帧内、帧间所需要的必须信息 */
       do_macroblock_layer();
-      /* 帧内预测、帧间预测、解码宏块、去块滤波 */
+      /* 帧内预测、帧间预测、解码宏块 */
       decoding_process();
     }
 
