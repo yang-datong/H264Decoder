@@ -91,7 +91,7 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
 /* 9.3.1 Initialization process */
 int SliceData::initCABAC() {
   /* CABAC编码 */
-  cabac = new CH264Cabac(*bs, *pic);
+  cabac = new Cabac(*bs, *pic);
 
   if (!m_pps->entropy_coding_mode_flag) return -1;
 

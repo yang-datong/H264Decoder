@@ -2,7 +2,7 @@
 #define MACROBLOCK_HPP_FBNXLFQV
 #include "BitStream.hpp"
 #include "CH264Golomb.hpp"
-#include "H264Cabac.hpp"
+#include "Cabac.hpp"
 #include "SliceHeader.hpp"
 #include "Type.hpp"
 #include <cstdint>
@@ -232,7 +232,7 @@ class MacroBlock {
   /* 用于内部类中使用 */
   bool _is_cabac = 0;
   CH264Golomb *_gb = nullptr;
-  CH264Cabac *_cabac = nullptr;
+  Cabac *_cabac = nullptr;
   BitStream *_bs = nullptr;
   CH264ResidualBlockCavlc *_cavlc = nullptr;
   PictureBase *_pic = nullptr;
@@ -241,10 +241,10 @@ class MacroBlock {
 
  public:
   int decode(BitStream &bs, PictureBase &picture, const SliceData &slice_data,
-             CH264Cabac &cabac);
+             Cabac &cabac);
 
   int decode_skip(PictureBase &picture, const SliceData &slice_data,
-                  CH264Cabac &cabac);
+                  Cabac &cabac);
 
   static int getMbPartWidthAndHeight(H264_MB_TYPE name_of_mb_type,
                                      int32_t &_MbPartWidth,

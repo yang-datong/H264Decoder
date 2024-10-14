@@ -7,7 +7,7 @@
 #include <stdlib.h>
 
 class PictureBase;
-class CH264Cabac {
+class Cabac {
  private:
   //上下文变量
   uint8_t pStateIdxs[1024] = {0};
@@ -22,7 +22,7 @@ class CH264Cabac {
   PictureBase &picture;
 
  public:
-  CH264Cabac(BitStream &bitStream, PictureBase &pic)
+  Cabac(BitStream &bitStream, PictureBase &pic)
       : bs(bitStream), picture(pic){};
 
   /* ============== 9.3.1 Initialization process ============== */

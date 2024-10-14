@@ -2,7 +2,7 @@
 #include "BitStream.hpp"
 #include "CH264Golomb.hpp"
 #include "Constants.hpp"
-#include "H264Cabac.hpp"
+#include "Cabac.hpp"
 #include "H264ResidualBlockCavlc.hpp"
 #include "PictureBase.hpp"
 #include "SliceHeader.hpp"
@@ -39,7 +39,7 @@ void MacroBlock::initFromSlice(const SliceHeader &header,
 // 7.3.5 Macroblock layer syntax -> page 57
 /* 负责解码一个宏块（这里的宏块指的是16x16 的矩阵块，并不是真的“一个”宏块）的各种信息，包括宏块类型、预测模式、残差数据 */
 int MacroBlock::decode(BitStream &bs, PictureBase &picture,
-                       const SliceData &slice_data, CH264Cabac &cabac) {
+                       const SliceData &slice_data, Cabac &cabac) {
   /* ------------------ 初始化常用变量 ------------------ */
   _pic = &picture;
   _cabac = &cabac;
@@ -137,7 +137,7 @@ int MacroBlock::decode(BitStream &bs, PictureBase &picture,
 #define MB_TYPE_B_Skip 23
 /* 该函数将一个宏块进行预处理，设置宏块跳过的状态，但是并不需要进行真正的解码操作 */
 int MacroBlock::decode_skip(PictureBase &picture, const SliceData &slice_data,
-                            CH264Cabac &cabac) {
+                            Cabac &cabac) {
   /* ------------------ 初始化常用变量 ------------------ */
   this->_cabac = &cabac;
   this->_pic = &picture;

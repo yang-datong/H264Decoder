@@ -1,4 +1,4 @@
-﻿#include "H264Cabac.hpp"
+﻿#include "Cabac.hpp"
 #include "Constants.hpp"
 #include "MacroBlock.hpp"
 #include "PictureBase.hpp"
@@ -7,8 +7,8 @@
 #include <cstdint>
 
 /* 对于P、SP和B Slice 类型，初始化还取决于cabac_init_idc语法元素的值 */
-int CH264Cabac::init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
-                         int32_t cabac_init_idc, int32_t &m, int32_t &n) {
+int Cabac::init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
+                    int32_t cabac_init_idc, int32_t &m, int32_t &n) {
   RET(ctxIdx < 0 || ctxIdx > 1024 || cabac_init_idc < 0 || cabac_init_idc > 2);
 
   if (ctxIdx >= 0 && ctxIdx <= 10) {
@@ -196,9 +196,8 @@ int CH264Cabac::init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
 }
 
 // 9.3.1.1 Initialisation process for context variables
-int CH264Cabac::init_of_context_variables(H264_SLICE_TYPE slice_type,
-                                          int32_t cabac_init_idc,
-                                          int32_t SliceQPY) {
+int Cabac::init_of_context_variables(H264_SLICE_TYPE slice_type,
+                                     int32_t cabac_init_idc, int32_t SliceQPY) {
   int m = 0, n = 0;
   // 遍历所有的 CABAC 上下文索引
   for (int ctxIdx = 0; ctxIdx < 1024; ++ctxIdx) {
@@ -215,7 +214,7 @@ int CH264Cabac::init_of_context_variables(H264_SLICE_TYPE slice_type,
 }
 
 // 9.3.1.2 Initialisation process for the arithmetic decoding engine
-int CH264Cabac::init_of_decoding_engine() {
+int Cabac::init_of_decoding_engine() {
   // 编码间隔：较大的值代表了最大的概率区间, 编码位移
   codIRange = 510, codIOffset = bs.readUn(9);
   RET(codIOffset == 510 || codIOffset == 511);
@@ -224,7 +223,7 @@ int CH264Cabac::init_of_decoding_engine() {
 
 //NOTE: 首次调用的CABAC解码
 /* 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element mb_skip_flag */
-int CH264Cabac::decode_mb_skip_flag(int32_t currMbAddr, int32_t &synElVal) {
+int Cabac::decode_mb_skip_flag(int32_t currMbAddr, int32_t &synElVal) {
   const int slice_type = picture.m_slice->slice_header->slice_type % 5;
   // Table 9-34 : slice_type == SLICE_P,SLICE_SP, SLICE_B)
   int32_t ctxIdxOffset = (slice_type == SLICE_B) ? 24 : 11;
@@ -243,8 +242,8 @@ int CH264Cabac::decode_mb_skip_flag(int32_t currMbAddr, int32_t &synElVal) {
 
 /* 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element mb_skip_flag */
 /* 输出: ctxIdxInc */
-int CH264Cabac::derivation_ctxIdxInc_for_mb_skip_flag(int32_t currMbAddr,
-                                                      int32_t &ctxIdxInc) {
+int Cabac::derivation_ctxIdxInc_for_mb_skip_flag(int32_t currMbAddr,
+                                                 int32_t &ctxIdxInc) {
   const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
   int32_t mbAddrA = 0, mbAddrB = 0;
   RET(picture.derivation_for_neighbouring_macroblocks(
@@ -262,7 +261,7 @@ int CH264Cabac::derivation_ctxIdxInc_for_mb_skip_flag(int32_t currMbAddr,
 }
 
 // 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element mb_field_decoding_flag
-int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
+int Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
   int ctxIdxInc = 0;
   RET(derivation_ctxIdxInc_for_mb_field_decoding_flag(ctxIdxInc));
 
@@ -276,8 +275,7 @@ int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element mb_field_decoding_flag
-int CH264Cabac::derivation_ctxIdxInc_for_mb_field_decoding_flag(
-    int32_t &ctxIdxInc) {
+int Cabac::derivation_ctxIdxInc_for_mb_field_decoding_flag(int32_t &ctxIdxInc) {
 
   /* Table 6-4 – Specification of mbAddrN and yM */
   int32_t mbAddrA, mbAddrB, mbAddrC, mbAddrD;
@@ -306,7 +304,7 @@ int CH264Cabac::derivation_ctxIdxInc_for_mb_field_decoding_flag(
 }
 
 // 9.3.3.1.1.3 Derivation process of ctxIdxInc for the syntax element mb_type
-int CH264Cabac::decode_mb_type(int32_t &synElVal) {
+int Cabac::decode_mb_type(int32_t &synElVal) {
   H264_SLICE_TYPE slice_type =
       (H264_SLICE_TYPE)picture.m_slice->slice_header->slice_type;
   int ret = 0;
@@ -324,7 +322,7 @@ int CH264Cabac::decode_mb_type(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::decode_mb_type_in_SI_slices(int32_t &synElVal) {
+int Cabac::decode_mb_type_in_SI_slices(int32_t &synElVal) {
   H264_SLICE_TYPE slice_type =
       (H264_SLICE_TYPE)picture.m_slice->slice_header->slice_type;
   RET((slice_type % 5) != SLICE_SI);
@@ -344,8 +342,7 @@ int CH264Cabac::decode_mb_type_in_SI_slices(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
-                                           int32_t &synElVal) {
+int Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset, int32_t &synElVal) {
   int32_t ctxIdxInc = 0;
   if (ctxIdxOffset == 3) {
     RET(derivation_ctxIdxInc_for_mb_type(ctxIdxOffset, ctxIdxInc));
@@ -617,7 +614,7 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
   return 0;
 }
 
-int CH264Cabac::decode_mb_type_in_P_SP_slices(int32_t &synElVal) {
+int Cabac::decode_mb_type_in_P_SP_slices(int32_t &synElVal) {
 
   H264_SLICE_TYPE slice_type =
       (H264_SLICE_TYPE)picture.m_slice->slice_header->slice_type;
@@ -676,7 +673,7 @@ int CH264Cabac::decode_mb_type_in_P_SP_slices(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::decode_mb_type_in_B_slices(int32_t &synElVal) {
+int Cabac::decode_mb_type_in_B_slices(int32_t &synElVal) {
   H264_SLICE_TYPE slice_type =
       (H264_SLICE_TYPE)picture.m_slice->slice_header->slice_type;
   int32_t ctxIdxOffset = 0, ctxIdxInc = 0;
@@ -909,8 +906,8 @@ int CH264Cabac::decode_mb_type_in_B_slices(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.3 Derivation process of ctxIdxInc for the syntax element mb_type
-int CH264Cabac::derivation_ctxIdxInc_for_mb_type(int32_t ctxIdxOffset,
-                                                 int32_t &ctxIdxInc) {
+int Cabac::derivation_ctxIdxInc_for_mb_type(int32_t ctxIdxOffset,
+                                            int32_t &ctxIdxInc) {
   const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
 
   int32_t mbAddrA = 0, mbAddrB = 0;
@@ -944,7 +941,7 @@ int CH264Cabac::derivation_ctxIdxInc_for_mb_type(int32_t ctxIdxOffset,
   return 0;
 }
 
-int CH264Cabac::decode_sub_mb_type(int32_t &synElVal) {
+int Cabac::decode_sub_mb_type(int32_t &synElVal) {
   H264_SLICE_TYPE slice_type =
       (H264_SLICE_TYPE)picture.m_slice->slice_header->slice_type;
   int ret = 0;
@@ -958,7 +955,7 @@ int CH264Cabac::decode_sub_mb_type(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::decode_sub_mb_type_in_P_SP_slices(int32_t &synElVal) {
+int Cabac::decode_sub_mb_type_in_P_SP_slices(int32_t &synElVal) {
 
   H264_SLICE_TYPE slice_type =
       (H264_SLICE_TYPE)picture.m_slice->slice_header->slice_type;
@@ -999,7 +996,7 @@ int CH264Cabac::decode_sub_mb_type_in_P_SP_slices(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::decode_sub_mb_type_in_B_slices(int32_t &synElVal) {
+int Cabac::decode_sub_mb_type_in_B_slices(int32_t &synElVal) {
 
   H264_SLICE_TYPE slice_type =
       (H264_SLICE_TYPE)picture.m_slice->slice_header->slice_type;
@@ -1111,7 +1108,7 @@ int CH264Cabac::decode_sub_mb_type_in_B_slices(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.4 Derivation process of ctxIdxInc for the syntax element coded_block_pattern
-int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
+int Cabac::decode_coded_block_pattern(int32_t &synElVal) {
   int32_t ChromaArrayType =
       picture.m_slice->slice_header->m_sps->ChromaArrayType;
   int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
@@ -1195,9 +1192,10 @@ int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.4 Derivation process of ctxIdxInc for the syntax element coded_block_pattern
-int CH264Cabac::derivation_ctxIdxInc_for_coded_block_pattern(
-    int32_t binIdx, int32_t binValues, int32_t ctxIdxOffset,
-    int32_t &ctxIdxInc) {
+int Cabac::derivation_ctxIdxInc_for_coded_block_pattern(int32_t binIdx,
+                                                        int32_t binValues,
+                                                        int32_t ctxIdxOffset,
+                                                        int32_t &ctxIdxInc) {
   const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
 
   if (ctxIdxOffset == 73) {
@@ -1276,7 +1274,7 @@ int CH264Cabac::derivation_ctxIdxInc_for_coded_block_pattern(
 }
 
 //9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element mb_qp_delta
-int CH264Cabac::decode_mb_qp_delta(int32_t &synElVal) {
+int Cabac::decode_mb_qp_delta(int32_t &synElVal) {
   int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
   int32_t binIdx = -1, binVal = 0;
   int32_t bypassFlag = 0;
@@ -1334,7 +1332,7 @@ int CH264Cabac::decode_mb_qp_delta(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element
-int CH264Cabac::derivation_ctxIdxInc_for_mb_qp_delta(int32_t &ctxIdxInc) {
+int Cabac::derivation_ctxIdxInc_for_mb_qp_delta(int32_t &ctxIdxInc) {
   const SliceHeader *header = picture.m_slice->slice_header;
 
   /* 令 prevMbAddr 为按解码顺序位于当前宏块之前的宏块的宏块地址。当当前宏块是切片的第一个宏块时，prevMbAddr被标记为不可用。 */
@@ -1368,8 +1366,8 @@ int CH264Cabac::derivation_ctxIdxInc_for_mb_qp_delta(int32_t &ctxIdxInc) {
   return 0;
 }
 
-int CH264Cabac::decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
-                                  int32_t &synElVal) {
+int Cabac::decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
+                             int32_t &synElVal) {
   int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
   int32_t binIdx = -1, binVal = 0;
   int32_t bypassFlag = 0;
@@ -1410,9 +1408,9 @@ int CH264Cabac::decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
 }
 
 // 9.3.3.1.1.6 Derivation process of ctxIdxInc for the syntax elements ref_idx_l0 and ref_idx_l1
-int CH264Cabac::derivation_ctxIdxInc_for_ref_idx_lX(int32_t is_ref_idx_10,
-                                                    int32_t mbPartIdx,
-                                                    int32_t &ctxIdxInc) {
+int Cabac::derivation_ctxIdxInc_for_ref_idx_lX(int32_t is_ref_idx_10,
+                                               int32_t mbPartIdx,
+                                               int32_t &ctxIdxInc) {
 
   const MacroBlock &mb = picture.m_mbs[picture.CurrMbAddr];
   const int32_t isChroma = 0;
@@ -1585,9 +1583,9 @@ int CH264Cabac::derivation_ctxIdxInc_for_ref_idx_lX(int32_t is_ref_idx_10,
 }
 
 // 9.3.3.1.1.7 Derivation process of ctxIdxInc for the syntax elements mvd_l0 and mvd_l1
-int CH264Cabac::decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
-                              int32_t subMbPartIdx, int32_t isChroma,
-                              int32_t &synElVal) {
+int Cabac::decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
+                         int32_t subMbPartIdx, int32_t isChroma,
+                         int32_t &synElVal) {
   int32_t ctxIdxOffset = 47, ctxIdxInc = 0, ctxIdx = 0;
   int32_t binVal = 0;
   int32_t bypassFlag = 0;
@@ -1659,9 +1657,11 @@ int CH264Cabac::decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
 }
 
 // 9.3.3.1.1.7 Derivation process of ctxIdxInc for the syntax elements mvd_l0 and mvd_l1
-int CH264Cabac::derivation_ctxIdxInc_for_mvd_lX(
-    int32_t is_mvd_10, int32_t mbPartIdx, int32_t subMbPartIdx,
-    int32_t isChroma, int32_t ctxIdxOffset, int32_t &ctxIdxInc) {
+int Cabac::derivation_ctxIdxInc_for_mvd_lX(int32_t is_mvd_10, int32_t mbPartIdx,
+                                           int32_t subMbPartIdx,
+                                           int32_t isChroma,
+                                           int32_t ctxIdxOffset,
+                                           int32_t &ctxIdxInc) {
 
   const MacroBlock &mb = picture.m_mbs[picture.CurrMbAddr];
   const int32_t MbPartWidth = mb.MbPartWidth;
@@ -1857,7 +1857,7 @@ int CH264Cabac::derivation_ctxIdxInc_for_mvd_lX(
 }
 
 // 9.3.3.1.1.8 Derivation process of ctxIdxInc for the syntax element intra_chroma_pred_mode
-int CH264Cabac::decode_intra_chroma_pred_mode(int32_t &synElVal) {
+int Cabac::decode_intra_chroma_pred_mode(int32_t &synElVal) {
   int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
   int32_t binVal = 0;
   int32_t bypassFlag = 0;
@@ -1899,8 +1899,7 @@ int CH264Cabac::decode_intra_chroma_pred_mode(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.8 Derivation process of ctxIdxInc for the syntax element intra_chroma_pred_mode
-int CH264Cabac::derivation_ctxIdxInc_for_intra_chroma_pred_mode(
-    int32_t &ctxIdxInc) {
+int Cabac::derivation_ctxIdxInc_for_intra_chroma_pred_mode(int32_t &ctxIdxInc) {
   const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
   const int32_t isChroma = 0;
 
@@ -1931,9 +1930,9 @@ int CH264Cabac::derivation_ctxIdxInc_for_intra_chroma_pred_mode(
 }
 
 // 9.3.3.1.1.9 Derivation process of ctxIdxInc for the syntax element coded_block_flag
-int CH264Cabac::decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
-                                        int32_t BlkIdx, int32_t iCbCr,
-                                        int32_t &synElVal) {
+int Cabac::decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
+                                   int32_t BlkIdx, int32_t iCbCr,
+                                   int32_t &synElVal) {
   int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
   int32_t binVal = 0;
   int32_t bypassFlag = 0;
@@ -1976,10 +1975,10 @@ int CH264Cabac::decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
 }
 
 // 9.3.3.1.1.9 Derivation process of ctxIdxInc for the syntax element coded_block_flag ctxIdxInc( ctxBlockCat )
-int CH264Cabac::derivation_ctxIdxInc_for_coded_block_flag(int32_t ctxBlockCat,
-                                                          int32_t BlkIdx,
-                                                          int32_t iCbCr,
-                                                          int32_t &ctxIdxInc) {
+int Cabac::derivation_ctxIdxInc_for_coded_block_flag(int32_t ctxBlockCat,
+                                                     int32_t BlkIdx,
+                                                     int32_t iCbCr,
+                                                     int32_t &ctxIdxInc) {
   const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
 
   int32_t mbAddrA = 0, mbAddrB = 0;
@@ -2413,7 +2412,7 @@ int CH264Cabac::derivation_ctxIdxInc_for_coded_block_flag(int32_t ctxBlockCat,
 }
 
 // 9.3.3.1.1.10 Derivation process of ctxIdxInc for the syntax element transform_size_8x8_flag
-int CH264Cabac::decode_transform_size_8x8_flag(int32_t &synElVal) {
+int Cabac::decode_transform_size_8x8_flag(int32_t &synElVal) {
   int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
   int32_t binVal = 0;
   int32_t bypassFlag = 0;
@@ -2434,7 +2433,7 @@ int CH264Cabac::decode_transform_size_8x8_flag(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.10 Derivation process of ctxIdxInc for the syntax element transform_size_8x8_flag
-int CH264Cabac::derivation_ctxIdxInc_for_transform_size_8x8_flag(
+int Cabac::derivation_ctxIdxInc_for_transform_size_8x8_flag(
     int32_t &ctxIdxInc) {
   const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
   int32_t mbAddrA = 0, mbAddrB = 0, isChroma = 0;
@@ -2453,11 +2452,11 @@ int CH264Cabac::derivation_ctxIdxInc_for_transform_size_8x8_flag(
 
 // 7.3.5.3.3 Residual block CABAC syntax
 // TODO 后面需要再仔细看一下，复现CABAC算法的时候吧 <24-10-03 15:51:55, YangJing>
-int CH264Cabac::residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
-                                     int32_t endIdx, int32_t maxNumCoeff,
-                                     MB_RESIDUAL_LEVEL mb_block_level,
-                                     int32_t BlkIdx, int32_t iCbCr,
-                                     int32_t &TotalCoeff) {
+int Cabac::residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
+                                int32_t endIdx, int32_t maxNumCoeff,
+                                MB_RESIDUAL_LEVEL mb_block_level,
+                                int32_t BlkIdx, int32_t iCbCr,
+                                int32_t &TotalCoeff) {
   const int32_t ChromaArrayType =
       picture.m_slice->slice_header->m_sps->ChromaArrayType;
 
@@ -2546,10 +2545,9 @@ int CH264Cabac::residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
 }
 
 // 如果last_flag=1,则表示 CABAC_decode_last_significant_coeff_flag(...)
-int CH264Cabac::decode_significant_coeff_flag(MB_RESIDUAL_LEVEL mb_block_level,
-                                              int32_t levelListIdx,
-                                              int32_t last_flag,
-                                              int32_t &synElVal) {
+int Cabac::decode_significant_coeff_flag(MB_RESIDUAL_LEVEL mb_block_level,
+                                         int32_t levelListIdx,
+                                         int32_t last_flag, int32_t &synElVal) {
   int32_t NumC8x8 = 4 / (picture.m_slice->slice_header->m_sps->SubWidthC *
                          picture.m_slice->slice_header->m_sps->SubHeightC);
   int32_t mb_field_decoding_flag =
@@ -2654,10 +2652,10 @@ int CH264Cabac::decode_significant_coeff_flag(MB_RESIDUAL_LEVEL mb_block_level,
   return 0;
 }
 
-int CH264Cabac::decode_coeff_abs_level_minus1(MB_RESIDUAL_LEVEL mb_block_level,
-                                              int32_t numDecodAbsLevelEq1,
-                                              int32_t numDecodAbsLevelGt1,
-                                              int32_t &synElVal) {
+int Cabac::decode_coeff_abs_level_minus1(MB_RESIDUAL_LEVEL mb_block_level,
+                                         int32_t numDecodAbsLevelEq1,
+                                         int32_t numDecodAbsLevelGt1,
+                                         int32_t &synElVal) {
   int32_t ctxIdxOffset = 0, ctxIdxInc = 0, ctxIdx = 0;
   int32_t binVal = 0;
   int32_t bypassFlag = 0;
@@ -2752,7 +2750,7 @@ int CH264Cabac::decode_coeff_abs_level_minus1(MB_RESIDUAL_LEVEL mb_block_level,
   return 0;
 }
 
-int CH264Cabac::decode_coeff_sign_flag(int32_t &synElVal) {
+int Cabac::decode_coeff_sign_flag(int32_t &synElVal) {
   int32_t binVal = 0;
 
   //------Table 9-34: ctxIdxOffset: (uses DecodeBypass)--------
@@ -2765,7 +2763,7 @@ int CH264Cabac::decode_coeff_sign_flag(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::decode_end_of_slice_flag(int32_t &synElVal) {
+int Cabac::decode_end_of_slice_flag(int32_t &synElVal) {
   int32_t ctxIdxOffset = 0, binVal = 0, ctxIdx = 0, bypassFlag = 0;
   //------Table 9-34: ctxIdxOffset: 276--------
   ctxIdxOffset = 276;
@@ -2778,8 +2776,7 @@ int CH264Cabac::decode_end_of_slice_flag(int32_t &synElVal) {
   return 0;
 }
 
-int CH264Cabac::decode_prev_intra4x4_or_intra8x8_pred_mode_flag(
-    int32_t &synElVal) {
+int Cabac::decode_prev_intra4x4_or_intra8x8_pred_mode_flag(int32_t &synElVal) {
   int32_t ctxIdxOffset = 0, ctxIdx = 0;
   int32_t binVal = 0;
   int32_t bypassFlag = 0;
@@ -2796,7 +2793,7 @@ int CH264Cabac::decode_prev_intra4x4_or_intra8x8_pred_mode_flag(
   return 0;
 }
 
-int CH264Cabac::decode_rem_intra4x4_or_intra8x8_pred_mode(int32_t &synElVal) {
+int Cabac::decode_rem_intra4x4_or_intra8x8_pred_mode(int32_t &synElVal) {
   int32_t ctxIdxOffset = 0, ctxIdx = 0;
   int32_t binVal = 0;
   int32_t bypassFlag = 0;
@@ -2824,7 +2821,7 @@ int CH264Cabac::decode_rem_intra4x4_or_intra8x8_pred_mode(int32_t &synElVal) {
 // 9.3.3.2 Arithmetic decoding process
 /* 输入：在第9.3.3.1节中导出的bypassFlag、ctxIdx以及算术解码引擎的状态变量codIRange和codIOffset 
  * 输出：bin 的值*/
-int CH264Cabac::decodeBin(int32_t bypassFlag, int32_t ctxIdx, int32_t &bin) {
+int Cabac::decodeBin(int32_t bypassFlag, int32_t ctxIdx, int32_t &bin) {
   int ret = 0;
   // 解码不依赖于上下文模型的状态，简单地从比特流中直接读取下一个比特
   if (bypassFlag) ret = decodeBypass(bin);
@@ -2840,7 +2837,7 @@ int CH264Cabac::decodeBin(int32_t bypassFlag, int32_t ctxIdx, int32_t &bin) {
 // 9.3.3.2.3 Bypass decoding process for binary decisions
 /* 输入: 切片数据的位以及变量 codIRange 和 codIOffset。  
  * 输出: 更新的变量 codIOffset 和解码值 binVal。 */
-int CH264Cabac::decodeBypass(int32_t &binVal) {
+int Cabac::decodeBypass(int32_t &binVal) {
   // 1. 默认为0比特值
   binVal = 0;
   // 2. 将已经解码的位流中添加一个新的比特，在已累积的已经编码位流中进行累加
@@ -2854,7 +2851,7 @@ int CH264Cabac::decodeBypass(int32_t &binVal) {
 // 9.3.3.2.4 Decoding process for binary decisions before termination
 /* 输入: 来自切片数据的位以及变量 codIRange 和 codIOffset。  
  * 输出: 更新的变量 codIRange 和 codIOffset 以及解码值 binVal。 */
-int CH264Cabac::decodeTerminate(int32_t &binVal) {
+int Cabac::decodeTerminate(int32_t &binVal) {
   // 1. 默认为0比特值
   binVal = 0;
   // 2. 准备检测终止符号。对于终止符，通常会有一个特定的概率设置（此处通过减去2来调整）。
@@ -2871,7 +2868,7 @@ int CH264Cabac::decodeTerminate(int32_t &binVal) {
 // 9.3.3.2.2 Renormalization process in the arithmetic decoding engine
 /* 输入: 来自切片数据的位以及变量 codIRange 和 codIOffset。  
  * 输出: 更新后的变量 codIRange 和 codIOffset。 */
-int CH264Cabac::renormD() {
+int Cabac::renormD() {
   /* 如果codIRange大于或等于256，则不需要重新归一化，并且RenormD过程结束；  
    * 否则（codIRange 小于 256），进入重整化循环。在此循环中，codIRange 的值加倍，即左移 1，并使用 read_bits( 1 ) 将一位移入 codIOffset 中。  */
   while (codIRange < 256) {
@@ -2884,7 +2881,7 @@ int CH264Cabac::renormD() {
 // 9.3.3.2.1 Arithmetic decoding process for a binary decision
 /* 输入: ctxIdx、codIRange 和 codIOffset。  
  * 输出: 解码值 binVal 以及更新的变量 codIRange 和 codIOffset。*/
-int CH264Cabac::decodeDecision(int32_t ctxIdx, int32_t &binVal) {
+int Cabac::decodeDecision(int32_t ctxIdx, int32_t &binVal) {
   // 1. 取第7,8位得到查询 LPS 表的索引，这里通过量化 codIRange 来选择不同的 LPS 概率区间
   int32_t qCodIRangeIdx = (codIRange >> 6) & 0b11;
   // 2. 给定上下文 ctxIdx 相关联的状态索引 pStateIdx，决定 MPS 和 LPS 的概率模型

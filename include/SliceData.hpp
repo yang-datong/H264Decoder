@@ -1,7 +1,7 @@
 #ifndef SLICEBODY_HPP_OVHTPIZQ
 #define SLICEBODY_HPP_OVHTPIZQ
 #include "BitStream.hpp"
-#include "H264Cabac.hpp"
+#include "Cabac.hpp"
 #include "SliceHeader.hpp"
 #include <cstdint>
 #include <cstring>
@@ -48,7 +48,7 @@ class SliceData {
   /* 由外部(parseSliceData)传进来的指针，不是Slice Data的一部分，随着parseSliceData后一起消灭 */
   SliceHeader *header = nullptr;
   /* 由外部(parseSliceData)初始化，不是Slice Data的一部分，随着parseSliceData后一起消灭 */
-  CH264Cabac *cabac = nullptr;
+  Cabac *cabac = nullptr;
   /* 由外部(parseSliceData)传进来的指针，不是Slice Data的一部分，随着parseSliceData后一起消灭 */
   BitStream *bs = nullptr;
   PictureBase *pic = nullptr;
