@@ -1,4 +1,5 @@
 #include "BitStream.hpp"
+#include <cstdint>
 
 bool BitStream::readU1() {
   _bitsLeft--;
@@ -66,8 +67,8 @@ uint32_t BitStream::readSE() {
   return r;
 }
 
-int BitStream::readME(int32_t ChromaArrayType,
-                      H264_MB_PART_PRED_MODE MbPartPredMode) {
+uint32_t BitStream::readME(int32_t ChromaArrayType,
+                           H264_MB_PART_PRED_MODE MbPartPredMode) {
   int32_t coded_block_pattern = 0;
   int32_t codeNum = readUE();
   /* TODO YangJing 移动到头文件 <24-10-15 01:47:19> */
@@ -124,6 +125,18 @@ int BitStream::readME(int32_t ChromaArrayType,
   }
 
   return coded_block_pattern;
+}
+
+uint32_t BitStream::readTE(int32_t r) {
+  int32_t codeNum = 0;
+  if (r <= 0)
+    return 0;
+  else if (r == 1) {
+    int b = readU1();
+    codeNum = !b;
+  } else
+    codeNum = readUE();
+  return codeNum;
 }
 
 bool BitStream::endOfBit() { return _bitsLeft % 8 == 0; }

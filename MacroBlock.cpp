@@ -1,6 +1,5 @@
 ﻿#include "MacroBlock.hpp"
 #include "BitStream.hpp"
-#include "CH264Golomb.hpp"
 #include "Cabac.hpp"
 #include "Cavlc.hpp"
 #include "Constants.hpp"
@@ -13,7 +12,6 @@
 
 MacroBlock::~MacroBlock() {
   _is_cabac = 0;
-  FREE(_gb);
   FREE(_cabac);
   FREE(_bs);
   FREE(_cavlc);
@@ -43,7 +41,6 @@ int MacroBlock::decode(BitStream &bs, PictureBase &picture,
   /* ------------------ 初始化常用变量 ------------------ */
   _pic = &picture;
   _cabac = &cabac;
-  if (_gb == nullptr) _gb = new CH264Golomb();
   _bs = &bs;
   _is_cabac = _pic->m_slice->slice_header->m_pps
                   ->entropy_coding_mode_flag; // 是否CABAC编码
@@ -141,7 +138,6 @@ int MacroBlock::decode_skip(PictureBase &picture, const SliceData &slice_data,
   /* ------------------ 初始化常用变量 ------------------ */
   this->_cabac = &cabac;
   this->_pic = &picture;
-  if (_gb == nullptr) this->_gb = new CH264Golomb();
   /* ------------------  End ------------------ */
   SliceHeader *header = _pic->m_slice->slice_header;
   m_slice_type_fixed = header->slice_type;
@@ -1343,8 +1339,7 @@ int MacroBlock::process_coded_block_pattern(const uint32_t ChromaArrayType) {
   if (_is_cabac)
     ret = _cabac->decode_coded_block_pattern(coded_block_pattern);
   else
-    coded_block_pattern =
-        _gb->get_me_golomb(*_bs, ChromaArrayType, m_mb_pred_mode);
+    coded_block_pattern = _bs->readME(ChromaArrayType, m_mb_pred_mode);
 
   /* 亮度块模式的值范围是0到15，表示宏块中哪些4x4的亮度块包含非零系数。例如，CodedBlockPatternLuma = 5 表示宏块中第1和第3个4x4亮度块包含非零系数。 */
   CodedBlockPatternLuma = coded_block_pattern % 16;
@@ -1429,7 +1424,7 @@ int MacroBlock::process_ref_idx_l0(int mbPartIdx,
     else
       size = num_ref_idx_l0_active_minus1;
 
-    ref_idx_l0[mbPartIdx] = _gb->get_te_golomb(*_bs, size);
+    ref_idx_l0[mbPartIdx] = _bs->readTE(size);
   }
   return ret;
 }
@@ -1446,7 +1441,7 @@ int MacroBlock::process_ref_idx_l1(int mbPartIdx,
     else
       size = num_ref_idx_l1_active_minus1;
 
-    ref_idx_l1[mbPartIdx] = _gb->get_te_golomb(*_bs, size);
+    ref_idx_l1[mbPartIdx] = _bs->readTE(size);
   }
 
   return ret;

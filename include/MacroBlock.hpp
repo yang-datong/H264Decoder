@@ -1,7 +1,6 @@
 #ifndef MACROBLOCK_HPP_FBNXLFQV
 #define MACROBLOCK_HPP_FBNXLFQV
 #include "BitStream.hpp"
-#include "CH264Golomb.hpp"
 #include "Cabac.hpp"
 #include "SliceHeader.hpp"
 #include "Type.hpp"
@@ -231,7 +230,6 @@ class MacroBlock {
  private:
   /* 用于内部类中使用 */
   bool _is_cabac = 0;
-  CH264Golomb *_gb = nullptr;
   Cabac *_cabac = nullptr;
   BitStream *_bs = nullptr;
   Cavlc *_cavlc = nullptr;

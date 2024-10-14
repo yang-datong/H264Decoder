@@ -28,7 +28,10 @@ class BitStream {
   /* 读取有符号指数哥伦布编码 */
   uint32_t readSE();
 
-  int readME(int32_t ChromaArrayType, H264_MB_PART_PRED_MODE MbPartPredMode);
+  uint32_t readME(int32_t ChromaArrayType,
+                  H264_MB_PART_PRED_MODE MbPartPredMode);
+
+  uint32_t readTE(int32_t r);
 
   bool endOfBit();
 
