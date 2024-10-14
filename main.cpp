@@ -13,7 +13,7 @@ int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
 
 int main(int argc, char *argv[]) {
   /* 关闭io输出同步 */
-  // std::ios::sync_with_stdio(false);
+  // ios::sync_with_stdio(false);
 
   string filePath;
   if (argc > 1 && argv[1] != NULL)
@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
     /* 714x624 场编码(隔行扫描，顶场优先)*/
     //filePath = "./test/demo_10_frames_TFF.h264";
     /* 714x624 帧编码(CAVLC 熵编码模式,即profile=baseline) */
-    //filePath = "./test/demo_10_frames_cavlc.h264";
+    filePath = "./test/demo_10_frames_cavlc.h264";
     /* 714x624 场编码(CAVLC 熵编码模式，有一点点绿色宏块)*/
     //filePath = "./test/demo_10_frames_cavlc_and_interlace.h264";
     /* 714x624 帧编码(CABAC 熵编码模式 + 无损编码(lossless=1) + TransformBypassMode + YUV444 ,段错误。。) */
@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
   /* 1. 打开文件、读取NUL、存储NUL的操作 */
   AnnexBReader reader(filePath);
   int result = reader.open();
-  if (result) return -1;
+  RET(result);
 
   /* 2. 创建一个GOP用于存放解码后的I、P、B帧序列 */
   GOP *gop = new GOP();
@@ -92,8 +92,7 @@ int main(int argc, char *argv[]) {
       // nalu.parseSODB(rbsp, SODB);
 
       /* 见T-REC-H.264-202108-I!!PDF-E.pdf 87页 */
-      if (nalu.nal_unit_type > 21)
-        std::cout << "Unknown Nalu Type !!!" << std::endl;
+      if (nalu.nal_unit_type > 21) cout << "Unknown Nalu Type !!!" << endl;
 
       switch (nalu.nal_unit_type) {
       case 1: /* Slice(non-VCL) */
@@ -108,13 +107,13 @@ int main(int argc, char *argv[]) {
         cout << " }" << endl;
         break;
       case 2: /* DPA(non-VCL) */
-        std::cout << "Not Support DPA!" << std::endl;
+        cout << "Not Support DPA!" << endl;
         break;
       case 3: /* DPB(non-VCL) */
-        std::cout << "Not Support DPB!" << std::endl;
+        cout << "Not Support DPB!" << endl;
         break;
       case 4: /* DPC(non-VCL) */
-        std::cout << "Not Support DPC!" << std::endl;
+        cout << "Not Support DPC!" << endl;
         break;
       case 5: /* IDR Slice(VCL) */
         //gop->flush();
@@ -193,11 +192,10 @@ int main(int argc, char *argv[]) {
       /* 已读取完成所有NAL */
       if (result == 0) break;
     } else {
-      cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-           << endl;
+      RET(-1);
       break;
     }
-    std::cout << std::endl;
+    cout << endl;
   }
 
   /* 读取完所有Nalu，并送入解码后，则将缓存中所有的Frame读取出来，准备退出 */
@@ -211,7 +209,6 @@ int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
                OUTPUT_FILE_TYPE output_file_type) {
   if (frame != NULL && frame->m_current_picture_ptr != NULL) {
     Frame *newEmptyPicture = nullptr;
-    // 去块滤波器
     frame->m_current_picture_ptr
         ->end_decode_the_picture_and_get_a_new_empty_picture(newEmptyPicture);
 
@@ -230,10 +227,10 @@ int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
       } else if (output_file_type == YUV) {
         outPicture->m_picture_frame.writeYUV("output.yuv");
         if (frame->m_picture_frame.m_slice->slice_header->IdrPicFlag)
-          std::cout << "\tffplay -video_size "
-                    << outPicture->m_picture_frame.PicWidthInSamplesL << "x"
-                    << outPicture->m_picture_frame.PicHeightInSamplesL
-                    << " output.yuv" << std::endl;
+          cout << "\tffplay -video_size "
+               << outPicture->m_picture_frame.PicWidthInSamplesL << "x"
+               << outPicture->m_picture_frame.PicHeightInSamplesL
+               << " output.yuv" << endl;
       }
     }
 
