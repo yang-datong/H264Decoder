@@ -18,14 +18,12 @@ class CH264Cabac {
   int32_t codIOffset = 0;
 
   /* 声明为引用，如果Cabac消费了bs流，对应的外层也需要同样被消费 */
-  /* TODO YangJing 为什么这里会存在BitStream ，PictureBase？ <24-09-01 19:59:43> */
   BitStream &bs;
   PictureBase &picture;
 
  public:
-  CH264Cabac(BitStream &bitStream, PictureBase &p)
-      : bs(bitStream), picture(p){};
-  ~CH264Cabac(){};
+  CH264Cabac(BitStream &bitStream, PictureBase &pic)
+      : bs(bitStream), picture(pic){};
 
   /* ============== 9.3.1 Initialization process ============== */
  public:
@@ -37,32 +35,27 @@ class CH264Cabac {
   int init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
                int32_t cabac_init_idc, int32_t &m, int32_t &n);
 
-  int derivation_of_ctxIdxInc_for_mb_skip_flag(const int32_t currMbAddr,
-                                               int32_t &ctxIdxInc);
-  int derivation_of_ctxIdxInc_for_mb_field_decoding_flag(
-      int32_t &ctxIdxInc); // 9.3.3.1.1.2
-  int derivation_of_ctxIdxInc_for_the_syntax_element_mb_type(
-      int32_t ctxIdxOffset,
-      int32_t &ctxIdxInc); // 9.3.3.1.1.3
-  int derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_pattern(
-      int32_t binIdx, int32_t binValues, int32_t ctxIdxOffset,
-      int32_t &ctxIdxInc); // 9.3.3.1.1.4
-  int derivation_ctxIdxInc_for_the_syntax_element_mb_qp_delta(
-      int32_t &ctxIdxInc); // 9.3.3.1.1.5
-  int derivation_of_ctxIdxInc_for_the_syntax_elements_ref_idx_l0_and_ref_idx_l1(
-      int32_t is_ref_idx_10, int32_t mbPartIdx,
-      int32_t &ctxIdxInc); // 9.3.3.1.1.6
-  int derivation_of_ctxIdxInc_for_the_syntax_elements_mvd_l0_and_mvd_l1(
-      int32_t is_mvd_10, int32_t mbPartIdx, int32_t subMbPartIdx,
-      int32_t isChroma, int32_t ctxIdxOffset,
-      int32_t &ctxIdxInc); // 9.3.3.1.1.7
-  int derivation_of_ctxIdxInc_for_the_syntax_element_intra_chroma_pred_mode(
-      int32_t &ctxIdxInc); // 9.3.3.1.1.8
-  int derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_flag(
-      int32_t ctxBlockCat, int32_t BlkIdx, int32_t iCbCr,
-      int32_t &ctxIdxInc); // 9.3.3.1.1.9
-  int derivation_of_ctxIdxInc_for_the_syntax_element_transform_size_8x8_flag(
-      int32_t &ctxIdxInc); // 9.3.3.1.1.10
+  int derivation_ctxIdxInc_for_mb_skip_flag(int32_t currMbAddr,
+                                            int32_t &ctxIdxInc);
+  int derivation_ctxIdxInc_for_mb_field_decoding_flag(int32_t &ctxIdxInc);
+  int derivation_ctxIdxInc_for_mb_type(int32_t ctxIdxOffset,
+                                       int32_t &ctxIdxInc);
+  int derivation_ctxIdxInc_for_coded_block_pattern(int32_t binIdx,
+                                                   int32_t binValues,
+                                                   int32_t ctxIdxOffset,
+                                                   int32_t &ctxIdxInc);
+  int derivation_ctxIdxInc_for_mb_qp_delta(int32_t &ctxIdxInc);
+  int derivation_ctxIdxInc_for_ref_idx_lX(int32_t is_ref_idx_10,
+                                          int32_t mbPartIdx,
+                                          int32_t &ctxIdxInc);
+  int derivation_ctxIdxInc_for_mvd_lX(int32_t is_mvd_10, int32_t mbPartIdx,
+                                      int32_t subMbPartIdx, int32_t isChroma,
+                                      int32_t ctxIdxOffset, int32_t &ctxIdxInc);
+  int derivation_ctxIdxInc_for_intra_chroma_pred_mode(int32_t &ctxIdxInc);
+  int derivation_ctxIdxInc_for_coded_block_flag(int32_t ctxBlockCat,
+                                                int32_t BlkIdx, int32_t iCbCr,
+                                                int32_t &ctxIdxInc);
+  int derivation_ctxIdxInc_for_transform_size_8x8_flag(int32_t &ctxIdxInc);
 
   int decodeBin(int32_t bypassFlag, int32_t ctxIdx, int32_t &bin);
   int decodeDecision(int32_t ctxIdx, int32_t &binVal);
@@ -78,9 +71,8 @@ class CH264Cabac {
   int decode_sub_mb_type_in_B_slices(int32_t &synElVal);
 
  public:
-  int decode_mb_skip_flag(const int32_t currMbAddr, int32_t &synElVal);
+  int decode_mb_skip_flag(int32_t currMbAddr, int32_t &synElVal);
   int decode_mb_field_decoding_flag(int32_t &synElVal);
-
   int decode_mb_type(int32_t &synElVal);
   int decode_sub_mb_type(int32_t &synElVal);
   int decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx, int32_t subMbPartIdx,
