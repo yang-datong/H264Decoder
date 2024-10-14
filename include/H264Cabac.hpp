@@ -9,11 +9,13 @@
 class PictureBase;
 class CH264Cabac {
  private:
-  int32_t _codIRange = 0;
-  int32_t _codIOffset = 0;
+  //上下文变量
+  uint8_t pStateIdxs[1024] = {0};
+  bool valMPSs[1024] = {0};
 
-  int32_t _pStateIdxs[1024] = {0};
-  int32_t _valMPSs[1024] = {0};
+  //上下文引擎
+  int32_t codIRange = 0;
+  int32_t codIOffset = 0;
 
   /* 声明为引用，如果Cabac消费了bs流，对应的外层也需要同样被消费 */
   /* TODO YangJing 为什么这里会存在BitStream ，PictureBase？ <24-09-01 19:59:43> */
@@ -22,8 +24,8 @@ class CH264Cabac {
 
  public:
   CH264Cabac(BitStream &bitStream, PictureBase &p)
-      : bs(bitStream), picture(p) {};
-  ~CH264Cabac() {};
+      : bs(bitStream), picture(p){};
+  ~CH264Cabac(){};
 
   /* ============== 9.3.1 Initialization process ============== */
  public:
@@ -32,8 +34,8 @@ class CH264Cabac {
   int init_of_decoding_engine();
 
  private:
-  inline int init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
-                      int32_t cabac_init_idc, int32_t &m, int32_t &n);
+  int init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
+               int32_t cabac_init_idc, int32_t &m, int32_t &n);
 
   int derivation_of_ctxIdxInc_for_mb_skip_flag(const int32_t currMbAddr,
                                                int32_t &ctxIdxInc);
@@ -62,12 +64,11 @@ class CH264Cabac {
   int derivation_of_ctxIdxInc_for_the_syntax_element_transform_size_8x8_flag(
       int32_t &ctxIdxInc); // 9.3.3.1.1.10
 
-  int DecodeBin(const int32_t bypassFlag, const int32_t ctxIdx, int32_t &bin);
-  int DecodeDecision(const int32_t ctxIdx,
-                     int32_t &binVal);  // 9.3.3.2.1
-  int DecodeBypass(int32_t &binVal);    // 9.3.3.2.3
-  int DecodeTerminate(int32_t &binVal); // 9.3.3.2.4
-  inline int RenormD();
+  int decodeBin(int32_t bypassFlag, int32_t ctxIdx, int32_t &bin);
+  int decodeDecision(int32_t ctxIdx, int32_t &binVal);
+  int decodeBypass(int32_t &binVal);
+  int decodeTerminate(int32_t &binVal);
+  int renormD();
 
   int decode_mb_type_in_I_slices(int32_t ctxIdxOffset, int32_t &synElVal);
   int decode_mb_type_in_SI_slices(int32_t &synElVal);

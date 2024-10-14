@@ -102,10 +102,10 @@ int SliceData::initCABAC() {
     uint8_t cabac_alignment_one_bit = bs->readU1();
 #pragma GCC diagnostic pop
 
-  // cabac初始化环境变量
+  // CABAC初始化环境变量
   cabac->init_of_context_variables((H264_SLICE_TYPE)header->slice_type,
                                    header->cabac_init_idc, header->SliceQPY);
-  // cabac初始化解码引擎
+  // CABAC初始化解码引擎
   cabac->init_of_decoding_engine();
   return 0;
 }
