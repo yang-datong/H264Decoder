@@ -1,4 +1,4 @@
-#include "H264ResidualBlockCavlc.hpp"
+#include "Cavlc.hpp"
 
 //7.3.5.3.2 Residual block CAVLC syntax
 int Cavlc::residual_block_cavlc(int32_t *coeffLevel, int32_t startIdx,

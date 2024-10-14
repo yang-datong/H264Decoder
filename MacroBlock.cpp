@@ -3,7 +3,7 @@
 #include "CH264Golomb.hpp"
 #include "Cabac.hpp"
 #include "Constants.hpp"
-#include "H264ResidualBlockCavlc.hpp"
+#include "Cavlc.hpp"
 #include "PictureBase.hpp"
 #include "SliceHeader.hpp"
 #include "Type.hpp"
