@@ -224,15 +224,14 @@ int CH264Cabac::init_of_decoding_engine() {
 
 //NOTE: 首次调用的CABAC解码
 /* 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element mb_skip_flag */
-int CH264Cabac::decode_mb_skip_flag(const int32_t currMbAddr,
-                                    int32_t &synElVal) {
+int CH264Cabac::decode_mb_skip_flag(int32_t currMbAddr, int32_t &synElVal) {
   const int slice_type = picture.m_slice->slice_header->slice_type % 5;
   // Table 9-34 : slice_type == SLICE_P,SLICE_SP, SLICE_B)
   int32_t ctxIdxOffset = (slice_type == SLICE_B) ? 24 : 11;
 
   // 获取ctxIdxInc后才能进行算术解码
   int32_t ctxIdxInc;
-  RET(derivation_of_ctxIdxInc_for_mb_skip_flag(currMbAddr, ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_mb_skip_flag(currMbAddr, ctxIdxInc));
 
   //NOTE:如果没有为表 9-34 中标记的相应二值化或二值化部分的 ctxIdxOffset 分配值作为“na”，相应二值化或二值化前缀/后缀部分的比特串的所有bin通过调用第9.3.3.2.3节中指定的DecodeBypass过程来解码。在这种情况下，bypassFlag被设置为等于1，其中bypassFlag用于指示为了从比特流解析bin的值，应用DecodeBypass过程。
 
@@ -244,8 +243,8 @@ int CH264Cabac::decode_mb_skip_flag(const int32_t currMbAddr,
 
 /* 9.3.3.1.1.1 Derivation process of ctxIdxInc for the syntax element mb_skip_flag */
 /* 输出: ctxIdxInc */
-int CH264Cabac::derivation_of_ctxIdxInc_for_mb_skip_flag(int32_t currMbAddr,
-                                                         int32_t &ctxIdxInc) {
+int CH264Cabac::derivation_ctxIdxInc_for_mb_skip_flag(int32_t currMbAddr,
+                                                      int32_t &ctxIdxInc) {
   const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
   int32_t mbAddrA = 0, mbAddrB = 0;
   RET(picture.derivation_for_neighbouring_macroblocks(
@@ -265,7 +264,7 @@ int CH264Cabac::derivation_of_ctxIdxInc_for_mb_skip_flag(int32_t currMbAddr,
 // 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element mb_field_decoding_flag
 int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
   int ctxIdxInc = 0;
-  RET(derivation_of_ctxIdxInc_for_mb_field_decoding_flag(ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_mb_field_decoding_flag(ctxIdxInc));
 
   int ctxIdxOffset = 70;
   int bypassFlag = (ctxIdxOffset == -1) ? 1 : 0;
@@ -277,7 +276,7 @@ int CH264Cabac::decode_mb_field_decoding_flag(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.2 Derivation process of ctxIdxInc for the syntax element mb_field_decoding_flag
-int CH264Cabac::derivation_of_ctxIdxInc_for_mb_field_decoding_flag(
+int CH264Cabac::derivation_ctxIdxInc_for_mb_field_decoding_flag(
     int32_t &ctxIdxInc) {
 
   /* Table 6-4 – Specification of mbAddrN and yM */
@@ -331,8 +330,7 @@ int CH264Cabac::decode_mb_type_in_SI_slices(int32_t &synElVal) {
   RET((slice_type % 5) != SLICE_SI);
 
   int32_t ctxIdxOffset = 0, ctxIdxInc = 0;
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_mb_type(ctxIdxOffset,
-                                                             ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_mb_type(ctxIdxOffset, ctxIdxInc));
   int32_t binVal = 0;
   RET(decodeBin((ctxIdxOffset == NA), ctxIdxOffset + ctxIdxInc, binVal));
 
@@ -350,8 +348,7 @@ int CH264Cabac::decode_mb_type_in_I_slices(int32_t ctxIdxOffset,
                                            int32_t &synElVal) {
   int32_t ctxIdxInc = 0;
   if (ctxIdxOffset == 3) {
-    RET(derivation_of_ctxIdxInc_for_the_syntax_element_mb_type(ctxIdxOffset,
-                                                               ctxIdxInc));
+    RET(derivation_ctxIdxInc_for_mb_type(ctxIdxOffset, ctxIdxInc));
   }
 
   int32_t binVal = 0;
@@ -695,8 +692,7 @@ int CH264Cabac::decode_mb_type_in_B_slices(int32_t &synElVal) {
   // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
 
   // 0,1,2 (clause 9.3.3.1.1.3)
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_mb_type(ctxIdxOffset,
-                                                             ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_mb_type(ctxIdxOffset, ctxIdxInc));
   ctxIdx = ctxIdxOffset + ctxIdxInc;
 
   RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
@@ -913,8 +909,8 @@ int CH264Cabac::decode_mb_type_in_B_slices(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.3 Derivation process of ctxIdxInc for the syntax element mb_type
-int CH264Cabac::derivation_of_ctxIdxInc_for_the_syntax_element_mb_type(
-    int32_t ctxIdxOffset, int32_t &ctxIdxInc) {
+int CH264Cabac::derivation_ctxIdxInc_for_mb_type(int32_t ctxIdxOffset,
+                                                 int32_t &ctxIdxInc) {
   const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
 
   int32_t mbAddrA = 0, mbAddrB = 0;
@@ -1127,8 +1123,8 @@ int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
 
   //------b0--------
   binIdx = 0;
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_pattern(
-      binIdx, binValues, ctxIdxOffset, ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_coded_block_pattern(binIdx, binValues,
+                                                   ctxIdxOffset, ctxIdxInc));
 
   ctxIdx = ctxIdxOffset + ctxIdxInc;
   RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
@@ -1136,8 +1132,8 @@ int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
 
   //------b1--------
   binIdx = 1;
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_pattern(
-      binIdx, binValues, ctxIdxOffset, ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_coded_block_pattern(binIdx, binValues,
+                                                   ctxIdxOffset, ctxIdxInc));
 
   ctxIdx = ctxIdxOffset + ctxIdxInc;
   RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 1;
@@ -1145,8 +1141,8 @@ int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
 
   //------b2--------
   binIdx = 2;
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_pattern(
-      binIdx, binValues, ctxIdxOffset, ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_coded_block_pattern(binIdx, binValues,
+                                                   ctxIdxOffset, ctxIdxInc));
 
   ctxIdx = ctxIdxOffset + ctxIdxInc;
   RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 2;
@@ -1154,8 +1150,8 @@ int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
 
   //------b3--------
   binIdx = 3;
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_pattern(
-      binIdx, binValues, ctxIdxOffset, ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_coded_block_pattern(binIdx, binValues,
+                                                   ctxIdxOffset, ctxIdxInc));
 
   ctxIdx = ctxIdxOffset + ctxIdxInc;
   RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 3;
@@ -1171,8 +1167,8 @@ int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
     ctxIdxOffset = 77;
     binValues = 0;
     binIdx = 0;
-    RET(derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_pattern(
-        binIdx, binValues, ctxIdxOffset, ctxIdxInc));
+    RET(derivation_ctxIdxInc_for_coded_block_pattern(binIdx, binValues,
+                                                     ctxIdxOffset, ctxIdxInc));
 
     ctxIdx = ctxIdxOffset + ctxIdxInc;
     RET(decodeBin(bypassFlag, ctxIdx, binVal)); // binIdx = 0;
@@ -1182,7 +1178,7 @@ int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
     else {
       CodedBlockPatternChroma = 1;
       binIdx = 1;
-      RET(derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_pattern(
+      RET(derivation_ctxIdxInc_for_coded_block_pattern(
           binIdx, binValues, ctxIdxOffset, ctxIdxInc));
 
       ctxIdx = ctxIdxOffset + ctxIdxInc;
@@ -1199,10 +1195,9 @@ int CH264Cabac::decode_coded_block_pattern(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.4 Derivation process of ctxIdxInc for the syntax element coded_block_pattern
-int CH264Cabac::
-    derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_pattern(
-        int32_t binIdx, int32_t binValues, int32_t ctxIdxOffset,
-        int32_t &ctxIdxInc) {
+int CH264Cabac::derivation_ctxIdxInc_for_coded_block_pattern(
+    int32_t binIdx, int32_t binValues, int32_t ctxIdxOffset,
+    int32_t &ctxIdxInc) {
   const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
 
   if (ctxIdxOffset == 73) {
@@ -1293,7 +1288,7 @@ int CH264Cabac::decode_mb_qp_delta(int32_t &synElVal) {
   // 9.3.2.7 Binarization process for mb_qp_delta
 
   // 9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element
-  RET(derivation_ctxIdxInc_for_the_syntax_element_mb_qp_delta(ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_mb_qp_delta(ctxIdxInc));
 
   //---------------注意是：U binarization------------------------
   ctxIdx = ctxIdxOffset + ctxIdxInc;
@@ -1339,8 +1334,7 @@ int CH264Cabac::decode_mb_qp_delta(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.5 Derivation process of ctxIdxInc for the syntax element
-int CH264Cabac::derivation_ctxIdxInc_for_the_syntax_element_mb_qp_delta(
-    int32_t &ctxIdxInc) {
+int CH264Cabac::derivation_ctxIdxInc_for_mb_qp_delta(int32_t &ctxIdxInc) {
   const SliceHeader *header = picture.m_slice->slice_header;
 
   /* 令 prevMbAddr 为按解码顺序位于当前宏块之前的宏块的宏块地址。当当前宏块是切片的第一个宏块时，prevMbAddr被标记为不可用。 */
@@ -1386,8 +1380,7 @@ int CH264Cabac::decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
 
   // 0,1,2,3 (clause 9.3.3.1.1.6)
   int32_t is_ref_idx_10 = (ref_idx_flag == 0) ? 1 : 0;
-  RET(derivation_of_ctxIdxInc_for_the_syntax_elements_ref_idx_l0_and_ref_idx_l1(
-      is_ref_idx_10, mbPartIdx, ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_ref_idx_lX(is_ref_idx_10, mbPartIdx, ctxIdxInc));
 
   //---------------注意是：U binarization------------------------
   ctxIdx = ctxIdxOffset + ctxIdxInc;
@@ -1417,9 +1410,9 @@ int CH264Cabac::decode_ref_idx_lX(int32_t ref_idx_flag, int32_t mbPartIdx,
 }
 
 // 9.3.3.1.1.6 Derivation process of ctxIdxInc for the syntax elements ref_idx_l0 and ref_idx_l1
-int CH264Cabac::
-    derivation_of_ctxIdxInc_for_the_syntax_elements_ref_idx_l0_and_ref_idx_l1(
-        int32_t is_ref_idx_10, int32_t mbPartIdx, int32_t &ctxIdxInc) {
+int CH264Cabac::derivation_ctxIdxInc_for_ref_idx_lX(int32_t is_ref_idx_10,
+                                                    int32_t mbPartIdx,
+                                                    int32_t &ctxIdxInc) {
 
   const MacroBlock &mb = picture.m_mbs[picture.CurrMbAddr];
   const int32_t isChroma = 0;
@@ -1606,8 +1599,8 @@ int CH264Cabac::decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
 
   // 9.3.3.1.1.7 Derivation process of ctxIdxInc for the syntax elements mvd_l0 and mvd_l1
   int32_t is_mvd_10 = (mvd_flag == 0 || mvd_flag == 1) ? 1 : 0;
-  RET(derivation_of_ctxIdxInc_for_the_syntax_elements_mvd_l0_and_mvd_l1(
-      is_mvd_10, mbPartIdx, subMbPartIdx, isChroma, ctxIdxOffset, ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_mvd_lX(is_mvd_10, mbPartIdx, subMbPartIdx,
+                                      isChroma, ctxIdxOffset, ctxIdxInc));
 
   //---------------注意是：UEG3------------------------
   // UEG3编码是由 prefix(TU binarization) + suffix(Exp-Golomb) + signedValFlag,三部分组成
@@ -1666,10 +1659,9 @@ int CH264Cabac::decode_mvd_lX(int32_t mvd_flag, int32_t mbPartIdx,
 }
 
 // 9.3.3.1.1.7 Derivation process of ctxIdxInc for the syntax elements mvd_l0 and mvd_l1
-int CH264Cabac::
-    derivation_of_ctxIdxInc_for_the_syntax_elements_mvd_l0_and_mvd_l1(
-        int32_t is_mvd_10, int32_t mbPartIdx, int32_t subMbPartIdx,
-        int32_t isChroma, int32_t ctxIdxOffset, int32_t &ctxIdxInc) {
+int CH264Cabac::derivation_ctxIdxInc_for_mvd_lX(
+    int32_t is_mvd_10, int32_t mbPartIdx, int32_t subMbPartIdx,
+    int32_t isChroma, int32_t ctxIdxOffset, int32_t &ctxIdxInc) {
 
   const MacroBlock &mb = picture.m_mbs[picture.CurrMbAddr];
   const int32_t MbPartWidth = mb.MbPartWidth;
@@ -1877,8 +1869,7 @@ int CH264Cabac::decode_intra_chroma_pred_mode(int32_t &synElVal) {
 
   // 0,1,2 (clause 9.3.3.1.1.8)
   // 9.3.3.1.1.8 Derivation process of ctxIdxInc for the syntax element intra_chroma_pred_mode
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_intra_chroma_pred_mode(
-      ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_intra_chroma_pred_mode(ctxIdxInc));
 
   //---------------注意是：TU, cMax=3------------------------
   ctxIdx = ctxIdxOffset + ctxIdxInc;
@@ -1908,9 +1899,8 @@ int CH264Cabac::decode_intra_chroma_pred_mode(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.8 Derivation process of ctxIdxInc for the syntax element intra_chroma_pred_mode
-int CH264Cabac::
-    derivation_of_ctxIdxInc_for_the_syntax_element_intra_chroma_pred_mode(
-        int32_t &ctxIdxInc) {
+int CH264Cabac::derivation_ctxIdxInc_for_intra_chroma_pred_mode(
+    int32_t &ctxIdxInc) {
   const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
   const int32_t isChroma = 0;
 
@@ -1971,8 +1961,8 @@ int CH264Cabac::decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
   int32_t ctxIdxBlockCatOffset = ctxIdxBlockCatOffset_arr[ctxBlockCat];
 
   // 9.3.3.1.1.9
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_flag(
-      ctxBlockCat, BlkIdx, iCbCr, ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_coded_block_flag(ctxBlockCat, BlkIdx, iCbCr,
+                                                ctxIdxInc));
 
   //--------3.计算出ctxIdx的值-----------
   ctxIdx = ctxIdxOffset + ctxIdxBlockCatOffset + ctxIdxInc;
@@ -1986,8 +1976,10 @@ int CH264Cabac::decode_coded_block_flag(MB_RESIDUAL_LEVEL mb_block_level,
 }
 
 // 9.3.3.1.1.9 Derivation process of ctxIdxInc for the syntax element coded_block_flag ctxIdxInc( ctxBlockCat )
-int CH264Cabac::derivation_of_ctxIdxInc_for_the_syntax_element_coded_block_flag(
-    int32_t ctxBlockCat, int32_t BlkIdx, int32_t iCbCr, int32_t &ctxIdxInc) {
+int CH264Cabac::derivation_ctxIdxInc_for_coded_block_flag(int32_t ctxBlockCat,
+                                                          int32_t BlkIdx,
+                                                          int32_t iCbCr,
+                                                          int32_t &ctxIdxInc) {
   const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
 
   int32_t mbAddrA = 0, mbAddrB = 0;
@@ -2432,8 +2424,7 @@ int CH264Cabac::decode_transform_size_8x8_flag(int32_t &synElVal) {
   // Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
 
   // 0,1,2 (clause 9.3.3.1.1.10)
-  RET(derivation_of_ctxIdxInc_for_the_syntax_element_transform_size_8x8_flag(
-      ctxIdxInc));
+  RET(derivation_ctxIdxInc_for_transform_size_8x8_flag(ctxIdxInc));
 
   //---------------注意是：FL, cMax=1------------------------
   ctxIdx = ctxIdxOffset + ctxIdxInc;
@@ -2443,9 +2434,8 @@ int CH264Cabac::decode_transform_size_8x8_flag(int32_t &synElVal) {
 }
 
 // 9.3.3.1.1.10 Derivation process of ctxIdxInc for the syntax element transform_size_8x8_flag
-int CH264Cabac::
-    derivation_of_ctxIdxInc_for_the_syntax_element_transform_size_8x8_flag(
-        int32_t &ctxIdxInc) {
+int CH264Cabac::derivation_ctxIdxInc_for_transform_size_8x8_flag(
+    int32_t &ctxIdxInc) {
   const bool MbaffFrameFlag = picture.m_slice->slice_header->MbaffFrameFlag;
   int32_t mbAddrA = 0, mbAddrB = 0, isChroma = 0;
   RET(picture.derivation_for_neighbouring_macroblocks(
