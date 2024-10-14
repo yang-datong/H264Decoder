@@ -80,30 +80,30 @@ int PictureBase::deblocking_filter_process() {
       process_filterLeftMbEdge(leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
                                fieldModeInFrameFilteringFlag, MbaffFrameFlag,
                                fieldMbInFrameFlag, false, mbAddr,
-                               mb.mb_field_decoding_flag, 0, mbAddrA, E, 16);
+                               mb.mb_field_decoding_flag, mbAddrA, E);
 
     // 对宏块的内部的边缘进行滤波（水平方向）
     if (filterInternalEdgesFlag)
       process_filterInternalEdges(
           leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
           fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
-          false, true, mb.transform_size_8x8_flag, mbAddr,
-          mb.mb_field_decoding_flag, 0, mbAddrA, E, 16);
+          true, mb.transform_size_8x8_flag, mbAddr, mb.mb_field_decoding_flag,
+          mbAddrA, E);
 
     // 对宏块的上边缘进行滤波
     if (filterTopMbEdgeFlag)
       process_filterTopMbEdge(leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
                               fieldModeInFrameFilteringFlag, MbaffFrameFlag,
                               fieldMbInFrameFlag, false, mbAddr,
-                              mb.mb_field_decoding_flag, 0, mbAddrB, E, 16);
+                              mb.mb_field_decoding_flag, mbAddrB, E);
 
     // 对宏块的内部的边缘进行滤波（垂直方向）
     if (filterInternalEdgesFlag)
       process_filterInternalEdges(
           leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
           fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
-          false, false, mb.transform_size_8x8_flag, mbAddr,
-          mb.mb_field_decoding_flag, 0, mbAddrA, E, 16);
+          false, mb.transform_size_8x8_flag, mbAddr, mb.mb_field_decoding_flag,
+          mbAddrA, E);
 
     if (ChromaArrayType != 0) {
       // 对宏块的左边缘进行滤波
@@ -111,32 +111,30 @@ int PictureBase::deblocking_filter_process() {
         process_filterLeftMbEdge(
             leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
             fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
-            true, mbAddr, mb.mb_field_decoding_flag, 0, mbAddrA, E, MbHeightC);
+            true, mbAddr, mb.mb_field_decoding_flag, mbAddrA, E);
 
       // 对宏块的内部的边缘进行滤波（水平方向）
       if (filterInternalEdgesFlag)
         process_filterInternalEdges_chrome(
             leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
             fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
-            true, true, mb.transform_size_8x8_flag, mbAddr,
-            mb.mb_field_decoding_flag, 0, mbAddrA, E, MbHeightC,
-            ChromaArrayType);
+            true, mb.transform_size_8x8_flag, mbAddr, mb.mb_field_decoding_flag,
+            mbAddrA, E, ChromaArrayType);
 
       // 对宏块的上边缘进行滤波
       if (filterTopMbEdgeFlag)
-        process_filterTopMbEdge(
-            leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
-            fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
-            true, mbAddr, mb.mb_field_decoding_flag, 0, mbAddrB, E, MbHeightC);
+        process_filterTopMbEdge(leftMbEdgeFlag, chromaEdgeFlag,
+                                verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+                                MbaffFrameFlag, fieldMbInFrameFlag, true,
+                                mbAddr, mb.mb_field_decoding_flag, mbAddrB, E);
 
       // 对宏块的内部的边缘进行滤波（垂直方向）
       if (filterInternalEdgesFlag)
         process_filterInternalEdges_chrome(
             leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
             fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
-            true, false, mb.transform_size_8x8_flag, mbAddr,
-            mb.mb_field_decoding_flag, 0, mbAddrA, E, MbHeightC,
-            ChromaArrayType);
+            false, mb.transform_size_8x8_flag, mbAddr,
+            mb.mb_field_decoding_flag, mbAddrA, E, ChromaArrayType);
     }
   }
 
@@ -147,17 +145,16 @@ int PictureBase::process_filterLeftMbEdge(
     bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
     bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
     bool fieldMbInFrameFlag, bool _chromaEdgeFlag, int32_t _CurrMbAddr,
-    int32_t mb_field_decoding_flag, int32_t iCbCr, int32_t mbAddrN,
-    int32_t (&E)[16][2], int32_t n) {
+    int32_t mb_field_decoding_flag, int32_t mbAddrN, int32_t (&E)[16][2]) {
 
-  leftMbEdgeFlag = false;
+  leftMbEdgeFlag = false, verticalEdgeFlag = true,
+  chromaEdgeFlag = _chromaEdgeFlag,
+  fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
   if (MbaffFrameFlag && _CurrMbAddr >= 2 && mb_field_decoding_flag == false &&
       m_mbs[(_CurrMbAddr - 2)].mb_field_decoding_flag)
     leftMbEdgeFlag = true;
 
-  chromaEdgeFlag = _chromaEdgeFlag, verticalEdgeFlag = true;
-  fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
-
+  int32_t n = chromaEdgeFlag ? MbHeightC : 16;
   for (int32_t k = 0; k < n; k++)
     E[k][0] = 0, E[k][1] = k;
 
@@ -177,11 +174,10 @@ int PictureBase::process_filterLeftMbEdge(
 int PictureBase::process_filterInternalEdges(
     bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
     bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
-    bool fieldMbInFrameFlag, bool _chromaEdgeFlag, bool _verticalEdgeFlag,
+    bool fieldMbInFrameFlag, bool _verticalEdgeFlag,
     bool transform_size_8x8_flag, int32_t _CurrMbAddr,
-    int32_t mb_field_decoding_flag, int32_t iCbCr, int32_t mbAddrN,
-    int32_t (&E)[16][2], int32_t n) {
-  chromaEdgeFlag = _chromaEdgeFlag, verticalEdgeFlag = _verticalEdgeFlag;
+    int32_t mb_field_decoding_flag, int32_t mbAddrN, int32_t (&E)[16][2]) {
+  chromaEdgeFlag = false, verticalEdgeFlag = _verticalEdgeFlag;
   leftMbEdgeFlag = false;
   fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
 
@@ -231,16 +227,16 @@ int PictureBase::process_filterTopMbEdge(
     bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
     bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
     bool fieldMbInFrameFlag, bool _chromaEdgeFlag, int32_t _CurrMbAddr,
-    int32_t mb_field_decoding_flag, int32_t iCbCr, int32_t mbAddrN,
-    int32_t (&E)[16][2], int32_t n) {
+    int32_t mb_field_decoding_flag, int32_t mbAddrN, int32_t (&E)[16][2]) {
+
+  int32_t n = chromaEdgeFlag ? MbHeightC : 16;
+  verticalEdgeFlag = false, leftMbEdgeFlag = false,
+  chromaEdgeFlag = _chromaEdgeFlag,
+  fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
 
   if (MbaffFrameFlag && (_CurrMbAddr % 2) == 0 &&
       _CurrMbAddr >= 2 * PicWidthInMbs && mb_field_decoding_flag == false &&
       m_mbs[(_CurrMbAddr - 2 * PicWidthInMbs + 1)].mb_field_decoding_flag) {
-    chromaEdgeFlag = _chromaEdgeFlag, verticalEdgeFlag = false,
-    leftMbEdgeFlag = false;
-    fieldModeInFrameFilteringFlag = true;
-
     for (int32_t k = 0; k < n - !chromaEdgeFlag; k++)
       E[k][0] = k, E[k][1] = 0;
 
@@ -258,35 +254,20 @@ int PictureBase::process_filterTopMbEdge(
     for (int32_t k = 0; k < n; k++)
       E[k][0] = k, E[k][1] = 1;
 
-    RET(filtering_for_block_edges(
-        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
-        mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-        leftMbEdgeFlag, E));
-    if (chromaEdgeFlag) {
-      RET(filtering_for_block_edges(
-          MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag,
-          1, mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-          leftMbEdgeFlag, E));
-    }
-
   } else {
-    chromaEdgeFlag = _chromaEdgeFlag, verticalEdgeFlag = false,
-    leftMbEdgeFlag = false;
-    fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
-
     for (int32_t k = 0; k < n; k++)
       E[k][0] = k, E[k][1] = 0;
+  }
 
+  RET(filtering_for_block_edges(
+      MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
+      mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag, leftMbEdgeFlag,
+      E));
+  if (chromaEdgeFlag) {
     RET(filtering_for_block_edges(
-        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
+        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 1,
         mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
         leftMbEdgeFlag, E));
-    if (chromaEdgeFlag) {
-      RET(filtering_for_block_edges(
-          MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag,
-          1, mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-          leftMbEdgeFlag, E));
-    }
   }
   return 0;
 }
@@ -294,17 +275,17 @@ int PictureBase::process_filterTopMbEdge(
 int PictureBase::process_filterInternalEdges_chrome(
     bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
     bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
-    bool fieldMbInFrameFlag, bool _chromaEdgeFlag, bool _verticalEdgeFlag,
+    bool fieldMbInFrameFlag, bool _verticalEdgeFlag,
     bool transform_size_8x8_flag, int32_t _CurrMbAddr,
-    int32_t mb_field_decoding_flag, int32_t iCbCr, int32_t mbAddrN,
-    int32_t (&E)[16][2], int32_t n, int32_t ChromaArrayType) {
+    int32_t mb_field_decoding_flag, int32_t mbAddrN, int32_t (&E)[16][2],
+    int32_t ChromaArrayType) {
 
-  chromaEdgeFlag = _chromaEdgeFlag, verticalEdgeFlag = _verticalEdgeFlag,
+  chromaEdgeFlag = true, verticalEdgeFlag = _verticalEdgeFlag,
   leftMbEdgeFlag = false;
   fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
 
   if (ChromaArrayType != 3 || transform_size_8x8_flag == false) {
-    for (int32_t k = 0; k < n; k++)
+    for (int32_t k = 0; k < MbHeightC; k++)
       if (verticalEdgeFlag)
         E[k][0] = 4, E[k][1] = k;
       else
@@ -323,7 +304,7 @@ int PictureBase::process_filterInternalEdges_chrome(
 
   if (verticalEdgeFlag) {
     if (ChromaArrayType == 3) {
-      for (int32_t k = 0; k < n; k++)
+      for (int32_t k = 0; k < MbHeightC; k++)
         E[k][0] = 8, E[k][1] = k;
 
       RET(filtering_for_block_edges(
@@ -368,8 +349,9 @@ int PictureBase::process_filterInternalEdges_chrome(
     }
   }
 
+  // YUV444 水平，垂直方向都需要过滤两次
   if (ChromaArrayType == 3 && transform_size_8x8_flag == false) {
-    for (int32_t k = 0; k < n; k++)
+    for (int32_t k = 0; k < MbHeightC; k++)
       if (verticalEdgeFlag)
         E[k][0] = 12, E[k][1] = k;
       else
@@ -379,7 +361,6 @@ int PictureBase::process_filterInternalEdges_chrome(
         MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
         mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
         leftMbEdgeFlag, E));
-
     RET(filtering_for_block_edges(
         MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 1,
         mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
