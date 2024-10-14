@@ -1,6 +1,7 @@
 #ifndef SPS_CPP_F6QSULFM
 #define SPS_CPP_F6QSULFM
 
+#include "BitStream.hpp"
 #include "Common.hpp"
 #include "Type.hpp"
 #include <cstdint>

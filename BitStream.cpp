@@ -1,5 +1,4 @@
 #include "BitStream.hpp"
-#include <cstdint>
 
 bool BitStream::readU1() {
   _bitsLeft--;
@@ -65,6 +64,66 @@ uint32_t BitStream::readSE() {
   r >>= 1;
   if (sign) r *= -1; // 去绝对值
   return r;
+}
+
+int BitStream::readME(int32_t ChromaArrayType,
+                      H264_MB_PART_PRED_MODE MbPartPredMode) {
+  int32_t coded_block_pattern = 0;
+  int32_t codeNum = readUE();
+  /* TODO YangJing 移动到头文件 <24-10-15 01:47:19> */
+  struct maping_exp_golomb_t {
+    int32_t code_num;
+    int32_t coded_block_pattern_of_Intra_4x4_or_Intra_8x8;
+    int32_t coded_block_pattern_of_Inter;
+  };
+  const maping_exp_golomb_t maping_exp_golomb_arrays1[] = {
+      {0, 47, 0},   {1, 31, 16},  {2, 15, 1},   {3, 0, 2},    {4, 23, 4},
+      {5, 27, 8},   {6, 29, 32},  {7, 30, 3},   {8, 7, 5},    {9, 11, 10},
+      {10, 13, 12}, {11, 14, 15}, {12, 39, 47}, {13, 43, 7},  {14, 45, 11},
+      {15, 46, 13}, {16, 16, 14}, {17, 3, 6},   {18, 5, 9},   {19, 10, 31},
+      {20, 12, 35}, {21, 19, 37}, {22, 21, 42}, {23, 26, 44}, {24, 28, 33},
+      {25, 35, 34}, {26, 37, 36}, {27, 42, 40}, {28, 44, 39}, {29, 1, 43},
+      {30, 2, 45},  {31, 4, 46},  {32, 8, 17},  {33, 17, 18}, {34, 18, 20},
+      {35, 20, 24}, {36, 24, 19}, {37, 6, 21},  {38, 9, 26},  {39, 22, 28},
+      {40, 25, 23}, {41, 32, 27}, {42, 33, 29}, {43, 34, 30}, {44, 36, 22},
+      {45, 40, 25}, {46, 38, 38}, {47, 41, 41},
+  };
+
+  const maping_exp_golomb_t maping_exp_golomb_arrays2[] = {
+      {0, 15, 0},  {1, 0, 1},   {2, 7, 2},  {3, 11, 4},
+      {4, 13, 8},  {5, 14, 3},  {6, 3, 5},  {7, 5, 10},
+      {8, 10, 12}, {9, 12, 15}, {10, 1, 7}, {11, 2, 11},
+      {12, 4, 13}, {13, 8, 14}, {14, 6, 6}, {15, 9, 9},
+  };
+
+  switch (ChromaArrayType) {
+  case 1:
+  case 2: {
+    RET(codeNum < 0 || codeNum > 47);
+    if (MbPartPredMode == Intra_4x4 || MbPartPredMode == Intra_8x8)
+      coded_block_pattern = maping_exp_golomb_arrays1[codeNum]
+                                .coded_block_pattern_of_Intra_4x4_or_Intra_8x8;
+    else
+      coded_block_pattern =
+          maping_exp_golomb_arrays1[codeNum].coded_block_pattern_of_Inter;
+    break;
+  }
+  case 0:
+  case 3: {
+    RET(codeNum < 0 || codeNum > 15);
+    if (MbPartPredMode == Intra_4x4 || MbPartPredMode == Intra_8x8)
+      coded_block_pattern = maping_exp_golomb_arrays2[codeNum]
+                                .coded_block_pattern_of_Intra_4x4_or_Intra_8x8;
+    else
+      coded_block_pattern =
+          maping_exp_golomb_arrays2[codeNum].coded_block_pattern_of_Inter;
+    break;
+  }
+  default:
+    return -1;
+  }
+
+  return coded_block_pattern;
 }
 
 bool BitStream::endOfBit() { return _bitsLeft % 8 == 0; }

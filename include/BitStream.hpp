@@ -1,6 +1,8 @@
 #ifndef BITSTREAM_HPP_AUHM38NB
 #define BITSTREAM_HPP_AUHM38NB
 
+#include "Common.hpp"
+#include <cstdint>
 #include <math.h>
 #include <stdint.h>
 
@@ -25,6 +27,8 @@ class BitStream {
 
   /* 读取有符号指数哥伦布编码 */
   uint32_t readSE();
+
+  int readME(int32_t ChromaArrayType, H264_MB_PART_PRED_MODE MbPartPredMode);
 
   bool endOfBit();
 

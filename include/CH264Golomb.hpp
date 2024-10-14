@@ -3,6 +3,8 @@
 
 #include "BitStream.hpp"
 #include "Type.hpp"
+#include "Common.hpp"
+
 #include <cstdint>
 typedef enum {
   CODE_BLOCK_PATTERN_UNKNOWN,

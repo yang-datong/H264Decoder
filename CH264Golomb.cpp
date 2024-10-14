@@ -190,54 +190,31 @@ int CH264Golomb::get_me_golomb(BitStream &bs, int32_t ChromaArrayType,
   int32_t coded_block_pattern = 0;
   int32_t codeNum = get_ue_golomb(bs);
 
-  //----------------
   switch (ChromaArrayType) {
   case 1:
   case 2: {
-    RETURN_IF_FAILED(codeNum < 0 || codeNum > 47, -1);
-
-    if (MbPartPredMode == Intra_4x4    // #define    Intra_4x4        0
-        || MbPartPredMode == Intra_8x8 // #define    Intra_8x8        1
-    ) {
+    RET(codeNum < 0 || codeNum > 47);
+    if (MbPartPredMode == Intra_4x4 || MbPartPredMode == Intra_8x8)
       coded_block_pattern = maping_exp_golomb_arrays1[codeNum]
                                 .coded_block_pattern_of_Intra_4x4_or_Intra_8x8;
-    } else // if (IS_INTER_Prediction_Mode(MbPartPredMode))//#define    Inter 3
-    {
+    else
       coded_block_pattern =
           maping_exp_golomb_arrays1[codeNum].coded_block_pattern_of_Inter;
-    }
-    //            else
-    //            {
-    //                printf("MbPartPredMode=%d, must be 0,1 or 3;\n",
-    //                MbPartPredMode); return -1;
-    //            }
     break;
   }
   case 0:
   case 3: {
-    RETURN_IF_FAILED(codeNum < 0 || codeNum > 15, -1);
-
-    if (MbPartPredMode == Intra_4x4    // #define    Intra_4x4        0
-        || MbPartPredMode == Intra_8x8 // #define    Intra_8x8        1
-    ) {
+    RET(codeNum < 0 || codeNum > 15);
+    if (MbPartPredMode == Intra_4x4 || MbPartPredMode == Intra_8x8)
       coded_block_pattern = maping_exp_golomb_arrays2[codeNum]
                                 .coded_block_pattern_of_Intra_4x4_or_Intra_8x8;
-    } else // if (IS_INTER_Prediction_Mode(MbPartPredMode))//#define    Inter 3
-    {
+    else
       coded_block_pattern =
           maping_exp_golomb_arrays2[codeNum].coded_block_pattern_of_Inter;
-    }
-    //            else
-    //            {
-    //                printf("MbPartPredMode=%d, must be 0,1 or 3;\n",
-    //                MbPartPredMode); return -1;
-    //            }
     break;
   }
-  default: {
-    printf("ChromaArrayType=%d, must be 0,1,2 or 3;\n", ChromaArrayType);
+  default:
     return -1;
-  }
   }
 
   return coded_block_pattern;

@@ -1,4 +1,6 @@
-#include "BitStream.hpp"
+#include "Type.hpp"
+
+class BitStream;
 
 int h264_log2(int32_t value);
 

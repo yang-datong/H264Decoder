@@ -2,8 +2,8 @@
 #include "BitStream.hpp"
 #include "CH264Golomb.hpp"
 #include "Cabac.hpp"
-#include "Constants.hpp"
 #include "Cavlc.hpp"
+#include "Constants.hpp"
 #include "PictureBase.hpp"
 #include "SliceHeader.hpp"
 #include "Type.hpp"
@@ -1275,7 +1275,7 @@ int MacroBlock::process_mb_type(const SliceHeader &header, int32_t slice_type) {
   if (_is_cabac)
     ret = _cabac->decode_mb_type(mb_type);
   else
-    mb_type = _gb->get_ue_golomb(*_bs);
+    mb_type = _bs->readUE();
   RET(ret);
 
   // 调整该宏块的mb_type、slice_type的值，为了更好的归属宏块类型，进行不同的类型预测
@@ -1292,12 +1292,10 @@ int MacroBlock::process_mb_type(const SliceHeader &header, int32_t slice_type) {
 }
 
 int MacroBlock::process_sub_mb_type(const int mbPartIdx) {
-  int ret = 0;
-  if (_is_cabac)
-    ret = _cabac->decode_sub_mb_type(sub_mb_type[mbPartIdx]);
-  else
-    sub_mb_type[mbPartIdx] = _gb->get_ue_golomb(*_bs);
-  RET(ret);
+  if (_is_cabac) {
+    RET(_cabac->decode_sub_mb_type(sub_mb_type[mbPartIdx]));
+  } else
+    sub_mb_type[mbPartIdx] = _bs->readUE();
 
   /* 2. 根据子宏块类型设置预测模式等信息 */
   // 设置 P 帧子宏块信息
@@ -1360,7 +1358,7 @@ int MacroBlock::process_mb_qp_delta() {
   if (_is_cabac)
     ret = _cabac->decode_mb_qp_delta(mb_qp_delta);
   else
-    mb_qp_delta = _gb->get_se_golomb(*_bs);
+    mb_qp_delta = _bs->readSE();
   return ret;
 }
 
@@ -1411,7 +1409,7 @@ int MacroBlock::process_intra_chroma_pred_mode() {
   if (_is_cabac)
     ret = _cabac->decode_intra_chroma_pred_mode(intra_chroma_pred_mode);
   else
-    intra_chroma_pred_mode = _gb->get_ue_golomb(*_bs);
+    intra_chroma_pred_mode = _bs->readUE();
   return ret;
 }
 
@@ -1464,7 +1462,7 @@ int MacroBlock::process_mvd_l0(const int mbPartIdx, const int compIdx,
     ret = _cabac->decode_mvd_lX(mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
                                 mvd_l0[mbPartIdx][subMbPartIdx][compIdx]);
   else
-    mvd_l0[mbPartIdx][subMbPartIdx][compIdx] = _gb->get_se_golomb(*_bs);
+    mvd_l0[mbPartIdx][subMbPartIdx][compIdx] = _bs->readSE();
   return ret;
 }
 
@@ -1478,6 +1476,6 @@ int MacroBlock::process_mvd_l1(const int mbPartIdx, const int compIdx,
     ret = _cabac->decode_mvd_lX(mvd_flag, mbPartIdx, subMbPartIdx, isChroma,
                                 mvd_l1[mbPartIdx][subMbPartIdx][compIdx]);
   else
-    mvd_l1[mbPartIdx][subMbPartIdx][compIdx] = _gb->get_se_golomb(*_bs);
+    mvd_l1[mbPartIdx][subMbPartIdx][compIdx] = _bs->readSE();
   return ret;
 }

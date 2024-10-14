@@ -1,5 +1,6 @@
 #include "Common.hpp"
 #include <assert.h>
+#include "BitStream.hpp"
 
 int h264_log2(int32_t value) {
   assert(value > 0);
