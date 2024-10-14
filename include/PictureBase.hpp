@@ -483,6 +483,26 @@ class PictureBase {
                                bool _chromaEdgeFlag, int32_t _CurrMbAddr,
                                int32_t mb_field_decoding_flag, int32_t iCbCr,
                                int32_t mbAddrN, int32_t (&E)[16][2], int32_t n);
+  int process_filterInternalEdges(
+      bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
+      bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
+      bool fieldMbInFrameFlag, bool _chromaEdgeFlag, bool _verticalEdgeFlag,
+      bool transform_size_8x8_flag, int32_t _CurrMbAddr,
+      int32_t mb_field_decoding_flag, int32_t iCbCr, int32_t mbAddrN,
+      int32_t (&E)[16][2], int32_t n);
+int process_filterInternalEdges_chrome(
+    bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
+    bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
+    bool fieldMbInFrameFlag, bool _chromaEdgeFlag, bool _verticalEdgeFlag,
+    bool transform_size_8x8_flag, int32_t _CurrMbAddr,
+    int32_t mb_field_decoding_flag, int32_t iCbCr, int32_t mbAddrN,
+    int32_t (&E)[16][2], int32_t n, int32_t ChromaArrayType);
+int process_filterTopMbEdge(
+    bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
+    bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
+    bool fieldMbInFrameFlag, bool _chromaEdgeFlag, int32_t _CurrMbAddr,
+    int32_t mb_field_decoding_flag, int32_t iCbCr, int32_t mbAddrN,
+    int32_t (&E)[16][2], int32_t n);
 };
 
 #endif /* end of include guard: PICTUREBASE_HPP_ZGHBMJIH */

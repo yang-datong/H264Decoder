@@ -66,7 +66,7 @@ int PictureBase::deblocking_filter_process() {
     // 宏块是场编码的一部分还是帧编码的一部分
     bool fieldMbInFrameFlag = (MbaffFrameFlag && mb.mb_field_decoding_flag);
 
-    // 垂直边缘(1)或水平边缘(0)
+    // 垂直边缘(0)或水平边缘(1)
     bool verticalEdgeFlag = false;
     // 对宏块的左边缘进行滤波
     bool leftMbEdgeFlag = false;
@@ -75,118 +75,35 @@ int PictureBase::deblocking_filter_process() {
     bool chromaEdgeFlag = false;
     int32_t E[16][2] = {{0}};
 
+    // 对宏块的左边缘进行滤波
     if (filterLeftMbEdgeFlag)
       process_filterLeftMbEdge(leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
                                fieldModeInFrameFilteringFlag, MbaffFrameFlag,
                                fieldMbInFrameFlag, false, mbAddr,
                                mb.mb_field_decoding_flag, 0, mbAddrA, E, 16);
 
-    if (filterInternalEdgesFlag) {
-      chromaEdgeFlag = false, verticalEdgeFlag = true, leftMbEdgeFlag = false;
-      fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
-
-      if (mb.transform_size_8x8_flag == false) {
-        for (int32_t k = 0; k < 16; k++)
-          E[k][0] = 4, E[k][1] = k;
-
-        RET(filtering_for_block_edges(
-            MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-            0, mbAddrA, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-            leftMbEdgeFlag, E));
-      }
-
-      for (int32_t k = 0; k < 16; k++)
-        E[k][0] = 8, E[k][1] = k;
-
-      RET(filtering_for_block_edges(
-          MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag, 0,
-          mbAddrA, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-          leftMbEdgeFlag, E));
-
-      if (mb.transform_size_8x8_flag == false) {
-        for (int32_t k = 0; k < 16; k++)
-          E[k][0] = 12, E[k][1] = k;
-
-        RET(filtering_for_block_edges(
-            MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-            0, mbAddrA, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-            leftMbEdgeFlag, E));
-      }
-    }
+    // 对宏块的内部的边缘进行滤波（水平方向）
+    if (filterInternalEdgesFlag)
+      process_filterInternalEdges(
+          leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
+          fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
+          false, true, mb.transform_size_8x8_flag, mbAddr,
+          mb.mb_field_decoding_flag, 0, mbAddrA, E, 16);
 
     // 对宏块的上边缘进行滤波
-    if (filterTopMbEdgeFlag) {
-      if (MbaffFrameFlag && (mbAddr % 2) == 0 && mbAddr >= 2 * PicWidthInMbs &&
-          mb.mb_field_decoding_flag == false &&
-          m_mbs[(mbAddr - 2 * PicWidthInMbs + 1)].mb_field_decoding_flag) {
-        chromaEdgeFlag = false, verticalEdgeFlag = false,
-        leftMbEdgeFlag = false;
-        fieldModeInFrameFilteringFlag = true;
+    if (filterTopMbEdgeFlag)
+      process_filterTopMbEdge(leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
+                              fieldModeInFrameFilteringFlag, MbaffFrameFlag,
+                              fieldMbInFrameFlag, false, mbAddr,
+                              mb.mb_field_decoding_flag, 0, mbAddrB, E, 16);
 
-        for (int32_t k = 0; k < 15; k++)
-          E[k][0] = k, E[k][1] = 0;
-
-        RET(filtering_for_block_edges(
-            MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-            0, mbAddrB - 1, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-            leftMbEdgeFlag, E));
-
-        for (int32_t k = 0; k < 16; k++)
-          E[k][0] = k, E[k][1] = 1;
-
-        RET(filtering_for_block_edges(
-            MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-            0, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-            leftMbEdgeFlag, E));
-
-      } else {
-        chromaEdgeFlag = false, verticalEdgeFlag = false,
-        leftMbEdgeFlag = false;
-        fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
-
-        for (int32_t k = 0; k < 16; k++)
-          E[k][0] = k, E[k][1] = 0;
-
-        RET(filtering_for_block_edges(
-            MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-            0, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-            leftMbEdgeFlag, E));
-      }
-    }
-
-    // 对宏块的内部的边缘进行滤波
-    if (filterInternalEdgesFlag) {
-      chromaEdgeFlag = false, verticalEdgeFlag = false, leftMbEdgeFlag = false;
-      fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
-
-      if (mb.transform_size_8x8_flag == false) {
-        for (int32_t k = 0; k < 16; k++)
-          E[k][0] = k, E[k][1] = 4;
-
-        RET(filtering_for_block_edges(
-            MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-            0, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-            leftMbEdgeFlag, E));
-      }
-
-      for (int32_t k = 0; k < 16; k++)
-        E[k][0] = k, E[k][1] = 8;
-
-      RET(filtering_for_block_edges(
-          MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag, 0,
-          mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-          leftMbEdgeFlag, E));
-
-      if (mb.transform_size_8x8_flag == false) {
-        for (int32_t k = 0; k < 16; k++)
-          E[k][0] = k, E[k][1] = 12;
-
-        RET(filtering_for_block_edges(
-            MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-            0, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-            leftMbEdgeFlag, E));
-      }
-    }
+    // 对宏块的内部的边缘进行滤波（垂直方向）
+    if (filterInternalEdgesFlag)
+      process_filterInternalEdges(
+          leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
+          fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
+          false, false, mb.transform_size_8x8_flag, mbAddr,
+          mb.mb_field_decoding_flag, 0, mbAddrA, E, 16);
 
     if (ChromaArrayType != 0) {
       // 对宏块的左边缘进行滤波
@@ -196,176 +113,30 @@ int PictureBase::deblocking_filter_process() {
             fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
             true, mbAddr, mb.mb_field_decoding_flag, 0, mbAddrA, E, MbHeightC);
 
-      // 对宏块的内部的边缘进行滤波
-      if (filterInternalEdgesFlag) {
-        chromaEdgeFlag = true, verticalEdgeFlag = true, leftMbEdgeFlag = false;
-        fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
-
-        if (ChromaArrayType != 3 || mb.transform_size_8x8_flag == false) {
-          for (int32_t k = 0; k < MbHeightC; k++)
-            E[k][0] = 4, E[k][1] = k;
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              0, mbAddrA, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              1, mbAddrA, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-        }
-
-        if (ChromaArrayType == 3) {
-          for (int32_t k = 0; k < MbHeightC; k++)
-            E[k][0] = 8, E[k][1] = k;
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              0, mbAddrA, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              1, mbAddrA, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-        }
-
-        if (ChromaArrayType == 3 && mb.transform_size_8x8_flag == false) {
-          for (int32_t k = 0; k < MbHeightC; k++)
-            E[k][0] = 12, E[k][1] = k;
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              0, mbAddrA, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              1, mbAddrA, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-        }
-      }
+      // 对宏块的内部的边缘进行滤波（水平方向）
+      if (filterInternalEdgesFlag)
+        process_filterInternalEdges_chrome(
+            leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
+            fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
+            true, true, mb.transform_size_8x8_flag, mbAddr,
+            mb.mb_field_decoding_flag, 0, mbAddrA, E, MbHeightC,
+            ChromaArrayType);
 
       // 对宏块的上边缘进行滤波
-      if (filterTopMbEdgeFlag) {
-        if (MbaffFrameFlag && (mbAddr % 2) == 0 &&
-            mbAddr >= 2 * PicWidthInMbs && mb.mb_field_decoding_flag == false &&
-            m_mbs[(mbAddr - 2 * PicWidthInMbs + 1)].mb_field_decoding_flag) {
-          chromaEdgeFlag = true, verticalEdgeFlag = false,
-          leftMbEdgeFlag = false;
-          fieldModeInFrameFilteringFlag = true;
+      if (filterTopMbEdgeFlag)
+        process_filterTopMbEdge(
+            leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
+            fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
+            true, mbAddr, mb.mb_field_decoding_flag, 0, mbAddrB, E, MbHeightC);
 
-          for (int32_t k = 0; k < MbWidthC; k++)
-            E[k][0] = k, E[k][1] = 0;
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              0, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              1, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-
-          for (int32_t k = 0; k < MbWidthC; k++)
-            E[k][0] = k, E[k][1] = 1;
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              0, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              1, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-
-        } else {
-          chromaEdgeFlag = true, verticalEdgeFlag = false,
-          leftMbEdgeFlag = false;
-          fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
-
-          for (int32_t k = 0; k < MbWidthC; k++)
-            E[k][0] = k, E[k][1] = 0;
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              0, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              1, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-        }
-      }
-
-      // 对宏块的内部的边缘进行滤波
-      if (filterInternalEdgesFlag) {
-        chromaEdgeFlag = true, verticalEdgeFlag = false, leftMbEdgeFlag = false;
-        fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
-
-        if (ChromaArrayType != 3 || mb.transform_size_8x8_flag == 0) {
-          for (int32_t k = 0; k < MbWidthC; k++)
-            E[k][0] = k, E[k][1] = 4;
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              0, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              1, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-        }
-
-        if (ChromaArrayType != 1) {
-          for (int32_t k = 0; k < MbWidthC - 1; k++)
-            E[k][0] = k, E[k][1] = 8;
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              0, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              1, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-        }
-
-        if (ChromaArrayType == 2) {
-          for (int32_t k = 0; k < MbWidthC; k++)
-            E[k][0] = k, E[k][1] = 12;
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              0, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              1, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-        }
-
-        if (ChromaArrayType == 3 && mb.transform_size_8x8_flag == false) {
-          for (int32_t k = 0; k < MbWidthC; k++)
-            E[k][0] = k, E[k][1] = 12;
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              0, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-
-          RET(filtering_for_block_edges(
-              MbaffFrameFlag, mbAddr, mb.mb_field_decoding_flag, chromaEdgeFlag,
-              1, mbAddrB, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
-              leftMbEdgeFlag, E));
-        }
-      }
+      // 对宏块的内部的边缘进行滤波（垂直方向）
+      if (filterInternalEdgesFlag)
+        process_filterInternalEdges_chrome(
+            leftMbEdgeFlag, chromaEdgeFlag, verticalEdgeFlag,
+            fieldModeInFrameFilteringFlag, MbaffFrameFlag, fieldMbInFrameFlag,
+            true, false, mb.transform_size_8x8_flag, mbAddr,
+            mb.mb_field_decoding_flag, 0, mbAddrA, E, MbHeightC,
+            ChromaArrayType);
     }
   }
 
@@ -395,6 +166,220 @@ int PictureBase::process_filterLeftMbEdge(
       mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag, leftMbEdgeFlag,
       E));
   if (chromaEdgeFlag) {
+    RET(filtering_for_block_edges(
+        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 1,
+        mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+        leftMbEdgeFlag, E));
+  }
+  return 0;
+}
+
+int PictureBase::process_filterInternalEdges(
+    bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
+    bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
+    bool fieldMbInFrameFlag, bool _chromaEdgeFlag, bool _verticalEdgeFlag,
+    bool transform_size_8x8_flag, int32_t _CurrMbAddr,
+    int32_t mb_field_decoding_flag, int32_t iCbCr, int32_t mbAddrN,
+    int32_t (&E)[16][2], int32_t n) {
+  chromaEdgeFlag = _chromaEdgeFlag, verticalEdgeFlag = _verticalEdgeFlag;
+  leftMbEdgeFlag = false;
+  fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
+
+  if (transform_size_8x8_flag == false) {
+    for (int32_t k = 0; k < 16; k++) {
+      if (verticalEdgeFlag)
+        E[k][0] = 4, E[k][1] = k;
+      else
+        E[k][0] = k, E[k][1] = 4;
+    }
+
+    RET(filtering_for_block_edges(
+        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
+        mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+        leftMbEdgeFlag, E));
+  }
+
+  for (int32_t k = 0; k < 16; k++) {
+    if (verticalEdgeFlag)
+      E[k][0] = 8, E[k][1] = k;
+    else
+      E[k][0] = k, E[k][1] = 8;
+  }
+
+  RET(filtering_for_block_edges(
+      MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
+      mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag, leftMbEdgeFlag,
+      E));
+
+  if (transform_size_8x8_flag == false) {
+    for (int32_t k = 0; k < 16; k++) {
+      if (verticalEdgeFlag)
+        E[k][0] = 12, E[k][1] = k;
+      else
+        E[k][0] = k, E[k][1] = 12;
+    }
+
+    RET(filtering_for_block_edges(
+        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
+        mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+        leftMbEdgeFlag, E));
+  }
+  return 0;
+}
+
+int PictureBase::process_filterTopMbEdge(
+    bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
+    bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
+    bool fieldMbInFrameFlag, bool _chromaEdgeFlag, int32_t _CurrMbAddr,
+    int32_t mb_field_decoding_flag, int32_t iCbCr, int32_t mbAddrN,
+    int32_t (&E)[16][2], int32_t n) {
+
+  if (MbaffFrameFlag && (_CurrMbAddr % 2) == 0 &&
+      _CurrMbAddr >= 2 * PicWidthInMbs && mb_field_decoding_flag == false &&
+      m_mbs[(_CurrMbAddr - 2 * PicWidthInMbs + 1)].mb_field_decoding_flag) {
+    chromaEdgeFlag = _chromaEdgeFlag, verticalEdgeFlag = false,
+    leftMbEdgeFlag = false;
+    fieldModeInFrameFilteringFlag = true;
+
+    for (int32_t k = 0; k < n - !chromaEdgeFlag; k++)
+      E[k][0] = k, E[k][1] = 0;
+
+    RET(filtering_for_block_edges(
+        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
+        mbAddrN - !chromaEdgeFlag, verticalEdgeFlag,
+        fieldModeInFrameFilteringFlag, leftMbEdgeFlag, E));
+    if (chromaEdgeFlag) {
+      RET(filtering_for_block_edges(
+          MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag,
+          1, mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+          leftMbEdgeFlag, E));
+    }
+
+    for (int32_t k = 0; k < n; k++)
+      E[k][0] = k, E[k][1] = 1;
+
+    RET(filtering_for_block_edges(
+        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
+        mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+        leftMbEdgeFlag, E));
+    if (chromaEdgeFlag) {
+      RET(filtering_for_block_edges(
+          MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag,
+          1, mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+          leftMbEdgeFlag, E));
+    }
+
+  } else {
+    chromaEdgeFlag = _chromaEdgeFlag, verticalEdgeFlag = false,
+    leftMbEdgeFlag = false;
+    fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
+
+    for (int32_t k = 0; k < n; k++)
+      E[k][0] = k, E[k][1] = 0;
+
+    RET(filtering_for_block_edges(
+        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
+        mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+        leftMbEdgeFlag, E));
+    if (chromaEdgeFlag) {
+      RET(filtering_for_block_edges(
+          MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag,
+          1, mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+          leftMbEdgeFlag, E));
+    }
+  }
+  return 0;
+}
+
+int PictureBase::process_filterInternalEdges_chrome(
+    bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
+    bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
+    bool fieldMbInFrameFlag, bool _chromaEdgeFlag, bool _verticalEdgeFlag,
+    bool transform_size_8x8_flag, int32_t _CurrMbAddr,
+    int32_t mb_field_decoding_flag, int32_t iCbCr, int32_t mbAddrN,
+    int32_t (&E)[16][2], int32_t n, int32_t ChromaArrayType) {
+
+  chromaEdgeFlag = _chromaEdgeFlag, verticalEdgeFlag = _verticalEdgeFlag,
+  leftMbEdgeFlag = false;
+  fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
+
+  if (ChromaArrayType != 3 || transform_size_8x8_flag == false) {
+    for (int32_t k = 0; k < n; k++)
+      if (verticalEdgeFlag)
+        E[k][0] = 4, E[k][1] = k;
+      else
+        E[k][0] = k, E[k][1] = 4;
+
+    RET(filtering_for_block_edges(
+        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
+        mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+        leftMbEdgeFlag, E));
+
+    RET(filtering_for_block_edges(
+        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 1,
+        mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+        leftMbEdgeFlag, E));
+  }
+
+  if (verticalEdgeFlag) {
+    if (ChromaArrayType == 3) {
+      for (int32_t k = 0; k < n; k++)
+        E[k][0] = 8, E[k][1] = k;
+
+      RET(filtering_for_block_edges(
+          MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag,
+          0, mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+          leftMbEdgeFlag, E));
+
+      RET(filtering_for_block_edges(
+          MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag,
+          1, mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+          leftMbEdgeFlag, E));
+    }
+  } else {
+    if (ChromaArrayType != 1) {
+      for (int32_t k = 0; k < MbWidthC - 1; k++)
+        E[k][0] = k, E[k][1] = 8;
+
+      RET(filtering_for_block_edges(
+          MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag,
+          0, mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+          leftMbEdgeFlag, E));
+
+      RET(filtering_for_block_edges(
+          MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag,
+          1, mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+          leftMbEdgeFlag, E));
+    }
+
+    if (ChromaArrayType == 2) {
+      for (int32_t k = 0; k < MbWidthC; k++)
+        E[k][0] = k, E[k][1] = 12;
+
+      RET(filtering_for_block_edges(
+          MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag,
+          0, mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+          leftMbEdgeFlag, E));
+
+      RET(filtering_for_block_edges(
+          MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag,
+          1, mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+          leftMbEdgeFlag, E));
+    }
+  }
+
+  if (ChromaArrayType == 3 && transform_size_8x8_flag == false) {
+    for (int32_t k = 0; k < n; k++)
+      if (verticalEdgeFlag)
+        E[k][0] = 12, E[k][1] = k;
+      else
+        E[k][0] = k, E[k][1] = 12;
+
+    RET(filtering_for_block_edges(
+        MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 0,
+        mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
+        leftMbEdgeFlag, E));
+
     RET(filtering_for_block_edges(
         MbaffFrameFlag, _CurrMbAddr, mb_field_decoding_flag, chromaEdgeFlag, 1,
         mbAddrN, verticalEdgeFlag, fieldModeInFrameFilteringFlag,
