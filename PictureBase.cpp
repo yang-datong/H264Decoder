@@ -658,9 +658,6 @@ int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
     this->m_parent->m_is_decode_finished = 1;
   }
 
-  /* TODO YangJing 这里函数要认真看 <24-10-14 05:44:27> */
-  deblocking_filter_process();
-
   //--------标记图像参考列表------------
   if (m_slice->slice_header->nal_ref_idc != 0) {
     /* TODO YangJing 这里函数要认真看 <24-10-14 05:44:27> */
