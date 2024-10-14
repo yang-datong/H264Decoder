@@ -18,15 +18,15 @@ jobs:
     - name: make
       run: cmake --build build -j 4
     - name: test1
-      run: cd ./test && ../build/a.out ./demo_10_frames.h264 && ./test.sh demo_10_frames.h264 && rm output_*.bmp
+      run: cd ./test && ../build/a.out ./demo_10_frames.h264 && ./test2.sh demo_10_frames.h264 && rm output_*.bmp
     - name: test2
-      run: cd ./test && ../build/a.out ./demo_10_frames_cavlc.h264 && ./test.sh demo_10_frames_cavlc.h264 && rm output_*.bmp
+      run: cd ./test && ../build/a.out ./demo_10_frames_cavlc.h264 && ./test2.sh demo_10_frames_cavlc.h264 && rm output_*.bmp
     - name: test3
-      run: cd ./test && ../build/a.out ./source_cut_10_frames.h264 && ./test.sh source_cut_10_frames.h264 && rm output_*.bmp
+      run: cd ./test && ../build/a.out ./source_cut_10_frames.h264 && ./test2.sh source_cut_10_frames.h264 && rm output_*.bmp
     - name: test4
-      run: cd ./test && ../build/a.out ./source_cut_10_frames_no_B.h264 && ./test.sh source_cut_10_frames_no_B.h264 && rm output_*.bmp
+      run: cd ./test && ../build/a.out ./source_cut_10_frames_no_B.h264 && ./test2.sh source_cut_10_frames_no_B.h264 && rm output_*.bmp
     - name: test5
-      run: cd ./test && ../build/a.out ./demo_10_frames_cavlc_and_interlace.h264 && ./test.sh demo_10_frames_cavlc_and_interlace.h264 && rm output_*.bmp
+      run: cd ./test && ../build/a.out ./demo_10_frames_cavlc_and_interlace.h264 && ./test2.sh demo_10_frames_cavlc_and_interlace.h264 && rm output_*.bmp
     - name: test6
       run: cd ./test && ../build/a.out 854x480_60_fps_50_gop_and_I_Slice.h264  && rm output_*.bmp
 
