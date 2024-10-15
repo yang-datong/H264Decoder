@@ -275,8 +275,6 @@ class PictureBase {
   int derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
       int32_t &mbAddrA, int32_t &mbAddrB, int32_t &mbAddrC, int32_t &mbAddrD);
   //----------------- 量化 ------------------------
-  int inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
-      const int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag);
   int scaling_and_transform_for_chroma_DC(int32_t isChromaCb, int32_t c[4][2],
                                           int32_t nW, int32_t nH,
                                           int32_t (&dcC)[4][2]);
@@ -294,8 +292,6 @@ class PictureBase {
                                                     int32_t (&r)[8][8],
                                                     int32_t isChroma,
                                                     int32_t isChromaCb);
-  int inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
-      int32_t values[64], int32_t (&c)[8][8], int32_t field_scan_flag);
   int derivation_chroma_quantisation_parameters(int32_t isChromaCb);
   int get_chroma_quantisation_parameters2(int32_t QPY, int32_t isChromaCb,
                                           int32_t &QPC);

@@ -1784,3 +1784,93 @@ int PictureBase::sample_construction_for_I_PCM() {
 
   return 0;
 }
+
+// 8.5.14 Picture construction process prior to deblocking filter process (去块过滤过程之前的图片构造过程)
+// 重建图像数据，写入最终数据到pic_buff，主要针对帧、场编码的不同情况
+/* 输入：– 包含元素 uij 的样本数组 u，它是 16x16 亮度块或 (MbWidthC)x(MbHeightC) 色度块或 4x4 亮度块或 4x4 色度块或 8x8 亮度块，或者，当 ChromaArrayType等于 3，8x8 色度块，
+ * – 当 u 不是 16x16 亮度块或 (MbWidthC)x(MbHeightC) 色度块时，块索引 luma4x4BlkIdx 或 chroma4x4BlkIdx 或 luma8x8BlkIdx 或 cb4x4BlkIdx 或 cr4x4BlkIdx 或 cb8x8BlkIdx 或idx。*/
+int PictureBase::picture_construction_process_prior_to_deblocking_filter(
+    int32_t *u, int32_t nW, int32_t nH, int32_t BlkIdx, int32_t isChroma,
+    int32_t PicWidthInSamples, uint8_t *pic_buff) {
+
+  /* ------------------ 设置别名 ------------------ */
+  const int32_t mb_field_decoding_flag =
+      m_mbs[CurrMbAddr].mb_field_decoding_flag;
+
+  const SliceHeader *header = m_slice->slice_header;
+  const bool MbaffFrameFlag = header->MbaffFrameFlag;
+  const uint32_t ChromaArrayType = header->m_sps->ChromaArrayType;
+  const int32_t SubWidthC = header->m_sps->SubWidthC;
+  const int32_t SubHeightC = header->m_sps->SubHeightC;
+  bool isMbAff = header->MbaffFrameFlag && mb_field_decoding_flag;
+  /* ------------------  End ------------------ */
+
+  int32_t xP = 0, yP = 0;
+  inverse_mb_scanning_process(MbaffFrameFlag, CurrMbAddr,
+                              mb_field_decoding_flag, xP, yP);
+
+  /* 当 u 是亮度块时，对于亮度块的每个样本 uij，指定以下有序步骤：*/
+  if (isChroma == 0) {
+    int32_t xO = 0, yO = 0, nE = 16;
+    if (nW == 16 && nH == 16) {
+    } else if (nW == 4 && nH == 4) {
+      // 6.4.3 Inverse 4x4 luma block scanning process luma4x4BlkIdx
+      xO = InverseRasterScan(BlkIdx / 4, 8, 8, 16, 0) +
+           InverseRasterScan(BlkIdx % 4, 4, 4, 8, 0);
+      yO = InverseRasterScan(BlkIdx / 4, 8, 8, 16, 1) +
+           InverseRasterScan(BlkIdx % 4, 4, 4, 8, 1);
+      nE = 4;
+    } else {
+      // 6.4.5 Inverse 8x8 luma block scanning process
+      xO = InverseRasterScan(BlkIdx, 8, 8, 16, 0);
+      yO = InverseRasterScan(BlkIdx, 8, 8, 16, 1);
+      nE = 8;
+    }
+
+    int32_t n = (isMbAff) ? 2 : 1;
+    for (int32_t i = 0; i < nE; i++)
+      for (int32_t j = 0; j < nE; j++) {
+        int32_t y = yP + n * (yO + i);
+        int32_t x = xP + xO + j;
+        pic_buff[y * PicWidthInSamples + x] = u[i * nE + j];
+      }
+  }
+
+  /* 当 u 是色度块时，对于色度块的每个样本 uij，指定以下有序步骤：*/
+  else if (isChroma) {
+    int32_t xO = 0, yO = 0;
+    if (nW == MbWidthC && nH == MbHeightC) {
+    } else if (nW == 4 && nH == 4) {
+      if (ChromaArrayType == 1 || ChromaArrayType == 2) {
+        // 6.4.7 Inverse 4x4 chroma block scanning process chroma4x4BlkIdx
+        xO = InverseRasterScan(BlkIdx, 4, 4, 8, 0);
+        yO = InverseRasterScan(BlkIdx, 4, 4, 8, 1);
+      } else {
+        // 6.4.3 Inverse 4x4 luma block scanning process
+        xO = InverseRasterScan(BlkIdx / 4, 8, 8, 16, 0) +
+             InverseRasterScan(BlkIdx % 4, 4, 4, 8, 0);
+        yO = InverseRasterScan(BlkIdx / 4, 8, 8, 16, 1) +
+             InverseRasterScan(BlkIdx % 4, 4, 4, 8, 1);
+      }
+    } else if (ChromaArrayType == 3 && nW == 8 && nH == 8) {
+      // 6.4.5 Inverse 8x8 luma block scanning process luma8x8BlkIdx
+      xO = InverseRasterScan(BlkIdx, 8, 8, 16, 0);
+      yO = InverseRasterScan(BlkIdx, 8, 8, 16, 1);
+    }
+
+    for (int32_t i = 0; i < nH; i++)
+      for (int32_t j = 0; j < nW; j++) {
+        int32_t x = (xP / SubWidthC) + xO + j;
+
+        int32_t y;
+        if (isMbAff)
+          y = ((yP + SubHeightC - 1) / SubHeightC) + 2 * (yO + i);
+        else
+          y = (yP / SubHeightC) + yO + i;
+
+        pic_buff[y * PicWidthInSamples + x] = u[i * nW + j];
+      }
+  }
+
+  return 0;
+}
