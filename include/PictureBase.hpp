@@ -230,8 +230,11 @@ class PictureBase {
       int32_t &x, int32_t &y);
 
   //----------------- 相邻宏块地址推导 ------------------------
-  int derivation_of_the_availability_for_macroblock_addresses(
+  int derivation_of_availability_for_macroblock_addresses(
       int32_t mbAddr, int32_t &is_mbAddr_available);
+  int derivation_of_availability_macroblock_addresses(
+      int32_t _mbAddr, int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type,
+      int32_t &mbAddrN);
   int derivation_for_neighbouring_macroblocks(int32_t MbaffFrameFlag,
                                               int32_t currMbAddr,
                                               int32_t &mbAddrA,
@@ -264,9 +267,6 @@ class PictureBase {
   int derivation_for_neighbouring_macroblock_addr_availability(
       int32_t xN, int32_t yN, int32_t maxW, int32_t maxH, int32_t CurrMbAddr,
       MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN);
-  inline int derivation_of_availability_macroblock_addresses(
-      int32_t _mbAddr, int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type,
-      int32_t &mbAddrN);
   int neighbouring_locations_MBAFF(int32_t xN, int32_t yN, int32_t maxW,
                                    int32_t maxH, int32_t CurrMbAddr,
                                    MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN,
@@ -274,13 +274,6 @@ class PictureBase {
                                    int32_t &xW, int32_t &yW, int32_t isChroma);
   int derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
       int32_t &mbAddrA, int32_t &mbAddrB, int32_t &mbAddrC, int32_t &mbAddrD);
-  int derivation_for_4x4_luma_block_indices(uint8_t xP, uint8_t yP,
-                                            uint8_t &luma4x4BlkIdx);
-  int derivation_for_4x4_chroma_block_indices(uint8_t xP, uint8_t yP,
-                                              uint8_t &chroma4x4BlkIdx);
-  int derivation_for_8x8_luma_block_indices(uint8_t xP, uint8_t yP,
-                                            uint8_t &luma8x8BlkIdx);
-
   //----------------- 量化 ------------------------
   int inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
       const int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag);

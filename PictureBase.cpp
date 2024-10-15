@@ -152,9 +152,7 @@ int PictureBase::init(Slice *slice) {
     m_pic_buff_cr = m_pic_buff_cb + sizeU;
 
     m_is_malloc_mem_by_myself = 1;
-  } else // if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_TOP_FIELD ||
-         // m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
-  {
+  } else {
     // 因为top_filed顶场帧和bottom底场帧，都是共享frame帧的大部分数据信息，所以frame帧必须先初始化过了才行
     RETURN_IF_FAILED(
         this->m_parent->m_picture_frame.m_is_malloc_mem_by_myself != 1, -1);
@@ -400,16 +398,11 @@ int PictureBase::copyDataPicOrderCnt(const PictureBase &src) {
 int PictureBase::convertYuv420pToBgr24(uint32_t width, uint32_t height,
                                        const uint8_t *yuv420p, uint8_t *bgr24,
                                        uint32_t widthBytesBgr24) {
-  int ret = 0;
-
-  int32_t W = width;
-  int32_t H = height;
-  int32_t channels = 3;
+  int32_t W = width, H = height, channels = 3;
 
   //------------- YUV420P to BGR24 --------------------
-  for (int y = 0; y < H; ++y) // 可以在此处进行
   // m_slice->slice_header->m_sps->frame_crop_[left,right,top,bottom]_offset
-  {
+  for (int y = 0; y < H; ++y) {
     for (int x = 0; x < W; ++x) {
       unsigned char Y = yuv420p[y * W + x];
       unsigned char U = yuv420p[H * W + (y / 2) * (W / 2) + x / 2];
@@ -425,18 +418,14 @@ int PictureBase::convertYuv420pToBgr24(uint32_t width, uint32_t height,
     }
   }
 
-  return ret;
+  return 0;
 }
 
 int PictureBase::convertYuv420pToBgr24FlipLines(uint32_t width, uint32_t height,
                                                 const uint8_t *yuv420p,
                                                 uint8_t *bgr24,
                                                 uint32_t widthBytesBgr24) {
-  int ret = 0;
-
-  int32_t W = width;
-  int32_t H = height;
-  int32_t channels = 3;
+  int32_t W = width, H = height, channels = 3;
 
   //------------- YUV420P to BGR24 --------------------
   for (int y = 0; y < H; ++y) {
@@ -458,81 +447,55 @@ int PictureBase::convertYuv420pToBgr24FlipLines(uint32_t width, uint32_t height,
     }
   }
 
-  return ret;
+  return 0;
 }
 
 int PictureBase::createEmptyImage(MY_BITMAP &bitmap, int32_t width,
                                   int32_t height, int32_t bmBitsPixel) {
   bitmap.bmWidth = width;
   bitmap.bmHeight = height;
-  bitmap.bmBitsPixel = bmBitsPixel; // 32
-
   bitmap.bmType = 0;
   bitmap.bmPlanes = 1;
+  bitmap.bmBitsPixel = bmBitsPixel; // 32
 
   bitmap.bmWidthBytes = (width * bmBitsPixel / 8 + 3) / 4 * 4;
 
-  uint8_t *pBits =
-      (uint8_t *)malloc(bitmap.bmHeight * bitmap.bmWidthBytes); // 在堆上申请
-  if (pBits == NULL) {
-    printf("CreateEmptyImage: pBits == NULL\n");
-    return -1;
-  }
-  memset(pBits, 0,
-         sizeof(uint8_t) * bitmap.bmHeight *
-             bitmap.bmWidthBytes); // 初始化为黑色背景
-
+  uint8_t *pBits = (uint8_t *)malloc(bitmap.bmHeight * bitmap.bmWidthBytes);
+  if (pBits == nullptr) RET(-1);
+  // 初始化为黑色背景
+  memset(pBits, 0, sizeof(uint8_t) * bitmap.bmHeight * bitmap.bmWidthBytes);
   bitmap.bmBits = pBits;
-
   return 0;
 }
 
 int PictureBase::saveToBmpFile(const char *filename) {
-  int ret = 0;
   //----------------yuv420p到brg24的格式转换-------------------------
   int32_t W = PicWidthInSamplesL;
   int32_t H = PicHeightInSamplesL;
-
   MY_BITMAP bitmap;
-  ret = createEmptyImage(bitmap, W, H, 24);
-
-  ret = convertYuv420pToBgr24(W, H, m_pic_buff_luma, (uint8_t *)bitmap.bmBits,
-                              bitmap.bmWidthBytes);
-  if (ret != 0) {
-    return -1;
-  }
-
-  ret = saveBmp(filename, &bitmap);
-  if (ret != 0) {
-    return -1;
-  }
-
+  RET(createEmptyImage(bitmap, W, H, 24));
+  RET(convertYuv420pToBgr24(W, H, m_pic_buff_luma, (uint8_t *)bitmap.bmBits,
+                            bitmap.bmWidthBytes));
+  RET(saveBmp(filename, &bitmap));
   free(bitmap.bmBits);
-  bitmap.bmBits = NULL;
-
+  bitmap.bmBits = nullptr;
   return 0;
 }
 
 int PictureBase::saveBmp(const char *filename, MY_BITMAP *pBitmap) {
-
-  int ret = 0;
-
   MY_BitmapFileHeader bmpFileHeader;
   MY_BitmapInfoHeader bmpInfoHeader;
   // unsigned char pixVal = '\0';
   MY_RgbQuad quad[256] = {{0}};
 
   FILE *fp = fopen(filename, "wb");
-  if (!fp) {
-    return -1;
-  }
+  if (!fp) return -1;
 
   unsigned short fileType = 0x4D42;
   fwrite(&fileType, sizeof(unsigned short), 1, fp);
 
-  if (pBitmap->bmBitsPixel == 24 ||
-      pBitmap->bmBitsPixel == 32) // 24位，通道，彩图
-  {
+  // 24位，通道，彩图
+  if (pBitmap->bmBitsPixel == 24 || pBitmap->bmBitsPixel == 32) {
     int rowbytes = pBitmap->bmWidthBytes;
 
     bmpFileHeader.bfSize = pBitmap->bmHeight * rowbytes + 54;
@@ -557,11 +520,11 @@ int PictureBase::saveBmp(const char *filename, MY_BITMAP *pBitmap) {
     // int channels = pBitmap->bmBitsPixel / 8;
     unsigned char *pBits = (unsigned char *)(pBitmap->bmBits);
 
-    for (int i = pBitmap->bmHeight - 1; i > -1; i--) {
+    for (int i = pBitmap->bmHeight - 1; i > -1; i--)
       fwrite(pBits + i * rowbytes, rowbytes, 1, fp);
-    }
-  } else if (pBitmap->bmBitsPixel == 8) // 8位，单通道，灰度图
-  {
+  }
+  // 8位，单通道，灰度图
+  else if (pBitmap->bmBitsPixel == 8) {
     int rowbytes = pBitmap->bmWidthBytes;
 
     bmpFileHeader.bfSize = pBitmap->bmHeight * rowbytes + 54 + 256 * 4;
@@ -595,22 +558,19 @@ int PictureBase::saveBmp(const char *filename, MY_BITMAP *pBitmap) {
     // int channels = pBitmap->bmBitsPixel / 8;
     unsigned char *pBits = (unsigned char *)(pBitmap->bmBits);
 
-    for (int i = pBitmap->bmHeight - 1; i > -1; i--) {
+    for (int i = pBitmap->bmHeight - 1; i > -1; i--)
       fwrite(pBits + i * rowbytes, rowbytes, 1, fp);
-    }
   }
 
   fclose(fp);
 
-  return ret;
+  return 0;
 }
 
 #include <fstream>
 
 /* 所有解码的帧写入到一个文件 */
 int PictureBase::writeYUV(const char *filename) {
-  int ret = 0;
-
   static bool isFrist = false;
   if (isFrist == false) {
     std::ifstream f(filename);
@@ -626,22 +586,20 @@ int PictureBase::writeYUV(const char *filename) {
   fwrite(m_pic_buff_cr, PicWidthInSamplesC * PicHeightInSamplesC, 1, fp);
 
   fclose(fp);
-
-  return ret;
+  return 0;
 }
 
 int PictureBase::getOneEmptyPicture(Frame *&pic) {
   int32_t size_dpb = H264_MAX_DECODED_PICTURE_BUFFER_COUNT;
 
   for (int i = 0; i < size_dpb; i++) {
+    // 本帧数据未使用，即处于闲置状态, 重复利用被释放了的参考帧
     if (m_dpb[i] != this->m_parent &&
         m_dpb[i]->reference_marked_type != PICTURE_MARKED_AS_used_short_ref &&
         m_dpb[i]->reference_marked_type != PICTURE_MARKED_AS_used_long_ref &&
-        m_dpb[i]->m_is_in_use == 0 // 本帧数据未使用，即处于闲置状态
-        )                          // 重复利用被释放了的参考帧
-    {
+        m_dpb[i]->m_is_in_use == 0) {
       pic = m_dpb[i];
-      RETURN_IF_FAILED(pic == NULL, -1);
+      RET(pic == nullptr);
       return 0;
     }
   }
@@ -929,13 +887,34 @@ int PictureBase::inverse_sub_macroblock_partition_scanning_process(
   return 0;
 }
 
-// 6.4.8 Derivation process of the availability for macroblock addresses
-int PictureBase::derivation_of_the_availability_for_macroblock_addresses(
-    int32_t mbAddr, int32_t &is_mbAddr_available) {
-  is_mbAddr_available = 1;
-  if (mbAddr < 0 || mbAddr > CurrMbAddr ||
-      m_mbs[mbAddr].slice_number != m_mbs[CurrMbAddr].slice_number)
-    is_mbAddr_available = 0;
+// 6.4.11.1 Derivation process for neighbouring macroblocks
+/* 该过程的输出为： 
+ * – mbAddrA：当前宏块左侧宏块的地址及其可用性状态， 
+ * – mbAddrB：当前宏块上方宏块的地址及其可用性状态。*/
+int PictureBase::derivation_for_neighbouring_macroblocks(int32_t MbaffFrameFlag,
+                                                         int32_t currMbAddr,
+                                                         int32_t &mbAddrA,
+                                                         int32_t &mbAddrB,
+                                                         int32_t isChroma) {
+
+  int32_t xW = 0, yW = 0;
+
+  /* mbAddrA：当前宏块左侧宏块的地址及其可用性状态 */
+  MB_ADDR_TYPE mbAddrA_type = MB_ADDR_TYPE_UNKOWN;
+  int32_t luma4x4BlkIdxA = 0, luma8x8BlkIdxA = 0;
+  int32_t xA = -1, yA = 0;
+  RET(derivation_for_neighbouring_locations(
+      MbaffFrameFlag, xA, yA, currMbAddr, mbAddrA_type, mbAddrA, luma4x4BlkIdxA,
+      luma8x8BlkIdxA, xW, yW, isChroma));
+
+  /* mbAddrB：当前宏块上方宏块的地址及其可用性状态 */
+  MB_ADDR_TYPE mbAddrB_type = MB_ADDR_TYPE_UNKOWN;
+  int32_t luma4x4BlkIdxB = 0, luma8x8BlkIdxB = 0;
+  int32_t xB = 0, yB = -1;
+  RET(derivation_for_neighbouring_locations(
+      MbaffFrameFlag, xB, yB, currMbAddr, mbAddrB_type, mbAddrB, luma4x4BlkIdxB,
+      luma8x8BlkIdxB, xW, yW, isChroma));
+
   return 0;
 }
 
@@ -985,16 +964,12 @@ int PictureBase::derivation_for_neighbouring_8x8_luma_block(
   return 0;
 }
 
-// 6.4.11.3 Derivation process for neighbouring 8x8 chroma blocks for
-// ChromaArrayType equal to 3
+// 6.4.11.3 Derivation process for neighbouring 8x8 chroma blocks for ChromaArrayType equal to 3
 int PictureBase::derivation_for_neighbouring_8x8_chroma_blocks_for_YUV444(
     int32_t chroma8x8BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
     int32_t &chroma8x8BlkIdxA, int32_t &chroma8x8BlkIdxB) {
-  const int32_t isChroma = 1;
-  // 6.4.11.2 Derivation process for neighbouring 8x8 luma block
-  return derivation_for_neighbouring_8x8_luma_block(chroma8x8BlkIdx, mbAddrA,
-                                                    mbAddrB, chroma8x8BlkIdxA,
-                                                    chroma8x8BlkIdxB, isChroma);
+  return derivation_for_neighbouring_8x8_luma_block(
+      chroma8x8BlkIdx, mbAddrA, mbAddrB, chroma8x8BlkIdxA, chroma8x8BlkIdxB, 1);
 }
 
 // 6.4.11.4 Derivation process for neighbouring 4x4 luma blocks
@@ -1022,7 +997,6 @@ int PictureBase::derivation_for_neighbouring_4x4_luma_blocks(
     luma4x4BlkIdxA = -2; // marked as not available
   } else {
     // 6.4.13.1 Derivation process for 4x4 luma block indices
-    // ret = Derivation_process_for_4x4_luma_block_indices(xW, yW, (uint8_t &)luma4x4BlkIdxA);
     luma4x4BlkIdxA =
         8 * (yW / 8) + 4 * (xW / 8) + 2 * ((yW % 8) / 4) + ((xW % 8) / 4);
   }
@@ -1032,31 +1006,25 @@ int PictureBase::derivation_for_neighbouring_4x4_luma_blocks(
   int32_t luma8x8BlkIdxB = 0;
   int32_t xB = x + 0, yB = y - 1;
 
-  // 6.4.12 Derivation process for neighbouring locations
   RET(derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xB, yB, CurrMbAddr, mbAddrB_type,
       mbAddrB, luma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma));
 
-  if (mbAddrB < 0) {
+  if (mbAddrB < 0)
     luma4x4BlkIdxB = -2; // marked as not available
-  } else {
+  else
     luma4x4BlkIdxB =
         8 * (yW / 8) + 4 * (xW / 8) + 2 * ((yW % 8) / 4) + ((xW % 8) / 4);
-  }
 
   return 0;
 }
 
 // 6.4.11.5 Derivation process for neighbouring 4x4 chroma blocks
-// This clause is only invoked when ChromaArrayType is equal to 1 or 2.
 int PictureBase::derivation_for_neighbouring_4x4_chroma_blocks(
     int32_t chroma4x4BlkIdx, int32_t &mbAddrA, int32_t &mbAddrB,
     int32_t &chroma4x4BlkIdxA, int32_t &chroma4x4BlkIdxB) {
 
-  int32_t isChroma = 1;
   int32_t xW = 0, yW = 0;
-
-  // 6.4.7 Inverse 4x4 chroma block scanning process
   int32_t x = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 0);
   int32_t y = InverseRasterScan(chroma4x4BlkIdx, 4, 4, 8, 1);
 
@@ -1068,7 +1036,7 @@ int PictureBase::derivation_for_neighbouring_4x4_chroma_blocks(
   // 6.4.12 Derivation process for neighbouring locations
   RET(derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xA, yA, CurrMbAddr, mbAddrA_type,
-      mbAddrA, chroma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma));
+      mbAddrA, chroma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, 1));
 
   if (mbAddrA < 0) {
     chroma4x4BlkIdxA = -2; // marked as not available
@@ -1081,21 +1049,17 @@ int PictureBase::derivation_for_neighbouring_4x4_chroma_blocks(
   //---------------mbAddrB---------------------
   MB_ADDR_TYPE mbAddrB_type = MB_ADDR_TYPE_UNKOWN;
   int32_t luma8x8BlkIdxB = 0;
-
   int32_t xB = x + 0, yB = y - 1;
-
-  // 6.4.12 Derivation process for neighbouring locations
   RET(derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xB, yB, CurrMbAddr, mbAddrB_type,
-      mbAddrB, chroma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma));
+      mbAddrB, chroma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, 1));
 
-  if (mbAddrB < 0) {
+  if (mbAddrB < 0)
     chroma4x4BlkIdxB = -2; // marked as not available
-  } else {
+  else
     // 6.4.13.2 Derivation process for 4x4 chroma block indices
     // ret = Derivation_process_for_4x4_chroma_block_indices(xW, yW, (uint8_t &)chroma4x4BlkIdxB);
     chroma4x4BlkIdxB = 2 * (yW / 4) + (xW / 4);
-  }
 
   return 0;
 }
@@ -1110,55 +1074,42 @@ int PictureBase::derivation_for_neighbouring_locations(
     int32_t MbaffFrameFlag, int32_t xN, int32_t yN, int32_t currMbAddr,
     MB_ADDR_TYPE &mbAddrN_type, int32_t &mbAddrN, int32_t &b4x4BlkIdxN,
     int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW, int32_t isChroma) {
+  /* 邻近的亮,色度位置调用此过程 */
+  int32_t maxW = (isChroma) ? MbWidthC : 16, maxH = (isChroma) ? MbHeightC : 16;
 
-  /* maxW 和 maxH 分别为指定位置分量 xN、xW 和 yN、yW 的最大值的变量 */
-  int32_t maxW = 0, maxH = 0;
+  if (MbaffFrameFlag == 0) {
+    RET(neighbouring_locations_non_MBAFF(xN, yN, maxW, maxH, currMbAddr,
+                                         mbAddrN_type, mbAddrN, b4x4BlkIdxN,
+                                         b8x8BlkIdxN, xW, yW, isChroma));
+  } else
+    RET(neighbouring_locations_MBAFF(xN, yN, maxW, maxH, currMbAddr,
+                                     mbAddrN_type, mbAddrN, b4x4BlkIdxN,
+                                     b8x8BlkIdxN, xW, yW, isChroma));
+  return 0;
+}
 
-  /* 邻近的亮度位置调用此过程 */
-  if (isChroma == 0)
-    maxW = maxH = 16;
-  else {
-    /* 相邻色度位置调用此过程 */
-    maxW = MbWidthC;
-    maxH = MbHeightC;
-  }
-
-  int ret = -1;
-
-  if (MbaffFrameFlag == 0)
-    /* 用第 6.4.12.1 节中描述的字段和非 MBAFF 帧中相邻位置的规范*/
-    ret = neighbouring_locations_non_MBAFF(xN, yN, maxW, maxH, currMbAddr,
-                                           mbAddrN_type, mbAddrN, b4x4BlkIdxN,
-                                           b8x8BlkIdxN, xW, yW, isChroma);
-  else
-    /* 反之，用第 6.4.12.2 节中描述的 MBAFF 帧中相邻位置的规范 */
-    ret = neighbouring_locations_MBAFF(xN, yN, maxW, maxH, currMbAddr,
-                                       mbAddrN_type, mbAddrN, b4x4BlkIdxN,
-                                       b8x8BlkIdxN, xW, yW, isChroma);
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return ret;
-  }
-
+// 6.4.8 Derivation process of the availability for macroblock addresses
+int PictureBase::derivation_of_availability_for_macroblock_addresses(
+    int32_t mbAddr, int32_t &is_mbAddr_available) {
+  is_mbAddr_available = 1;
+  if (mbAddr < 0 || mbAddr > CurrMbAddr ||
+      m_mbs[mbAddr].slice_number != m_mbs[CurrMbAddr].slice_number)
+    is_mbAddr_available = 0;
   return 0;
 }
 
 /* 6.4.8 Derivation process of the availability for macroblock addresses */
-inline int PictureBase::derivation_of_availability_macroblock_addresses(
+int PictureBase::derivation_of_availability_macroblock_addresses(
     int32_t _mbAddr, int32_t CurrMbAddr, MB_ADDR_TYPE &mbAddrN_type,
     int32_t &mbAddrN) {
 
+  //宏块被标记为不可用
   if (_mbAddr < 0 || _mbAddr > CurrMbAddr ||
-      m_mbs[_mbAddr].slice_number != m_mbs[CurrMbAddr].slice_number) {
-    //宏块被标记为不可用
-    mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-    mbAddrN = -1;
-  } else {
-    //宏块被标记为可用
-    mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
-    mbAddrN = _mbAddr;
-  }
+      m_mbs[_mbAddr].slice_number != m_mbs[CurrMbAddr].slice_number)
+    mbAddrN_type = MB_ADDR_TYPE_UNKOWN, mbAddrN = -1;
+  //宏块被标记为可用
+  else
+    mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = _mbAddr;
   return 0;
 }
 
@@ -1196,13 +1147,10 @@ int PictureBase::derivation_for_neighbouring_macroblock_addr_availability(
     /* 第 6.4.8 节中的过程的输入是 mbAddrA = CurrMbAddr − 1，输出是宏块 mbAddrA 是否可用。此外，当 CurrMbAddr % PicWidthInMbs 等于 0 时，mbAddrA 被标记为不可用。*/
     derivation_of_availability_macroblock_addresses(mbAddrA, CurrMbAddr,
                                                     mbAddrN_type, mbAddrN);
-    if (CurrMbAddr % PicWidthInMbs == 0) {
-      mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-      mbAddrN = -1;
-    } else {
-      mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
-      mbAddrN = mbAddrA;
-    }
+    if (CurrMbAddr % PicWidthInMbs == 0)
+      mbAddrN_type = MB_ADDR_TYPE_UNKOWN, mbAddrN = -1;
+    else
+      mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA;
   }
   /* 上宏快 */
   else if ((xN >= 0 && xN <= maxW - 1) && yN < 0) {
@@ -1215,31 +1163,24 @@ int PictureBase::derivation_for_neighbouring_macroblock_addr_availability(
     /* 第 6.4.8 节中的过程的输入是 mbAddrC = CurrMbAddr − PicWidthInMbs + 1，输出是宏块 mbAddrC 是否可用。此外，当 (CurrMbAddr + 1) % PicWidthInMbs 等于 0 时，mbAddrC 被标记为不可用 */
     derivation_of_availability_macroblock_addresses(mbAddrC, CurrMbAddr,
                                                     mbAddrN_type, mbAddrN);
-    if ((CurrMbAddr + 1) % PicWidthInMbs == 0) {
-      mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-      mbAddrN = -1;
-    } else {
-      mbAddrN_type = MB_ADDR_TYPE_mbAddrC;
-      mbAddrN = mbAddrC;
-    }
+    if ((CurrMbAddr + 1) % PicWidthInMbs == 0)
+      mbAddrN_type = MB_ADDR_TYPE_UNKOWN, mbAddrN = -1;
+    else
+      mbAddrN_type = MB_ADDR_TYPE_mbAddrC, mbAddrN = mbAddrC;
   }
   /* 左上宏快 */
   else if (xN < 0 && yN < 0) {
     /* 第 6.4.8 节中的过程的输入是 mbAddrD = CurrMbAddr − PicWidthInMbs − 1，输出是宏块 mbAddrD 是否可用。此外，当 CurrMbAddr % PicWidthInMbs 等于 0 时，mbAddrD 被标记为不可用 */
     derivation_of_availability_macroblock_addresses(mbAddrD, CurrMbAddr,
                                                     mbAddrN_type, mbAddrN);
-    if (CurrMbAddr % PicWidthInMbs == 0) {
-      mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-      mbAddrN = -1;
-    } else {
-      mbAddrN_type = MB_ADDR_TYPE_mbAddrD;
-      mbAddrN = mbAddrD;
-    }
-  } else if ((xN >= 0 && xN <= maxW - 1) && (yN >= 0 && yN <= maxH - 1)) {
+    if (CurrMbAddr % PicWidthInMbs == 0)
+      mbAddrN_type = MB_ADDR_TYPE_UNKOWN, mbAddrN = -1;
+    else
+      mbAddrN_type = MB_ADDR_TYPE_mbAddrD, mbAddrN = mbAddrD;
+  } else if ((xN >= 0 && xN <= maxW - 1) && (yN >= 0 && yN <= maxH - 1))
     /* 当前宏块 */
-    mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr;
-    mbAddrN = CurrMbAddr;
-  } else if ((xN > maxW - 1) && (yN >= 0 && yN <= maxH - 1)) {
+    mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr, mbAddrN = CurrMbAddr;
+  else if ((xN > maxW - 1) && (yN >= 0 && yN <= maxH - 1)) {
     /* not available */
   } else if (yN > maxH - 1) {
     /* not available */
@@ -1344,29 +1285,20 @@ int PictureBase::get_chroma_quantisation_parameters2(int32_t QPY,
                                                      int32_t isChromaCb,
                                                      int32_t &QPC) {
   int32_t qPOffset = 0;
-  if (isChromaCb == 1) // If the chroma component is the Cb component
-  {
+  if (isChromaCb == 1)
     qPOffset = m_slice->slice_header->m_pps->chroma_qp_index_offset;
-  } else // the chroma component is the Cr component
-  {
+  else
     qPOffset = m_slice->slice_header->m_pps->second_chroma_qp_index_offset;
-  }
 
   int32_t qPI = CLIP3(-(int32_t)m_slice->slice_header->m_sps->QpBdOffsetC, 51,
                       QPY + qPOffset);
 
   // Table 8-15 – Specification of QPC as a function of qPI
-  QPC = 0;
-  if (qPI < 30) {
-    QPC = qPI;
-  } else {
-    // int32_t qPIs[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-    // 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
+  QPC = qPI;
+  if (qPI >= 30) {
     int32_t QPCs[] = {29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36,
                       36, 37, 37, 37, 38, 38, 38, 39, 39, 39, 39};
-
-    int32_t index = qPI - 30;
-    QPC = QPCs[index];
+    QPC = QPCs[qPI - 30];
   }
 
   return 0;
@@ -1380,8 +1312,7 @@ int PictureBase::neighbouring_locations_MBAFF(
     int32_t &b8x8BlkIdxN, int32_t &xW, int32_t &yW, int32_t isChroma) {
 
   int32_t yM = 0;
-  mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-  mbAddrN = -1;
+  mbAddrN_type = MB_ADDR_TYPE_UNKOWN, mbAddrN = -1;
 
   /* 第 6.4.10 节中相邻宏块地址及其可用性的推导过程是通过 mbAddrA、mbAddrB、mbAddrC 和 mbAddrD 以及它们的可用性状态作为输出来调用的。 */
   int32_t mbAddrA, mbAddrB, mbAddrC, mbAddrD;
@@ -1389,230 +1320,159 @@ int PictureBase::neighbouring_locations_MBAFF(
   derivation_for_neighbouring_macroblock_addr_availability_in_MBAFF(
       mbAddrA, mbAddrB, mbAddrC, mbAddrD);
 
-  /* 变量 currMbFrameFlag 的推导如下：
-   * – 如果地址为 CurrMbAddr 的宏块是帧宏块，则 currMbFrameFlag 设置为等于 1。
-   * – 否则（地址为 CurrMbAddr 的宏块是场宏块），则 currMbFrameFlag 设置为等于 0 */
-  int32_t currMbFrameFlag =
-      m_mbs[CurrMbAddr].mb_field_decoding_flag == 0 ? 1 : 0;
-
-  /* 变量 mbIsTopMbFlag 的推导如下：
-   * – 如果地址为 CurrMbAddr 的宏块是顶部宏块（即 CurrMbAddr % 2 等于 0），则 mbIsTopMbFlag 设置为等于 1。
-   * – 否则（地址为 CurrMbAddr 的宏块是底部宏块） ，即 CurrMbAddr % 2 等于 1)，mbIsTopMbFlag 设置为等于 0。 */
-  int32_t mbIsTopMbFlag = CurrMbAddr % 2 == 0 ? 1 : 0;
+  bool currMbFrameFlag = m_mbs[CurrMbAddr].mb_field_decoding_flag == 0;
+  bool mbIsTopMbFlag = CurrMbAddr % 2 == 0;
 
   /* Table 6-4 – Specification of mbAddrN and yM */
   int32_t mbAddrX = -1, mbAddrXFrameFlag = 0;
   if (xN < 0 && yN < 0) {
-    if (currMbFrameFlag == 1) {
-      if (mbIsTopMbFlag == 1) {
-        mbAddrX = mbAddrD;
-        mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1;
-        mbAddrN = mbAddrD + 1;
-        yM = yN;
-      } else if (mbIsTopMbFlag == 0) {
+    if (currMbFrameFlag) {
+      if (mbIsTopMbFlag)
+        mbAddrX = mbAddrD, mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1,
+        mbAddrN = mbAddrD + 1, yM = yN;
+      else if (mbIsTopMbFlag == false) {
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) {
-          mbAddrXFrameFlag =
-              (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
-          if (mbAddrXFrameFlag == 1) {
-            mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
-            mbAddrN = mbAddrA;
-            yM = yN;
-          } else if (mbAddrXFrameFlag == 0) {
-            mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
-            mbAddrN = mbAddrA + 1;
+          mbAddrXFrameFlag = (m_mbs[mbAddrX].mb_field_decoding_flag) ? 0 : 1;
+          if (mbAddrXFrameFlag)
+            mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA, yM = yN;
+          else
+            mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1, mbAddrN = mbAddrA + 1,
             yM = (yN + maxH) >> 1;
-          }
         }
       }
-    } else if (currMbFrameFlag == 0) {
-      if (mbIsTopMbFlag == 1) {
+    } else if (currMbFrameFlag == false) {
+      if (mbIsTopMbFlag) {
         mbAddrX = mbAddrD;
         if (mbAddrX >= 0) {
-          mbAddrXFrameFlag =
-              (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
-          if (mbAddrXFrameFlag == 1) {
-            mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1;
-            mbAddrN = mbAddrD + 1;
+          mbAddrXFrameFlag = (m_mbs[mbAddrX].mb_field_decoding_flag) ? 0 : 1;
+          if (mbAddrXFrameFlag)
+            mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1, mbAddrN = mbAddrD + 1,
             yM = 2 * yN;
-          } else if (mbAddrXFrameFlag == 0) {
-            mbAddrN_type = MB_ADDR_TYPE_mbAddrD;
-            mbAddrN = mbAddrD;
-            yM = yN;
-          }
+          else
+            mbAddrN_type = MB_ADDR_TYPE_mbAddrD, mbAddrN = mbAddrD, yM = yN;
         }
-      } else if (mbIsTopMbFlag == 0) {
-        mbAddrX = mbAddrD;
-        mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1;
-        mbAddrN = mbAddrD + 1;
-        yM = yN;
+      } else if (mbIsTopMbFlag == false) {
+        mbAddrX = mbAddrD, mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1,
+        mbAddrN = mbAddrD + 1, yM = yN;
       }
     }
   } else if (xN < 0 && (yN >= 0 && yN <= maxH - 1)) {
-    if (currMbFrameFlag == 1) {
-      if (mbIsTopMbFlag == 1) {
+    if (currMbFrameFlag) {
+      if (mbIsTopMbFlag) {
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) {
-          mbAddrXFrameFlag =
-              (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
-          if (mbAddrXFrameFlag == 1) {
-            mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
-            mbAddrN = mbAddrA;
-            yM = yN;
-          } else if (mbAddrXFrameFlag == 0) {
-            if (yN % 2 == 0) {
-              mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
-              mbAddrN = mbAddrA;
+          mbAddrXFrameFlag = (m_mbs[mbAddrX].mb_field_decoding_flag) ? 0 : 1;
+          if (mbAddrXFrameFlag)
+            mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA, yM = yN;
+          else {
+            if (yN % 2 == 0)
+              mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA,
               yM = yN >> 1;
-            } else if (yN % 2 != 0) {
-              mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
-              mbAddrN = mbAddrA + 1;
+            else if (yN % 2 != 0)
+              mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1, mbAddrN = mbAddrA + 1,
               yM = yN >> 1;
-            }
           }
         }
-      } else if (mbIsTopMbFlag == 0) {
+      } else if (mbIsTopMbFlag == false) {
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) {
-          mbAddrXFrameFlag =
-              (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
+          mbAddrXFrameFlag = (m_mbs[mbAddrX].mb_field_decoding_flag) ? 0 : 1;
           if (mbAddrXFrameFlag == 1) {
-            mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
-            mbAddrN = mbAddrA + 1;
+            mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1, mbAddrN = mbAddrA + 1,
             yM = yN;
-          } else if (mbAddrXFrameFlag == 0) {
-            if (yN % 2 == 0) {
-              mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
-              mbAddrN = mbAddrA;
+          } else {
+            if (yN % 2 == 0)
+              mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA,
               yM = (yN + maxH) >> 1;
-            } else if (yN % 2 != 0) {
-              mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
-              mbAddrN = mbAddrA + 1;
+            else if (yN % 2 != 0)
+              mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1, mbAddrN = mbAddrA + 1,
               yM = (yN + maxH) >> 1;
-            }
           }
         }
       }
-    } else if (currMbFrameFlag == 0) {
+    } else if (currMbFrameFlag == false) {
       if (mbIsTopMbFlag == 1) {
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) {
-          mbAddrXFrameFlag =
-              (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
-          if (mbAddrXFrameFlag == 1) {
+          mbAddrXFrameFlag = (m_mbs[mbAddrX].mb_field_decoding_flag) ? 0 : 1;
+          if (mbAddrXFrameFlag) {
             if (yN < (maxH / 2)) {
-              mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
-              mbAddrN = mbAddrA;
+              mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA,
               yM = yN << 1;
             } else if (yN >= (maxH / 2)) {
-              mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
-              mbAddrN = mbAddrA + 1;
+              mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1, mbAddrN = mbAddrA + 1,
               yM = (yN << 1) - maxH;
             }
-          } else if (mbAddrXFrameFlag == 0) {
-            mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
-            mbAddrN = mbAddrA;
-            yM = yN;
-          }
+          } else
+            mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA, yM = yN;
         }
-      } else if (mbIsTopMbFlag == 0) {
+      } else if (mbIsTopMbFlag == false) {
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) {
-          mbAddrXFrameFlag =
-              (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
-          if (mbAddrXFrameFlag == 1) {
+          mbAddrXFrameFlag = (m_mbs[mbAddrX].mb_field_decoding_flag) ? 0 : 1;
+          if (mbAddrXFrameFlag) {
             if (yN < (maxH / 2)) {
-              mbAddrN_type = MB_ADDR_TYPE_mbAddrA;
-              mbAddrN = mbAddrA;
+              mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA,
               yM = (yN << 1) + 1;
             } else if (yN >= (maxH / 2)) {
-              mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
-              mbAddrN = mbAddrA + 1;
+              mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1, mbAddrN = mbAddrA + 1,
               yM = (yN << 1) + 1 - maxH;
             }
-          } else if (mbAddrXFrameFlag == 0) {
-            mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1;
-            mbAddrN = mbAddrA + 1;
+          } else
+            mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1, mbAddrN = mbAddrA + 1,
             yM = yN;
-          }
         }
       }
     }
   } else if ((xN >= 0 && xN <= maxW - 1) && yN < 0) {
-    if (currMbFrameFlag == 1) {
-      if (mbIsTopMbFlag == 1) {
-        mbAddrX = mbAddrB;
-        mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1;
-        mbAddrN = mbAddrB + 1;
-        yM = yN;
-      } else if (mbIsTopMbFlag == 0) {
-        mbAddrX = CurrMbAddr;
-        mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr_minus_1;
-        mbAddrN = CurrMbAddr - 1;
-        yM = yN;
+    if (currMbFrameFlag) {
+      if (mbIsTopMbFlag) {
+        mbAddrX = mbAddrB, mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1,
+        mbAddrN = mbAddrB + 1, yM = yN;
+      } else if (mbIsTopMbFlag == false) {
+        mbAddrX = CurrMbAddr, mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr_minus_1,
+        mbAddrN = CurrMbAddr - 1, yM = yN;
       }
-    } else if (currMbFrameFlag == 0) {
+    } else if (currMbFrameFlag == false) {
       if (mbIsTopMbFlag == 1) {
         mbAddrX = mbAddrB;
         if (mbAddrX >= 0) {
-          mbAddrXFrameFlag =
-              (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
-          if (mbAddrXFrameFlag == 1) {
-            mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1;
-            mbAddrN = mbAddrB + 1;
+          mbAddrXFrameFlag = (m_mbs[mbAddrX].mb_field_decoding_flag) ? 0 : 1;
+          if (mbAddrXFrameFlag)
+            mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1, mbAddrN = mbAddrB + 1,
             yM = 2 * yN;
-          } else if (mbAddrXFrameFlag == 0) {
-            mbAddrN_type = MB_ADDR_TYPE_mbAddrB;
-            mbAddrN = mbAddrB;
-            yM = yN;
-          }
+          else if (mbAddrXFrameFlag == 0)
+            mbAddrN_type = MB_ADDR_TYPE_mbAddrB, mbAddrN = mbAddrB, yM = yN;
         }
-      } else if (mbIsTopMbFlag == 0) {
-        mbAddrX = mbAddrB;
-        mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1;
-        mbAddrN = mbAddrB + 1;
-        yM = yN;
-      }
+      } else
+        mbAddrX = mbAddrB, mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1,
+        mbAddrN = mbAddrB + 1, yM = yN;
     }
   } else if ((xN >= 0 && xN <= maxW - 1) && (yN >= 0 && yN <= maxH - 1)) {
-    mbAddrX = CurrMbAddr;
-    mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr;
-    mbAddrN = CurrMbAddr;
-    yM = yN;
+    mbAddrX = CurrMbAddr, mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr,
+    mbAddrN = CurrMbAddr, yM = yN;
   } else if (xN > maxW - 1 && yN < 0) {
-    if (currMbFrameFlag == 1) {
-      if (mbIsTopMbFlag == 1) {
-        mbAddrX = mbAddrC;
-        mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1;
-        mbAddrN = mbAddrC + 1;
-        yM = yN;
-      } else if (mbIsTopMbFlag == 0) {
-        mbAddrX = -2;
-        mbAddrN_type = MB_ADDR_TYPE_UNKOWN;
-        mbAddrN = -2;
-        yM = NA;
-      }
-    } else if (currMbFrameFlag == 0) {
-      if (mbIsTopMbFlag == 1) {
+    if (currMbFrameFlag) {
+      if (mbIsTopMbFlag)
+        mbAddrX = mbAddrC, mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1,
+        mbAddrN = mbAddrC + 1, yM = yN;
+      else if (mbIsTopMbFlag == 0)
+        mbAddrX = -2, mbAddrN_type = MB_ADDR_TYPE_UNKOWN, mbAddrN = -2, yM = NA;
+    } else {
+      if (mbIsTopMbFlag) {
         mbAddrX = mbAddrC;
         if (mbAddrX >= 0) {
-          mbAddrXFrameFlag =
-              (m_mbs[mbAddrX].mb_field_decoding_flag == 1) ? 0 : 1;
-          if (mbAddrXFrameFlag == 1) {
-            mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1;
-            mbAddrN = mbAddrC + 1;
+          mbAddrXFrameFlag = (m_mbs[mbAddrX].mb_field_decoding_flag) ? 0 : 1;
+          if (mbAddrXFrameFlag)
+            mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1, mbAddrN = mbAddrC + 1,
             yM = 2 * yN;
-          } else if (mbAddrXFrameFlag == 0) {
-            mbAddrN_type = MB_ADDR_TYPE_mbAddrC;
-            mbAddrN = mbAddrC;
-            yM = yN;
-          }
+          else
+            mbAddrN_type = MB_ADDR_TYPE_mbAddrC, mbAddrN = mbAddrC, yM = yN;
         }
       } else if (mbIsTopMbFlag == 0) {
-        mbAddrX = mbAddrC;
-        mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1;
-        mbAddrN = mbAddrC + 1;
-        yM = yN;
+        mbAddrX = mbAddrC, mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1,
+        mbAddrN = mbAddrC + 1, yM = yN;
       }
     }
   } else {
@@ -2084,76 +1944,5 @@ int PictureBase::picture_construction_process_prior_to_deblocking_filter(
       }
   }
 
-  return 0;
-}
-
-// 6.4.11.1 Derivation process for neighbouring macroblocks
-/* 该过程的输出为： 
- * – mbAddrA：当前宏块左侧宏块的地址及其可用性状态， 
- * – mbAddrB：当前宏块上方宏块的地址及其可用性状态。*/
-int PictureBase::derivation_for_neighbouring_macroblocks(int32_t MbaffFrameFlag,
-                                                         int32_t currMbAddr,
-                                                         int32_t &mbAddrA,
-                                                         int32_t &mbAddrB,
-                                                         int32_t isChroma) {
-
-  int32_t xW = 0, yW = 0;
-
-  /* mbAddrN（N 为 A 或 B）按照以下有序步骤指定导出： 
- * 1. 根据表 6-2 设置亮度位置差 ( xD, yD )。  
- * 2. 对于 ( xN, yN ) 等于 ( xD, yD ) 的亮度位置，调用第 6.4.12 节中指定的相邻位置的推导过程，并将输出分配给 mbAddrN。 */
-
-  /* mbAddrA：当前宏块左侧宏块的地址及其可用性状态 */
-  MB_ADDR_TYPE mbAddrA_type = MB_ADDR_TYPE_UNKOWN;
-  int32_t luma4x4BlkIdxA = 0, luma8x8BlkIdxA = 0;
-  int32_t xA = -1, yA = 0;
-
-  // 6.4.12 Derivation process for neighbouring locations(A)
-  int ret = derivation_for_neighbouring_locations(
-      MbaffFrameFlag, xA, yA, currMbAddr, mbAddrA_type, mbAddrA, luma4x4BlkIdxA,
-      luma8x8BlkIdxA, xW, yW, isChroma);
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return ret;
-  }
-
-  /* mbAddrB：当前宏块上方宏块的地址及其可用性状态 */
-  MB_ADDR_TYPE mbAddrB_type = MB_ADDR_TYPE_UNKOWN;
-  int32_t luma4x4BlkIdxB = 0, luma8x8BlkIdxB = 0;
-  int32_t xB = 0, yB = -1;
-
-  // 6.4.12 Derivation process for neighbouring locations(B)
-  ret = derivation_for_neighbouring_locations(
-      MbaffFrameFlag, xB, yB, currMbAddr, mbAddrB_type, mbAddrB, luma4x4BlkIdxB,
-      luma8x8BlkIdxB, xW, yW, isChroma);
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return ret;
-  }
-
-  return 0;
-}
-
-// 6.4.13.1 Derivation process for 4x4 luma block indices
-int PictureBase::derivation_for_4x4_luma_block_indices(uint8_t xP, uint8_t yP,
-                                                       uint8_t &luma4x4BlkIdx) {
-  luma4x4BlkIdx =
-      8 * (yP / 8) + 4 * (xP / 8) + 2 * ((yP % 8) / 4) + ((xP % 8) / 4);
-  return 0;
-}
-
-// 6.4.13.2 Derivation process for 4x4 chroma block indices
-int PictureBase::derivation_for_4x4_chroma_block_indices(
-    uint8_t xP, uint8_t yP, uint8_t &chroma4x4BlkIdx) {
-  chroma4x4BlkIdx = 2 * (yP / 4) + (xP / 4);
-  return 0;
-}
-
-// 6.4.13.3 Derivation process for 8x8 luma block indices
-int PictureBase::derivation_for_8x8_luma_block_indices(uint8_t xP, uint8_t yP,
-                                                       uint8_t &luma8x8BlkIdx) {
-  luma8x8BlkIdx = 2 * (yP / 8) + (xP / 8);
   return 0;
 }

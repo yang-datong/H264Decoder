@@ -603,16 +603,17 @@ int DeblockingFilter::
     return 0;
   }
 
+  // 6.4.13.1 Derivation process for 4x4 luma block indices
   uint8_t luma4x4BlkIdx_p0 = 0, luma4x4BlkIdx_q0 = 0;
-  RET(pic->derivation_for_4x4_luma_block_indices(mb_x_p0, mb_y_p0,
-                                                 luma4x4BlkIdx_p0));
-  RET(pic->derivation_for_4x4_luma_block_indices(mb_x_q0, mb_y_q0,
-                                                 luma4x4BlkIdx_q0));
+  luma4x4BlkIdx_p0 = 8 * (mb_y_p0 / 8) + 4 * (mb_x_p0 / 8) +
+                     2 * ((mb_y_p0 % 8) / 4) + ((mb_x_p0 % 8) / 4);
+  luma4x4BlkIdx_q0 = 8 * (mb_y_q0 / 8) + 4 * (mb_x_q0 / 8) +
+                     2 * ((mb_y_q0 % 8) / 4) + ((mb_x_q0 % 8) / 4);
+
+  // 6.4.13.3 Derivation process for 8x8 luma block indices
   uint8_t luma8x8BlkIdx_p0 = 0, luma8x8BlkIdx_q0 = 0;
-  RET(pic->derivation_for_8x8_luma_block_indices(mb_x_p0, mb_y_p0,
-                                                 luma8x8BlkIdx_p0));
-  RET(pic->derivation_for_8x8_luma_block_indices(mb_x_q0, mb_y_q0,
-                                                 luma8x8BlkIdx_q0));
+  luma8x8BlkIdx_p0 = 2 * (mb_y_p0 / 8) + (mb_x_p0 / 8);
+  luma8x8BlkIdx_q0 = 2 * (mb_y_q0 / 8) + (mb_x_q0 / 8);
 
   if (mb_p.transform_size_8x8_flag &&
       mb_p.mb_luma_8x8_non_zero_count_coeff[luma8x8BlkIdx_p0] > 0) {
