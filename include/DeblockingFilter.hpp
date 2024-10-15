@@ -20,12 +20,17 @@ class DeblockingFilter {
   // 色度（U和V）边缘进行滤波
   bool chromaEdgeFlag = false;
 
+  // -------------- 临时引用变量(别名) ------------
   bool transform_size_8x8_flag = false;
   bool MbaffFrameFlag = false;
   uint32_t ChromaArrayType = 0;
   int32_t mb_field_decoding_flag = false;
+  int32_t SubWidthC = 0;
+  int32_t SubHeightC = 0;
+  uint32_t BitDepthY = 0;
+  uint32_t BitDepthC = 0;
+  //-----------------------------------------------
 
-  //--------------去块滤波过程------------------------
  public:
   int deblocking_filter_process(PictureBase *picture);
 
