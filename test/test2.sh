@@ -52,7 +52,6 @@ demo_10_frames_cavlc_h264(){
 
 
 demo_10_frames_cavlc_and_interlace_h264(){
-	echo "Skip demo_10_frames_cavlc_and_interlace_h264"
 	index=11
 	ALL_MD5['output_I_0.bmp']=9cbf2c8b5cf428c74a8d0a0981d45ae5
 	ALL_MD5['output_P_1.bmp']=e8966fadaa3667fdfb8a38c79259d44a
