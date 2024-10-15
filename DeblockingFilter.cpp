@@ -1,4 +1,6 @@
-﻿#include "PictureBase.hpp"
+﻿#include "DeblockingFilter.hpp"
+#include "MacroBlock.hpp"
+#include "PictureBase.hpp"
 #include <cstdint>
 
 bool UseMacroblockLeftEdgeFiltering(bool MbaffFrameFlag, int32_t mbAddr,
@@ -37,26 +39,27 @@ bool UseMacroblockTopEdgeFiltering(bool MbaffFrameFlag, int32_t mbAddr,
 }
 
 // 8.7 Deblocking filter process
-int PictureBase::deblocking_filter_process() {
+int DeblockingFilter::deblocking_filter_process(PictureBase *picture) {
+  this->pic = picture;
   const uint32_t ChromaArrayType =
-      m_slice->slice_header->m_sps->ChromaArrayType;
+      pic->m_slice->slice_header->m_sps->ChromaArrayType;
 
   // 宏块内部的,左,上边缘进行滤波
-  for (int32_t mbAddr = 0; mbAddr < PicSizeInMbs; mbAddr++) {
-    const MacroBlock &mb = m_mbs[mbAddr];
+  for (int32_t mbAddr = 0; mbAddr < pic->PicSizeInMbs; mbAddr++) {
+    const MacroBlock &mb = pic->m_mbs[mbAddr];
     const bool MbaffFrameFlag = mb.MbaffFrameFlag;
 
     int32_t mbAddrA = 0, mbAddrB = 0;
-    RET(derivation_for_neighbouring_macroblocks(MbaffFrameFlag, mbAddr, mbAddrA,
-                                                mbAddrB, 0));
+    RET(pic->derivation_for_neighbouring_macroblocks(MbaffFrameFlag, mbAddr,
+                                                     mbAddrA, mbAddrB, 0));
 
     // 是否对宏块左边缘进行滤波
     bool filterLeftMbEdgeFlag = UseMacroblockLeftEdgeFiltering(
-        MbaffFrameFlag, mbAddr, mbAddrA, PicWidthInMbs,
+        MbaffFrameFlag, mbAddr, mbAddrA, pic->PicWidthInMbs,
         mb.disable_deblocking_filter_idc);
     // 是否对宏块上边缘进行滤波
     bool filterTopMbEdgeFlag = UseMacroblockTopEdgeFiltering(
-        MbaffFrameFlag, mbAddr, mbAddrB, PicWidthInMbs,
+        MbaffFrameFlag, mbAddr, mbAddrB, pic->PicWidthInMbs,
         mb.disable_deblocking_filter_idc, mb.mb_field_decoding_flag);
     // 是否对宏块的内部的边缘进行滤波
     bool filterInternalEdgesFlag = (mb.disable_deblocking_filter_idc != 1);
@@ -141,7 +144,7 @@ int PictureBase::deblocking_filter_process() {
   return 0;
 }
 
-int PictureBase::process_filterLeftMbEdge(
+int DeblockingFilter::process_filterLeftMbEdge(
     bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
     bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
     bool fieldMbInFrameFlag, bool _chromaEdgeFlag, int32_t _CurrMbAddr,
@@ -151,10 +154,10 @@ int PictureBase::process_filterLeftMbEdge(
   chromaEdgeFlag = _chromaEdgeFlag,
   fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
   if (MbaffFrameFlag && _CurrMbAddr >= 2 && mb_field_decoding_flag == false &&
-      m_mbs[(_CurrMbAddr - 2)].mb_field_decoding_flag)
+      pic->m_mbs[(_CurrMbAddr - 2)].mb_field_decoding_flag)
     leftMbEdgeFlag = true;
 
-  int32_t n = chromaEdgeFlag ? MbHeightC : 16;
+  int32_t n = chromaEdgeFlag ? pic->MbHeightC : 16;
   for (int32_t k = 0; k < n; k++)
     E[k][0] = 0, E[k][1] = k;
 
@@ -171,7 +174,7 @@ int PictureBase::process_filterLeftMbEdge(
   return 0;
 }
 
-int PictureBase::process_filterInternalEdges(
+int DeblockingFilter::process_filterInternalEdges(
     bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
     bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
     bool fieldMbInFrameFlag, bool _verticalEdgeFlag,
@@ -223,20 +226,22 @@ int PictureBase::process_filterInternalEdges(
   return 0;
 }
 
-int PictureBase::process_filterTopMbEdge(
+int DeblockingFilter::process_filterTopMbEdge(
     bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
     bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
     bool fieldMbInFrameFlag, bool _chromaEdgeFlag, int32_t _CurrMbAddr,
     int32_t mb_field_decoding_flag, int32_t mbAddrN, int32_t (&E)[16][2]) {
 
-  int32_t n = chromaEdgeFlag ? MbHeightC : 16;
+  int32_t n = chromaEdgeFlag ? pic->MbHeightC : 16;
   verticalEdgeFlag = false, leftMbEdgeFlag = false,
   chromaEdgeFlag = _chromaEdgeFlag,
   fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
 
   if (MbaffFrameFlag && (_CurrMbAddr % 2) == 0 &&
-      _CurrMbAddr >= 2 * PicWidthInMbs && mb_field_decoding_flag == false &&
-      m_mbs[(_CurrMbAddr - 2 * PicWidthInMbs + 1)].mb_field_decoding_flag) {
+      _CurrMbAddr >= 2 * pic->PicWidthInMbs &&
+      mb_field_decoding_flag == false &&
+      pic->m_mbs[(_CurrMbAddr - 2 * pic->PicWidthInMbs + 1)]
+          .mb_field_decoding_flag) {
     for (int32_t k = 0; k < n - !chromaEdgeFlag; k++)
       E[k][0] = k, E[k][1] = 0;
 
@@ -272,7 +277,7 @@ int PictureBase::process_filterTopMbEdge(
   return 0;
 }
 
-int PictureBase::process_filterInternalEdges_chrome(
+int DeblockingFilter::process_filterInternalEdges_chrome(
     bool &leftMbEdgeFlag, bool &chromaEdgeFlag, bool &verticalEdgeFlag,
     bool &fieldModeInFrameFilteringFlag, bool MbaffFrameFlag,
     bool fieldMbInFrameFlag, bool _verticalEdgeFlag,
@@ -285,7 +290,7 @@ int PictureBase::process_filterInternalEdges_chrome(
   fieldModeInFrameFilteringFlag = fieldMbInFrameFlag;
 
   if (ChromaArrayType != 3 || transform_size_8x8_flag == false) {
-    for (int32_t k = 0; k < MbHeightC; k++)
+    for (int32_t k = 0; k < pic->MbHeightC; k++)
       if (verticalEdgeFlag)
         E[k][0] = 4, E[k][1] = k;
       else
@@ -304,7 +309,7 @@ int PictureBase::process_filterInternalEdges_chrome(
 
   if (verticalEdgeFlag) {
     if (ChromaArrayType == 3) {
-      for (int32_t k = 0; k < MbHeightC; k++)
+      for (int32_t k = 0; k < pic->MbHeightC; k++)
         E[k][0] = 8, E[k][1] = k;
 
       RET(filtering_for_block_edges(
@@ -319,7 +324,7 @@ int PictureBase::process_filterInternalEdges_chrome(
     }
   } else {
     if (ChromaArrayType != 1) {
-      for (int32_t k = 0; k < MbWidthC - 1; k++)
+      for (int32_t k = 0; k < pic->MbWidthC - 1; k++)
         E[k][0] = k, E[k][1] = 8;
 
       RET(filtering_for_block_edges(
@@ -334,7 +339,7 @@ int PictureBase::process_filterInternalEdges_chrome(
     }
 
     if (ChromaArrayType == 2) {
-      for (int32_t k = 0; k < MbWidthC; k++)
+      for (int32_t k = 0; k < pic->MbWidthC; k++)
         E[k][0] = k, E[k][1] = 12;
 
       RET(filtering_for_block_edges(
@@ -351,7 +356,7 @@ int PictureBase::process_filterInternalEdges_chrome(
 
   // YUV444 水平，垂直方向都需要过滤两次
   if (ChromaArrayType == 3 && transform_size_8x8_flag == false) {
-    for (int32_t k = 0; k < MbHeightC; k++)
+    for (int32_t k = 0; k < pic->MbHeightC; k++)
       if (verticalEdgeFlag)
         E[k][0] = 12, E[k][1] = k;
       else
@@ -370,7 +375,7 @@ int PictureBase::process_filterInternalEdges_chrome(
 }
 
 // 8.7.1 Filtering process for block edges
-int PictureBase::filtering_for_block_edges(
+int DeblockingFilter::filtering_for_block_edges(
     int32_t MbaffFrameFlag, int32_t _CurrMbAddr, int32_t mb_field_decoding_flag,
     int32_t chromaEdgeFlag, int32_t iCbCr, int32_t mbAddrN,
     int32_t verticalEdgeFlag, int32_t fieldModeInFrameFilteringFlag,
@@ -380,24 +385,26 @@ int PictureBase::filtering_for_block_edges(
   uint8_t *pic_buff = nullptr;
 
   if (chromaEdgeFlag == false)
-    pic_buff = m_pic_buff_luma, PicWidthInSamples = PicWidthInSamplesL;
+    pic_buff = pic->m_pic_buff_luma,
+    PicWidthInSamples = pic->PicWidthInSamplesL;
   else if (chromaEdgeFlag && iCbCr == 0)
-    pic_buff = m_pic_buff_cb, PicWidthInSamples = PicWidthInSamplesC;
+    pic_buff = pic->m_pic_buff_cb, PicWidthInSamples = pic->PicWidthInSamplesC;
   else if (chromaEdgeFlag && iCbCr == 1)
-    pic_buff = m_pic_buff_cr, PicWidthInSamples = PicWidthInSamplesC;
+    pic_buff = pic->m_pic_buff_cr, PicWidthInSamples = pic->PicWidthInSamplesC;
 
   int32_t xI = 0, yI = 0;
-  RET(inverse_mb_scanning_process(MbaffFrameFlag, _CurrMbAddr,
-                                  mb_field_decoding_flag, xI, yI));
+  RET(pic->inverse_mb_scanning_process(MbaffFrameFlag, _CurrMbAddr,
+                                       mb_field_decoding_flag, xI, yI));
   int32_t xP = xI, yP = yI;
   if (chromaEdgeFlag) {
-    xP = xI / m_slice->slice_header->m_sps->SubWidthC;
-    yP = (yI + m_slice->slice_header->m_sps->SubHeightC - 1) /
-         m_slice->slice_header->m_sps->SubHeightC;
+    xP = xI / pic->m_slice->slice_header->m_sps->SubWidthC;
+    yP = (yI + pic->m_slice->slice_header->m_sps->SubHeightC - 1) /
+         pic->m_slice->slice_header->m_sps->SubHeightC;
   }
 
   int32_t nE = 16;
-  if (chromaEdgeFlag != 0) nE = (verticalEdgeFlag == 1) ? MbHeightC : MbWidthC;
+  if (chromaEdgeFlag != 0)
+    nE = (verticalEdgeFlag == 1) ? pic->MbHeightC : pic->MbWidthC;
   int32_t dy = (1 + fieldModeInFrameFilteringFlag);
   for (int32_t k = 0; k < nE; k++) {
     uint8_t p[4] = {0}, q[4] = {0};
@@ -466,7 +473,7 @@ int PictureBase::filtering_for_block_edges(
 }
 
 // 8.7.2 Filtering process for a set of samples across a horizontal or vertical block edge
-int PictureBase::
+int DeblockingFilter::
     filtering_for_a_set_of_samples_across_a_horizontal_or_vertical_block_edge(
         int32_t MbaffFrameFlag, int32_t _CurrMbAddr, int32_t chromaEdgeFlag,
         int32_t isChromaCb, uint8_t mb_x_p0, uint8_t mb_y_p0, uint8_t mb_x_q0,
@@ -481,10 +488,14 @@ int PictureBase::
         MbaffFrameFlag, p[0], q[0], mb_x_p0, mb_y_p0, mb_x_q0, mb_y_q0,
         mbAddr_p0, mbAddr_q0, verticalEdgeFlag, bS));
   } else {
-    uint8_t mb_x_p0_chroma = m_slice->slice_header->m_sps->SubWidthC * mb_x_p0;
-    uint8_t mb_y_p0_chroma = m_slice->slice_header->m_sps->SubHeightC * mb_y_p0;
-    uint8_t mb_x_q0_chroma = m_slice->slice_header->m_sps->SubWidthC * mb_x_q0;
-    uint8_t mb_y_q0_chroma = m_slice->slice_header->m_sps->SubHeightC * mb_y_q0;
+    uint8_t mb_x_p0_chroma =
+        pic->m_slice->slice_header->m_sps->SubWidthC * mb_x_p0;
+    uint8_t mb_y_p0_chroma =
+        pic->m_slice->slice_header->m_sps->SubHeightC * mb_y_p0;
+    uint8_t mb_x_q0_chroma =
+        pic->m_slice->slice_header->m_sps->SubWidthC * mb_x_q0;
+    uint8_t mb_y_q0_chroma =
+        pic->m_slice->slice_header->m_sps->SubHeightC * mb_y_q0;
 
     RET(derivation_the_luma_content_dependent_boundary_filtering_strength(
         MbaffFrameFlag, p[0], q[0], mb_x_p0_chroma, mb_y_p0_chroma,
@@ -492,34 +503,36 @@ int PictureBase::
         bS));
   }
 
-  int32_t filterOffsetA = m_mbs[mbAddr_q0].FilterOffsetA;
-  int32_t filterOffsetB = m_mbs[mbAddr_q0].FilterOffsetB;
+  int32_t filterOffsetA = pic->m_mbs[mbAddr_q0].FilterOffsetA;
+  int32_t filterOffsetB = pic->m_mbs[mbAddr_q0].FilterOffsetB;
   int32_t qPp = 0, qPq = 0;
   if (chromaEdgeFlag == false) {
-    qPp = (m_mbs[mbAddr_p0].m_name_of_mb_type == I_PCM) ? 0
-                                                        : m_mbs[mbAddr_p0].QPY;
-    qPq = (m_mbs[mbAddr_q0].m_name_of_mb_type == I_PCM) ? 0
-                                                        : m_mbs[mbAddr_q0].QPY;
+    qPp = (pic->m_mbs[mbAddr_p0].m_name_of_mb_type == I_PCM)
+              ? 0
+              : pic->m_mbs[mbAddr_p0].QPY;
+    qPq = (pic->m_mbs[mbAddr_q0].m_name_of_mb_type == I_PCM)
+              ? 0
+              : pic->m_mbs[mbAddr_q0].QPY;
   } else {
     int32_t QPY = 0, QPC = 0;
 
-    if (m_mbs[mbAddr_p0].m_name_of_mb_type == I_PCM) {
+    if (pic->m_mbs[mbAddr_p0].m_name_of_mb_type == I_PCM) {
       QPY = 0;
-      RET(get_chroma_quantisation_parameters2(QPY, isChromaCb, QPC));
+      RET(pic->get_chroma_quantisation_parameters2(QPY, isChromaCb, QPC));
       qPp = QPC;
     } else {
-      QPY = m_mbs[mbAddr_p0].QPY;
-      RET(get_chroma_quantisation_parameters2(QPY, isChromaCb, QPC));
+      QPY = pic->m_mbs[mbAddr_p0].QPY;
+      RET(pic->get_chroma_quantisation_parameters2(QPY, isChromaCb, QPC));
       qPp = QPC;
     }
 
-    if (m_mbs[mbAddr_q0].m_name_of_mb_type == I_PCM) {
+    if (pic->m_mbs[mbAddr_q0].m_name_of_mb_type == I_PCM) {
       QPY = 0;
-      RET(get_chroma_quantisation_parameters2(QPY, isChromaCb, QPC));
+      RET(pic->get_chroma_quantisation_parameters2(QPY, isChromaCb, QPC));
       qPq = QPC;
     } else {
-      QPY = m_mbs[mbAddr_q0].QPY;
-      RET(get_chroma_quantisation_parameters2(QPY, isChromaCb, QPC));
+      QPY = pic->m_mbs[mbAddr_q0].QPY;
+      RET(pic->get_chroma_quantisation_parameters2(QPY, isChromaCb, QPC));
       qPq = QPC;
     }
   }
@@ -533,7 +546,8 @@ int PictureBase::
       qPp, qPq, filterSamplesFlag, indexA, alpha, beta));
 
   int32_t chromaStyleFilteringFlag =
-      chromaEdgeFlag && (m_slice->slice_header->m_sps->ChromaArrayType != 3);
+      chromaEdgeFlag &&
+      (pic->m_slice->slice_header->m_sps->ChromaArrayType != 3);
 
   if (filterSamplesFlag) {
     if (bS < 4) {
@@ -552,7 +566,7 @@ int PictureBase::
 }
 
 // 8.7.2.3 Filtering process for edges with bS less than 4
-int PictureBase::filtering_for_edges_with_bS_less_than_4(
+int DeblockingFilter::filtering_for_edges_with_bS_less_than_4(
     const uint8_t (&p)[4], const uint8_t (&q)[4], int32_t chromaEdgeFlag,
     int32_t chromaStyleFilteringFlag, int32_t bS, int32_t beta, int32_t indexA,
     uint8_t (&pp)[3], uint8_t (&qq)[3]) {
@@ -572,10 +586,10 @@ int PictureBase::filtering_for_edges_with_bS_less_than_4(
   int32_t tC0 = 0;
   if (chromaEdgeFlag == false)
     tC0 = ttC0[bS - 1][indexA] *
-          (1 << (m_slice->slice_header->m_sps->BitDepthY - 8));
+          (1 << (pic->m_slice->slice_header->m_sps->BitDepthY - 8));
   else
     tC0 = ttC0[bS - 1][indexA] *
-          (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
+          (1 << (pic->m_slice->slice_header->m_sps->BitDepthC - 8));
 
   int32_t ap = ABS(p[2] - p[0]), aq = ABS(q[2] - q[0]);
 
@@ -587,14 +601,14 @@ int PictureBase::filtering_for_edges_with_bS_less_than_4(
       CLIP3(-tC, tC, ((((q[0] - p[0]) << 2) + (p[1] - q[1]) + 4) >> 3));
 
   if (chromaEdgeFlag == false) {
-    pp[0] = CLIP3(0, (1 << m_slice->slice_header->m_sps->BitDepthY) - 1,
+    pp[0] = CLIP3(0, (1 << pic->m_slice->slice_header->m_sps->BitDepthY) - 1,
                   p[0] + delta);
-    qq[0] = CLIP3(0, (1 << m_slice->slice_header->m_sps->BitDepthY) - 1,
+    qq[0] = CLIP3(0, (1 << pic->m_slice->slice_header->m_sps->BitDepthY) - 1,
                   q[0] - delta);
   } else {
-    pp[0] = CLIP3(0, (1 << m_slice->slice_header->m_sps->BitDepthC) - 1,
+    pp[0] = CLIP3(0, (1 << pic->m_slice->slice_header->m_sps->BitDepthC) - 1,
                   p[0] + delta);
-    qq[0] = CLIP3(0, (1 << m_slice->slice_header->m_sps->BitDepthC) - 1,
+    qq[0] = CLIP3(0, (1 << pic->m_slice->slice_header->m_sps->BitDepthC) - 1,
                   q[0] - delta);
   }
 
@@ -614,7 +628,7 @@ int PictureBase::filtering_for_edges_with_bS_less_than_4(
 }
 
 // 8.7.2.4 Filtering process for edges for bS equal to 4
-int PictureBase::filtering_for_edges_for_bS_equal_to_4(
+int DeblockingFilter::filtering_for_edges_for_bS_equal_to_4(
     const uint8_t (&p)[4], const uint8_t (&q)[4], int32_t chromaEdgeFlag,
     int32_t chromaStyleFilteringFlag, int32_t alpha, int32_t beta,
     uint8_t (&pp)[3], uint8_t (&qq)[3]) {
@@ -647,79 +661,8 @@ int PictureBase::filtering_for_edges_for_bS_equal_to_4(
   return 0;
 }
 
-// 6.4.11.1 Derivation process for neighbouring macroblocks
-/* 该过程的输出为： 
- * – mbAddrA：当前宏块左侧宏块的地址及其可用性状态， 
- * – mbAddrB：当前宏块上方宏块的地址及其可用性状态。*/
-int PictureBase::derivation_for_neighbouring_macroblocks(int32_t MbaffFrameFlag,
-                                                         int32_t currMbAddr,
-                                                         int32_t &mbAddrA,
-                                                         int32_t &mbAddrB,
-                                                         int32_t isChroma) {
-
-  int32_t xW = 0, yW = 0;
-
-  /* mbAddrN（N 为 A 或 B）按照以下有序步骤指定导出： 
- * 1. 根据表 6-2 设置亮度位置差 ( xD, yD )。  
- * 2. 对于 ( xN, yN ) 等于 ( xD, yD ) 的亮度位置，调用第 6.4.12 节中指定的相邻位置的推导过程，并将输出分配给 mbAddrN。 */
-
-  /* mbAddrA：当前宏块左侧宏块的地址及其可用性状态 */
-  MB_ADDR_TYPE mbAddrA_type = MB_ADDR_TYPE_UNKOWN;
-  int32_t luma4x4BlkIdxA = 0, luma8x8BlkIdxA = 0;
-  int32_t xA = -1, yA = 0;
-
-  // 6.4.12 Derivation process for neighbouring locations(A)
-  int ret = derivation_for_neighbouring_locations(
-      MbaffFrameFlag, xA, yA, currMbAddr, mbAddrA_type, mbAddrA, luma4x4BlkIdxA,
-      luma8x8BlkIdxA, xW, yW, isChroma);
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return ret;
-  }
-
-  /* mbAddrB：当前宏块上方宏块的地址及其可用性状态 */
-  MB_ADDR_TYPE mbAddrB_type = MB_ADDR_TYPE_UNKOWN;
-  int32_t luma4x4BlkIdxB = 0, luma8x8BlkIdxB = 0;
-  int32_t xB = 0, yB = -1;
-
-  // 6.4.12 Derivation process for neighbouring locations(B)
-  ret = derivation_for_neighbouring_locations(
-      MbaffFrameFlag, xB, yB, currMbAddr, mbAddrB_type, mbAddrB, luma4x4BlkIdxB,
-      luma8x8BlkIdxB, xW, yW, isChroma);
-  if (ret != 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return ret;
-  }
-
-  return 0;
-}
-
-// 6.4.13.1 Derivation process for 4x4 luma block indices
-int PictureBase::derivation_for_4x4_luma_block_indices(uint8_t xP, uint8_t yP,
-                                                       uint8_t &luma4x4BlkIdx) {
-  luma4x4BlkIdx =
-      8 * (yP / 8) + 4 * (xP / 8) + 2 * ((yP % 8) / 4) + ((xP % 8) / 4);
-  return 0;
-}
-
-// 6.4.13.2 Derivation process for 4x4 chroma block indices
-int PictureBase::derivation_for_4x4_chroma_block_indices(
-    uint8_t xP, uint8_t yP, uint8_t &chroma4x4BlkIdx) {
-  chroma4x4BlkIdx = 2 * (yP / 4) + (xP / 4);
-  return 0;
-}
-
-// 6.4.13.3 Derivation process for 8x8 luma block indices
-int PictureBase::derivation_for_8x8_luma_block_indices(uint8_t xP, uint8_t yP,
-                                                       uint8_t &luma8x8BlkIdx) {
-  luma8x8BlkIdx = 2 * (yP / 8) + (xP / 8);
-  return 0;
-}
-
 // 8.7.2.1 Derivation process for the luma content dependent boundary filtering strength
-int PictureBase::
+int DeblockingFilter::
     derivation_the_luma_content_dependent_boundary_filtering_strength(
         int32_t MbaffFrameFlag, int32_t p0, int32_t q0, uint8_t mb_x_p0,
         uint8_t mb_y_p0, uint8_t mb_x_q0, uint8_t mb_y_q0, int32_t mbAddr_p0,
@@ -727,52 +670,52 @@ int PictureBase::
   bool mixedModeEdgeFlag = false;
 
   if (MbaffFrameFlag && mbAddr_p0 != mbAddr_q0 &&
-      m_mbs[mbAddr_p0].mb_field_decoding_flag !=
-          m_mbs[mbAddr_q0].mb_field_decoding_flag)
+      pic->m_mbs[mbAddr_p0].mb_field_decoding_flag !=
+          pic->m_mbs[mbAddr_q0].mb_field_decoding_flag)
     mixedModeEdgeFlag = true;
 
   if (mbAddr_p0 != mbAddr_q0) {
-    if ((m_mbs[mbAddr_p0].mb_field_decoding_flag == false &&
-         m_mbs[mbAddr_q0].mb_field_decoding_flag == false &&
-         (IS_INTRA_Prediction_Mode(m_mbs[mbAddr_p0].m_mb_pred_mode) ||
-          IS_INTRA_Prediction_Mode(m_mbs[mbAddr_q0].m_mb_pred_mode))) ||
-        (m_mbs[mbAddr_p0].mb_field_decoding_flag == false &&
-         m_mbs[mbAddr_q0].mb_field_decoding_flag == false &&
-         (m_mbs[mbAddr_p0].m_slice_type == SLICE_SP ||
-          m_mbs[mbAddr_p0].m_slice_type == SLICE_SI ||
-          m_mbs[mbAddr_q0].m_slice_type == SLICE_SP ||
-          m_mbs[mbAddr_q0].m_slice_type == SLICE_SI)) ||
-        ((MbaffFrameFlag || m_mbs[mbAddr_q0].field_pic_flag) &&
+    if ((pic->m_mbs[mbAddr_p0].mb_field_decoding_flag == false &&
+         pic->m_mbs[mbAddr_q0].mb_field_decoding_flag == false &&
+         (IS_INTRA_Prediction_Mode(pic->m_mbs[mbAddr_p0].m_mb_pred_mode) ||
+          IS_INTRA_Prediction_Mode(pic->m_mbs[mbAddr_q0].m_mb_pred_mode))) ||
+        (pic->m_mbs[mbAddr_p0].mb_field_decoding_flag == false &&
+         pic->m_mbs[mbAddr_q0].mb_field_decoding_flag == false &&
+         (pic->m_mbs[mbAddr_p0].m_slice_type == SLICE_SP ||
+          pic->m_mbs[mbAddr_p0].m_slice_type == SLICE_SI ||
+          pic->m_mbs[mbAddr_q0].m_slice_type == SLICE_SP ||
+          pic->m_mbs[mbAddr_q0].m_slice_type == SLICE_SI)) ||
+        ((MbaffFrameFlag || pic->m_mbs[mbAddr_q0].field_pic_flag) &&
          verticalEdgeFlag &&
-         (IS_INTRA_Prediction_Mode(m_mbs[mbAddr_p0].m_mb_pred_mode) ||
-          IS_INTRA_Prediction_Mode(m_mbs[mbAddr_q0].m_mb_pred_mode))) ||
-        ((MbaffFrameFlag || m_mbs[mbAddr_q0].field_pic_flag) &&
+         (IS_INTRA_Prediction_Mode(pic->m_mbs[mbAddr_p0].m_mb_pred_mode) ||
+          IS_INTRA_Prediction_Mode(pic->m_mbs[mbAddr_q0].m_mb_pred_mode))) ||
+        ((MbaffFrameFlag || pic->m_mbs[mbAddr_q0].field_pic_flag) &&
          verticalEdgeFlag &&
-         (m_mbs[mbAddr_p0].m_slice_type == SLICE_SP ||
-          m_mbs[mbAddr_p0].m_slice_type == SLICE_SI ||
-          m_mbs[mbAddr_q0].m_slice_type == SLICE_SP ||
-          m_mbs[mbAddr_q0].m_slice_type == SLICE_SI))) {
+         (pic->m_mbs[mbAddr_p0].m_slice_type == SLICE_SP ||
+          pic->m_mbs[mbAddr_p0].m_slice_type == SLICE_SI ||
+          pic->m_mbs[mbAddr_q0].m_slice_type == SLICE_SP ||
+          pic->m_mbs[mbAddr_q0].m_slice_type == SLICE_SI))) {
       bS = 4;
       return 0;
     }
   }
 
   if ((mixedModeEdgeFlag == false &&
-       (IS_INTRA_Prediction_Mode(m_mbs[mbAddr_p0].m_mb_pred_mode) ||
-        IS_INTRA_Prediction_Mode(m_mbs[mbAddr_q0].m_mb_pred_mode))) ||
+       (IS_INTRA_Prediction_Mode(pic->m_mbs[mbAddr_p0].m_mb_pred_mode) ||
+        IS_INTRA_Prediction_Mode(pic->m_mbs[mbAddr_q0].m_mb_pred_mode))) ||
       (mixedModeEdgeFlag == false &&
-       (m_mbs[mbAddr_p0].m_slice_type == SLICE_SP ||
-        m_mbs[mbAddr_p0].m_slice_type == SLICE_SI ||
-        m_mbs[mbAddr_q0].m_slice_type == SLICE_SP ||
-        m_mbs[mbAddr_q0].m_slice_type == SLICE_SI)) ||
+       (pic->m_mbs[mbAddr_p0].m_slice_type == SLICE_SP ||
+        pic->m_mbs[mbAddr_p0].m_slice_type == SLICE_SI ||
+        pic->m_mbs[mbAddr_q0].m_slice_type == SLICE_SP ||
+        pic->m_mbs[mbAddr_q0].m_slice_type == SLICE_SI)) ||
       (mixedModeEdgeFlag && verticalEdgeFlag == false &&
-       (IS_INTRA_Prediction_Mode(m_mbs[mbAddr_p0].m_mb_pred_mode) ||
-        IS_INTRA_Prediction_Mode(m_mbs[mbAddr_q0].m_mb_pred_mode))) ||
+       (IS_INTRA_Prediction_Mode(pic->m_mbs[mbAddr_p0].m_mb_pred_mode) ||
+        IS_INTRA_Prediction_Mode(pic->m_mbs[mbAddr_q0].m_mb_pred_mode))) ||
       (mixedModeEdgeFlag && verticalEdgeFlag == false &&
-       (m_mbs[mbAddr_p0].m_slice_type == SLICE_SP ||
-        m_mbs[mbAddr_p0].m_slice_type == SLICE_SI ||
-        m_mbs[mbAddr_q0].m_slice_type == SLICE_SP ||
-        m_mbs[mbAddr_q0].m_slice_type == SLICE_SI))) {
+       (pic->m_mbs[mbAddr_p0].m_slice_type == SLICE_SP ||
+        pic->m_mbs[mbAddr_p0].m_slice_type == SLICE_SI ||
+        pic->m_mbs[mbAddr_q0].m_slice_type == SLICE_SP ||
+        pic->m_mbs[mbAddr_q0].m_slice_type == SLICE_SI))) {
     bS = 3;
     return 0;
   }
@@ -780,30 +723,30 @@ int PictureBase::
   uint8_t luma4x4BlkIdx_p0 = 0, luma4x4BlkIdx_q0 = 0;
   uint8_t luma8x8BlkIdx_p0 = 0, luma8x8BlkIdx_q0 = 0;
 
-  RET(derivation_for_4x4_luma_block_indices(mb_x_p0, mb_y_p0,
-                                            luma4x4BlkIdx_p0));
+  RET(pic->derivation_for_4x4_luma_block_indices(mb_x_p0, mb_y_p0,
+                                                 luma4x4BlkIdx_p0));
 
-  RET(derivation_for_4x4_luma_block_indices(mb_x_q0, mb_y_q0,
-                                            luma4x4BlkIdx_q0));
+  RET(pic->derivation_for_4x4_luma_block_indices(mb_x_q0, mb_y_q0,
+                                                 luma4x4BlkIdx_q0));
 
-  RET(derivation_for_8x8_luma_block_indices(mb_x_p0, mb_y_p0,
-                                            luma8x8BlkIdx_p0));
+  RET(pic->derivation_for_8x8_luma_block_indices(mb_x_p0, mb_y_p0,
+                                                 luma8x8BlkIdx_p0));
 
-  RET(derivation_for_8x8_luma_block_indices(mb_x_q0, mb_y_q0,
-                                            luma8x8BlkIdx_q0));
+  RET(pic->derivation_for_8x8_luma_block_indices(mb_x_q0, mb_y_q0,
+                                                 luma8x8BlkIdx_q0));
 
-  if ((m_mbs[mbAddr_p0].transform_size_8x8_flag &&
-       m_mbs[mbAddr_p0].mb_luma_8x8_non_zero_count_coeff[luma8x8BlkIdx_p0] >
-           0) ||
-      (m_mbs[mbAddr_p0].transform_size_8x8_flag == false &&
-       m_mbs[mbAddr_p0].mb_luma_4x4_non_zero_count_coeff[luma4x4BlkIdx_p0] >
-           0) ||
-      (m_mbs[mbAddr_q0].transform_size_8x8_flag &&
-       m_mbs[mbAddr_q0].mb_luma_8x8_non_zero_count_coeff[luma8x8BlkIdx_q0] >
-           0) ||
-      (m_mbs[mbAddr_q0].transform_size_8x8_flag == false &&
-       m_mbs[mbAddr_q0].mb_luma_4x4_non_zero_count_coeff[luma4x4BlkIdx_q0] >
-           0)) {
+  if ((pic->m_mbs[mbAddr_p0].transform_size_8x8_flag &&
+       pic->m_mbs[mbAddr_p0]
+               .mb_luma_8x8_non_zero_count_coeff[luma8x8BlkIdx_p0] > 0) ||
+      (pic->m_mbs[mbAddr_p0].transform_size_8x8_flag == false &&
+       pic->m_mbs[mbAddr_p0]
+               .mb_luma_4x4_non_zero_count_coeff[luma4x4BlkIdx_p0] > 0) ||
+      (pic->m_mbs[mbAddr_q0].transform_size_8x8_flag &&
+       pic->m_mbs[mbAddr_q0]
+               .mb_luma_8x8_non_zero_count_coeff[luma8x8BlkIdx_q0] > 0) ||
+      (pic->m_mbs[mbAddr_q0].transform_size_8x8_flag == false &&
+       pic->m_mbs[mbAddr_q0]
+               .mb_luma_4x4_non_zero_count_coeff[luma4x4BlkIdx_q0] > 0)) {
     bS = 2;
     return 0;
   }
@@ -812,67 +755,67 @@ int PictureBase::
   int32_t mbPartIdx_q0 = 0, subMbPartIdx_q0 = 0;
 
   int32_t mv_y_diff =
-      ((m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD ||
-        m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD) ||
-       (MbaffFrameFlag && m_mbs[mbAddr_q0].mb_field_decoding_flag))
+      ((pic->m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD ||
+        pic->m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD) ||
+       (MbaffFrameFlag && pic->m_mbs[mbAddr_q0].mb_field_decoding_flag))
           ? 2
           : 4;
 
   // 6.4.13.4 Derivation process for macroblock and sub-macroblock partition indices
-  RET(derivation_macroblock_and_sub_macroblock_partition_indices(
-      m_mbs[mbAddr_p0].m_name_of_mb_type,
-      m_mbs[mbAddr_p0].m_name_of_sub_mb_type, mb_x_p0, mb_y_p0, mbPartIdx_p0,
-      subMbPartIdx_p0));
+  RET(pic->derivation_macroblock_and_sub_macroblock_partition_indices(
+      pic->m_mbs[mbAddr_p0].m_name_of_mb_type,
+      pic->m_mbs[mbAddr_p0].m_name_of_sub_mb_type, mb_x_p0, mb_y_p0,
+      mbPartIdx_p0, subMbPartIdx_p0));
 
   // 6.4.13.4 Derivation process for macroblock and sub-macroblock partition indices
-  RET(derivation_macroblock_and_sub_macroblock_partition_indices(
-      m_mbs[mbAddr_q0].m_name_of_mb_type,
-      m_mbs[mbAddr_q0].m_name_of_sub_mb_type, mb_x_q0, mb_y_q0, mbPartIdx_q0,
-      subMbPartIdx_q0));
+  RET(pic->derivation_macroblock_and_sub_macroblock_partition_indices(
+      pic->m_mbs[mbAddr_q0].m_name_of_mb_type,
+      pic->m_mbs[mbAddr_q0].m_name_of_sub_mb_type, mb_x_q0, mb_y_q0,
+      mbPartIdx_q0, subMbPartIdx_q0));
 
   if (mixedModeEdgeFlag) {
     bS = 1;
     return 0;
   } else if (mixedModeEdgeFlag == false) {
     Frame *RefPicList0_p0 =
-        (m_mbs[mbAddr_p0].m_RefIdxL0[mbPartIdx_p0] >= 0)
-            ? m_RefPicList0[m_mbs[mbAddr_p0].m_RefIdxL0[mbPartIdx_p0]]
+        (pic->m_mbs[mbAddr_p0].m_RefIdxL0[mbPartIdx_p0] >= 0)
+            ? pic->m_RefPicList0[pic->m_mbs[mbAddr_p0].m_RefIdxL0[mbPartIdx_p0]]
             : nullptr;
     Frame *RefPicList1_p0 =
-        (m_mbs[mbAddr_p0].m_RefIdxL1[mbPartIdx_p0] >= 0)
-            ? m_RefPicList1[m_mbs[mbAddr_p0].m_RefIdxL1[mbPartIdx_p0]]
+        (pic->m_mbs[mbAddr_p0].m_RefIdxL1[mbPartIdx_p0] >= 0)
+            ? pic->m_RefPicList1[pic->m_mbs[mbAddr_p0].m_RefIdxL1[mbPartIdx_p0]]
             : nullptr;
     Frame *RefPicList0_q0 =
-        (m_mbs[mbAddr_q0].m_RefIdxL0[mbPartIdx_q0] >= 0)
-            ? m_RefPicList0[m_mbs[mbAddr_q0].m_RefIdxL0[mbPartIdx_q0]]
+        (pic->m_mbs[mbAddr_q0].m_RefIdxL0[mbPartIdx_q0] >= 0)
+            ? pic->m_RefPicList0[pic->m_mbs[mbAddr_q0].m_RefIdxL0[mbPartIdx_q0]]
             : nullptr;
     Frame *RefPicList1_q0 =
-        (m_mbs[mbAddr_q0].m_RefIdxL1[mbPartIdx_q0] >= 0)
-            ? m_RefPicList1[m_mbs[mbAddr_q0].m_RefIdxL1[mbPartIdx_q0]]
+        (pic->m_mbs[mbAddr_q0].m_RefIdxL1[mbPartIdx_q0] >= 0)
+            ? pic->m_RefPicList1[pic->m_mbs[mbAddr_q0].m_RefIdxL1[mbPartIdx_q0]]
             : nullptr;
 
-    int32_t PredFlagL0_p0 = m_mbs[mbAddr_p0].m_PredFlagL0[mbPartIdx_p0];
-    int32_t PredFlagL1_p0 = m_mbs[mbAddr_p0].m_PredFlagL1[mbPartIdx_p0];
-    int32_t PredFlagL0_q0 = m_mbs[mbAddr_q0].m_PredFlagL0[mbPartIdx_q0];
-    int32_t PredFlagL1_q0 = m_mbs[mbAddr_q0].m_PredFlagL1[mbPartIdx_q0];
+    int32_t PredFlagL0_p0 = pic->m_mbs[mbAddr_p0].m_PredFlagL0[mbPartIdx_p0];
+    int32_t PredFlagL1_p0 = pic->m_mbs[mbAddr_p0].m_PredFlagL1[mbPartIdx_p0];
+    int32_t PredFlagL0_q0 = pic->m_mbs[mbAddr_q0].m_PredFlagL0[mbPartIdx_q0];
+    int32_t PredFlagL1_q0 = pic->m_mbs[mbAddr_q0].m_PredFlagL1[mbPartIdx_q0];
 
     int32_t MvL0_p0_x =
-        m_mbs[mbAddr_p0].m_MvL0[mbPartIdx_p0][subMbPartIdx_p0][0];
+        pic->m_mbs[mbAddr_p0].m_MvL0[mbPartIdx_p0][subMbPartIdx_p0][0];
     int32_t MvL0_p0_y =
-        m_mbs[mbAddr_p0].m_MvL0[mbPartIdx_p0][subMbPartIdx_p0][1];
+        pic->m_mbs[mbAddr_p0].m_MvL0[mbPartIdx_p0][subMbPartIdx_p0][1];
     int32_t MvL0_q0_x =
-        m_mbs[mbAddr_q0].m_MvL0[mbPartIdx_q0][subMbPartIdx_q0][0];
+        pic->m_mbs[mbAddr_q0].m_MvL0[mbPartIdx_q0][subMbPartIdx_q0][0];
     int32_t MvL0_q0_y =
-        m_mbs[mbAddr_q0].m_MvL0[mbPartIdx_q0][subMbPartIdx_q0][1];
+        pic->m_mbs[mbAddr_q0].m_MvL0[mbPartIdx_q0][subMbPartIdx_q0][1];
 
     int32_t MvL1_p0_x =
-        m_mbs[mbAddr_p0].m_MvL1[mbPartIdx_p0][subMbPartIdx_p0][0];
+        pic->m_mbs[mbAddr_p0].m_MvL1[mbPartIdx_p0][subMbPartIdx_p0][0];
     int32_t MvL1_p0_y =
-        m_mbs[mbAddr_p0].m_MvL1[mbPartIdx_p0][subMbPartIdx_p0][1];
+        pic->m_mbs[mbAddr_p0].m_MvL1[mbPartIdx_p0][subMbPartIdx_p0][1];
     int32_t MvL1_q0_x =
-        m_mbs[mbAddr_q0].m_MvL1[mbPartIdx_q0][subMbPartIdx_q0][0];
+        pic->m_mbs[mbAddr_q0].m_MvL1[mbPartIdx_q0][subMbPartIdx_q0][0];
     int32_t MvL1_q0_y =
-        m_mbs[mbAddr_q0].m_MvL1[mbPartIdx_q0][subMbPartIdx_q0][1];
+        pic->m_mbs[mbAddr_q0].m_MvL1[mbPartIdx_q0][subMbPartIdx_q0][1];
 
     // p0和q0有不同的参考图片，或者p0和q0有不同数量的运动向量
     if (((RefPicList0_p0 == RefPicList0_q0 &&
@@ -965,7 +908,7 @@ int PictureBase::
 }
 
 // 8.7.2.2 Derivation process for the thresholds for each block edge
-int PictureBase::derivation_for_the_thresholds_for_each_block_edge(
+int DeblockingFilter::derivation_for_the_thresholds_for_each_block_edge(
     int32_t p0, int32_t q0, int32_t p1, int32_t q1, int32_t chromaEdgeFlag,
     int32_t bS, int32_t filterOffsetA, int32_t filterOffsetB, int32_t qPp,
     int32_t qPq, int32_t &filterSamplesFlag, int32_t &indexA, int32_t &alpha,
@@ -987,13 +930,15 @@ int PictureBase::derivation_for_the_thresholds_for_each_block_edge(
   indexA = CLIP3(0, 51, qPav + filterOffsetA);
   int32_t indexB = CLIP3(0, 51, qPav + filterOffsetB);
   if (chromaEdgeFlag == false) {
-    alpha =
-        alpha2[indexA] * (1 << (m_slice->slice_header->m_sps->BitDepthY - 8));
-    beta = beta2[indexB] * (1 << (m_slice->slice_header->m_sps->BitDepthY - 8));
+    alpha = alpha2[indexA] *
+            (1 << (pic->m_slice->slice_header->m_sps->BitDepthY - 8));
+    beta = beta2[indexB] *
+           (1 << (pic->m_slice->slice_header->m_sps->BitDepthY - 8));
   } else {
-    alpha =
-        alpha2[indexA] * (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
-    beta = beta2[indexB] * (1 << (m_slice->slice_header->m_sps->BitDepthC - 8));
+    alpha = alpha2[indexA] *
+            (1 << (pic->m_slice->slice_header->m_sps->BitDepthC - 8));
+    beta = beta2[indexB] *
+           (1 << (pic->m_slice->slice_header->m_sps->BitDepthC - 8));
   }
 
   filterSamplesFlag = (bS != 0 && ABS(p0 - q0) < alpha && ABS(p1 - p0) < beta &&

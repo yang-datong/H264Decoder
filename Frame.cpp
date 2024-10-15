@@ -1,4 +1,5 @@
 #include "Frame.hpp"
+#include "DeblockingFilter.hpp"
 #include "Slice.hpp"
 #include "SliceHeader.hpp"
 
@@ -33,7 +34,8 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop) {
                 gop.m_ppss[gop.curr_pps_id], this);
   // 去块滤波器
   /* TODO YangJing 这里函数要认真看 <24-10-14 05:44:27> */
-  m_picture_frame.deblocking_filter_process();
+  DeblockingFilter deblockingFilter;
+  deblockingFilter.deblocking_filter_process(&m_picture_frame);
   m_picture_frame.saveToBmpFile(output_file.c_str());
   //}
   return 0;

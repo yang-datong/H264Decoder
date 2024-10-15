@@ -2086,3 +2086,74 @@ int PictureBase::picture_construction_process_prior_to_deblocking_filter(
 
   return 0;
 }
+
+// 6.4.11.1 Derivation process for neighbouring macroblocks
+/* 该过程的输出为： 
+ * – mbAddrA：当前宏块左侧宏块的地址及其可用性状态， 
+ * – mbAddrB：当前宏块上方宏块的地址及其可用性状态。*/
+int PictureBase::derivation_for_neighbouring_macroblocks(int32_t MbaffFrameFlag,
+                                                         int32_t currMbAddr,
+                                                         int32_t &mbAddrA,
+                                                         int32_t &mbAddrB,
+                                                         int32_t isChroma) {
+
+  int32_t xW = 0, yW = 0;
+
+  /* mbAddrN（N 为 A 或 B）按照以下有序步骤指定导出： 
+ * 1. 根据表 6-2 设置亮度位置差 ( xD, yD )。  
+ * 2. 对于 ( xN, yN ) 等于 ( xD, yD ) 的亮度位置，调用第 6.4.12 节中指定的相邻位置的推导过程，并将输出分配给 mbAddrN。 */
+
+  /* mbAddrA：当前宏块左侧宏块的地址及其可用性状态 */
+  MB_ADDR_TYPE mbAddrA_type = MB_ADDR_TYPE_UNKOWN;
+  int32_t luma4x4BlkIdxA = 0, luma8x8BlkIdxA = 0;
+  int32_t xA = -1, yA = 0;
+
+  // 6.4.12 Derivation process for neighbouring locations(A)
+  int ret = derivation_for_neighbouring_locations(
+      MbaffFrameFlag, xA, yA, currMbAddr, mbAddrA_type, mbAddrA, luma4x4BlkIdxA,
+      luma8x8BlkIdxA, xW, yW, isChroma);
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return ret;
+  }
+
+  /* mbAddrB：当前宏块上方宏块的地址及其可用性状态 */
+  MB_ADDR_TYPE mbAddrB_type = MB_ADDR_TYPE_UNKOWN;
+  int32_t luma4x4BlkIdxB = 0, luma8x8BlkIdxB = 0;
+  int32_t xB = 0, yB = -1;
+
+  // 6.4.12 Derivation process for neighbouring locations(B)
+  ret = derivation_for_neighbouring_locations(
+      MbaffFrameFlag, xB, yB, currMbAddr, mbAddrB_type, mbAddrB, luma4x4BlkIdxB,
+      luma8x8BlkIdxB, xW, yW, isChroma);
+  if (ret != 0) {
+    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+              << std::endl;
+    return ret;
+  }
+
+  return 0;
+}
+
+// 6.4.13.1 Derivation process for 4x4 luma block indices
+int PictureBase::derivation_for_4x4_luma_block_indices(uint8_t xP, uint8_t yP,
+                                                       uint8_t &luma4x4BlkIdx) {
+  luma4x4BlkIdx =
+      8 * (yP / 8) + 4 * (xP / 8) + 2 * ((yP % 8) / 4) + ((xP % 8) / 4);
+  return 0;
+}
+
+// 6.4.13.2 Derivation process for 4x4 chroma block indices
+int PictureBase::derivation_for_4x4_chroma_block_indices(
+    uint8_t xP, uint8_t yP, uint8_t &chroma4x4BlkIdx) {
+  chroma4x4BlkIdx = 2 * (yP / 4) + (xP / 4);
+  return 0;
+}
+
+// 6.4.13.3 Derivation process for 8x8 luma block indices
+int PictureBase::derivation_for_8x8_luma_block_indices(uint8_t xP, uint8_t yP,
+                                                       uint8_t &luma8x8BlkIdx) {
+  luma8x8BlkIdx = 2 * (yP / 8) + (xP / 8);
+  return 0;
+}
