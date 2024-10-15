@@ -54,6 +54,12 @@ int DeblockingFilter::deblocking_filter_process(PictureBase *picture) {
     this->mb_field_decoding_flag = mb.mb_field_decoding_flag;
     this->transform_size_8x8_flag = mb.transform_size_8x8_flag;
 
+    this->fieldModeInFrameFilteringFlag = false;
+    this->fieldMbInFrameFlag = (MbaffFrameFlag && mb.mb_field_decoding_flag);
+    this->verticalEdgeFlag = false;
+    this->leftMbEdgeFlag = false;
+    this->chromaEdgeFlag = false;
+
     int32_t mbAddrA = 0, mbAddrB = 0;
     RET(pic->derivation_for_neighbouring_macroblocks(MbaffFrameFlag, mbAddr,
                                                      mbAddrA, mbAddrB, 0));
@@ -69,11 +75,6 @@ int DeblockingFilter::deblocking_filter_process(PictureBase *picture) {
     // 是否对宏块的内部的边缘进行滤波
     bool filterInternalEdgesFlag = (mb.disable_deblocking_filter_idc != 1);
 
-    this->fieldModeInFrameFilteringFlag = false;
-    this->fieldMbInFrameFlag = (MbaffFrameFlag && mb.mb_field_decoding_flag);
-    this->verticalEdgeFlag = false;
-    this->leftMbEdgeFlag = false;
-    this->chromaEdgeFlag = false;
     int32_t E[16][2] = {{0}};
 
     // 对宏块的左边缘进行滤波
@@ -156,9 +157,8 @@ int DeblockingFilter::process_filterTopMbEdge(bool _chromaEdgeFlag,
 
     RET(filtering_for_block_edges(_CurrMbAddr, 0, mbAddrN - !chromaEdgeFlag,
                                   E));
-    if (chromaEdgeFlag) {
+    if (chromaEdgeFlag)
       RET(filtering_for_block_edges(_CurrMbAddr, 1, mbAddrN, E));
-    }
 
     for (int32_t k = 0; k < n; k++)
       E[k][0] = k, E[k][1] = 1;
@@ -169,9 +169,8 @@ int DeblockingFilter::process_filterTopMbEdge(bool _chromaEdgeFlag,
   }
 
   RET(filtering_for_block_edges(_CurrMbAddr, 0, mbAddrN, E));
-  if (chromaEdgeFlag) {
+  if (chromaEdgeFlag)
     RET(filtering_for_block_edges(_CurrMbAddr, 1, mbAddrN, E));
-  }
   return 0;
 }
 
