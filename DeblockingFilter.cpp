@@ -242,6 +242,7 @@ int DeblockingFilter::process_filterTopMbEdge(
       mb_field_decoding_flag == false &&
       pic->m_mbs[(_CurrMbAddr - 2 * pic->PicWidthInMbs + 1)]
           .mb_field_decoding_flag) {
+    fieldModeInFrameFilteringFlag = true;
     for (int32_t k = 0; k < n - !chromaEdgeFlag; k++)
       E[k][0] = k, E[k][1] = 0;
 

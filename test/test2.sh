@@ -53,18 +53,18 @@ demo_10_frames_cavlc_h264(){
 
 demo_10_frames_cavlc_and_interlace_h264(){
 	echo "Skip demo_10_frames_cavlc_and_interlace_h264"
-#	index=11
-#	ALL_MD5['output_I_0.bmp']=9cbf2c8b5cf428c74a8d0a0981d45ae5
-#	ALL_MD5['output_P_1.bmp']=e8966fadaa3667fdfb8a38c79259d44a
-#	ALL_MD5['output_P_2.bmp']=88d0698aea9668a083baadb42cf1abf5
-#	ALL_MD5['output_P_3.bmp']=f8a765081f9d45a057ec773a21ad2e18
-#	ALL_MD5['output_P_4.bmp']=8e530662365152358a77ef90eefef567
-#	ALL_MD5['output_P_5.bmp']=ac2d470e128267dff8da90e3feeb0607
-#	ALL_MD5['output_P_6.bmp']=c14bae1faed247deb584f35e70aa7541
-#	ALL_MD5['output_P_7.bmp']=6373c65029d385bd37f6bbc7a18b9d37
-#	ALL_MD5['output_P_8.bmp']=6c2b4080ca7eafb7e872f64a25b33c0e
-#	ALL_MD5['output_P_9.bmp']=a604b79d3e0d332bff62515730e25f6e
-#	ALL_MD5['output_P_10.bmp']=0e09bacdda11bdec3d6342ab5a7c9823
+	index=11
+	ALL_MD5['output_I_0.bmp']=9cbf2c8b5cf428c74a8d0a0981d45ae5
+	ALL_MD5['output_P_1.bmp']=e8966fadaa3667fdfb8a38c79259d44a
+	ALL_MD5['output_P_2.bmp']=88d0698aea9668a083baadb42cf1abf5
+	ALL_MD5['output_P_3.bmp']=f8a765081f9d45a057ec773a21ad2e18
+	ALL_MD5['output_P_4.bmp']=8e530662365152358a77ef90eefef567
+	ALL_MD5['output_P_5.bmp']=ac2d470e128267dff8da90e3feeb0607
+	ALL_MD5['output_P_6.bmp']=c14bae1faed247deb584f35e70aa7541
+	ALL_MD5['output_P_7.bmp']=6373c65029d385bd37f6bbc7a18b9d37
+	ALL_MD5['output_P_8.bmp']=6c2b4080ca7eafb7e872f64a25b33c0e
+	ALL_MD5['output_P_9.bmp']=a604b79d3e0d332bff62515730e25f6e
+	ALL_MD5['output_P_10.bmp']=0e09bacdda11bdec3d6342ab5a7c9823
 }
 
 source_cut_10_frames_h264(){
