@@ -1,4 +1,5 @@
 #include "PictureBase.hpp"
+#include <cstdint>
 
 // 8.3.1.1 Derivation process for Intra4x4PredMode (8.3.1 Intra_4x4 prediction process for luma samples)
 int PictureBase::getIntra4x4PredMode(int32_t luma4x4BlkIdx,
@@ -1827,12 +1828,26 @@ int PictureBase::picture_construction_process_prior_to_deblocking_filter(
       nE = 8;
     }
 
+//#define SHOW_MB_BORDER
+#ifdef SHOW_MB_BORDER
+    const int32_t border_color = 255; // 边框颜色为白色
+#endif
     int32_t n = (isMbAff) ? 2 : 1;
     for (int32_t i = 0; i < nE; i++)
       for (int32_t j = 0; j < nE; j++) {
         int32_t y = yP + n * (yO + i);
         int32_t x = xP + xO + j;
+#ifdef SHOW_MB_BORDER
+        // 添加宏块边框
+        if (y == (yP + n * yO))
+          pic_buff[y * PicWidthInSamples + x] = border_color;
+        else if (x == (xP + xO))
+          pic_buff[y * PicWidthInSamples + x] = border_color;
+        else
+          pic_buff[y * PicWidthInSamples + x] = u[i * nE + j];
+#else
         pic_buff[y * PicWidthInSamples + x] = u[i * nE + j];
+#endif
       }
   }
 
