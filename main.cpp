@@ -16,7 +16,7 @@ int main(int argc, char *argv[]) {
   // ios::sync_with_stdio(false);
 
   string filePath;
-  if (argc > 1 && argv[1] != NULL)
+  if (argc > 1 && argv[1] != nullptr)
     filePath = argv[1];
   else {
     /* 1920x1080 */
@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
 
   /* 2. 创建一个GOP用于存放解码后的I、P、B帧序列 */
   GOP *gop = new GOP();
-  Frame *frame = gop->m_DecodedPictureBuffer[0];
+  Frame *frame = gop->m_dpb[0];
 
   BitStream *bitStream = nullptr;
 
@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
         bitStream = new BitStream(rbsp.buf, rbsp.len);
         /* 此处根据SliceHeader可判断A Frame =? A Slice */
         nalu.extractSliceparameters(*bitStream, *gop, *frame);
-        frame->decode(*bitStream, gop->m_DecodedPictureBuffer, *gop);
+        frame->decode(*bitStream, gop->m_dpb, *gop);
         cout << " }" << endl;
         break;
       case 2: /* DPA(non-VCL) */
@@ -125,7 +125,7 @@ int main(int argc, char *argv[]) {
         bitStream = new BitStream(rbsp.buf, rbsp.len);
         /* 这里通过解析SliceHeader后可以知道一个Frame到底是几个Slice，通过直接调用frame->decode，在内部对每个Slice->decode() （如果存在多个Slice的情况，可以通过first_mb_in_slice判断，如果每个Slice都为0,则表示每个Slice都是一帧数据，当first_mb_in_slice>0，则表示与前面的一个或多个Slice共同组成一个Frame） */
         nalu.extractIDRparameters(*bitStream, *gop, *frame);
-        frame->decode(*bitStream, gop->m_DecodedPictureBuffer, *gop);
+        frame->decode(*bitStream, gop->m_dpb, *gop);
         cout << " }" << endl;
         break;
       case 6: /* SEI（补充信息）(VCL) */
@@ -139,7 +139,7 @@ int main(int argc, char *argv[]) {
         /* 8. 解码SPS中信息 */
         cout << "SPS -> {" << endl;
         nalu.extractSPSparameters(rbsp, gop->m_spss, gop->last_sps_id);
-        gop->max_num_reorder_frames =
+        gop->m_max_num_reorder_frames =
             gop->m_spss[gop->last_sps_id].max_num_reorder_frames;
         cout << " }" << endl;
         break;
@@ -200,6 +200,8 @@ int main(int argc, char *argv[]) {
 
   /* 读取完所有Nalu，并送入解码后，则将缓存中所有的Frame读取出来，准备退出 */
   reader.close();
+  delete gop;
+  delete bitStream;
   return 0;
 }
 
@@ -207,7 +209,7 @@ int main(int argc, char *argv[]) {
 /* 清空单帧，若当IDR解码完成时，则对整个GOP进行flush */
 int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
                OUTPUT_FILE_TYPE output_file_type) {
-  if (frame != NULL && frame->m_current_picture_ptr != NULL) {
+  if (frame != nullptr && frame->m_current_picture_ptr != nullptr) {
     Frame *newEmptyPicture = nullptr;
     frame->m_current_picture_ptr
         ->end_decode_the_picture_and_get_a_new_empty_picture(newEmptyPicture);

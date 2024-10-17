@@ -10,93 +10,60 @@
 
 extern int32_t g_PicNumCnt;
 
-PictureBase::PictureBase() {
-  m_mbs = NULL;
-  m_pic_buff_luma = NULL;
-  m_pic_buff_cb = NULL;
-  m_pic_buff_cr = NULL;
-  m_is_malloc_mem_by_myself = 0;
-
-  reset();
-}
+PictureBase::PictureBase() {}
 
 PictureBase::~PictureBase() { unInit(); }
 
 int PictureBase::reset() {
-  //----------------------
-  if (m_mbs) {
-    memset(m_mbs, 0, sizeof(MacroBlock) * PicSizeInMbs);
-    //fill(m_mbs, m_mbs + PicSizeInMbs, MacroBlock());
-  }
+  if (m_mbs) memset(m_mbs, 0, sizeof(MacroBlock) * PicSizeInMbs);
 
-  if (m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
-    if (m_pic_buff_luma) {
+  if (m_picture_coded_type == FRAME) {
+    if (m_pic_buff_luma)
       memset(m_pic_buff_luma, 0,
              sizeof(uint8_t) * PicWidthInSamplesL * PicHeightInSamplesL);
-    }
 
-    if (m_pic_buff_cb) {
+    if (m_pic_buff_cb)
       memset(m_pic_buff_cb, 0,
              sizeof(uint8_t) * PicWidthInSamplesC * PicHeightInSamplesC);
-    }
 
-    if (m_pic_buff_cr) {
+    if (m_pic_buff_cr)
       memset(m_pic_buff_cr, 0,
              sizeof(uint8_t) * PicWidthInSamplesC * PicHeightInSamplesC);
-    }
   }
 
-  //----------------------
-  mb_x = 0;
-  mb_y = 0;
-  m_pic_coded_width_pixels = 0;
-  m_pic_coded_height_pixels = 0;
-  MbWidthL = 0;
-  MbHeightL = 0;
-  MbWidthC = 0;
-  MbHeightC = 0;
+  mb_x = 0, mb_y = 0;
+  m_pic_coded_width_pixels = 0, m_pic_coded_height_pixels = 0;
+  MbWidthL = 0, MbHeightL = 0;
+  MbWidthC = 0, MbHeightC = 0;
   Chroma_Format = 0;
   mb_cnt = 0;
   CurrMbAddr = 0;
-  PicWidthInMbs = 0;
-  PicHeightInMbs = 0;
-  PicSizeInMbs = 0;
-  //    m_mbs = NULL;
-  //    m_pic_buff_luma = NULL;
-  //    m_pic_buff_cb = NULL;
-  //    m_pic_buff_cr = NULL;
-  TopFieldOrderCnt = 0;
-  BottomFieldOrderCnt = 0;
-  PicOrderCntMsb = 0;
-  PicOrderCntLsb = 0;
-  FrameNumOffset = 0;
-  absFrameNum = 0;
+  PicWidthInMbs = 0, PicHeightInMbs = 0, PicSizeInMbs = 0;
+  TopFieldOrderCnt = 0, BottomFieldOrderCnt = 0;
+  PicOrderCntMsb = 0, PicOrderCntLsb = 0;
+  FrameNumOffset = 0, absFrameNum = 0;
   picOrderCntCycleCnt = 0;
   frameNumInPicOrderCntCycle = 0;
   expectedPicOrderCnt = 0;
   PicOrderCnt = 0;
-  FrameNum = 0;
-  FrameNumWrap = 0;
+  FrameNum = 0, FrameNumWrap = 0;
   LongTermFrameIdx = 0;
-  PicNum = 0;
-  LongTermPicNum = 0;
-  FieldNum = NA;
-  MaxLongTermFrameIdx = NA;
-  memory_management_control_operation_5_flag = 0;
+  PicNum = 0, LongTermPicNum = 0;
+  FieldNum = NA, MaxLongTermFrameIdx = NA;
+  memory_management_control_operation_5_flag = 0,
   memory_management_control_operation_6_flag = 0;
-  reference_marked_type = PICTURE_MARKED_AS_unkown;
-  m_picture_coded_type = PICTURE_CODED_TYPE_UNKNOWN;
-  m_picture_type = H264_PICTURE_TYPE_UNKNOWN;
-  m_is_decode_finished = 0;
-  m_parent = NULL;
+  reference_marked_type = UNKOWN;
+  m_picture_coded_type = UNKNOWN;
+  m_picture_type = SLICE_UNKNOWN;
   m_slice_cnt = 0;
+  m_RefPicList0Length = 0, m_RefPicList1Length = 0;
+  m_PicNumCnt = 0;
+  m_parent = nullptr;
+  m_is_decode_finished = 0;
+
   memset(m_dpb, 0, sizeof(Frame *) * 16);
   memset(m_RefPicList0, 0, sizeof(Frame *) * 16);
   memset(m_RefPicList1, 0, sizeof(Frame *) * 16);
-  m_RefPicList0Length = 0;
-  m_RefPicList1Length = 0;
-  m_PicNumCnt = 0;
-
   return 0;
 }
 
@@ -128,7 +95,7 @@ int PictureBase::init(Slice *slice) {
   }
 
   //----------------------------
-  if (m_picture_coded_type == PICTURE_CODED_TYPE_FRAME) {
+  if (m_picture_coded_type == FRAME) {
     m_mbs = (MacroBlock *)malloc(sizeof(MacroBlock) * PicSizeInMbs);
     // 因为MacroBlock构造函数中，有对变量初始化，可以考虑使用C++/new申请内存，此处使用C/my_malloc
     RETURN_IF_FAILED(m_mbs == NULL, -1);
@@ -190,7 +157,7 @@ int PictureBase::init(Slice *slice) {
     m_pic_coded_width_pixels = PicWidthInMbs * MbWidthL;
     m_pic_coded_height_pixels = PicHeightInMbs * MbHeightL;
 
-    if (m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD) {
+    if (m_picture_coded_type == TOP_FIELD) {
       //
     } else // if (m_picture_coded_type == H264_PICTURE_CODED_TYPE_BOTTOM_FIELD)
     {
@@ -590,13 +557,11 @@ int PictureBase::writeYUV(const char *filename) {
 }
 
 int PictureBase::getOneEmptyPicture(Frame *&pic) {
-  int32_t size_dpb = H264_MAX_DECODED_PICTURE_BUFFER_COUNT;
-
-  for (int i = 0; i < size_dpb; i++) {
+  for (int i = 0; i < MAX_DPB; i++) {
     // 本帧数据未使用，即处于闲置状态, 重复利用被释放了的参考帧
     if (m_dpb[i] != this->m_parent &&
-        m_dpb[i]->reference_marked_type != PICTURE_MARKED_AS_used_short_ref &&
-        m_dpb[i]->reference_marked_type != PICTURE_MARKED_AS_used_long_ref &&
+        m_dpb[i]->reference_marked_type != SHORT_REF &&
+        m_dpb[i]->reference_marked_type != LONG_REF &&
         m_dpb[i]->m_is_in_use == 0) {
       pic = m_dpb[i];
       RET(pic == nullptr);
@@ -609,19 +574,17 @@ int PictureBase::getOneEmptyPicture(Frame *&pic) {
 
 int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
     Frame *&newEmptyPicture) {
+  this->m_is_decode_finished = true;
+  if (m_picture_coded_type == FRAME ||
+      m_picture_coded_type == BOTTOM_FIELD)
+    this->m_parent->m_is_decode_finished = true;
 
-  this->m_is_decode_finished = 1;
-  if (m_picture_coded_type == PICTURE_CODED_TYPE_FRAME ||
-      m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD) {
-    this->m_parent->m_is_decode_finished = 1;
-  }
-
-  //--------标记图像参考列表------------
+  // 如果当前帧是非参考帧，则处理前面的已解码帧
   if (m_slice->slice_header->nal_ref_idc != 0) {
-    /* TODO YangJing 这里函数要认真看 <24-10-14 05:44:27> */
+    // 处理解码后的参考图片标记
     RET(decoded_reference_picture_marking(m_dpb));
     if (memory_management_control_operation_5_flag) {
-      int32_t tempPicOrderCnt = PicOrderCnt; // PicOrderCntFunc(this);
+      int32_t tempPicOrderCnt = PicOrderCnt;
       TopFieldOrderCnt = TopFieldOrderCnt - tempPicOrderCnt;
       BottomFieldOrderCnt = BottomFieldOrderCnt - tempPicOrderCnt;
     }
@@ -639,8 +602,8 @@ int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
 
   emptyPic->m_picture_previous = this;
 
-  if (reference_marked_type == PICTURE_MARKED_AS_used_short_ref ||
-      reference_marked_type == PICTURE_MARKED_AS_used_long_ref)
+  if (reference_marked_type == SHORT_REF ||
+      reference_marked_type == LONG_REF)
     emptyPic->m_picture_previous_ref = this;
   else
     emptyPic->m_picture_previous_ref = this->m_parent->m_picture_previous_ref;

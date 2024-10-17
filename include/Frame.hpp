@@ -36,7 +36,7 @@ class Frame {
   PictureBase *m_picture_previous = nullptr;    // 前一个已解码的图像
   H264_PICTURE_CODED_TYPE m_picture_coded_type; // H264_PICTURE_CODED_TYPE_FRAME
   H264_PICTURE_CODED_TYPE
-  m_picture_coded_type_marked_as_refrence; // 整个帧或哪一场被标记为参考帧或参考场
+  m_pic_coded_type_marked_as_refrence; // 整个帧或哪一场被标记为参考帧或参考场
 
   int32_t TopFieldOrderCnt = 0;
   int32_t BottomFieldOrderCnt = 0;

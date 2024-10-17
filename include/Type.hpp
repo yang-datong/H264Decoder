@@ -40,7 +40,8 @@ using namespace std;
               : 0)
 
 // Table 7-6 – Name association to slice_type
-enum H264_SLICE_TYPE {
+typedef enum _H264_SLICE_TYPE {
+  SLICE_UNKNOWN = -1,
   SLICE_P = 0,
   SLICE_B,
   SLICE_I,
@@ -52,7 +53,7 @@ enum H264_SLICE_TYPE {
   SLICE_I2,
   SLICE_SP2,
   SLICE_SI2
-};
+} H264_SLICE_TYPE;
 
 #define ROUND(x) ((int)((x) + 0.5))
 #define ABS(x) ((int)(((x) >= (0)) ? (x) : (-(x))))
@@ -67,31 +68,23 @@ enum H264_SLICE_TYPE {
 
 // Table 7-9 – Memory management control operation (memory_management_control_operation) values
 typedef enum _H264_PICTURE_MARKED_AS_ {
-  PICTURE_MARKED_AS_unkown = 0,
-  PICTURE_MARKED_AS_used_for_reference = 1,
-  PICTURE_MARKED_AS_used_short_ref = 2,
-  PICTURE_MARKED_AS_used_long_ref = 3,
-  PICTURE_MARKED_AS_non_existing = 4,
-  PICTURE_MARKED_AS_unused_for_reference = 5,
-  PICTURE_MARKED_AS_output_display = 6,
+  UNKOWN = 0,
+  REFERENCE = 1,
+  SHORT_REF = 2,
+  LONG_REF = 3,
+  NON_EXISTING = 4,
+  UNUSED_REF = 5,
+  OUTPUT_DISPLAY = 6,
 } H264_PICTURE_MARKED_AS;
 
 typedef enum _H264_PICTURE_CODED_TYPE_ {
-  PICTURE_CODED_TYPE_UNKNOWN = 0,
-  PICTURE_CODED_TYPE_FRAME = 1,                    // 帧
-  PICTURE_CODED_TYPE_FIELD = 2,                    // 场
-  PICTURE_CODED_TYPE_TOP_FIELD = 3,                // 顶场
-  PICTURE_CODED_TYPE_BOTTOM_FIELD = 4,             // 底场
-  PICTURE_CODED_TYPE_COMPLEMENTARY_FIELD_PAIR = 5, // 互补场对
+  UNKNOWN = 0,
+  FRAME = 1,                    // 帧
+  FIELD = 2,                    // 场
+  TOP_FIELD = 3,                // 顶场
+  BOTTOM_FIELD = 4,             // 底场
+  COMPLEMENTARY_FIELD_PAIR = 5, // 互补场对
 } H264_PICTURE_CODED_TYPE;
-
-typedef enum _H264_PICTURE_TYPE_ {
-  H264_PICTURE_TYPE_UNKNOWN = 0,
-  H264_PICTURE_TYPE_I = 1,   // I 帧（I帧不一定是IDR帧）
-  H264_PICTURE_TYPE_P = 2,   // P 帧
-  H264_PICTURE_TYPE_B = 3,   // B 帧
-  H264_PICTURE_TYPE_IDR = 4, // IDR 帧（IDR帧一定是I帧）
-} H264_PICTURE_TYPE;
 
 typedef struct _MY_BITMAP_ {
   long bmType;
@@ -411,7 +404,8 @@ typedef enum _H264_VERT_MV_SCALE_ {
   H264_VERT_MV_SCALE_Fld_To_Frm = 3,
 } H264_VERT_MV_SCALE;
 
-#define H264_MAX_DECODED_PICTURE_BUFFER_COUNT 16 // DPB[16]
-#define H264_MAX_REF_PIC_LIST_COUNT 16           // RefPicList0[16]
+
+#define MAX_DPB 16                     // DPB[16]
+#define H264_MAX_REF_PIC_LIST_COUNT 16 // RefPicList0[16]
 
 #endif /* end of include guard: TYPE_HPP_TPOWA9WD */

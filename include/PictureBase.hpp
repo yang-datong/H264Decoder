@@ -11,72 +11,76 @@ class Frame;
 
 class PictureBase {
  public:
-  int32_t mb_x; // 存储当前正在解码的宏块的X坐标（相对于图片左上角位置）
-  int32_t mb_y; // 存储当前正在解码的宏块的Y坐标（相对于图片左上角位置）
-  int32_t m_pic_coded_width_pixels; // 图片宽（单位：像素），例如：1920x1088
-  int32_t m_pic_coded_height_pixels; // 图片高（单位：像素），例如：1920x1088
-  int32_t PicWidthInMbs;             // 图片宽（单位：16x16的宏块）
-  int32_t PicHeightInMbs;            // 图片高（单位：16x16的宏块）
-  int32_t PicSizeInMbs;        // PicSizeInMbs = PicWidthInMbs * PicHeightInMbs;
-  int32_t MbWidthL;            // 亮度宏块的宽（单位：像素）
-  int32_t MbHeightL;           // 亮度宏块的宽（单位：像素）
-  int32_t MbWidthC;            // 色度宏块的宽（单位：像素）
-  int32_t MbHeightC;           // 色度宏块的宽（单位：像素）
-  int32_t PicWidthInSamplesL;  // 解码后图片的宽度（单位：像素）
-  int32_t PicWidthInSamplesC;  // PicWidthInSamplesC = PicWidthInMbs * MbWidthC;
-  int32_t PicHeightInSamplesL; // 解码后图片的高度（单位：像素）
-  int32_t PicHeightInSamplesC;
-  int32_t Chroma_Format; // CHROMA_FORMAT_IDC_420
-  int32_t mb_cnt;        // 解码的宏块的计数
-  int32_t CurrMbAddr; // 当前解码的宏块在图片中的坐标位置(此字段非常重要)
+  int32_t mb_x = 0; // 存储当前正在解码的宏块的X坐标（相对于图片左上角位置）
+  int32_t mb_y = 0; // 存储当前正在解码的宏块的Y坐标（相对于图片左上角位置）
+  int32_t m_pic_coded_width_pixels = 0; // 图片宽（单位：像素），例如：1920x1088
+  int32_t m_pic_coded_height_pixels =
+      0; // 图片高（单位：像素），例如：1920x1088
+  int32_t PicWidthInMbs = 0;  // 图片宽（单位：16x16的宏块）
+  int32_t PicHeightInMbs = 0; // 图片高（单位：16x16的宏块）
+  int32_t PicSizeInMbs = 0;   // PicSizeInMbs = PicWidthInMbs * PicHeightInMbs;
+  int32_t MbWidthL = 0;       // 亮度宏块的宽（单位：像素）
+  int32_t MbHeightL = 0;      // 亮度宏块的宽（单位：像素）
+  int32_t MbWidthC = 0;       // 色度宏块的宽（单位：像素）
+  int32_t MbHeightC = 0;      // 色度宏块的宽（单位：像素）
+  int32_t PicWidthInSamplesL = 0; // 解码后图片的宽度（单位：像素）
+  int32_t PicWidthInSamplesC =
+      0; // PicWidthInSamplesC = PicWidthInMbs * MbWidthC;
+  int32_t PicHeightInSamplesL = 0; // 解码后图片的高度（单位：像素）
+  int32_t PicHeightInSamplesC = 0;
+  int32_t Chroma_Format = 0; // CHROMA_FORMAT_IDC_420
+  int32_t mb_cnt = 0;        // 解码的宏块的计数
+  int32_t CurrMbAddr = 0; // 当前解码的宏块在图片中的坐标位置(此字段非常重要)
 
-  uint8_t *m_pic_buff_luma; // 存储解码后图片的Y分量数据 cSL[1920x1088]
-  uint8_t *m_pic_buff_cb; // 存储解码后图片的cb分量数据
-  uint8_t *m_pic_buff_cr; // 存储解码后图片的cr分量数据
+  uint8_t *m_pic_buff_luma =
+      nullptr; // 存储解码后图片的Y分量数据 cSL[1920x1088]
+  uint8_t *m_pic_buff_cb = nullptr; // 存储解码后图片的cb分量数据
+  uint8_t *m_pic_buff_cr = nullptr; // 存储解码后图片的cr分量数据
 
-  int32_t TopFieldOrderCnt;
-  int32_t BottomFieldOrderCnt;
-  int32_t PicOrderCntMsb;
-  int32_t PicOrderCntLsb;
-  int32_t FrameNumOffset;
-  int32_t absFrameNum;
-  int32_t picOrderCntCycleCnt;
-  int32_t frameNumInPicOrderCntCycle;
-  int32_t expectedPicOrderCnt;
-  int32_t PicOrderCnt; //POC图像顺序的计数器，用于确定图像的显示顺序
-  int32_t FrameNum;     // To each short-term reference picture 短期参考帧
-  int32_t FrameNumWrap; // To each short-term reference picture 短期参考帧
-  int32_t LongTermFrameIdx; // Each long-term reference picture 长期参考帧
-  int32_t PicNum; // To each short-term reference picture 短期参考图像
-  int32_t LongTermPicNum; // To each long-term reference picture 长期参考图像
-  int32_t FieldNum;
-  int32_t MaxLongTermFrameIdx; // -1: "no long-term frame indices"
+  int32_t TopFieldOrderCnt = 0;
+  int32_t BottomFieldOrderCnt = 0;
+  int32_t PicOrderCntMsb = 0;
+  int32_t PicOrderCntLsb = 0;
+  int32_t FrameNumOffset = 0;
+  int32_t absFrameNum = 0;
+  int32_t picOrderCntCycleCnt = 0;
+  int32_t frameNumInPicOrderCntCycle = 0;
+  int32_t expectedPicOrderCnt = 0;
+  int32_t PicOrderCnt = 0; //POC图像顺序的计数器，用于确定图像的显示顺序
+  int32_t FrameNum = 0; // To each short-term reference picture 短期参考帧
+  int32_t FrameNumWrap = 0; // To each short-term reference picture 短期参考帧
+  int32_t LongTermFrameIdx = 0; // Each long-term reference picture 长期参考帧
+  int32_t PicNum = 0; // To each short-term reference picture 短期参考图像
+  int32_t LongTermPicNum =
+      0; // To each long-term reference picture 长期参考图像
+  int32_t FieldNum = NA;
+  int32_t MaxLongTermFrameIdx = NA; // -1: "no long-term frame indices"
   /*  所有参考图像标记为“不用于参考” */
-  int32_t memory_management_control_operation_5_flag;
-  int32_t memory_management_control_operation_6_flag;
+  int32_t memory_management_control_operation_5_flag = 0;
+  int32_t memory_management_control_operation_6_flag = 0;
   // I,P作为参考帧的mark状态
-  H264_PICTURE_MARKED_AS reference_marked_type = PICTURE_MARKED_AS_unkown;
+  H264_PICTURE_MARKED_AS reference_marked_type = UNKOWN;
 
-  Slice *m_slice;
-  MacroBlock *m_mbs; // 存储当前图像的所有宏块
+  Slice *m_slice = nullptr;
+  MacroBlock *m_mbs = nullptr; // 存储当前图像的所有宏块
 
-  int32_t LevelScale4x4[6][4][4];
-  int32_t LevelScale8x8[6][8][8];
+  int32_t LevelScale4x4[6][4][4] = {{{0}}};
+  int32_t LevelScale8x8[6][8][8] = {{{0}}};
 
-  H264_PICTURE_CODED_TYPE m_picture_coded_type;
-  H264_PICTURE_TYPE m_picture_type;
+  H264_PICTURE_CODED_TYPE m_picture_coded_type = UNKNOWN;
+  H264_SLICE_TYPE m_picture_type = SLICE_UNKNOWN;
 
-  int32_t m_is_malloc_mem_by_myself; // 是否已经初始化
-  int32_t m_is_decode_finished;      // 本帧/场是否解码完毕
-  int32_t m_slice_cnt; // 一个picture中可能有多个slice data
+  int32_t m_is_malloc_mem_by_myself = 0; // 是否已经初始化
+  bool m_is_decode_finished = false;      // 本帧/场是否解码完毕
+  int32_t m_slice_cnt = 0; // 一个picture中可能有多个slice data
 
-  Frame *m_parent;
-  Frame *m_dpb[16];             //[16] decoded picture buffer
-  Frame *m_RefPicList0[16];     //[16] decoding a P or SP slice;
-  Frame *m_RefPicList1[16];     //[16] decoding a B slice;
-  uint32_t m_RefPicList0Length; // RefPicList0排序后的参考图像数目
-  uint32_t m_RefPicList1Length; // RefPicList1排序后的参考图像数目
-  int32_t m_PicNumCnt;          // 图片递增计数
+  Frame *m_parent = nullptr;
+  Frame *m_dpb[16] = {nullptr};         //[16] decoded picture buffer
+  Frame *m_RefPicList0[16] = {nullptr}; //[16] decoding a P or SP slice;
+  Frame *m_RefPicList1[16] = {nullptr}; //[16] decoding a B slice;
+  uint32_t m_RefPicList0Length = 0; // RefPicList0排序后的参考图像数目
+  uint32_t m_RefPicList1Length = 0; // RefPicList1排序后的参考图像数目
+  int32_t m_PicNumCnt = 0;          // 图片递增计数
 
  public:
   PictureBase();
@@ -161,8 +165,6 @@ class PictureBase {
 
   // 8.2.5 每一张图片解码完成后，都需要标记一次图像参考列表
   int decoded_reference_picture_marking(Frame *(&dpb)[16]);
-  int sequence_of_operations_for_decoded_reference_picture_marking(
-      Frame *(&dpb)[16]);
   int sliding_window_decoded_reference_picture_marking(Frame *(&dpb)[16]);
   int adaptive_memory_control_decoded_reference_picture_marking(
       Frame *(&dpb)[16]);

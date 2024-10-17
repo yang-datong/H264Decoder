@@ -4,6 +4,7 @@
 #include "SliceData.hpp"
 
 #include "SliceHeader.hpp"
+#include "Type.hpp"
 
 Slice::Slice(Nalu *nalu) : mNalu(nalu) {
   slice_header = new SliceHeader(mNalu->nal_unit_type, mNalu->nal_ref_idc);
@@ -36,23 +37,23 @@ int Slice::encode() {
 int Slice::decode(BitStream &bs, Frame *(&dpb)[16], SPS &sps, PPS &pps,
                   Frame *frame) {
   //----------------帧----------------------------------
-  frame->m_picture_coded_type = PICTURE_CODED_TYPE_FRAME;
-  frame->m_picture_frame.m_picture_coded_type = PICTURE_CODED_TYPE_FRAME;
+  frame->m_picture_coded_type = FRAME;
+  frame->m_picture_frame.m_picture_coded_type = FRAME;
   frame->m_picture_frame.m_parent = frame;
-  memcpy(frame->m_picture_frame.m_dpb, dpb, sizeof(Nalu *) * GOP_SIZE);
+  memcpy(frame->m_picture_frame.m_dpb, dpb, sizeof(Frame *) * MAX_DPB);
   frame->m_current_picture_ptr = &(frame->m_picture_frame);
   frame->m_picture_frame.init(this);
 
   /* TODO YangJing 移动到Filed类中去 <24-09-14 20:53:06> */
   //----------------顶场-------------------------------
   frame->m_picture_top_filed.m_picture_coded_type =
-      PICTURE_CODED_TYPE_TOP_FIELD;
+      TOP_FIELD;
   frame->m_picture_top_filed.m_parent = frame;
   frame->m_picture_top_filed.init(this);
 
   //----------------底场-------------------------------
   frame->m_picture_bottom_filed.m_picture_coded_type =
-      PICTURE_CODED_TYPE_BOTTOM_FIELD;
+      BOTTOM_FIELD;
   frame->m_picture_bottom_filed.m_parent = frame;
   frame->m_picture_bottom_filed.init(this);
 

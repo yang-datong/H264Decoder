@@ -42,8 +42,8 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop) {
 }
 
 int Frame::reset() {
-  m_picture_coded_type = PICTURE_CODED_TYPE_UNKNOWN;
-  m_picture_coded_type_marked_as_refrence = PICTURE_CODED_TYPE_UNKNOWN;
+  m_picture_coded_type = UNKNOWN;
+  m_pic_coded_type_marked_as_refrence = UNKNOWN;
 
   TopFieldOrderCnt = 0;
   BottomFieldOrderCnt = 0;
@@ -57,7 +57,7 @@ int Frame::reset() {
   PicOrderCnt = 0;
   PicNum = 0;
   LongTermPicNum = 0;
-  reference_marked_type = PICTURE_MARKED_AS_unkown;
+  reference_marked_type = UNKOWN;
   m_is_decode_finished = 0;
   m_is_in_use = 1; // 正在使用状态
 

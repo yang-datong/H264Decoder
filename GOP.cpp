@@ -1,52 +1,23 @@
 #include "GOP.hpp"
 #include "Frame.hpp"
-#include "Nalu.hpp"
 
-GOP::GOP() { init(); }
-
-GOP::~GOP() { unInit(); }
-
-int GOP::init() {
-  m_gop_size = 0;
-  m_dpb_for_output_length = 0;
-  max_num_reorder_frames = 0;
-
-  int32_t size_dpb = H264_MAX_DECODED_PICTURE_BUFFER_COUNT;
-
-  for (int i = 0; i < size_dpb; i++) {
+GOP::GOP() {
+  for (int i = 0; i < MAX_DPB; i++) {
     m_dpb_for_output[i] = NULL;
-
-    m_DecodedPictureBuffer[i] = new Frame;
-    if (m_DecodedPictureBuffer[i] == NULL) {
-      LOG_ERROR("new Frame failed! m_DecodedPictureBuffer[%d] == NULL\n", i);
-      return -1;
-    }
+    m_dpb[i] = new Frame;
   }
-
-  return 0;
 }
 
-int GOP::unInit() {
-  int32_t size_dpb = H264_MAX_DECODED_PICTURE_BUFFER_COUNT;
-
-  m_dpb_for_output_length = 0;
-  max_num_reorder_frames = 0;
-
-  for (int i = 0; i < size_dpb; i++) {
-    free(m_DecodedPictureBuffer[i]);
-  }
-
-  return 0;
+GOP::~GOP() {
+  for (int i = 0; i < MAX_DPB; i++)
+    free(m_dpb[i]);
 }
 
 int GOP::getOneEmptyPicture(Frame *&pic) {
-  int32_t size_dpb = H264_MAX_DECODED_PICTURE_BUFFER_COUNT;
-
-  for (int i = 0; i < size_dpb; i++) {
-    if (m_DecodedPictureBuffer[i]->m_picture_coded_type ==
-        PICTURE_CODED_TYPE_UNKNOWN) // 重复利用被释放了的参考帧
-    {
-      pic = m_DecodedPictureBuffer[i];
+  for (int i = 0; i < MAX_DPB; i++) {
+    // 重复利用被释放的参考帧
+    if (m_dpb[i]->m_picture_coded_type == UNKNOWN) {
+      pic = m_dpb[i];
       RETURN_IF_FAILED(pic == NULL, -1);
       return 0;
     }
@@ -60,7 +31,7 @@ int GOP::getOneOutPicture(Frame *newDecodedPic, Frame *&outPic) {
   int32_t index = -1;
 
   //----------处理P帧情况---------------
-  if (max_num_reorder_frames == 0) {
+  if (m_max_num_reorder_frames == 0) {
     outPic = newDecodedPic; // 直接返回，一般为IP编码，即码流中没有B帧的情况
     return 0;
   }
@@ -98,7 +69,7 @@ int GOP::getOneOutPicture(Frame *newDecodedPic, Frame *&outPic) {
       outPic = NULL; // 说明缓存中彻底没有帧了
   } else {
     // //一般表示解码过程中的push_a_decoded_frame_and_get_a_display_frame操作
-    if (m_dpb_for_output_length < max_num_reorder_frames) {
+    if (m_dpb_for_output_length < m_max_num_reorder_frames) {
       // 说明m_dpb_index_for_output[]数组还没塞满，只push，不get
       m_dpb_for_output[m_dpb_for_output_length] = newDecodedPic;
       m_dpb_for_output_length++;

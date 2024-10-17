@@ -629,8 +629,8 @@ int DeblockingFilter::
   if (bS == 2) return 0;
 
   int32_t mv_y_diff = 4;
-  if (pic->m_picture_coded_type == PICTURE_CODED_TYPE_TOP_FIELD ||
-      pic->m_picture_coded_type == PICTURE_CODED_TYPE_BOTTOM_FIELD)
+  if (pic->m_picture_coded_type == TOP_FIELD ||
+      pic->m_picture_coded_type == BOTTOM_FIELD)
     mv_y_diff = 2;
   else if (MbaffFrameFlag && mb_field_q)
     mv_y_diff = 2;

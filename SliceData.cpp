@@ -505,7 +505,7 @@ int NextMbAddress(int currMbAddr, SliceHeader *header) {
 void SliceData::printFrameReorderPriorityInfo() {
   string sliceType = "UNKNOWN";
   cout << "\tGOP[" << pic->m_PicNumCnt + 1 << "] -> {" << endl;
-  for (int i = 0; i < GOP_SIZE; ++i) {
+  for (int i = 0; i < MAX_DPB; ++i) {
     const auto &refPic = pic->m_dpb[i];
     if (refPic) {
       auto &frame = refPic->m_picture_frame;
@@ -533,9 +533,8 @@ void SliceData::printFrameReorderPriorityInfo() {
 
   for (uint32_t i = 0; i < pic->m_RefPicList0Length; ++i) {
     const auto &refPic = pic->m_RefPicList0[i];
-    if (refPic &&
-        (refPic->reference_marked_type == PICTURE_MARKED_AS_used_short_ref ||
-         refPic->reference_marked_type == PICTURE_MARKED_AS_used_long_ref)) {
+    if (refPic && (refPic->reference_marked_type == SHORT_REF ||
+                   refPic->reference_marked_type == LONG_REF)) {
       auto &frame = refPic->m_picture_frame;
       auto &sliceHeader = frame.m_slice->slice_header;
 
@@ -548,9 +547,8 @@ void SliceData::printFrameReorderPriorityInfo() {
 
   for (uint32_t i = 0; i < pic->m_RefPicList1Length; ++i) {
     const auto &refPic = pic->m_RefPicList1[i];
-    if (refPic &&
-        (refPic->reference_marked_type == PICTURE_MARKED_AS_used_short_ref ||
-         refPic->reference_marked_type == PICTURE_MARKED_AS_used_long_ref)) {
+    if (refPic && (refPic->reference_marked_type == SHORT_REF ||
+                   refPic->reference_marked_type == LONG_REF)) {
       auto &frame = refPic->m_picture_frame;
       auto &sliceHeader = frame.m_slice->slice_header;
 
