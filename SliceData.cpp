@@ -1,6 +1,8 @@
 #include "SliceData.hpp"
+#include "Common.hpp"
 #include "Frame.hpp"
 #include "GOP.hpp"
+#include "MacroBlock.hpp"
 #include "PictureBase.hpp"
 #include "Type.hpp"
 #include <cstdint>
@@ -81,6 +83,16 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
         moreDataFlag = !end_of_slice_flag;
       }
     }
+
+    //MacroBlock &mb = pic->m_mbs[pic->CurrMbAddr];
+    //if (IS_INTRA_Prediction_Mode(mb.m_mb_pred_mode)) {
+    //  string mb_type = MacroBlockNmae(mb.m_name_of_mb_type);
+    //  string mb_pred_mode = MacroBlockPredMode(mb.m_mb_pred_mode);
+    //  cout << "CurrMbAddr:[" << (CurrMbAddr / header->PicWidthInMbs) << ","
+    //       << (CurrMbAddr % header->PicWidthInMbs) << "], mb_type:" << mb_type
+    //       << ", pred_mode:" << mb_pred_mode << endl;
+    //}
+
     /* 计算下一个宏块的地址 */
     CurrMbAddr = NextMbAddress(CurrMbAddr, header);
   } while (moreDataFlag);

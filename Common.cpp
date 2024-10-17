@@ -1,5 +1,6 @@
 #include "Common.hpp"
 #include "BitStream.hpp"
+#include "Type.hpp"
 #include <assert.h>
 
 int h264_log2(int32_t value) {
@@ -17,6 +18,186 @@ int32_t h264_power2(int32_t value) {
   for (int32_t i = 0; i < value; ++i)
     power2 *= 2;
   return power2;
+}
+
+string MacroBlockNmae(H264_MB_TYPE m_name_of_mb_type) {
+  string mb_type = "NA";
+  if (m_name_of_mb_type == I_NxN)
+    mb_type = "I_NxN";
+  else if (m_name_of_mb_type == I_PCM)
+    mb_type = "I_PCM";
+  else if (m_name_of_mb_type == I_NxN)
+    mb_type = "I_NxN";
+  else if (m_name_of_mb_type == I_16x16_0_0_0)
+    mb_type = "I_16x16_0_0_0";
+  else if (m_name_of_mb_type == I_16x16_1_0_0)
+    mb_type = "I_16x16_1_0_0";
+  else if (m_name_of_mb_type == I_16x16_2_0_0)
+    mb_type = "I_16x16_2_0_0";
+  else if (m_name_of_mb_type == I_16x16_3_0_0)
+    mb_type = "I_16x16_3_0_0";
+  else if (m_name_of_mb_type == I_16x16_0_1_0)
+    mb_type = "I_16x16_0_1_0";
+  else if (m_name_of_mb_type == I_16x16_1_1_0)
+    mb_type = "I_16x16_1_1_0";
+  else if (m_name_of_mb_type == I_16x16_2_1_0)
+    mb_type = "I_16x16_2_1_0";
+  else if (m_name_of_mb_type == I_16x16_3_1_0)
+    mb_type = "I_16x16_3_1_0";
+  else if (m_name_of_mb_type == I_16x16_0_2_0)
+    mb_type = "I_16x16_0_2_0";
+  else if (m_name_of_mb_type == I_16x16_1_2_0)
+    mb_type = "I_16x16_1_2_0";
+  else if (m_name_of_mb_type == I_16x16_2_2_0)
+    mb_type = "I_16x16_2_2_0";
+  else if (m_name_of_mb_type == I_16x16_3_2_0)
+    mb_type = "I_16x16_3_2_0";
+  else if (m_name_of_mb_type == I_16x16_0_0_1)
+    mb_type = "I_16x16_0_0_1";
+  else if (m_name_of_mb_type == I_16x16_1_0_1)
+    mb_type = "I_16x16_1_0_1";
+  else if (m_name_of_mb_type == I_16x16_2_0_1)
+    mb_type = "I_16x16_2_0_1";
+  else if (m_name_of_mb_type == I_16x16_3_0_1)
+    mb_type = "I_16x16_3_0_1";
+  else if (m_name_of_mb_type == I_16x16_0_1_1)
+    mb_type = "I_16x16_0_1_1";
+  else if (m_name_of_mb_type == I_16x16_1_1_1)
+    mb_type = "I_16x16_1_1_1";
+  else if (m_name_of_mb_type == I_16x16_2_1_1)
+    mb_type = "I_16x16_2_1_1";
+  else if (m_name_of_mb_type == I_16x16_3_1_1)
+    mb_type = "I_16x16_3_1_1";
+  else if (m_name_of_mb_type == I_16x16_0_2_1)
+    mb_type = "I_16x16_0_2_1";
+  else if (m_name_of_mb_type == I_16x16_1_2_1)
+    mb_type = "I_16x16_1_2_1";
+  else if (m_name_of_mb_type == I_16x16_2_2_1)
+    mb_type = "I_16x16_2_2_1";
+  else if (m_name_of_mb_type == I_16x16_3_2_1)
+    mb_type = "I_16x16_3_2_1";
+  else if (m_name_of_mb_type == SI)
+    mb_type = "SI";
+  else if (m_name_of_mb_type == P_L0_16x16)
+    mb_type = "P_L0_16x16";
+  else if (m_name_of_mb_type == P_L0_L0_16x8)
+    mb_type = "P_L0_L0_16x8";
+  else if (m_name_of_mb_type == P_L0_L0_8x16)
+    mb_type = "P_L0_L0_8x16";
+  else if (m_name_of_mb_type == P_8x8)
+    mb_type = "P_8x8";
+  else if (m_name_of_mb_type == P_8x8ref0)
+    mb_type = "P_8x8ref0";
+  else if (m_name_of_mb_type == P_Skip)
+    mb_type = "P_Skip";
+  else if (m_name_of_mb_type == B_Direct_16x16)
+    mb_type = "B_Direct_16x16";
+  else if (m_name_of_mb_type == B_L0_16x16)
+    mb_type = "B_L0_16x16";
+  else if (m_name_of_mb_type == B_L0_16x16)
+    mb_type = "B_L1_16x16";
+  else if (m_name_of_mb_type == B_Bi_16x16)
+    mb_type = "B_Bi_16x16";
+  else if (m_name_of_mb_type == B_L0_L0_16x8)
+    mb_type = "B_L0_L0_16x8";
+  else if (m_name_of_mb_type == B_L0_L0_8x16)
+    mb_type = "B_L0_L0_8x16";
+  else if (m_name_of_mb_type == B_L1_L1_16x8)
+    mb_type = "B_L1_L1_16x8";
+  else if (m_name_of_mb_type == B_L1_L1_8x16)
+    mb_type = "B_L1_L1_8x16";
+  else if (m_name_of_mb_type == B_L0_L1_16x8)
+    mb_type = "B_L0_L1_16x8";
+  else if (m_name_of_mb_type == B_L0_L1_8x16)
+    mb_type = "B_L0_L1_8x16";
+  else if (m_name_of_mb_type == B_L1_L0_16x8)
+    mb_type = "B_L1_L0_16x8";
+  else if (m_name_of_mb_type == B_L1_L0_8x16)
+    mb_type = "B_L1_L0_8x16";
+  else if (m_name_of_mb_type == B_L0_Bi_16x8)
+    mb_type = "B_L0_Bi_16x8";
+  else if (m_name_of_mb_type == B_L0_Bi_8x16)
+    mb_type = "B_L0_Bi_8x16";
+  else if (m_name_of_mb_type == B_L1_Bi_16x8)
+    mb_type = "B_L1_Bi_16x8";
+  else if (m_name_of_mb_type == B_L1_Bi_8x16)
+    mb_type = "B_L1_Bi_8x16";
+  else if (m_name_of_mb_type == B_Bi_L0_16x8)
+    mb_type = "B_Bi_L0_16x8";
+  else if (m_name_of_mb_type == B_Bi_L0_8x16)
+    mb_type = "B_Bi_L0_8x16";
+  else if (m_name_of_mb_type == B_Bi_L1_16x8)
+    mb_type = "B_Bi_L1_16x8";
+  else if (m_name_of_mb_type == B_Bi_L1_8x16)
+    mb_type = "B_Bi_L1_8x16";
+  else if (m_name_of_mb_type == B_Bi_Bi_16x8)
+    mb_type = "B_Bi_Bi_16x8";
+  else if (m_name_of_mb_type == B_Bi_Bi_8x16)
+    mb_type = "B_Bi_Bi_8x16";
+  else if (m_name_of_mb_type == B_8x8)
+    mb_type = "B_8x8";
+  else if (m_name_of_mb_type == B_Skip)
+    mb_type = "B_Skip";
+  else if (m_name_of_mb_type == P_L0_8x8)
+    mb_type = "P_L0_8x8";
+  else if (m_name_of_mb_type == P_L0_8x4)
+    mb_type = "P_L0_8x4";
+  else if (m_name_of_mb_type == P_L0_4x8)
+    mb_type = "P_L0_4x8";
+  else if (m_name_of_mb_type == P_L0_4x4)
+    mb_type = "P_L0_4x4";
+  else if (m_name_of_mb_type == B_Direct_8x8)
+    mb_type = "B_Direct_8x8";
+  else if (m_name_of_mb_type == B_L0_8x8)
+    mb_type = "B_L0_8x8";
+  else if (m_name_of_mb_type == B_L1_8x8)
+    mb_type = "B_L1_8x8";
+  else if (m_name_of_mb_type == B_Bi_8x8)
+    mb_type = "B_Bi_8x8";
+  else if (m_name_of_mb_type == B_L0_8x4)
+    mb_type = "B_L0_8x4";
+  else if (m_name_of_mb_type == B_L0_4x8)
+    mb_type = "B_L0_4x8";
+  else if (m_name_of_mb_type == B_L1_8x4)
+    mb_type = "B_L1_8x4";
+  else if (m_name_of_mb_type == B_L1_4x8)
+    mb_type = "B_L1_4x8";
+  else if (m_name_of_mb_type == B_Bi_8x4)
+    mb_type = "B_Bi_8x4";
+  else if (m_name_of_mb_type == B_Bi_4x8)
+    mb_type = "B_Bi_4x8";
+  else if (m_name_of_mb_type == B_L0_4x4)
+    mb_type = "B_L0_4x4";
+  else if (m_name_of_mb_type == B_L1_4x4)
+    mb_type = "B_L1_4x4";
+  else if (m_name_of_mb_type == B_Bi_4x4)
+    mb_type = "B_Bi_4x4";
+  return mb_type;
+}
+
+string MacroBlockPredMode(H264_MB_PART_PRED_MODE m_mb_pred_mode) {
+  string mb_pred_mode = "MB_PRED_MODE_NA";
+  if (m_mb_pred_mode == Intra_NA)
+    mb_pred_mode = "Intra_NA";
+  else if (m_mb_pred_mode == Intra_4x4)
+    mb_pred_mode = "Intra_4x4";
+  else if (m_mb_pred_mode == Intra_8x8)
+    mb_pred_mode = "Intra_8x8";
+  else if (m_mb_pred_mode == Intra_16x16)
+    mb_pred_mode = "Intra_16x16";
+  else if (m_mb_pred_mode == Inter)
+    mb_pred_mode = "Inter";
+  else if (m_mb_pred_mode == Pred_NA)
+    mb_pred_mode = "Pred_NA";
+  else if (m_mb_pred_mode == Pred_L0)
+    mb_pred_mode = "Pred_L0";
+  else if (m_mb_pred_mode == Pred_L1)
+    mb_pred_mode = "Pred_L1";
+  else if (m_mb_pred_mode == BiPred)
+    mb_pred_mode = "BiPred";
+  else if (m_mb_pred_mode == Direct)
+    mb_pred_mode = "Direct";
+  return mb_pred_mode;
 }
 
 /*

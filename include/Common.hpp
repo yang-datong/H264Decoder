@@ -41,6 +41,9 @@ void scaling_list(BitStream &bitStream, uint32_t *scalingList,
                   uint32_t sizeOfScalingList,
                   uint32_t &useDefaultScalingMatrixFlag);
 
+string MacroBlockNmae(H264_MB_TYPE m_name_of_mb_type);
+string MacroBlockPredMode(H264_MB_PART_PRED_MODE m_mb_pred_mode);
+
 int inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
     const int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag);
 
