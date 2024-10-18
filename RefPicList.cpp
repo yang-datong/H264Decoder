@@ -317,12 +317,7 @@ inline int updateShortTermReference(PictureBase &pic_frame,
       pic_bottom.reference_marked_type == SHORT_REF) {
     pic_bottom.PicNum = pic_bottom.FrameNumWrap;
     PicNum = pic_top.PicNum = pic_top.FrameNumWrap;
-
-    if (pic_top.PicNum != pic_bottom.PicNum) {
-      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-                << std::endl;
-      return -1;
-    }
+    RET(pic_top.PicNum != pic_bottom.PicNum);
   }
   return 0;
 }
@@ -338,12 +333,7 @@ inline int updateLongTermReference(PictureBase &pic_frame, PictureBase &pic_top,
       pict_bottom.reference_marked_type == LONG_REF) {
     pict_bottom.LongTermPicNum = pict_bottom.LongTermFrameIdx;
     LongTermPicNum = pic_top.LongTermPicNum = pic_top.LongTermFrameIdx;
-
-    if (pic_top.LongTermPicNum != pict_bottom.LongTermPicNum) {
-      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-                << std::endl;
-      return -1;
-    }
+    RET(pic_top.LongTermPicNum != pict_bottom.LongTermPicNum);
   }
   return 0;
 }
@@ -517,11 +507,7 @@ int PictureBase::init_ref_picture_list_P_SP_in_frames(
   }
 
   /* 当调用该过程时，应当有至少一个参考帧或互补参考场对当前被标记为“用于参考”（即，“用于短期参考”或“用于长期参考”） ）并且未标记为“不存在”*/
-  if (indexTemp_short.size() + indexTemp_long.size() <= 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return -1;
-  }
+  RET(indexTemp_short.size() + indexTemp_long.size() <= 0);
 
   //排序的规则为：让时间最相近的优先
 
@@ -599,11 +585,7 @@ int PictureBase::init_ref_picture_list_P_SP_in_fields(
   }
 
   /* 当调用这一过程时，应该有至少一个参考场（可以是参考帧的场）当前被标记为“用于参考”（即，“用于短期参考”或“用于参考”）。供长期参考”）并且没有标记为“不存在”。 */
-  if (refFrameList0ShortTerm.size() + refFrameList0LongTerm.size() == 0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return -1;
-  }
+  RET(refFrameList0ShortTerm.size() + refFrameList0LongTerm.size() == 0);
 
   /* 3. 短期互补场对，按照FrameNumWrap值实现 “降序” */
   sort(refFrameList0ShortTerm.begin(), refFrameList0ShortTerm.end(),
@@ -654,13 +636,9 @@ int PictureBase::init_ref_picture_lists_B_in_frames(
   }
 
   /* 当调用该过程时，应至少有一个参考条目当前被标记为“用于参考”（即“用于短期参考”或“用于长期参考”）并且未被标记为“不存在” */
-  if (indexTemp_short_left.size() + indexTemp_short_right.size() +
+  RET(indexTemp_short_left.size() + indexTemp_short_right.size() +
           indexTemp_long.size() <=
-      0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return -1;
-  }
+      0);
 
   //排序的规则为：让时间最相近的优先
 
@@ -710,13 +688,9 @@ int PictureBase::init_ref_picture_lists_B_in_frames(
   }
 
   /* 当调用该过程时，应至少有一个参考条目当前被标记为“用于参考”（即“用于短期参考”或“用于长期参考”）并且未被标记为“不存在” */
-  if (indexTemp_short_left.size() + indexTemp_short_right.size() +
+  RET(indexTemp_short_left.size() + indexTemp_short_right.size() +
           indexTemp_long.size() <=
-      0) {
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
-    return -1;
-  }
+      0);
 
   /* 2. 短期参考帧，大于当前POC（不含有IDR帧），按照PicNum值实现 “升序”，一般是后编码的(因为是向后参考，所以这里时间最相近的“后”一帧是最优先的 */
   sort(indexTemp_short_left.begin(), indexTemp_short_left.end(),

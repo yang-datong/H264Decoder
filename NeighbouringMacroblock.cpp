@@ -195,14 +195,13 @@ int PictureBase::derivation_for_neighbouring_8x8_luma_block(
   int32_t xA = (luma8x8BlkIdx % 2) * 8 - 1;
   int32_t yA = (luma8x8BlkIdx / 2) * 8 + 0;
 
-  // 6.4.12 Derivation process for neighbouring locations
   RET(derivation_for_neighbouring_locations(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xA, yA, CurrMbAddr, mbAddrA_type,
       mbAddrA, luma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma));
 
-  if (mbAddrA < 0) {
-    luma8x8BlkIdxA = -2; // marked as not available
-  } else {
+  if (mbAddrA < 0)
+    luma8x8BlkIdxA = -2;
+  else {
     // 6.4.13.3 Derivation process for 8x8 luma block indices
     luma8x8BlkIdxA = 2 * (yW / 8) + (xW / 8);
   }
@@ -218,9 +217,9 @@ int PictureBase::derivation_for_neighbouring_8x8_luma_block(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xB, yB, CurrMbAddr, mbAddrB_type,
       mbAddrB, luma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma));
 
-  if (mbAddrB < 0) {
-    luma8x8BlkIdxB = -2; // marked as not available
-  } else {
+  if (mbAddrB < 0)
+    luma8x8BlkIdxB = -2;
+  else {
     // 6.4.13.3 Derivation process for 8x8 luma block indices
     luma8x8BlkIdxB = 2 * (yW / 8) + (xW / 8);
   }
@@ -258,7 +257,7 @@ int PictureBase::derivation_for_neighbouring_4x4_luma_blocks(
       mbAddrA, luma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma));
 
   if (mbAddrA < 0) {
-    luma4x4BlkIdxA = -2; // marked as not available
+    luma4x4BlkIdxA = -2;
   } else {
     // 6.4.13.1 Derivation process for 4x4 luma block indices
     luma4x4BlkIdxA =
@@ -275,7 +274,7 @@ int PictureBase::derivation_for_neighbouring_4x4_luma_blocks(
       mbAddrB, luma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma));
 
   if (mbAddrB < 0)
-    luma4x4BlkIdxB = -2; // marked as not available
+    luma4x4BlkIdxB = -2;
   else
     luma4x4BlkIdxB =
         8 * (yW / 8) + 4 * (xW / 8) + 2 * ((yW % 8) / 4) + ((xW % 8) / 4);
@@ -302,11 +301,10 @@ int PictureBase::derivation_for_neighbouring_4x4_chroma_blocks(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xA, yA, CurrMbAddr, mbAddrA_type,
       mbAddrA, chroma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, 1));
 
-  if (mbAddrA < 0) {
-    chroma4x4BlkIdxA = -2; // marked as not available
-  } else {
+  if (mbAddrA < 0)
+    chroma4x4BlkIdxA = -2;
+  else {
     // 6.4.13.2 Derivation process for 4x4 chroma block indices
-    // ret = Derivation_process_for_4x4_chroma_block_indices(xW, yW, (uint8_t &)chroma4x4BlkIdxA);
     chroma4x4BlkIdxA = 2 * (yW / 4) + (xW / 4);
   }
 
@@ -319,10 +317,9 @@ int PictureBase::derivation_for_neighbouring_4x4_chroma_blocks(
       mbAddrB, chroma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, 1));
 
   if (mbAddrB < 0)
-    chroma4x4BlkIdxB = -2; // marked as not available
+    chroma4x4BlkIdxB = -2;
   else
     // 6.4.13.2 Derivation process for 4x4 chroma block indices
-    // ret = Derivation_process_for_4x4_chroma_block_indices(xW, yW, (uint8_t &)chroma4x4BlkIdxB);
     chroma4x4BlkIdxB = 2 * (yW / 4) + (xW / 4);
 
   return 0;

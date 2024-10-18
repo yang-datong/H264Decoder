@@ -180,8 +180,8 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
       sp_for_switch_flag = _bs->readU1();
       cout << "\tSP切换标志:" << sp_for_switch_flag << endl;
       /* TODO YangJing 未实现 <24-09-15 13:24:02> */
-      std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-                << std::endl;
+      cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
+           << endl;
     }
     /* qs 是专门用于 SP Slice 和 SI Slice 的量化参数。它类似于 qp */
     slice_qs_delta = _bs->readSE();
@@ -378,7 +378,7 @@ void SliceHeader::pred_weight_table() {
          << ",Cb权重:" << chroma_weight_l0[i][0]
          << ",Cr权重:" << chroma_weight_l0[i][1]
          << ",Cb偏移:" << chroma_offset_l0[i][0]
-         << ",Cr偏移:" << chroma_offset_l0[i][1] << "}" << std::endl;
+         << ",Cr偏移:" << chroma_offset_l0[i][1] << "}" << endl;
   }
 
   if (slice_type == SLICE_B) {
@@ -416,7 +416,7 @@ void SliceHeader::pred_weight_table() {
            << ",Cb权重:" << chroma_weight_l1[i][0]
            << ",Cr权重:" << chroma_weight_l1[i][1]
            << ",Cb偏移:" << chroma_offset_l1[i][0]
-           << ",Cr偏移:" << chroma_offset_l1[i][1] << "}" << std::endl;
+           << ",Cr偏移:" << chroma_offset_l1[i][1] << "}" << endl;
     }
   }
   cout << "\t}" << endl;
@@ -635,27 +635,27 @@ int SliceHeader::pic_scaling_matrix(int32_t scaling_list_size) {
 void SliceHeader::printf_scaling_lists_values() {
   //ScalingList4x4[6][16]
   uint8_t row = 4, clo = 4;
-  std::cout << "\tScalingList4x4 -> {" << std::endl;
+  cout << "\tScalingList4x4 -> {" << endl;
   for (int index = 0; index < 1; ++index) {
     for (int i = 0; i < row; ++i) {
-      std::cout << "\t\t|";
+      cout << "\t\t|";
       for (int j = 0; j < clo; ++j)
-        std::cout << setw(3) << (int)ScalingList4x4[index][row * i + j];
-      std::cout << " |" << std::endl;
+        cout << setw(3) << (int)ScalingList4x4[index][row * i + j];
+      cout << " |" << endl;
     }
   }
-  std::cout << "\t}" << std::endl;
+  cout << "\t}" << endl;
 
   //ScalingList8x8[6][64]
   row = 8, clo = 8;
-  std::cout << "\tScalingList8x8 -> {" << std::endl;
+  cout << "\tScalingList8x8 -> {" << endl;
   for (int index = 0; index < 1; ++index) {
     for (int i = 0; i < row; ++i) {
-      std::cout << "\t\t|";
+      cout << "\t\t|";
       for (int j = 0; j < clo; ++j)
-        std::cout << setw(3) << (int)ScalingList8x8[index][row * i + j];
-      std::cout << " |" << std::endl;
+        cout << setw(3) << (int)ScalingList8x8[index][row * i + j];
+      cout << " |" << endl;
     }
   }
-  std::cout << "\t}" << std::endl;
+  cout << "\t}" << endl;
 }

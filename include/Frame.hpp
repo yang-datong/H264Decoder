@@ -22,9 +22,6 @@ class Frame {
   /* Slice */
   Slice *slice = nullptr;
 
-  /* IDR */
-  //IDR idr;
-
   PictureBase m_picture_frame;
   PictureBase m_picture_top_filed;
   PictureBase m_picture_bottom_filed;

@@ -2,10 +2,11 @@
 #include "BitStream.hpp"
 #include "Type.hpp"
 #include <assert.h>
+#include <cstdint>
 
-int h264_log2(int32_t value) {
+int32_t LOG2(int32_t value) {
   assert(value > 0);
-  int log2 = 0;
+  int32_t log2 = 0;
   while (value) {
     value >>= 1;
     log2++;
@@ -13,7 +14,7 @@ int h264_log2(int32_t value) {
   return log2;
 }
 
-int32_t h264_power2(int32_t value) {
+int32_t POWER2(int32_t value) {
   int32_t power2 = 1;
   for (int32_t i = 0; i < value; ++i)
     power2 *= 2;
@@ -200,11 +201,7 @@ string MacroBlockPredMode(H264_MB_PART_PRED_MODE m_mb_pred_mode) {
   return mb_pred_mode;
 }
 
-/*
- * T-REC-H.264-201704-S!!PDF-E.pdf
- * Page 44/66/812
- * 7.3.2.1.1.1 Scaling list syntax
- */
+// 7.3.2.1.1.1 Scaling list syntax
 void scaling_list(BitStream &bs, uint32_t *scalingList,
                   uint32_t sizeOfScalingList,
                   uint32_t &useDefaultScalingMatrixFlag) {

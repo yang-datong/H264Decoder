@@ -1773,12 +1773,11 @@ int PictureBase::weighted_sample_prediction_Explicit_or_Implicit(
   for (int y = 0; y < partHeight; y++)                                         \
     for (int x = 0; x < partWidth; x++)                                        \
       if (logWDL >= 1)                                                         \
-        predPartL[y * partWidth + x] =                                         \
-            Clip1C(((predPartLXL[y * partWidth + x] * w0L +                    \
-                     h264_power2(logWDL - 1)) >>                               \
-                    logWDL) +                                                  \
-                       o0L,                                                    \
-                   BitDepthY);                                                 \
+        predPartL[y * partWidth + x] = Clip1C(                                 \
+            ((predPartLXL[y * partWidth + x] * w0L + POWER2(logWDL - 1)) >>    \
+             logWDL) +                                                         \
+                o0L,                                                           \
+            BitDepthY);                                                        \
       else                                                                     \
         predPartL[y * partWidth + x] =                                         \
             Clip1C(predPartLXL[y * partWidth + x] * w0L + o0L, BitDepthY);     \
@@ -1788,7 +1787,7 @@ int PictureBase::weighted_sample_prediction_Explicit_or_Implicit(
         if (logWDCb >= 1)                                                      \
           predPartCb[y * partWidthC + x] =                                     \
               Clip1C(((predPartLXCb[y * partWidthC + x] * wXCb +               \
-                       h264_power2(logWDCb - 1)) >>                            \
+                       POWER2(logWDCb - 1)) >>                                 \
                       logWDCb) +                                               \
                          oXCb,                                                 \
                      BitDepthC);                                               \
@@ -1798,7 +1797,7 @@ int PictureBase::weighted_sample_prediction_Explicit_or_Implicit(
         if (logWDCr >= 1)                                                      \
           predPartCr[y * partWidthC + x] =                                     \
               Clip1C(((predPartLXCr[y * partWidthC + x] * wXCr +               \
-                       h264_power2(logWDCr - 1)) >>                            \
+                       POWER2(logWDCr - 1)) >>                                 \
                       logWDCr) +                                               \
                          oXCr,                                                 \
                      BitDepthC);                                               \
@@ -1825,31 +1824,29 @@ int PictureBase::weighted_sample_prediction_Explicit_or_Implicit(
   else {
     for (int y = 0; y < partHeight; y++)
       for (int x = 0; x < partWidth; x++)
-        predPartL[y * partWidth + x] = Clip1C(
-            ((predPartL0L[y * partWidth + x] * w0L +
-              predPartL1L[y * partWidth + x] * w1L + h264_power2(logWDL)) >>
-             (logWDL + 1)) +
-                ((o0L + o1L + 1) >> 1),
-            BitDepthY);
+        predPartL[y * partWidth + x] =
+            Clip1C(((predPartL0L[y * partWidth + x] * w0L +
+                     predPartL1L[y * partWidth + x] * w1L + POWER2(logWDL)) >>
+                    (logWDL + 1)) +
+                       ((o0L + o1L + 1) >> 1),
+                   BitDepthY);
 
     if (ChromaArrayType != 0) {
       for (int y = 0; y < partHeightC; y++) {
         for (int x = 0; x < partWidthC; x++) {
-          predPartCb[y * partWidthC + x] =
-              Clip1C(((predPartL0Cb[y * partWidthC + x] * w0Cb +
-                       predPartL1Cb[y * partWidthC + x] * w1Cb +
-                       h264_power2(logWDCb)) >>
-                      (logWDCb + 1)) +
-                         ((o0Cb + o1Cb + 1) >> 1),
-                     BitDepthC);
+          predPartCb[y * partWidthC + x] = Clip1C(
+              ((predPartL0Cb[y * partWidthC + x] * w0Cb +
+                predPartL1Cb[y * partWidthC + x] * w1Cb + POWER2(logWDCb)) >>
+               (logWDCb + 1)) +
+                  ((o0Cb + o1Cb + 1) >> 1),
+              BitDepthC);
 
-          predPartCr[y * partWidthC + x] =
-              Clip1C(((predPartL0Cr[y * partWidthC + x] * w0Cr +
-                       predPartL1Cr[y * partWidthC + x] * w1Cr +
-                       h264_power2(logWDCr)) >>
-                      (logWDCr + 1)) +
-                         ((o0Cr + o1Cr + 1) >> 1),
-                     BitDepthC);
+          predPartCr[y * partWidthC + x] = Clip1C(
+              ((predPartL0Cr[y * partWidthC + x] * w0Cr +
+                predPartL1Cr[y * partWidthC + x] * w1Cr + POWER2(logWDCr)) >>
+               (logWDCr + 1)) +
+                  ((o0Cr + o1Cr + 1) >> 1),
+              BitDepthC);
         }
       }
     }

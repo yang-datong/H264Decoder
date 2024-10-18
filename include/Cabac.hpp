@@ -22,8 +22,7 @@ class Cabac {
   PictureBase &picture;
 
  public:
-  Cabac(BitStream &bitStream, PictureBase &pic)
-      : bs(bitStream), picture(pic){};
+  Cabac(BitStream &bitStream, PictureBase &pic) : bs(bitStream), picture(pic){};
 
   /* ============== 9.3.1 Initialization process ============== */
  public:
@@ -99,9 +98,7 @@ class Cabac {
 
  public:
   int decode_transform_size_8x8_flag(int32_t &synElVal);
-
   int decode_end_of_slice_flag(int32_t &synElVal);
-
   int residual_block_cabac(int32_t coeffLevel[], int32_t startIdx,
                            int32_t endIdx, int32_t maxNumCoeff,
                            MB_RESIDUAL_LEVEL mb_block_level, int32_t BlkIdx,

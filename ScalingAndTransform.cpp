@@ -65,7 +65,7 @@ int PictureBase::scaling_and_transform_for_chroma_DC(int32_t isChromaCb,
                         << (qP_DC / 6 - 6);
           else
             dcC[i][j] = (f[i][j] * LevelScale4x4[qP_DC % 6][0][0] +
-                         h264_power2(5 - qP_DC / 6)) >>
+                         POWER2(5 - qP_DC / 6)) >>
                         (6 - qP / 6);
     }
   }
@@ -116,7 +116,6 @@ int PictureBase::scaling_and_transform_for_residual_4x4_blocks(
 
     // 8.5.12.2 Transformation process for residual 4x4 blocks （反整数变换）
     transform_decoding_for_residual_4x4_blocks(d, r);
-    /* TODO YangJing 量化和变换需要再了解下理论知识 <24-10-03 22:32:49> */
   }
 
   return 0;
@@ -187,9 +186,9 @@ int PictureBase::scaling_for_residual_4x4_blocks(
         if (qP >= 24)
           d[i][j] = (c[i][j] * LevelScale4x4[qP % 6][i][j]) << (qP / 6 - 4);
         else
-          d[i][j] = (c[i][j] * LevelScale4x4[qP % 6][i][j] +
-                     h264_power2(3 - qP / 6)) >>
-                    (4 - qP / 6);
+          d[i][j] =
+              (c[i][j] * LevelScale4x4[qP % 6][i][j] + POWER2(3 - qP / 6)) >>
+              (4 - qP / 6);
       }
     }
   }
@@ -205,7 +204,7 @@ int PictureBase::scaling_for_residual_8x8_blocks(
         d[i][j] = (c[i][j] * LevelScale8x8[qP % 6][i][j]) << (qP / 6 - 6);
       else
         d[i][j] =
-            (c[i][j] * LevelScale8x8[qP % 6][i][j] + h264_power2(5 - qP / 6)) >>
+            (c[i][j] * LevelScale8x8[qP % 6][i][j] + POWER2(5 - qP / 6)) >>
             (6 - qP / 6);
     }
   }
@@ -325,7 +324,6 @@ int PictureBase::scaling_functions(int32_t isChroma, int32_t isChromaCb) {
 // 8.5.8 Derivation process for chroma quantisation parameters (色度量化参数的推导过程)
 /* 输出： – QPC：每个色度分量 Cb 和 Cr 的色度量化参数，
  * – QSC：解码 SP 和 SI 切片所需的每个色度分量 Cb 和 Cr 的附加色度量化参数（如果适用）*/
-/* TODO YangJing 记得看 <24-10-03 21:02:25> */
 int PictureBase::derivation_chroma_quantisation_parameters(int32_t isChromaCb) {
   const SliceHeader *header = m_slice->slice_header;
   MacroBlock &mb = m_mbs[CurrMbAddr];

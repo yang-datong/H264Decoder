@@ -46,14 +46,12 @@ int Slice::decode(BitStream &bs, Frame *(&dpb)[16], SPS &sps, PPS &pps,
 
   /* TODO YangJing 移动到Filed类中去 <24-09-14 20:53:06> */
   //----------------顶场-------------------------------
-  frame->m_picture_top_filed.m_picture_coded_type =
-      TOP_FIELD;
+  frame->m_picture_top_filed.m_picture_coded_type = TOP_FIELD;
   frame->m_picture_top_filed.m_parent = frame;
   frame->m_picture_top_filed.init(this);
 
   //----------------底场-------------------------------
-  frame->m_picture_bottom_filed.m_picture_coded_type =
-      BOTTOM_FIELD;
+  frame->m_picture_bottom_filed.m_picture_coded_type = BOTTOM_FIELD;
   frame->m_picture_bottom_filed.m_parent = frame;
   frame->m_picture_bottom_filed.init(this);
 

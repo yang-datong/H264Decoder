@@ -71,12 +71,6 @@ uint32_t BitStream::readME(int32_t ChromaArrayType,
                            H264_MB_PART_PRED_MODE MbPartPredMode) {
   int32_t coded_block_pattern = 0;
   int32_t codeNum = readUE();
-  /* TODO YangJing 移动到头文件 <24-10-15 01:47:19> */
-  struct maping_exp_golomb_t {
-    int32_t code_num;
-    int32_t coded_block_pattern_of_Intra_4x4_or_Intra_8x8;
-    int32_t coded_block_pattern_of_Inter;
-  };
   const maping_exp_golomb_t maping_exp_golomb_arrays1[] = {
       {0, 47, 0},   {1, 31, 16},  {2, 15, 1},   {3, 0, 2},    {4, 23, 4},
       {5, 27, 8},   {6, 29, 32},  {7, 30, 3},   {8, 7, 5},    {9, 11, 10},
@@ -97,9 +91,7 @@ uint32_t BitStream::readME(int32_t ChromaArrayType,
       {12, 4, 13}, {13, 8, 14}, {14, 6, 6}, {15, 9, 9},
   };
 
-  switch (ChromaArrayType) {
-  case 1:
-  case 2: {
+  if (ChromaArrayType == 1 || ChromaArrayType == 2) {
     RET(codeNum < 0 || codeNum > 47);
     if (MbPartPredMode == Intra_4x4 || MbPartPredMode == Intra_8x8)
       coded_block_pattern = maping_exp_golomb_arrays1[codeNum]
@@ -107,10 +99,7 @@ uint32_t BitStream::readME(int32_t ChromaArrayType,
     else
       coded_block_pattern =
           maping_exp_golomb_arrays1[codeNum].coded_block_pattern_of_Inter;
-    break;
-  }
-  case 0:
-  case 3: {
+  } else { //0,3
     RET(codeNum < 0 || codeNum > 15);
     if (MbPartPredMode == Intra_4x4 || MbPartPredMode == Intra_8x8)
       coded_block_pattern = maping_exp_golomb_arrays2[codeNum]
@@ -118,10 +107,6 @@ uint32_t BitStream::readME(int32_t ChromaArrayType,
     else
       coded_block_pattern =
           maping_exp_golomb_arrays2[codeNum].coded_block_pattern_of_Inter;
-    break;
-  }
-  default:
-    return -1;
   }
 
   return coded_block_pattern;

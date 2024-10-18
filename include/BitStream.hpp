@@ -57,4 +57,10 @@ class BitStream {
   int rbsp_trailing_bits();
 };
 
+struct maping_exp_golomb_t {
+  int32_t code_num;
+  int32_t coded_block_pattern_of_Intra_4x4_or_Intra_8x8;
+  int32_t coded_block_pattern_of_Inter;
+};
+
 #endif /* end of include guard: BITSTREAM_HPP_AUHM38NB */
