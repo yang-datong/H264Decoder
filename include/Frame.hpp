@@ -55,7 +55,7 @@ class Frame {
   int32_t PicNum = 0; // To each short-term reference picture 短期参考图像
   int32_t LongTermPicNum =
       0; // To each long-term reference picture 长期参考图像
-  H264_PICTURE_MARKED_AS reference_marked_type; // I,P作为参考帧的mark状态
+  PICTURE_MARKED_AS reference_marked_type; // I,P作为参考帧的mark状态
   int32_t m_is_decode_finished = 0;             // 本帧是否解码完毕;
       // 0-未解码完毕，1-已经解码完毕
   int32_t m_is_in_use = 0; // 本帧数据是否正在使用; 0-未使用，1-正在使用

@@ -59,7 +59,7 @@ class PictureBase {
   int32_t memory_management_control_operation_5_flag = 0;
   int32_t memory_management_control_operation_6_flag = 0;
   // I,P作为参考帧的mark状态
-  H264_PICTURE_MARKED_AS reference_marked_type = UNKOWN;
+  PICTURE_MARKED_AS reference_marked_type = UNKOWN;
 
   Slice *m_slice = nullptr;
   MacroBlock *m_mbs = nullptr; // 存储当前图像的所有宏块

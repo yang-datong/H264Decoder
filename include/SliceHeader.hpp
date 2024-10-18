@@ -210,9 +210,9 @@ class SliceHeader {
 
   // dec_ref_pic_marking
  public:
-  int32_t no_output_of_prior_pics_flag = 0;
-  int32_t long_term_reference_flag = 0;
-  int32_t adaptive_ref_pic_marking_mode_flag = 0;
+  bool no_output_of_prior_pics_flag = false;
+  bool long_term_reference_flag = false;
+  bool adaptive_ref_pic_marking_mode_flag = false;
   int32_t dec_ref_pic_marking_count = 0;
   /* 当前使用的缩放矩阵值: 
    * 对于4x4:

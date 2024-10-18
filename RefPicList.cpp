@@ -2,7 +2,6 @@
 #include "PictureBase.hpp"
 #include "SliceHeader.hpp"
 #include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -590,7 +589,7 @@ int PictureBase::init_ref_picture_list_P_SP_in_fields(
   }
 
   /*2. "当前场"（上面是指"参考场")是互补参考场对的第二场（按解码顺序）并且第一场被标记为“用于短期参考”时，第一场被包括在短期参考帧列表refFrameList0ShortTerm中。*/
-  Frame *curPic = m_parent;
+  Frame *curPic = this->m_parent;
   if (m_picture_coded_type == BOTTOM_FIELD) {
     if (curPic->m_picture_top_filed.reference_marked_type == SHORT_REF)
       refFrameList0ShortTerm.push_back(curPic);
@@ -1103,59 +1102,56 @@ int PictureBase::modif_ref_picture_lists_for_long_ref_pictures(
 // 8.2.5 Decoded reference picture marking process
 // 8.2.5.1 Sequence of operations for decoded reference picture marking process
 int PictureBase::decoded_reference_picture_marking(Frame *(&dpb)[16]) {
-  const SliceHeader *slice_header = m_slice->slice_header;
-  if (slice_header->IdrPicFlag) {
+  const SliceHeader *header = m_slice->slice_header;
+  Frame *curPic = this->m_parent;
+  // IDR帧
+  if (header->IdrPicFlag) {
     // 将所有已解码参考图片均标记为"未用于参考"，以及编码类型标记为"未知"
     for (int i = 0; i < MAX_DPB; i++) {
       dpb[i]->reference_marked_type = UNUSED_REF;
       dpb[i]->m_pic_coded_type_marked_as_refrence = UNKNOWN;
       // 需要先将之前解码的所有帧输出去
-      if (dpb[i] != this->m_parent) dpb[i]->m_picture_coded_type = UNKNOWN;
+      if (dpb[i] != curPic) dpb[i]->m_picture_coded_type = UNKNOWN;
     }
-
-    if (slice_header->long_term_reference_flag == 0) {
+    // 当前帧被标记为短期参考帧，并且没有长期参考帧索引
+    if (header->long_term_reference_flag == false) {
+      MaxLongTermFrameIdx = NA;
       reference_marked_type = SHORT_REF;
-      MaxLongTermFrameIdx = NA; //"no long-term frame indices".
-      m_parent->reference_marked_type = SHORT_REF;
-
-      if (m_parent->m_picture_coded_type == FRAME)
-        m_parent->m_pic_coded_type_marked_as_refrence = FRAME;
-      else
-        m_parent->m_pic_coded_type_marked_as_refrence =
-            COMPLEMENTARY_FIELD_PAIR;
-
-    } else {
+      curPic->reference_marked_type = SHORT_REF;
+    }
+    // 当前帧被标记为长期参考帧，并且长期参考帧索引为初始值0
+    else {
       reference_marked_type = LONG_REF;
       LongTermFrameIdx = 0, MaxLongTermFrameIdx = 0;
-      m_parent->reference_marked_type = LONG_REF;
-
-      if (m_parent->m_picture_coded_type == FRAME)
-        m_parent->m_pic_coded_type_marked_as_refrence = FRAME;
-      else
-        m_parent->m_pic_coded_type_marked_as_refrence =
-            COMPLEMENTARY_FIELD_PAIR;
+      curPic->reference_marked_type = LONG_REF;
     }
+    // 当前图像为帧类型，则当前的标记类型也设为参考帧类型
+    if (curPic->m_picture_coded_type == FRAME)
+      curPic->m_pic_coded_type_marked_as_refrence = FRAME;
+    else
+      curPic->m_pic_coded_type_marked_as_refrence = COMPLEMENTARY_FIELD_PAIR;
   }
 
   // 普通帧
   else {
-    if (slice_header->adaptive_ref_pic_marking_mode_flag == 0) {
-      // 滑动窗口解码参考图像的标识过程
-      RET(sliding_window_decoded_reference_picture_marking(dpb));
-    } else
-      RET(adaptive_memory_control_decoded_reference_picture_marking(dpb));
+    if (header->adaptive_ref_pic_marking_mode_flag)
+      // 自适应内存控制管理参考帧
+      adaptive_memory_control_decoded_reference_picture_marking(dpb);
+    else
+      // 使用滑动窗口机制来管理参考帧
+      sliding_window_decoded_reference_picture_marking(dpb);
   }
 
-  if (slice_header->IdrPicFlag != 1 &&
+  if (header->IdrPicFlag == false &&
       memory_management_control_operation_6_flag != 6) {
     reference_marked_type = SHORT_REF;
     MaxLongTermFrameIdx = NA;
-    m_parent->reference_marked_type = SHORT_REF;
+    curPic->reference_marked_type = SHORT_REF;
 
-    if (m_parent->m_picture_coded_type == FRAME)
-      m_parent->m_pic_coded_type_marked_as_refrence = FRAME;
+    if (curPic->m_picture_coded_type == FRAME)
+      curPic->m_pic_coded_type_marked_as_refrence = FRAME;
     else
-      m_parent->m_pic_coded_type_marked_as_refrence = COMPLEMENTARY_FIELD_PAIR;
+      curPic->m_pic_coded_type_marked_as_refrence = COMPLEMENTARY_FIELD_PAIR;
   }
 
   return 0;
@@ -1165,91 +1161,80 @@ int PictureBase::decoded_reference_picture_marking(Frame *(&dpb)[16]) {
 // 滑动窗口解码参考图像的标识过程
 int PictureBase::sliding_window_decoded_reference_picture_marking(
     Frame *(&dpb)[16]) {
-
-  if (m_picture_coded_type == BOTTOM_FIELD &&
-      (m_parent->m_picture_top_filed.reference_marked_type == SHORT_REF)) {
+  const PictureBase &m_picture_top_filed = m_parent->m_picture_top_filed;
+  uint32_t max_num_ref_frames =
+      m_slice->slice_header->m_sps->max_num_ref_frames;
+  // 当前图片为底场，且顶已被标记为“用于短期参考”，则当前图片和互补参考场对也被标记为“用于短期参考”，且当前图像参考类型标记为互补场对
+  if (this->m_picture_coded_type == BOTTOM_FIELD &&
+      (m_picture_top_filed.reference_marked_type == SHORT_REF)) {
     reference_marked_type = SHORT_REF;
     m_parent->reference_marked_type = SHORT_REF;
     m_parent->m_pic_coded_type_marked_as_refrence = COMPLEMENTARY_FIELD_PAIR;
   } else {
+
+    // 遍历参考帧缓冲区，统计当前缓冲区中短期参考帧和长期参考帧的数量
     uint32_t numShortTerm = 0, numLongTerm = 0;
     for (int i = 0; i < MAX_DPB; i++) {
-      if (dpb[i]->m_picture_frame.reference_marked_type == SHORT_REF ||
-          dpb[i]->m_picture_top_filed.reference_marked_type == SHORT_REF ||
-          dpb[i]->m_picture_bottom_filed.reference_marked_type == SHORT_REF)
-        numShortTerm++;
+      auto marked_f = dpb[i]->m_picture_frame.reference_marked_type;
+      auto marked_t = dpb[i]->m_picture_top_filed.reference_marked_type;
+      auto marked_b = dpb[i]->m_picture_bottom_filed.reference_marked_type;
 
-      if (dpb[i]->m_picture_frame.reference_marked_type == LONG_REF ||
-          dpb[i]->m_picture_top_filed.reference_marked_type == LONG_REF ||
-          dpb[i]->m_picture_bottom_filed.reference_marked_type == LONG_REF)
+      if (marked_f == SHORT_REF || marked_t == SHORT_REF ||
+          marked_b == SHORT_REF)
+        numShortTerm++;
+      if (marked_f == LONG_REF || marked_t == LONG_REF || marked_b == LONG_REF)
         numLongTerm++;
     }
 
-    if (numShortTerm + numLongTerm ==
-            MAX(m_slice->slice_header->m_sps->max_num_ref_frames, 1) &&
+    // 当前参考帧的总数达到了最大参考帧数，并且存在短期参考帧，则丢弃最旧的短期参考帧
+    if (numShortTerm + numLongTerm == MAX(max_num_ref_frames, 1) &&
         numShortTerm > 0) {
-      PictureBase *refPic = NULL;
-      int32_t FrameNumWrap_smallest_index = -1;
+      PictureBase *refPic = nullptr;
+      int32_t index = -1;
 
+      //遍历参考帧缓冲区，查找最旧的短期参考帧。最旧的短期参考帧通过比较"帧号(编码顺序)"来确定
       for (int i = 0; i < MAX_DPB; i++) {
-        if (dpb[i]->m_picture_frame.reference_marked_type == SHORT_REF ||
-            dpb[i]->m_picture_top_filed.reference_marked_type == SHORT_REF ||
-            dpb[i]->m_picture_bottom_filed.reference_marked_type == SHORT_REF) {
-          if (dpb[i]->m_picture_frame.reference_marked_type == SHORT_REF) {
-            if (FrameNumWrap_smallest_index == -1) {
-              FrameNumWrap_smallest_index = i;
-              refPic = &dpb[i]->m_picture_frame;
-            }
-
-            if (dpb[i]->m_picture_frame.FrameNumWrap <
-                dpb[FrameNumWrap_smallest_index]
-                    ->m_picture_frame.FrameNumWrap) {
-              FrameNumWrap_smallest_index = i;
-              refPic = &dpb[i]->m_picture_frame;
-            }
-          }
-
-          if (dpb[i]->m_picture_top_filed.reference_marked_type == SHORT_REF ||
-              dpb[i]->m_picture_top_filed.reference_marked_type == SHORT_REF) {
-            if (FrameNumWrap_smallest_index == -1) {
-              FrameNumWrap_smallest_index = i;
-              refPic = &dpb[i]->m_picture_top_filed;
-            }
-
-            if (dpb[i]->m_picture_top_filed.FrameNumWrap <
-                dpb[FrameNumWrap_smallest_index]
-                    ->m_picture_top_filed.FrameNumWrap) {
-              FrameNumWrap_smallest_index = i;
-              refPic = &dpb[i]->m_picture_top_filed;
-            }
-          }
-
-          if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-              SHORT_REF) {
-            if (FrameNumWrap_smallest_index == -1) {
-              FrameNumWrap_smallest_index = i;
-              refPic = &dpb[i]->m_picture_bottom_filed;
-            }
-
-            if (dpb[i]->m_picture_bottom_filed.FrameNumWrap <
-                dpb[FrameNumWrap_smallest_index]
-                    ->m_picture_bottom_filed.FrameNumWrap) {
-              FrameNumWrap_smallest_index = i;
-              refPic = &dpb[i]->m_picture_bottom_filed;
-            }
-          }
+        //检查完整帧（m_picture_frame）、顶场（m_picture_top_filed）和底场（m_picture_bottom_filed）的参考标记，确保找到最旧的短期参考帧。
+        auto marked_f = dpb[i]->m_picture_frame.reference_marked_type;
+        auto marked_t = dpb[i]->m_picture_top_filed.reference_marked_type;
+        auto marked_b = dpb[i]->m_picture_bottom_filed.reference_marked_type;
+        // 帧类型
+        if (marked_f == SHORT_REF) {
+          // 初始默认为首帧
+          if (index == -1) index = i, refPic = &dpb[i]->m_picture_frame;
+          // 比较帧号，哪个更“旧”
+          else if (dpb[i]->m_picture_frame.FrameNumWrap <
+                   dpb[index]->m_picture_frame.FrameNumWrap)
+            index = i, refPic = &dpb[i]->m_picture_frame;
+        }
+        // 场类型(顶场)，逻辑同帧类型
+        if (marked_t == SHORT_REF) {
+          if (index == -1)
+            index = i, refPic = &dpb[i]->m_picture_top_filed;
+          else if (dpb[i]->m_picture_top_filed.FrameNumWrap <
+                   dpb[index]->m_picture_top_filed.FrameNumWrap)
+            index = i, refPic = &dpb[i]->m_picture_top_filed;
+        }
+        // 场类型(底场)，逻辑同帧类型
+        if (marked_b == SHORT_REF) {
+          if (index == -1)
+            index = i, refPic = &dpb[i]->m_picture_bottom_filed;
+          else if (dpb[i]->m_picture_bottom_filed.FrameNumWrap <
+                   dpb[index]->m_picture_bottom_filed.FrameNumWrap)
+            index = i, refPic = &dpb[i]->m_picture_bottom_filed;
         }
       }
 
-      if (FrameNumWrap_smallest_index >= 0 && refPic != NULL) {
+      // 如果找到了最旧的短期参考帧，则将其标记为“未使用参考帧”
+      if (index >= 0 && refPic != nullptr) {
         refPic->reference_marked_type = UNUSED_REF;
-
-        if (refPic->m_parent->m_picture_coded_type == FRAME) {
-          refPic->m_parent->reference_marked_type = UNUSED_REF;
+        auto code_type = refPic->m_parent->m_picture_coded_type;
+        auto &mark_type = refPic->m_parent->reference_marked_type;
+        if (code_type == FRAME)
+          mark_type = UNUSED_REF,
           refPic->m_parent->m_pic_coded_type_marked_as_refrence = UNKNOWN;
-        } else if (refPic->m_parent->m_picture_coded_type ==
-                   COMPLEMENTARY_FIELD_PAIR) {
-          refPic->m_parent->reference_marked_type = UNUSED_REF;
+        else if (code_type == COMPLEMENTARY_FIELD_PAIR) {
+          mark_type = UNUSED_REF,
           refPic->m_parent->m_pic_coded_type_marked_as_refrence = UNKNOWN;
           refPic->m_parent->m_picture_top_filed.reference_marked_type =
               UNUSED_REF;
@@ -1263,361 +1248,366 @@ int PictureBase::sliding_window_decoded_reference_picture_marking(
   return 0;
 }
 
+// 8.2.5.4.1 Marking process of a short-term reference picture as "unused for reference"
+int marking_short_term_ref_picture_as_unused_for_ref(Frame *pic,
+                                                     int32_t picNumX,
+
+                                                     bool field_pic_flag) {
+
+  for (int32_t i = 0; i < MAX_DPB; i++) {
+    auto &marked_f = pic->m_picture_frame.reference_marked_type;
+    auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
+    auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
+    auto picnum_f = pic->m_picture_frame.PicNum;
+    auto picnum_t = pic->m_picture_top_filed.PicNum;
+    auto picnum_b = pic->m_picture_bottom_filed.PicNum;
+    if (field_pic_flag == false) {
+      if ((marked_f == SHORT_REF && picnum_f == picNumX) ||
+          (marked_t == SHORT_REF && picnum_t == picNumX) ||
+          (marked_b == SHORT_REF && picnum_b == picNumX)) {
+        pic->reference_marked_type = UNUSED_REF;
+        marked_f = UNUSED_REF;
+        marked_t = UNUSED_REF;
+        marked_b = UNUSED_REF;
+      }
+    } else {
+      if (marked_t == SHORT_REF && picnum_t == picNumX) {
+        pic->reference_marked_type = marked_b;
+        pic->m_pic_coded_type_marked_as_refrence =
+            pic->m_picture_bottom_filed.m_picture_coded_type;
+        marked_f = UNUSED_REF;
+        marked_t = UNUSED_REF;
+      } else if (marked_b == SHORT_REF && picnum_b == picNumX) {
+        pic->reference_marked_type = marked_t;
+        pic->m_pic_coded_type_marked_as_refrence =
+            pic->m_picture_top_filed.m_picture_coded_type;
+        marked_f = UNUSED_REF;
+        marked_b = UNUSED_REF;
+      }
+    }
+  }
+  return 0;
+}
+
+// 8.2.5.4.2 Marking process of a long-term reference picture as "unused for reference"
+int marking_long_term_ref_picture_as_unused_for_ref(Frame *pic,
+                                                    int32_t long_term_pic_num_2,
+                                                    bool field_pic_flag) {
+  for (int32_t i = 0; i < MAX_DPB; i++) {
+    auto &marked_f = pic->m_picture_frame.reference_marked_type;
+    auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
+    auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
+    auto LongTermPicNum_f = pic->m_picture_frame.LongTermPicNum;
+    auto LongTermPicNum_t = pic->m_picture_top_filed.LongTermPicNum;
+    auto LongTermPicNum_b = pic->m_picture_bottom_filed.LongTermPicNum;
+    if (field_pic_flag == false) {
+      if (marked_f == LONG_REF && LongTermPicNum_f == long_term_pic_num_2) {
+        pic->reference_marked_type = UNUSED_REF;
+        pic->m_pic_coded_type_marked_as_refrence = UNKNOWN;
+        marked_f = UNUSED_REF;
+        marked_t = UNUSED_REF;
+        marked_b = UNUSED_REF;
+      } else {
+        if (marked_t == LONG_REF && LongTermPicNum_t == long_term_pic_num_2) {
+          pic->reference_marked_type = marked_b;
+          pic->m_pic_coded_type_marked_as_refrence =
+              pic->m_picture_bottom_filed.m_picture_coded_type;
+          marked_f = UNUSED_REF;
+          marked_t = UNUSED_REF;
+        } else if (marked_b == LONG_REF &&
+                   LongTermPicNum_b == long_term_pic_num_2) {
+          pic->reference_marked_type = marked_t;
+          pic->m_pic_coded_type_marked_as_refrence =
+              pic->m_picture_top_filed.m_picture_coded_type;
+          marked_f = UNUSED_REF;
+          marked_b = UNUSED_REF;
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+// 8.2.5.4.3 Assignment process of a LongTermFrameIdx to a short-term reference picture
+int assignment_longTermFrameIdx_to_short_term_ref_picture(
+    Frame *pic, int32_t picNumX, int32_t long_term_frame_idx,
+    bool field_pic_flag, int32_t &LongTermFrameIdx) {
+  for (int32_t i = 0; i < MAX_DPB; i++) {
+    auto &marked_f = pic->m_picture_frame.reference_marked_type;
+    auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
+    auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
+    if (marked_f == LONG_REF &&
+        pic->m_picture_frame.LongTermFrameIdx == long_term_frame_idx) {
+      pic->reference_marked_type = UNUSED_REF;
+      pic->m_pic_coded_type_marked_as_refrence = UNKNOWN;
+      marked_f = UNUSED_REF;
+      marked_t = UNUSED_REF;
+      marked_b = UNUSED_REF;
+    }
+  }
+
+  int32_t picNumXIndex = -1;
+  for (int32_t i = 0; i < MAX_DPB; i++) {
+    auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
+    auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
+    if (marked_t == SHORT_REF && pic->m_picture_top_filed.PicNum == picNumX) {
+      picNumXIndex = i;
+      break;
+    } else if (marked_b == SHORT_REF &&
+               pic->m_picture_bottom_filed.PicNum == picNumX) {
+      picNumXIndex = i;
+      break;
+    }
+  }
+
+  for (int32_t i = 0; i < MAX_DPB; i++) {
+    auto &marked_f = pic->m_picture_frame.reference_marked_type;
+    auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
+    auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
+    if (marked_t == LONG_REF &&
+        pic->m_picture_top_filed.LongTermFrameIdx == long_term_frame_idx) {
+      if (i != picNumXIndex) {
+        pic->reference_marked_type = UNUSED_REF;
+        pic->m_pic_coded_type_marked_as_refrence =
+            pic->m_picture_bottom_filed.m_picture_coded_type;
+        marked_f = marked_b;
+        marked_t = UNUSED_REF;
+      }
+    } else if (marked_b == LONG_REF &&
+               pic->m_picture_bottom_filed.LongTermFrameIdx ==
+                   long_term_frame_idx) {
+      if (i != picNumXIndex) {
+        pic->reference_marked_type = UNUSED_REF;
+        pic->m_pic_coded_type_marked_as_refrence =
+            pic->m_picture_top_filed.m_picture_coded_type;
+        marked_f = marked_t;
+        marked_b = UNUSED_REF;
+      }
+    }
+  }
+
+  if (field_pic_flag == false) {
+    for (int32_t i = 0; i < MAX_DPB; i++) {
+      auto &marked_f = pic->m_picture_frame.reference_marked_type;
+      auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
+      auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
+      if (marked_f == SHORT_REF && pic->m_picture_frame.PicNum == picNumX) {
+        pic->reference_marked_type = LONG_REF;
+        pic->m_pic_coded_type_marked_as_refrence = FRAME;
+        marked_f = LONG_REF;
+
+        if (pic->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR)
+          marked_t = LONG_REF, marked_b = LONG_REF;
+
+        LongTermFrameIdx = long_term_frame_idx;
+      }
+    }
+  } else {
+    for (int32_t i = 0; i < MAX_DPB; i++) {
+      auto &marked_f = pic->m_picture_frame.reference_marked_type;
+      auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
+      auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
+      if (marked_t == SHORT_REF && pic->m_picture_top_filed.PicNum == picNumX) {
+        marked_t = LONG_REF;
+
+        if (marked_b == LONG_REF) {
+          pic->reference_marked_type = LONG_REF;
+
+          if (pic->m_picture_frame.m_picture_coded_type == FRAME)
+            pic->m_pic_coded_type_marked_as_refrence = FRAME;
+          else if (pic->m_picture_frame.m_picture_coded_type ==
+                   COMPLEMENTARY_FIELD_PAIR)
+            pic->m_pic_coded_type_marked_as_refrence = COMPLEMENTARY_FIELD_PAIR;
+
+          marked_f = LONG_REF;
+          pic->m_picture_bottom_filed.LongTermFrameIdx = long_term_frame_idx;
+        }
+
+        pic->m_picture_top_filed.LongTermFrameIdx = long_term_frame_idx;
+      } else if (marked_b == SHORT_REF &&
+                 pic->m_picture_bottom_filed.PicNum == picNumX) {
+        marked_b = LONG_REF;
+
+        if (marked_t == LONG_REF) {
+          pic->reference_marked_type = LONG_REF;
+
+          if (pic->m_picture_frame.m_picture_coded_type == FRAME)
+            pic->m_pic_coded_type_marked_as_refrence = FRAME;
+          else if (pic->m_picture_frame.m_picture_coded_type ==
+                   COMPLEMENTARY_FIELD_PAIR)
+            pic->m_pic_coded_type_marked_as_refrence = COMPLEMENTARY_FIELD_PAIR;
+
+          marked_f = LONG_REF;
+          pic->m_picture_top_filed.LongTermFrameIdx = long_term_frame_idx;
+        }
+
+        pic->m_picture_bottom_filed.LongTermFrameIdx = long_term_frame_idx;
+      }
+    }
+  }
+  return 0;
+}
+
+// 8.2.5.4.4 Decoding process for MaxLongTermFrameIdx
+int decoding_maxLongTermFrameIdx(Frame *pic, int32_t max_long_term_frame_idx,
+                                 int32_t &MaxLongTermFrameIdx) {
+  for (int32_t i = 0; i < MAX_DPB; i++) {
+    auto &marked_f = pic->m_picture_frame.reference_marked_type;
+    auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
+    if (pic->m_picture_frame.LongTermFrameIdx > max_long_term_frame_idx &&
+        marked_f == LONG_REF) {
+      marked_f = UNUSED_REF;
+    }
+
+    if (pic->m_picture_top_filed.LongTermFrameIdx > max_long_term_frame_idx &&
+        pic->m_picture_top_filed.reference_marked_type == LONG_REF) {
+      pic->m_picture_top_filed.reference_marked_type = UNUSED_REF;
+    }
+
+    if (pic->m_picture_bottom_filed.LongTermFrameIdx >
+            max_long_term_frame_idx &&
+        marked_b == LONG_REF) {
+      marked_b = UNUSED_REF;
+    }
+
+    if (pic->m_picture_coded_type == FRAME ||
+        pic->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR) {
+      pic->m_pic_coded_type_marked_as_refrence = UNKNOWN;
+      pic->reference_marked_type = UNUSED_REF;
+    }
+  }
+
+  if (max_long_term_frame_idx - 1 == 0)
+    MaxLongTermFrameIdx = NA;
+  else
+    MaxLongTermFrameIdx = max_long_term_frame_idx;
+  return 0;
+}
+
+// 8.2.5.4.5 Marking process of all reference pictures as "unused for reference" and setting MaxLongTermFrameIdx to "no long-term frame indices"
+int marking_all_ref_pictures_as_unused_for_ref(
+    Frame *pic, int32_t &MaxLongTermFrameIdx,
+    int32_t &memory_management_control_operation_5_flag) {
+  for (int32_t i = 0; i < MAX_DPB; i++) {
+    pic->m_pic_coded_type_marked_as_refrence = UNKNOWN;
+    pic->reference_marked_type = UNUSED_REF;
+    pic->m_picture_frame.reference_marked_type = UNUSED_REF;
+    pic->m_picture_top_filed.reference_marked_type = UNUSED_REF;
+    pic->m_picture_bottom_filed.reference_marked_type = UNUSED_REF;
+  }
+
+  MaxLongTermFrameIdx = NA;
+  memory_management_control_operation_5_flag = 1;
+  return 0;
+}
+
+// 8.2.5.4.6 Process for assigning a long-term frame index to the current picture
+int assigning_long_term_frame_index_to_the_current_picture(
+    Frame *pic, H264_PICTURE_CODED_TYPE m_picture_coded_type,
+    bool field_pic_flag, int32_t long_term_frame_idx,
+    int32_t max_long_term_frame_idx, Frame *m_parent,
+    PICTURE_MARKED_AS &reference_marked_type, int32_t &LongTermFrameIdx,
+    int32_t &memory_management_control_operation_6_flag) {
+  for (int32_t i = 0; i < MAX_DPB; i++) {
+    auto &marked_f = pic->m_picture_frame.reference_marked_type;
+    auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
+    auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
+    if (pic->m_picture_frame.LongTermFrameIdx == max_long_term_frame_idx &&
+        marked_f == LONG_REF) {
+      marked_f = UNUSED_REF;
+      pic->reference_marked_type = UNUSED_REF;
+      pic->m_pic_coded_type_marked_as_refrence = UNKNOWN;
+
+      if (pic->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR) {
+        marked_t = UNUSED_REF;
+        marked_b = UNUSED_REF;
+      }
+    }
+
+    if (pic->m_picture_top_filed.LongTermFrameIdx == LongTermFrameIdx &&
+        m_parent->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR &&
+        (pic != m_parent)) {
+      pic->reference_marked_type = marked_b;
+      pic->m_pic_coded_type_marked_as_refrence =
+          pic->m_picture_bottom_filed.m_picture_coded_type;
+      marked_t = UNUSED_REF;
+    } else if (pic->m_picture_bottom_filed.LongTermFrameIdx ==
+                   LongTermFrameIdx &&
+               m_parent->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR &&
+               (pic != m_parent)) {
+      pic->reference_marked_type = marked_t;
+      pic->m_pic_coded_type_marked_as_refrence =
+          pic->m_picture_top_filed.m_picture_coded_type;
+      marked_b = UNUSED_REF;
+    }
+  }
+
+  reference_marked_type = LONG_REF;
+  LongTermFrameIdx = long_term_frame_idx;
+  memory_management_control_operation_6_flag = 6;
+  if (field_pic_flag == false) {
+    if (m_parent->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR) {
+      m_parent->m_picture_top_filed.reference_marked_type = LONG_REF;
+      m_parent->m_picture_top_filed.LongTermFrameIdx = long_term_frame_idx;
+      m_parent->m_picture_bottom_filed.reference_marked_type = LONG_REF;
+      m_parent->m_picture_bottom_filed.LongTermFrameIdx = long_term_frame_idx;
+    }
+  }
+
+  if (field_pic_flag && m_picture_coded_type == BOTTOM_FIELD &&
+      m_parent->m_picture_top_filed.reference_marked_type == LONG_REF) {
+    m_parent->reference_marked_type = LONG_REF;
+    LongTermFrameIdx = long_term_frame_idx;
+  }
+  return 0;
+}
+
 // 8.2.5.4 Adaptive memory control decoded reference picture marking process
+// TODO 这里要好好看看，睡觉了，头晕死了 <24-10-18 09:32:15, YangJing>
 int PictureBase::adaptive_memory_control_decoded_reference_picture_marking(
     Frame *(&dpb)[16]) {
-  const SliceHeader *slice_header = m_slice->slice_header;
-  for (int32_t j = 0; j < slice_header->dec_ref_pic_marking_count; j++) {
-    if (slice_header->m_dec_ref_pic_marking[j]
-            .memory_management_control_operation == 0)
-      break;
+  const SliceHeader *header = m_slice->slice_header;
+  const bool field_pic_flag = header->field_pic_flag;
 
-    // 8.2.5.4.1 Marking process of a short-term reference picture as "unused for reference"
+  for (int32_t i = 0; i < header->dec_ref_pic_marking_count; i++) {
+    auto dec_marking = header->m_dec_ref_pic_marking[i];
+    const int32_t operation = dec_marking.memory_management_control_operation;
+    const int32_t long_term_frame_idx = dec_marking.long_term_frame_idx;
+    const int32_t long_term_pic_num_2 = dec_marking.long_term_pic_num_2;
+    const int32_t max_long_term_frame_idx =
+        dec_marking.max_long_term_frame_idx_plus1 - 1;
+    const int32_t picNumX =
+        header->CurrPicNum - dec_marking.difference_of_pic_nums_minus1 - 1;
+
+    if (operation == 0) break;
     // 将短期图像标记为“不用于参考”
-    if (slice_header->m_dec_ref_pic_marking[j]
-            .memory_management_control_operation == 1) {
-      int32_t picNumX =
-          slice_header->CurrPicNum - (slice_header->m_dec_ref_pic_marking[j]
-                                          .difference_of_pic_nums_minus1 +
-                                      1);
-      if (slice_header->field_pic_flag == false) {
-        for (int32_t i = 0; i < MAX_DPB; i++) {
-          if ((dpb[i]->m_picture_frame.reference_marked_type == SHORT_REF &&
-               dpb[i]->m_picture_frame.PicNum == picNumX) ||
-              (dpb[i]->m_picture_top_filed.reference_marked_type == SHORT_REF &&
-               dpb[i]->m_picture_top_filed.PicNum == picNumX) ||
-              (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                   SHORT_REF &&
-               dpb[i]->m_picture_bottom_filed.PicNum == picNumX)) {
-            dpb[i]->reference_marked_type = UNUSED_REF;
-            dpb[i]->m_picture_frame.reference_marked_type = UNUSED_REF;
-            dpb[i]->m_picture_top_filed.reference_marked_type = UNUSED_REF;
-            dpb[i]->m_picture_bottom_filed.reference_marked_type = UNUSED_REF;
-          }
-        }
-      } else {
-        for (int32_t i = 0; i < MAX_DPB; i++) {
-          if (dpb[i]->m_picture_top_filed.reference_marked_type == SHORT_REF &&
-              dpb[i]->m_picture_top_filed.PicNum == picNumX) {
-            dpb[i]->reference_marked_type =
-                dpb[i]->m_picture_bottom_filed.reference_marked_type;
-            dpb[i]->m_pic_coded_type_marked_as_refrence =
-                dpb[i]->m_picture_bottom_filed.m_picture_coded_type;
-            dpb[i]->m_picture_frame.reference_marked_type = UNUSED_REF;
-            dpb[i]->m_picture_top_filed.reference_marked_type = UNUSED_REF;
-          } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                         SHORT_REF &&
-                     dpb[i]->m_picture_bottom_filed.PicNum == picNumX) {
-            dpb[i]->reference_marked_type =
-                dpb[i]->m_picture_top_filed.reference_marked_type;
-            dpb[i]->m_pic_coded_type_marked_as_refrence =
-                dpb[i]->m_picture_top_filed.m_picture_coded_type;
-            dpb[i]->m_picture_frame.reference_marked_type = UNUSED_REF;
-            dpb[i]->m_picture_bottom_filed.reference_marked_type = UNUSED_REF;
-          }
-        }
-      }
-    }
-
-    // 8.2.5.4.2 Marking process of a long-term reference picture as "unused for reference"
+    if (operation == 1)
+      marking_short_term_ref_picture_as_unused_for_ref(dpb[i], picNumX,
+                                                       field_pic_flag);
     // 将长期图像标记为“不用于参考”
-    else if (slice_header->m_dec_ref_pic_marking[j]
-                 .memory_management_control_operation == 2) {
-      if (slice_header->field_pic_flag == 0) {
-        for (int32_t i = 0; i < MAX_DPB; i++) {
-          if (dpb[i]->m_picture_frame.reference_marked_type == LONG_REF &&
-              dpb[i]->m_picture_frame.LongTermPicNum ==
-                  slice_header->m_dec_ref_pic_marking[j].long_term_pic_num_2) {
-            dpb[i]->reference_marked_type = UNUSED_REF;
-            dpb[i]->m_pic_coded_type_marked_as_refrence = UNKNOWN;
-            dpb[i]->m_picture_frame.reference_marked_type = UNUSED_REF;
-            dpb[i]->m_picture_top_filed.reference_marked_type = UNUSED_REF;
-            dpb[i]->m_picture_bottom_filed.reference_marked_type = UNUSED_REF;
-          }
-        }
-      } else {
-        for (int32_t i = 0; i < MAX_DPB; i++) {
-          if (dpb[i]->m_picture_top_filed.reference_marked_type == LONG_REF &&
-              dpb[i]->m_picture_top_filed.LongTermPicNum ==
-                  slice_header->m_dec_ref_pic_marking[j].long_term_pic_num_2) {
-            dpb[i]->reference_marked_type =
-                dpb[i]->m_picture_bottom_filed.reference_marked_type;
-            dpb[i]->m_pic_coded_type_marked_as_refrence =
-                dpb[i]->m_picture_bottom_filed.m_picture_coded_type;
-            dpb[i]->m_picture_frame.reference_marked_type = UNUSED_REF;
-            dpb[i]->m_picture_top_filed.reference_marked_type = UNUSED_REF;
-          } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                         LONG_REF &&
-                     dpb[i]->m_picture_bottom_filed.LongTermPicNum ==
-                         slice_header->m_dec_ref_pic_marking[j]
-                             .long_term_pic_num_2) {
-            dpb[i]->reference_marked_type =
-                dpb[i]->m_picture_top_filed.reference_marked_type;
-            dpb[i]->m_pic_coded_type_marked_as_refrence =
-                dpb[i]->m_picture_top_filed.m_picture_coded_type;
-            dpb[i]->m_picture_frame.reference_marked_type = UNUSED_REF;
-            dpb[i]->m_picture_bottom_filed.reference_marked_type = UNUSED_REF;
-          }
-        }
-      }
-    }
-
-    // 8.2.5.4.3 Assignment process of a LongTermFrameIdx to a short-term reference picture
+    else if (operation == 2)
+      marking_long_term_ref_picture_as_unused_for_ref(
+          dpb[i], long_term_pic_num_2, field_pic_flag);
     // 分配LongTermFrameIdx给一个短期参考图像
-    else if (slice_header->m_dec_ref_pic_marking[j]
-                 .memory_management_control_operation == 3) {
-      int32_t picNumX =
-          slice_header->CurrPicNum - (slice_header->m_dec_ref_pic_marking[j]
-                                          .difference_of_pic_nums_minus1 +
-                                      1);
-      for (int32_t i = 0; i < MAX_DPB; i++) {
-        if (dpb[i]->m_picture_frame.reference_marked_type == LONG_REF &&
-            dpb[i]->m_picture_frame.LongTermFrameIdx ==
-                slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx) {
-          dpb[i]->reference_marked_type = UNUSED_REF;
-          dpb[i]->m_pic_coded_type_marked_as_refrence = UNKNOWN;
-          dpb[i]->m_picture_frame.reference_marked_type = UNUSED_REF;
-          dpb[i]->m_picture_top_filed.reference_marked_type = UNUSED_REF;
-          dpb[i]->m_picture_bottom_filed.reference_marked_type = UNUSED_REF;
-        }
-      }
-
-      int32_t picNumXIndex = -1;
-      for (int32_t i = 0; i < MAX_DPB; i++) {
-        if (dpb[i]->m_picture_top_filed.reference_marked_type == SHORT_REF &&
-            dpb[i]->m_picture_top_filed.PicNum == picNumX) {
-          picNumXIndex = i;
-          break;
-        } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                       SHORT_REF &&
-                   dpb[i]->m_picture_bottom_filed.PicNum == picNumX) {
-          picNumXIndex = i;
-          break;
-        }
-      }
-
-      for (int32_t i = 0; i < MAX_DPB; i++) {
-        if (dpb[i]->m_picture_top_filed.reference_marked_type == LONG_REF &&
-            dpb[i]->m_picture_top_filed.LongTermFrameIdx ==
-                slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx) {
-          if (i != picNumXIndex) {
-            dpb[i]->reference_marked_type = UNUSED_REF;
-            dpb[i]->m_pic_coded_type_marked_as_refrence =
-                dpb[i]->m_picture_bottom_filed.m_picture_coded_type;
-            dpb[i]->m_picture_frame.reference_marked_type =
-                dpb[i]->m_picture_bottom_filed.reference_marked_type;
-            dpb[i]->m_picture_top_filed.reference_marked_type = UNUSED_REF;
-          }
-        } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                       LONG_REF &&
-                   dpb[i]->m_picture_bottom_filed.LongTermFrameIdx ==
-                       slice_header->m_dec_ref_pic_marking[j]
-                           .long_term_frame_idx) {
-          if (i != picNumXIndex) {
-            dpb[i]->reference_marked_type = UNUSED_REF;
-            dpb[i]->m_pic_coded_type_marked_as_refrence =
-                dpb[i]->m_picture_top_filed.m_picture_coded_type;
-            dpb[i]->m_picture_frame.reference_marked_type =
-                dpb[i]->m_picture_top_filed.reference_marked_type;
-            dpb[i]->m_picture_bottom_filed.reference_marked_type = UNUSED_REF;
-          }
-        }
-      }
-
-      if (slice_header->field_pic_flag == false) {
-        for (int32_t i = 0; i < MAX_DPB; i++) {
-          if (dpb[i]->m_picture_frame.reference_marked_type == SHORT_REF &&
-              dpb[i]->m_picture_frame.PicNum == picNumX) {
-            dpb[i]->reference_marked_type = LONG_REF;
-            dpb[i]->m_pic_coded_type_marked_as_refrence = FRAME;
-            dpb[i]->m_picture_frame.reference_marked_type = LONG_REF;
-
-            if (dpb[i]->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR) {
-              dpb[i]->m_picture_top_filed.reference_marked_type = LONG_REF;
-              dpb[i]->m_picture_bottom_filed.reference_marked_type = LONG_REF;
-            }
-
-            LongTermFrameIdx =
-                slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
-          }
-        }
-      } else {
-        for (int32_t i = 0; i < MAX_DPB; i++) {
-          if (dpb[i]->m_picture_top_filed.reference_marked_type == SHORT_REF &&
-              dpb[i]->m_picture_top_filed.PicNum == picNumX) {
-            dpb[i]->m_picture_top_filed.reference_marked_type = LONG_REF;
-
-            if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                LONG_REF) {
-              dpb[i]->reference_marked_type = LONG_REF;
-
-              if (dpb[i]->m_picture_frame.m_picture_coded_type == FRAME)
-                dpb[i]->m_pic_coded_type_marked_as_refrence = FRAME;
-              else if (dpb[i]->m_picture_frame.m_picture_coded_type ==
-                       COMPLEMENTARY_FIELD_PAIR)
-                dpb[i]->m_pic_coded_type_marked_as_refrence =
-                    COMPLEMENTARY_FIELD_PAIR;
-
-              dpb[i]->m_picture_frame.reference_marked_type = LONG_REF;
-              dpb[i]->m_picture_bottom_filed.LongTermFrameIdx =
-                  slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
-            }
-
-            dpb[i]->m_picture_top_filed.LongTermFrameIdx =
-                slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
-          } else if (dpb[i]->m_picture_bottom_filed.reference_marked_type ==
-                         SHORT_REF &&
-                     dpb[i]->m_picture_bottom_filed.PicNum == picNumX) {
-            dpb[i]->m_picture_bottom_filed.reference_marked_type = LONG_REF;
-
-            if (dpb[i]->m_picture_top_filed.reference_marked_type == LONG_REF) {
-              dpb[i]->reference_marked_type = LONG_REF;
-
-              if (dpb[i]->m_picture_frame.m_picture_coded_type == FRAME)
-                dpb[i]->m_pic_coded_type_marked_as_refrence = FRAME;
-              else if (dpb[i]->m_picture_frame.m_picture_coded_type ==
-                       COMPLEMENTARY_FIELD_PAIR)
-                dpb[i]->m_pic_coded_type_marked_as_refrence =
-                    COMPLEMENTARY_FIELD_PAIR;
-
-              dpb[i]->m_picture_frame.reference_marked_type = LONG_REF;
-              dpb[i]->m_picture_top_filed.LongTermFrameIdx =
-                  slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
-            }
-
-            dpb[i]->m_picture_bottom_filed.LongTermFrameIdx =
-                slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
-          }
-        }
-      }
-    }
-
-    // 8.2.5.4.4 Decoding process for MaxLongTermFrameIdx
+    else if (operation == 3)
+      assignment_longTermFrameIdx_to_short_term_ref_picture(
+          dpb[i], picNumX, long_term_frame_idx, field_pic_flag,
+          LongTermFrameIdx);
     // 基于MaxLongTermFrameIdx的标记过程
-    else if (slice_header->m_dec_ref_pic_marking[j]
-                 .memory_management_control_operation == 4) {
-      for (int32_t i = 0; i < MAX_DPB; i++) {
-        if (dpb[i]->m_picture_frame.LongTermFrameIdx >
-                (int)slice_header->m_dec_ref_pic_marking[j]
-                        .max_long_term_frame_idx_plus1 -
-                    1 &&
-            dpb[i]->m_picture_frame.reference_marked_type == LONG_REF) {
-          dpb[i]->m_picture_frame.reference_marked_type = UNUSED_REF;
-        }
-
-        if (dpb[i]->m_picture_top_filed.LongTermFrameIdx >
-                (int)slice_header->m_dec_ref_pic_marking[j]
-                        .max_long_term_frame_idx_plus1 -
-                    1 &&
-            dpb[i]->m_picture_top_filed.reference_marked_type == LONG_REF) {
-          dpb[i]->m_picture_top_filed.reference_marked_type = UNUSED_REF;
-        }
-
-        if (dpb[i]->m_picture_bottom_filed.LongTermFrameIdx >
-                (int)slice_header->m_dec_ref_pic_marking[j]
-                        .max_long_term_frame_idx_plus1 -
-                    1 &&
-            dpb[i]->m_picture_bottom_filed.reference_marked_type == LONG_REF) {
-          dpb[i]->m_picture_bottom_filed.reference_marked_type = UNUSED_REF;
-        }
-
-        if (dpb[i]->m_picture_coded_type == FRAME ||
-            dpb[i]->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR) {
-          dpb[i]->m_pic_coded_type_marked_as_refrence = UNKNOWN;
-          dpb[i]->reference_marked_type = UNUSED_REF;
-        }
-      }
-
-      if (slice_header->m_dec_ref_pic_marking[j]
-              .max_long_term_frame_idx_plus1 == 0) {
-        MaxLongTermFrameIdx = -1; //"no long-term frame indices"
-      } else {
-        MaxLongTermFrameIdx = slice_header->m_dec_ref_pic_marking[j]
-                                  .max_long_term_frame_idx_plus1 -
-                              1;
-      }
-    }
-
-    // 8.2.5.4.5 Marking process of all reference pictures as "unused for reference" and setting MaxLongTermFrameIdx to "no long-term frame indices"
+    else if (operation == 4)
+      decoding_maxLongTermFrameIdx(dpb[i], max_long_term_frame_idx,
+                                   MaxLongTermFrameIdx);
     // 所有参考图像标记为“不用于参考”
-    else if (slice_header->m_dec_ref_pic_marking[j]
-                 .memory_management_control_operation == 5) {
-      for (int32_t i = 0; i < MAX_DPB; i++) {
-        dpb[i]->m_pic_coded_type_marked_as_refrence = UNKNOWN;
-        dpb[i]->reference_marked_type = UNUSED_REF;
-        dpb[i]->m_picture_frame.reference_marked_type = UNUSED_REF;
-        dpb[i]->m_picture_top_filed.reference_marked_type = UNUSED_REF;
-        dpb[i]->m_picture_bottom_filed.reference_marked_type = UNUSED_REF;
-      }
-
-      MaxLongTermFrameIdx = NA;
-      memory_management_control_operation_5_flag = 1;
-    }
-
-    // 8.2.5.4.6 Process for assigning a long-term frame index to the current picture
+    else if (operation == 5)
+      marking_all_ref_pictures_as_unused_for_ref(
+          dpb[i], MaxLongTermFrameIdx,
+          memory_management_control_operation_5_flag);
     // 分配一个长期帧索引给当前图像
-    else if (slice_header->m_dec_ref_pic_marking[j]
-                 .memory_management_control_operation == 6) {
-      for (int32_t i = 0; i < MAX_DPB; i++) {
-        if (dpb[i]->m_picture_frame.LongTermFrameIdx ==
-                (int)slice_header->m_dec_ref_pic_marking[j]
-                        .max_long_term_frame_idx_plus1 -
-                    1 &&
-            dpb[i]->m_picture_frame.reference_marked_type == LONG_REF) {
-          dpb[i]->m_picture_frame.reference_marked_type = UNUSED_REF;
-          dpb[i]->reference_marked_type = UNUSED_REF;
-          dpb[i]->m_pic_coded_type_marked_as_refrence = UNKNOWN;
-
-          if (dpb[i]->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR) {
-            dpb[i]->m_picture_top_filed.reference_marked_type = UNUSED_REF;
-            dpb[i]->m_picture_bottom_filed.reference_marked_type = UNUSED_REF;
-          }
-        }
-
-        if (dpb[i]->m_picture_top_filed.LongTermFrameIdx == LongTermFrameIdx &&
-            m_parent->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR &&
-            (dpb[i] != m_parent)) {
-          dpb[i]->reference_marked_type =
-              dpb[i]->m_picture_bottom_filed.reference_marked_type;
-          dpb[i]->m_pic_coded_type_marked_as_refrence =
-              dpb[i]->m_picture_bottom_filed.m_picture_coded_type;
-          dpb[i]->m_picture_top_filed.reference_marked_type = UNUSED_REF;
-        } else if (dpb[i]->m_picture_bottom_filed.LongTermFrameIdx ==
-                       LongTermFrameIdx &&
-                   m_parent->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR &&
-                   (dpb[i] != m_parent)) {
-          dpb[i]->reference_marked_type =
-              dpb[i]->m_picture_top_filed.reference_marked_type;
-          dpb[i]->m_pic_coded_type_marked_as_refrence =
-              dpb[i]->m_picture_top_filed.m_picture_coded_type;
-          dpb[i]->m_picture_bottom_filed.reference_marked_type = UNUSED_REF;
-        }
-      }
-
-      reference_marked_type = LONG_REF;
-      LongTermFrameIdx =
-          slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
-      memory_management_control_operation_6_flag = 6;
-
-      if (slice_header->field_pic_flag == false) {
-        // FIXME: what meaning 'both its fields'?
-        if (m_parent->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR) {
-          m_parent->m_picture_top_filed.reference_marked_type = LONG_REF;
-          m_parent->m_picture_top_filed.LongTermFrameIdx =
-              slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
-          m_parent->m_picture_bottom_filed.reference_marked_type = LONG_REF;
-          m_parent->m_picture_bottom_filed.LongTermFrameIdx =
-              slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
-        }
-      }
-
-      if (slice_header->field_pic_flag &&
-          m_picture_coded_type == BOTTOM_FIELD &&
-          m_parent->m_picture_top_filed.reference_marked_type == LONG_REF) {
-        m_parent->reference_marked_type = LONG_REF;
-        LongTermFrameIdx =
-            slice_header->m_dec_ref_pic_marking[j].long_term_frame_idx;
-      }
+    else if (operation == 6) {
+      assigning_long_term_frame_index_to_the_current_picture(
+          dpb[i], m_picture_coded_type, field_pic_flag, long_term_frame_idx,
+          MaxLongTermFrameIdx, m_parent, reference_marked_type,
+          LongTermFrameIdx, memory_management_control_operation_6_flag);
     }
   }
 

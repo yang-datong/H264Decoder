@@ -433,6 +433,7 @@ void SliceHeader::dec_ref_pic_marking() {
     /* 非IDR帧 */
     adaptive_ref_pic_marking_mode_flag = _bs->readU1();
     if (adaptive_ref_pic_marking_mode_flag) {
+      cout << "\t参考帧管理机制:自适应内存控制" << endl;
       /* 自适应参考图片标记模式 */
       uint32_t index = 0;
       do {
@@ -465,7 +466,8 @@ void SliceHeader::dec_ref_pic_marking() {
       } while (
           m_dec_ref_pic_marking[index - 1].memory_management_control_operation);
       dec_ref_pic_marking_count = index;
-    }
+    } else
+      cout << "\t参考帧管理机制:滑动窗口机制" << endl;
   }
 }
 
