@@ -593,7 +593,7 @@ int Cabac::decode_mb_type_in_B_slices(int32_t &synElVal) {
           } else {
             ctxIdx = ctxIdxOffset + 5;
             RET(decodeBin(bypassFlag, ctxIdx, binVal));
-            synElVal = (binVal == 0) ? 11 : 12;
+            synElVal = (binVal == 0) ? 11 : 22;
           }
         }
       }
