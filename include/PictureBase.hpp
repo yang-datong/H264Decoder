@@ -56,8 +56,8 @@ class PictureBase {
   int32_t FieldNum = NA;
   int32_t MaxLongTermFrameIdx = NA; // -1: "no long-term frame indices"
   /*  所有参考图像标记为“不用于参考” */
-  int32_t memory_management_control_operation_5_flag = 0;
-  int32_t memory_management_control_operation_6_flag = 0;
+  bool mmco_5_flag = false;
+  bool mmco_6_flag = false;
   // I,P作为参考帧的mark状态
   PICTURE_MARKED_AS reference_marked_type = UNKOWN;
 
@@ -71,7 +71,7 @@ class PictureBase {
   H264_SLICE_TYPE m_picture_type = SLICE_UNKNOWN;
 
   int32_t m_is_malloc_mem_by_myself = 0; // 是否已经初始化
-  bool m_is_decode_finished = false;      // 本帧/场是否解码完毕
+  bool m_is_decode_finished = false;     // 本帧/场是否解码完毕
   int32_t m_slice_cnt = 0; // 一个picture中可能有多个slice data
 
   Frame *m_parent = nullptr;
@@ -109,7 +109,7 @@ class PictureBase {
   // 在内存中创建一幅空白位图
   int createEmptyImage(MY_BITMAP &bitmap, int32_t width, int32_t height,
                        int32_t bmBitsPixel);
-  int getOneEmptyPicture(Frame *&pic);
+  int getOnePictureFromDPB(Frame *&pic);
   int end_decode_the_picture_and_get_a_new_empty_picture(
       Frame *&newEmptyPicture);
 

@@ -50,8 +50,7 @@ int PictureBase::reset() {
   LongTermFrameIdx = 0;
   PicNum = 0, LongTermPicNum = 0;
   FieldNum = NA, MaxLongTermFrameIdx = NA;
-  memory_management_control_operation_5_flag = 0,
-  memory_management_control_operation_6_flag = 0;
+  mmco_5_flag = 0, mmco_6_flag = 0;
   reference_marked_type = UNKOWN;
   m_picture_coded_type = UNKNOWN;
   m_picture_type = SLICE_UNKNOWN;
@@ -288,10 +287,8 @@ int PictureBase::copyData2(const PictureBase &src, int32_t copyMbsDataFlag) {
   LongTermPicNum = src.LongTermPicNum;
   FieldNum = src.FieldNum;
   MaxLongTermFrameIdx = src.MaxLongTermFrameIdx;
-  memory_management_control_operation_5_flag =
-      src.memory_management_control_operation_5_flag;
-  memory_management_control_operation_6_flag =
-      src.memory_management_control_operation_6_flag;
+  mmco_5_flag = src.mmco_5_flag;
+  mmco_6_flag = src.mmco_6_flag;
   reference_marked_type = src.reference_marked_type;
 
   //m_h264_slice_header = src.m_h264_slice_header;
@@ -556,7 +553,7 @@ int PictureBase::writeYUV(const char *filename) {
   return 0;
 }
 
-int PictureBase::getOneEmptyPicture(Frame *&pic) {
+int PictureBase::getOnePictureFromDPB(Frame *&pic) {
   for (int i = 0; i < MAX_DPB; i++) {
     // 本帧数据未使用，即处于闲置状态, 重复利用被释放了的参考帧
     if (m_dpb[i] != this->m_parent &&
@@ -575,35 +572,27 @@ int PictureBase::getOneEmptyPicture(Frame *&pic) {
 int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
     Frame *&newEmptyPicture) {
   this->m_is_decode_finished = true;
-  if (m_picture_coded_type == FRAME ||
-      m_picture_coded_type == BOTTOM_FIELD)
+  if (m_picture_coded_type == FRAME || m_picture_coded_type == BOTTOM_FIELD)
     this->m_parent->m_is_decode_finished = true;
 
   // 如果当前帧是非参考帧，则处理前面的已解码帧
   if (m_slice->slice_header->nal_ref_idc != 0) {
     // 处理解码后的参考图片标记
     RET(decoded_reference_picture_marking(m_dpb));
-    if (memory_management_control_operation_5_flag) {
-      int32_t tempPicOrderCnt = PicOrderCnt;
-      TopFieldOrderCnt = TopFieldOrderCnt - tempPicOrderCnt;
-      BottomFieldOrderCnt = BottomFieldOrderCnt - tempPicOrderCnt;
-    }
+    if (mmco_5_flag)
+      TopFieldOrderCnt -= PicOrderCnt, BottomFieldOrderCnt -= PicOrderCnt;
   }
 
+  // 重置变量的值，用于重复利用帧内存
   Frame *emptyPic = nullptr;
-  RET(getOneEmptyPicture(emptyPic));
-
-  int ret = 0;
-  ret = emptyPic->reset();                        // 重置各个变量的值
-  ret = emptyPic->m_picture_frame.reset();        // 重置各个变量的值
-  ret = emptyPic->m_picture_top_filed.reset();    // 重置各个变量的值
-  ret = emptyPic->m_picture_bottom_filed.reset(); // 重置各个变量的值
-  RET(ret);
-
+  RET(getOnePictureFromDPB(emptyPic));
+  emptyPic->reset();
+  emptyPic->m_picture_frame.reset();
+  emptyPic->m_picture_top_filed.reset();
+  emptyPic->m_picture_bottom_filed.reset();
   emptyPic->m_picture_previous = this;
 
-  if (reference_marked_type == SHORT_REF ||
-      reference_marked_type == LONG_REF)
+  if (reference_marked_type == SHORT_REF || reference_marked_type == LONG_REF)
     emptyPic->m_picture_previous_ref = this;
   else
     emptyPic->m_picture_previous_ref = this->m_parent->m_picture_previous_ref;
