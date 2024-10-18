@@ -71,7 +71,6 @@ class PictureBase {
   H264_SLICE_TYPE m_picture_type = SLICE_UNKNOWN;
 
   int32_t m_is_malloc_mem_by_myself = 0; // 是否已经初始化
-  bool m_is_decode_finished = false;     // 本帧/场是否解码完毕
   int32_t m_slice_cnt = 0; // 一个picture中可能有多个slice data
 
   Frame *m_parent = nullptr;
@@ -83,9 +82,7 @@ class PictureBase {
   int32_t m_PicNumCnt = 0;          // 图片递增计数
 
  public:
-  PictureBase();
   ~PictureBase();
-  int printInfo();
   int reset();
   int init(Slice *slice);
   int unInit();
@@ -93,25 +90,8 @@ class PictureBase {
   int copyData(const PictureBase &src, bool isMallocAndCopyData);
   int copyData2(const PictureBase &src, int32_t copyMbsDataFlag);
   int copyDataPicOrderCnt(const PictureBase &src);
-
-  // 图像不是上下翻转的，主要用于保存成BMP图片
-  int convertYuv420pToBgr24(uint32_t width, uint32_t height,
-                            const uint8_t *yuv420p, uint8_t *bgr24,
-                            uint32_t widthBytesBgr24);
-  // 图像是上下翻转的，主要用于播放器画图
-  int convertYuv420pToBgr24FlipLines(uint32_t width, uint32_t height,
-                                     const uint8_t *yuv420p, uint8_t *bgr24,
-                                     uint32_t widthBytesBgr24);
-  int saveToBmpFile(const char *filename);
-  int saveBmp(const char *filename, MY_BITMAP *pBitmap);
-  int writeYUV(const char *filename);
-
-  // 在内存中创建一幅空白位图
-  int createEmptyImage(MY_BITMAP &bitmap, int32_t width, int32_t height,
-                       int32_t bmBitsPixel);
-  int getOnePictureFromDPB(Frame *&pic);
-  int end_decode_the_picture_and_get_a_new_empty_picture(
-      Frame *&newEmptyPicture);
+  int getOneFrameFromDPB(Frame *&pic);
+  int getEmptyFrameFromDPB(Frame *&newEmptyPicture);
 
   //================= 参考帧列表重排序 ========================
   int picOrderCntFunc(PictureBase *picX);

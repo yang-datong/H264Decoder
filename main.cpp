@@ -1,6 +1,7 @@
 #include "AnnexBReader.hpp"
 #include "Frame.hpp"
 #include "GOP.hpp"
+#include "Image.hpp"
 #include "Nalu.hpp"
 #include <ostream>
 
@@ -211,8 +212,7 @@ int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
                OUTPUT_FILE_TYPE output_file_type) {
   if (frame != nullptr && frame->m_current_picture_ptr != nullptr) {
     Frame *newEmptyPicture = nullptr;
-    frame->m_current_picture_ptr
-        ->end_decode_the_picture_and_get_a_new_empty_picture(newEmptyPicture);
+    frame->m_current_picture_ptr->getEmptyFrameFromDPB(newEmptyPicture);
 
     //当上一帧完成解码后，且解码帧为IDR帧，则进行GOP -> flush
     if (isFromIDR == false)
@@ -223,11 +223,12 @@ int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
     gop->getOneOutPicture(frame, outPicture);
     if (outPicture != nullptr) {
       //标记为闲置状态，以便后续回收重复利用
-      outPicture->m_is_in_use = 0;
+      outPicture->m_is_in_use = false;
       if (output_file_type == BMP) {
 
       } else if (output_file_type == YUV) {
-        outPicture->m_picture_frame.writeYUV("output.yuv");
+        Image image;
+        image.writeYUV(outPicture->m_picture_frame, "output.yuv");
         if (frame->m_picture_frame.m_slice->slice_header->IdrPicFlag)
           cout << "\tffplay -video_size "
                << outPicture->m_picture_frame.PicWidthInSamplesL << "x"

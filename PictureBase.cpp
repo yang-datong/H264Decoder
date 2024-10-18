@@ -1,5 +1,4 @@
 ﻿#include "PictureBase.hpp"
-#include "Bitmap.hpp"
 #include "Frame.hpp"
 #include "MacroBlock.hpp"
 #include "SliceHeader.hpp"
@@ -9,8 +8,6 @@
 #include <cstring>
 
 extern int32_t g_PicNumCnt;
-
-PictureBase::PictureBase() {}
 
 PictureBase::~PictureBase() { unInit(); }
 
@@ -58,7 +55,6 @@ int PictureBase::reset() {
   m_RefPicList0Length = 0, m_RefPicList1Length = 0;
   m_PicNumCnt = 0;
   m_parent = nullptr;
-  m_is_decode_finished = 0;
 
   memset(m_dpb, 0, sizeof(Frame *) * 16);
   memset(m_RefPicList0, 0, sizeof(Frame *) * 16);
@@ -311,7 +307,6 @@ int PictureBase::copyData2(const PictureBase &src, int32_t copyMbsDataFlag) {
 
   m_picture_coded_type = src.m_picture_coded_type;
   m_picture_type = src.m_picture_type;
-  m_is_decode_finished = src.m_is_decode_finished;
   m_slice_cnt = src.m_slice_cnt;
 
   memcpy(m_dpb, src.m_dpb, sizeof(Frame *) * 16);
@@ -347,7 +342,6 @@ int PictureBase::copyDataPicOrderCnt(const PictureBase &src) {
   FieldNum = src.FieldNum;
   MaxLongTermFrameIdx = src.MaxLongTermFrameIdx;
 
-  m_is_decode_finished = src.m_is_decode_finished;
   m_slice_cnt = src.m_slice_cnt;
 
   memcpy(m_RefPicList0, src.m_RefPicList0, sizeof(Frame *) * 16);
@@ -359,223 +353,28 @@ int PictureBase::copyDataPicOrderCnt(const PictureBase &src) {
   return ret;
 }
 
-int PictureBase::convertYuv420pToBgr24(uint32_t width, uint32_t height,
-                                       const uint8_t *yuv420p, uint8_t *bgr24,
-                                       uint32_t widthBytesBgr24) {
-  int32_t W = width, H = height, channels = 3;
-
-  //------------- YUV420P to BGR24 --------------------
-  // m_slice->slice_header->m_sps->frame_crop_[left,right,top,bottom]_offset
-  for (int y = 0; y < H; ++y) {
-    for (int x = 0; x < W; ++x) {
-      unsigned char Y = yuv420p[y * W + x];
-      unsigned char U = yuv420p[H * W + (y / 2) * (W / 2) + x / 2];
-      unsigned char V = yuv420p[H * W + H * W / 4 + (y / 2) * (W / 2) + x / 2];
-
-      int b = (1164 * (Y - 16) + 2018 * (U - 128)) / 1000;
-      int g = (1164 * (Y - 16) - 813 * (V - 128) - 391 * (U - 128)) / 1000;
-      int r = (1164 * (Y - 16) + 1596 * (V - 128)) / 1000;
-
-      bgr24[y * widthBytesBgr24 + x * channels + 0] = CLIP3(0, 255, b);
-      bgr24[y * widthBytesBgr24 + x * channels + 1] = CLIP3(0, 255, g);
-      bgr24[y * widthBytesBgr24 + x * channels + 2] = CLIP3(0, 255, r);
-    }
-  }
-
-  return 0;
-}
-
-int PictureBase::convertYuv420pToBgr24FlipLines(uint32_t width, uint32_t height,
-                                                const uint8_t *yuv420p,
-                                                uint8_t *bgr24,
-                                                uint32_t widthBytesBgr24) {
-  int32_t W = width, H = height, channels = 3;
-
-  //------------- YUV420P to BGR24 --------------------
-  for (int y = 0; y < H; ++y) {
-    for (int x = 0; x < W; ++x) {
-      unsigned char Y = yuv420p[y * W + x];
-      unsigned char U = yuv420p[H * W + (y / 2) * (W / 2) + x / 2];
-      unsigned char V = yuv420p[H * W + H * W / 4 + (y / 2) * (W / 2) + x / 2];
-
-      int b = (1164 * (Y - 16) + 2018 * (U - 128)) / 1000;
-      int g = (1164 * (Y - 16) - 813 * (V - 128) - 391 * (U - 128)) / 1000;
-      int r = (1164 * (Y - 16) + 1596 * (V - 128)) / 1000;
-
-      bgr24[(H - 1 - y) * widthBytesBgr24 + x * channels + 0] =
-          CLIP3(0, 255, b);
-      bgr24[(H - 1 - y) * widthBytesBgr24 + x * channels + 1] =
-          CLIP3(0, 255, g);
-      bgr24[(H - 1 - y) * widthBytesBgr24 + x * channels + 2] =
-          CLIP3(0, 255, r);
-    }
-  }
-
-  return 0;
-}
-
-int PictureBase::createEmptyImage(MY_BITMAP &bitmap, int32_t width,
-                                  int32_t height, int32_t bmBitsPixel) {
-  bitmap.bmWidth = width;
-  bitmap.bmHeight = height;
-  bitmap.bmType = 0;
-  bitmap.bmPlanes = 1;
-  bitmap.bmBitsPixel = bmBitsPixel; // 32
-
-  bitmap.bmWidthBytes = (width * bmBitsPixel / 8 + 3) / 4 * 4;
-
-  uint8_t *pBits = (uint8_t *)malloc(bitmap.bmHeight * bitmap.bmWidthBytes);
-  if (pBits == nullptr) RET(-1);
-  // 初始化为黑色背景
-  memset(pBits, 0, sizeof(uint8_t) * bitmap.bmHeight * bitmap.bmWidthBytes);
-  bitmap.bmBits = pBits;
-  return 0;
-}
-
-int PictureBase::saveToBmpFile(const char *filename) {
-  //----------------yuv420p到brg24的格式转换-------------------------
-  int32_t W = PicWidthInSamplesL;
-  int32_t H = PicHeightInSamplesL;
-  MY_BITMAP bitmap;
-  RET(createEmptyImage(bitmap, W, H, 24));
-  RET(convertYuv420pToBgr24(W, H, m_pic_buff_luma, (uint8_t *)bitmap.bmBits,
-                            bitmap.bmWidthBytes));
-  RET(saveBmp(filename, &bitmap));
-  free(bitmap.bmBits);
-  bitmap.bmBits = nullptr;
-  return 0;
-}
-
-int PictureBase::saveBmp(const char *filename, MY_BITMAP *pBitmap) {
-  MY_BitmapFileHeader bmpFileHeader;
-  MY_BitmapInfoHeader bmpInfoHeader;
-  // unsigned char pixVal = '\0';
-  MY_RgbQuad quad[256] = {{0}};
-
-  FILE *fp = fopen(filename, "wb");
-  if (!fp) return -1;
-
-  unsigned short fileType = 0x4D42;
-  fwrite(&fileType, sizeof(unsigned short), 1, fp);
-
-  // 24位，通道，彩图
-  if (pBitmap->bmBitsPixel == 24 || pBitmap->bmBitsPixel == 32) {
-    int rowbytes = pBitmap->bmWidthBytes;
-
-    bmpFileHeader.bfSize = pBitmap->bmHeight * rowbytes + 54;
-    bmpFileHeader.bfReserved1 = 0;
-    bmpFileHeader.bfReserved2 = 0;
-    bmpFileHeader.bfOffBits = 54;
-    fwrite(&bmpFileHeader, sizeof(MY_BitmapFileHeader), 1, fp);
-
-    bmpInfoHeader.biSize = 40;
-    bmpInfoHeader.biWidth = pBitmap->bmWidth;
-    bmpInfoHeader.biHeight = pBitmap->bmHeight;
-    bmpInfoHeader.biPlanes = 1;
-    bmpInfoHeader.biBitCount = pBitmap->bmBitsPixel; // 24|32
-    bmpInfoHeader.biCompression = 0;
-    bmpInfoHeader.biSizeImage = pBitmap->bmHeight * rowbytes;
-    bmpInfoHeader.biXPelsPerMeter = 0;
-    bmpInfoHeader.biYPelsPerMeter = 0;
-    bmpInfoHeader.biClrUsed = 0;
-    bmpInfoHeader.biClrImportant = 0;
-    fwrite(&bmpInfoHeader, sizeof(MY_BitmapInfoHeader), 1, fp);
-
-    // int channels = pBitmap->bmBitsPixel / 8;
-    unsigned char *pBits = (unsigned char *)(pBitmap->bmBits);
-
-    for (int i = pBitmap->bmHeight - 1; i > -1; i--)
-      fwrite(pBits + i * rowbytes, rowbytes, 1, fp);
-  }
-  // 8位，单通道，灰度图
-  else if (pBitmap->bmBitsPixel == 8) {
-    int rowbytes = pBitmap->bmWidthBytes;
-
-    bmpFileHeader.bfSize = pBitmap->bmHeight * rowbytes + 54 + 256 * 4;
-    bmpFileHeader.bfReserved1 = 0;
-    bmpFileHeader.bfReserved2 = 0;
-    bmpFileHeader.bfOffBits = 54 + 256 * 4;
-    fwrite(&bmpFileHeader, sizeof(MY_BitmapFileHeader), 1, fp);
-
-    bmpInfoHeader.biSize = 40;
-    bmpInfoHeader.biWidth = pBitmap->bmWidth;
-    bmpInfoHeader.biHeight = pBitmap->bmHeight;
-    bmpInfoHeader.biPlanes = 1;
-    bmpInfoHeader.biBitCount = 8;
-    bmpInfoHeader.biCompression = 0;
-    bmpInfoHeader.biSizeImage = pBitmap->bmHeight * rowbytes;
-    bmpInfoHeader.biXPelsPerMeter = 0;
-    bmpInfoHeader.biYPelsPerMeter = 0;
-    bmpInfoHeader.biClrUsed = 256;
-    bmpInfoHeader.biClrImportant = 256;
-    fwrite(&bmpInfoHeader, sizeof(MY_BitmapInfoHeader), 1, fp);
-
-    for (int i = 0; i < 256; i++) {
-      quad[i].rgbBlue = i;
-      quad[i].rgbGreen = i;
-      quad[i].rgbRed = i;
-      quad[i].rgbReserved = 0;
-    }
-
-    fwrite(quad, sizeof(MY_RgbQuad), 256, fp);
-
-    // int channels = pBitmap->bmBitsPixel / 8;
-    unsigned char *pBits = (unsigned char *)(pBitmap->bmBits);
-
-    for (int i = pBitmap->bmHeight - 1; i > -1; i--)
-      fwrite(pBits + i * rowbytes, rowbytes, 1, fp);
-  }
-
-  fclose(fp);
-
-  return 0;
-}
-
-#include <fstream>
-
-/* 所有解码的帧写入到一个文件 */
-int PictureBase::writeYUV(const char *filename) {
-  static bool isFrist = false;
-  if (isFrist == false) {
-    std::ifstream f(filename);
-    if (f.good()) remove(filename);
-    isFrist = true;
-  }
-
-  FILE *fp = fopen(filename, "ab+");
-  if (fp == NULL) return -1;
-
-  fwrite(m_pic_buff_luma, PicWidthInSamplesL * PicHeightInSamplesL, 1, fp);
-  fwrite(m_pic_buff_cb, PicWidthInSamplesC * PicHeightInSamplesC, 1, fp);
-  fwrite(m_pic_buff_cr, PicWidthInSamplesC * PicHeightInSamplesC, 1, fp);
-
-  fclose(fp);
-  return 0;
-}
-
-int PictureBase::getOnePictureFromDPB(Frame *&pic) {
+int PictureBase::getOneFrameFromDPB(Frame *&pic) {
   for (int i = 0; i < MAX_DPB; i++) {
     // 本帧数据未使用，即处于闲置状态, 重复利用被释放了的参考帧
     if (m_dpb[i] != this->m_parent &&
         m_dpb[i]->reference_marked_type != SHORT_REF &&
         m_dpb[i]->reference_marked_type != LONG_REF &&
-        m_dpb[i]->m_is_in_use == 0) {
+        m_dpb[i]->m_is_in_use == false) {
       pic = m_dpb[i];
-      RET(pic == nullptr);
-      return 0;
+      break;
     }
   }
-
-  return -1;
+  return 0;
 }
 
-int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
-    Frame *&newEmptyPicture) {
-  this->m_is_decode_finished = true;
+int PictureBase::getEmptyFrameFromDPB(Frame *&emptyPic) {
+  if (emptyPic) {
+    emptyPic = nullptr;
+    std::cout << "Warring emptyPic point is non-NULL !!!" << std::endl;
+  }
   if (m_picture_coded_type == FRAME || m_picture_coded_type == BOTTOM_FIELD)
     this->m_parent->m_is_decode_finished = true;
-
-  // 如果当前帧是非参考帧，则处理前面的已解码帧
+  // 如果当前帧是非参考帧，则处理前面的已解码帧标记
   if (m_slice->slice_header->nal_ref_idc != 0) {
     // 处理解码后的参考图片标记
     RET(decoded_reference_picture_marking(m_dpb));
@@ -584,8 +383,8 @@ int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
   }
 
   // 重置变量的值，用于重复利用帧内存
-  Frame *emptyPic = nullptr;
-  RET(getOnePictureFromDPB(emptyPic));
+  getOneFrameFromDPB(emptyPic);
+  RET(emptyPic == nullptr);
   emptyPic->reset();
   emptyPic->m_picture_frame.reset();
   emptyPic->m_picture_top_filed.reset();
@@ -598,12 +397,9 @@ int PictureBase::end_decode_the_picture_and_get_a_new_empty_picture(
     emptyPic->m_picture_previous_ref = this->m_parent->m_picture_previous_ref;
 
   g_PicNumCnt++;
-
   emptyPic->m_picture_frame.m_PicNumCnt = g_PicNumCnt;
   emptyPic->m_picture_top_filed.m_PicNumCnt = g_PicNumCnt;
   emptyPic->m_picture_bottom_filed.m_PicNumCnt = g_PicNumCnt;
-
-  newEmptyPicture = emptyPic;
   return 0;
 }
 

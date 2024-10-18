@@ -99,7 +99,7 @@ int GOP::flush() {
     int ret = getOneOutPicture(NULL, outPicture);
     RET(ret);
     if (outPicture)
-      outPicture->m_is_in_use = 0;
+      outPicture->m_is_in_use = false;
     else // flush完毕，DPB缓存中已无可输出帧
       break;
   }

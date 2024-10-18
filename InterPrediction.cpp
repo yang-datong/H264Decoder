@@ -377,14 +377,11 @@ int PictureBase::derivation_chroma_motion_vectors(int32_t ChromaArrayType,
     // 水平方向的运动矢量不受场编码的影响，所以可以直接使用
     mvCLX[0] = mvLX[0];
     // 顶场和底场之间存在 1 行像素的垂直偏移，因此需要对垂直方向的运动矢量进行修正
-    if (refPic &&
-        refPic->m_picture_coded_type == TOP_FIELD &&
+    if (refPic && refPic->m_picture_coded_type == TOP_FIELD &&
         (m_picture_coded_type == BOTTOM_FIELD || mb_y % 2))
       mvCLX[1] = mvLX[1] + 2;
-    else if (refPic &&
-             refPic->m_picture_coded_type == BOTTOM_FIELD &&
-             (m_picture_coded_type == TOP_FIELD ||
-              mb_y % 2 == 0))
+    else if (refPic && refPic->m_picture_coded_type == BOTTOM_FIELD &&
+             (m_picture_coded_type == TOP_FIELD || mb_y % 2 == 0))
       mvCLX[1] = mvLX[1] - 2;
     else
       mvCLX[1] = mvLX[1];
@@ -564,8 +561,7 @@ int PictureBase::derivation_the_coLocated_4x4_sub_macroblock_partitions(
   // 参考帧是帧图像或互补场对，则获取其顶场和底场，并计算当前帧与顶场和底场的POC差值
   PictureBase *firstRefPicL1Top = NULL, *firstRefPicL1Bottom = NULL;
   int32_t topAbsDiffPOC = 0, bottomAbsDiffPOC = 0;
-  if (ref_marked_type == FRAME ||
-      ref_marked_type == COMPLEMENTARY_FIELD_PAIR) {
+  if (ref_marked_type == FRAME || ref_marked_type == COMPLEMENTARY_FIELD_PAIR) {
     firstRefPicL1Top = &refPic->m_picture_top_filed;
     firstRefPicL1Bottom = &refPic->m_picture_bottom_filed;
 
@@ -579,8 +575,7 @@ int PictureBase::derivation_the_coLocated_4x4_sub_macroblock_partitions(
   // 如果当前帧是场图像，则根据参考帧的类型，选择顶场或底场作为共位宏块的参考帧
   if (header->field_pic_flag) {
     if (refPic->m_is_decode_finished &&
-        (ref_marked_type == TOP_FIELD ||
-         ref_marked_type == BOTTOM_FIELD))
+        (ref_marked_type == TOP_FIELD || ref_marked_type == BOTTOM_FIELD))
       colPic = &refPic->m_picture_frame;
     else {
       if (ref_marked_type == TOP_FIELD)
@@ -591,8 +586,7 @@ int PictureBase::derivation_the_coLocated_4x4_sub_macroblock_partitions(
   }
   // 如果当前帧是帧图像，则根据较小的POC差值选择顶场或底场，或者直接使用帧图像作为共位宏块的参考帧
   else {
-    if (refPic->m_is_decode_finished &&
-        ref_marked_type == FRAME)
+    if (refPic->m_is_decode_finished && ref_marked_type == FRAME)
       colPic = &refPic->m_picture_frame;
     else if (ref_marked_type == COMPLEMENTARY_FIELD_PAIR) {
       if (m_slice->slice_data->mb_field_decoding_flag == 0)
@@ -809,8 +803,7 @@ int PictureBase::
   // 判断共位宏块是否为零运动矢量：共位宏块的参考帧索引为0，并且运动矢量的水平和垂直分量都在[-1, 1]之间，则认为共位宏块的运动矢量为零(运动矢量的大小非常小，可以记为忽略)
   bool colZeroFlag = false;
   /* 首个后参考帧，当前被标记为“用于短期参考” */
-  if (m_RefPicList1[0]->reference_marked_type ==
-      SHORT_REF)
+  if (m_RefPicList1[0]->reference_marked_type == SHORT_REF)
     if ((mvCol[0] >= -1 && mvCol[0] <= 1) && (mvCol[1] >= -1 && mvCol[1] <= 1))
       if (refIdxCol == 0) colZeroFlag = true;
 
@@ -902,8 +895,7 @@ int PictureBase::
 
   /* 当前宏块的每个4x4子宏块分区的两个运动向量mvL0和mvL1推导如下： */
   // L0参考帧是长参考帧，或者L0和L1参考帧的POC存在差值，则直接使用共位宏块的运动矢量 mvCol 作为L0的运动矢量，并将L1的运动矢量设置为零
-  if (m_RefPicList0[refIdxL0]->reference_marked_type ==
-          LONG_REF ||
+  if (m_RefPicList0[refIdxL0]->reference_marked_type == LONG_REF ||
       DiffPicOrderCnt(pic1, pic0))
     mvL0[0] = mvCol[0], mvL0[1] = mvCol[1], mvL1[0] = 0, mvL1[1] = 0;
 
@@ -1278,23 +1270,20 @@ int PictureBase::reference_picture_selection(int32_t refIdxLX,
   for (int i = 0; i < RefPicListXLength; i++) {
     // 当前帧是场图像，则参考帧必须是场图像
     if (header->field_pic_flag) {
-      RET((RefPicListX[i]->m_pic_coded_type_marked_as_refrence !=
-               TOP_FIELD &&
+      RET((RefPicListX[i]->m_pic_coded_type_marked_as_refrence != TOP_FIELD &&
            RefPicListX[i]->m_pic_coded_type_marked_as_refrence !=
                BOTTOM_FIELD));
     }
     // 当前帧是帧图像，则参考帧必须是帧图像
     else
-      RET((RefPicListX[i]->m_pic_coded_type_marked_as_refrence !=
-               FRAME &&
+      RET((RefPicListX[i]->m_pic_coded_type_marked_as_refrence != FRAME &&
            RefPicListX[i]->m_pic_coded_type_marked_as_refrence !=
                COMPLEMENTARY_FIELD_PAIR));
   }
 
   if (header->field_pic_flag) { // Field
     // 如果参考帧是顶场（PICTURE_CODED_TYPE_TOP_FIELD），则选择 m_picture_top_filed。
-    if (RefPicListX[refIdxLX]->m_pic_coded_type_marked_as_refrence ==
-        TOP_FIELD)
+    if (RefPicListX[refIdxLX]->m_pic_coded_type_marked_as_refrence == TOP_FIELD)
       refPic = &(RefPicListX[refIdxLX]->m_picture_top_filed);
     // 如果参考帧是底场（PICTURE_CODED_TYPE_BOTTOM_FIELD），则选择 m_picture_bottom_filed
     else if (RefPicListX[refIdxLX]->m_pic_coded_type_marked_as_refrence ==
@@ -1880,8 +1869,7 @@ int PictureBase::MapColToList0(int32_t refIdxCol, PictureBase *colPic,
     if (m_RefPicList0[i] == nullptr) break;
     if ((m_RefPicList0[i]->m_picture_coded_type == FRAME &&
          (&m_RefPicList0[i]->m_picture_frame == colPic)) ||
-        (m_RefPicList0[i]->m_picture_coded_type ==
-             COMPLEMENTARY_FIELD_PAIR &&
+        (m_RefPicList0[i]->m_picture_coded_type == COMPLEMENTARY_FIELD_PAIR &&
          (&m_RefPicList0[i]->m_picture_top_filed == colPic ||
           &m_RefPicList0[i]->m_picture_bottom_filed == colPic))) {
       refIdxL0Frm = i;
@@ -1896,10 +1884,8 @@ int PictureBase::MapColToList0(int32_t refIdxCol, PictureBase *colPic,
   if (vertMvScale == H264_VERT_MV_SCALE_One_To_One) {
     if (field_pic_flag == 0 && m_mbs[CurrMbAddr].mb_field_decoding_flag) {
       // 引用refIdxCol 引用的字段与当前宏块具有相同的奇偶校验
-      if ((colPic->m_picture_coded_type == TOP_FIELD &&
-           CurrMbAddr % 2 == 0) ||
-          (colPic->m_picture_coded_type == BOTTOM_FIELD &&
-           CurrMbAddr % 2 == 1))
+      if ((colPic->m_picture_coded_type == TOP_FIELD && CurrMbAddr % 2 == 0) ||
+          (colPic->m_picture_coded_type == BOTTOM_FIELD && CurrMbAddr % 2 == 1))
         refIdxL0_temp = refIdxL0Frm << 1;
       // 引用refIdxCol 引用的字段具有与当前宏块相反的奇偶校验
       else

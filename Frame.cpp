@@ -1,5 +1,6 @@
 #include "Frame.hpp"
 #include "DeblockingFilter.hpp"
+#include "Image.hpp"
 #include "Slice.hpp"
 #include "SliceHeader.hpp"
 
@@ -36,7 +37,8 @@ int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop) {
   /* TODO YangJing 这里函数要认真看 <24-10-14 05:44:27> */
   DeblockingFilter deblockingFilter;
   deblockingFilter.deblocking_filter_process(&m_picture_frame);
-  m_picture_frame.saveToBmpFile(output_file.c_str());
+  Image image;
+  image.saveToBmpFile(m_picture_frame, output_file.c_str());
   //}
   return 0;
 }
@@ -59,7 +61,7 @@ int Frame::reset() {
   LongTermPicNum = 0;
   reference_marked_type = UNKOWN;
   m_is_decode_finished = 0;
-  m_is_in_use = 1; // 正在使用状态
+  m_is_in_use = true;
 
   return 0;
 }
