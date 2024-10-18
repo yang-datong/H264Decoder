@@ -2,16 +2,17 @@
 #include "Bitmap.hpp"
 
 int Image::saveToBmpFile(PictureBase &pic, const char *filename) {
-  //----------------yuv420p到brg24的格式转换-------------------------
   int32_t W = pic.PicWidthInSamplesL;
   int32_t H = pic.PicHeightInSamplesL;
   MY_BITMAP bitmap;
-  RET(createEmptyImage(bitmap, W, H, 24));
-  RET(convertYuv420pToBgr24(W, H, pic.m_pic_buff_luma, (uint8_t *)bitmap.bmBits,
-                            bitmap.bmWidthBytes));
+  createEmptyImage(bitmap, W, H, 24);
+  convertYuv420pToBgr24(W, H, pic.m_pic_buff_luma, (uint8_t *)bitmap.bmBits,
+                        bitmap.bmWidthBytes);
   RET(saveBmp(filename, &bitmap));
-  free(bitmap.bmBits);
-  bitmap.bmBits = nullptr;
+  if (bitmap.bmBits) {
+    free(bitmap.bmBits);
+    bitmap.bmBits = nullptr;
+  }
   return 0;
 }
 
@@ -104,14 +105,11 @@ int Image::convertYuv420pToBgr24(uint32_t width, uint32_t height,
                                  const uint8_t *yuv420p, uint8_t *bgr24,
                                  uint32_t widthBytesBgr24) {
   int32_t W = width, H = height, channels = 3;
-
-  //------------- YUV420P to BGR24 --------------------
-  // m_slice->slice_header->m_sps->frame_crop_[left,right,top,bottom]_offset
   for (int y = 0; y < H; ++y) {
     for (int x = 0; x < W; ++x) {
-      unsigned char Y = yuv420p[y * W + x];
-      unsigned char U = yuv420p[H * W + (y / 2) * (W / 2) + x / 2];
-      unsigned char V = yuv420p[H * W + H * W / 4 + (y / 2) * (W / 2) + x / 2];
+      uint8_t Y = yuv420p[y * W + x];
+      uint8_t U = yuv420p[H * W + (y / 2) * (W / 2) + x / 2];
+      uint8_t V = yuv420p[H * W + H * W / 4 + (y / 2) * (W / 2) + x / 2];
 
       int b = (1164 * (Y - 16) + 2018 * (U - 128)) / 1000;
       int g = (1164 * (Y - 16) - 813 * (V - 128) - 391 * (U - 128)) / 1000;
@@ -131,13 +129,11 @@ int Image::convertYuv420pToBgr24FlipLines(uint32_t width, uint32_t height,
                                           uint8_t *bgr24,
                                           uint32_t widthBytesBgr24) {
   int32_t W = width, H = height, channels = 3;
-
-  //------------- YUV420P to BGR24 --------------------
   for (int y = 0; y < H; ++y) {
     for (int x = 0; x < W; ++x) {
-      unsigned char Y = yuv420p[y * W + x];
-      unsigned char U = yuv420p[H * W + (y / 2) * (W / 2) + x / 2];
-      unsigned char V = yuv420p[H * W + H * W / 4 + (y / 2) * (W / 2) + x / 2];
+      uint8_t Y = yuv420p[y * W + x];
+      uint8_t U = yuv420p[H * W + (y / 2) * (W / 2) + x / 2];
+      uint8_t V = yuv420p[H * W + H * W / 4 + (y / 2) * (W / 2) + x / 2];
 
       int b = (1164 * (Y - 16) + 2018 * (U - 128)) / 1000;
       int g = (1164 * (Y - 16) - 813 * (V - 128) - 391 * (U - 128)) / 1000;

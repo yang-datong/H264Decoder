@@ -3,104 +3,83 @@
 
 GOP::GOP() {
   for (int i = 0; i < MAX_DPB; i++) {
-    m_dpb_for_output[i] = NULL;
+    m_dpb_for_output[i] = nullptr;
     m_dpb[i] = new Frame;
   }
 }
 
 GOP::~GOP() {
-  for (int i = 0; i < MAX_DPB; i++)
-    free(m_dpb[i]);
-}
-
-int GOP::getOneEmptyPicture(Frame *&pic) {
   for (int i = 0; i < MAX_DPB; i++) {
-    // 重复利用被释放的参考帧
-    if (m_dpb[i]->m_picture_coded_type == UNKNOWN) {
-      pic = m_dpb[i];
-      RETURN_IF_FAILED(pic == NULL, -1);
-      return 0;
-    }
+    free(m_dpb[i]);
+    m_dpb[i] = nullptr;
   }
-
-  return -1;
 }
 
-int GOP::getOneOutPicture(Frame *newDecodedPic, Frame *&outPic) {
-  int32_t i = 0;
-  int32_t index = -1;
-
-  //----------处理P帧情况---------------
+// lastDecodedPic: 上一个完成解码的帧
+// outPic: 输出的已解码帧，或者不输出帧（即nullptr)
+int GOP::outputOneFrame(Frame *lastDecodedPic, Frame *&outPic) {
+  //无B Slice情况，直接输出该帧
   if (m_max_num_reorder_frames == 0) {
-    outPic = newDecodedPic; // 直接返回，一般为IP编码，即码流中没有B帧的情况
+    outPic = lastDecodedPic;
     return 0;
   }
 
-  //----------处理B帧情况---------------
-  // 先找出已经解码完毕，并且还保存在DPB中的POC最小的那一帧
-  for (i = 0; i < m_dpb_for_output_length; ++i) {
-    RETURN_IF_FAILED(m_dpb_for_output[i] == NULL, -1);
-
+  //含B Slice情况，输出已解码且最小POC帧
+  int index = -1;
+  for (int i = 0; i < m_dpb_for_output_length; ++i)
     if (i == 0 || m_dpb_for_output[i]->m_picture_frame.PicOrderCnt <
-                      m_dpb_for_output[index]->m_picture_frame.PicOrderCnt) {
+                      m_dpb_for_output[index]->m_picture_frame.PicOrderCnt)
       index = i;
+
+  if (lastDecodedPic != nullptr) {
+    // 不满足最大重排序帧数，不输出帧（最大重排序帧数有B帧一般是2）
+    if (m_dpb_for_output_length < m_max_num_reorder_frames) {
+      m_dpb_for_output[m_dpb_for_output_length] = lastDecodedPic;
+      m_dpb_for_output_length++;
+      outPic = nullptr;
+    }
+    // 达到最大重排序帧数，输出帧POC最小的帧
+    else {
+      /* 上一解码帧比缓冲区的帧POC更小，直接输出它 */
+      if (lastDecodedPic->m_picture_frame.PicOrderCnt <
+          m_dpb_for_output[index]->m_picture_frame.PicOrderCnt)
+        outPic = lastDecodedPic;
+      /* 将缓冲区最小POC的帧输出后，该帧纳入缓冲区 */
+      else
+        outPic = m_dpb_for_output[index],
+        m_dpb_for_output[index] = lastDecodedPic;
     }
   }
-
-  if (newDecodedPic == NULL) {
-    // 一般表示解码结束时的flush操作
+  // 当前正在解码帧为IDR帧，将整个缓冲区所有帧按POC最小开始全部输出
+  else {
+    // 存在未输出的帧，从DPB中的POC最小的帧开始输出
     if (m_dpb_for_output_length > 0) {
-      // 说明m_dpb_index_for_output[]数组还残留有未输出的帧
       if (index >= 0)
-        outPic = m_dpb_for_output[index]; // 输出DPB中的POC最小的那一帧
-      else {                              //说明缓存中没有帧了
-        outPic = NULL;
+        outPic = m_dpb_for_output[index];
+      else {
+        outPic = nullptr;
         m_dpb_for_output_length = 0;
         return 0;
       }
-
+      //从输出帧的索引处，队列往前移动
+      for (int32_t i = index; i < m_dpb_for_output_length; ++i)
+        m_dpb_for_output[i] = m_dpb_for_output[i + 1];
       m_dpb_for_output_length--;
-
-      for (i = index; i < m_dpb_for_output_length; ++i) {
-        m_dpb_for_output[i] =
-            m_dpb_for_output[i + 1]; // 数组元素整体向前移动一个单元
-      }
     } else
-      outPic = NULL; // 说明缓存中彻底没有帧了
-  } else {
-    // //一般表示解码过程中的push_a_decoded_frame_and_get_a_display_frame操作
-    if (m_dpb_for_output_length < m_max_num_reorder_frames) {
-      // 说明m_dpb_index_for_output[]数组还没塞满，只push，不get
-      m_dpb_for_output[m_dpb_for_output_length] = newDecodedPic;
-      m_dpb_for_output_length++;
-      outPic = NULL; // 目前还没有可输出的帧
-    } else {
-      // //说明m_dpb_index_for_output[]数组已满，先get，再push
-      RETURN_IF_FAILED(index < 0, -1);
-
-      if (newDecodedPic->m_picture_frame.PicOrderCnt <
-          m_dpb_for_output[index]->m_picture_frame.PicOrderCnt) {
-        outPic = newDecodedPic;
-        // 说明当前新输入的已解码帧的POC是最小的，一般为B帧
-      } else {
-        outPic = m_dpb_for_output[index]; // 输出DPB中的POC最小的那一帧
-        m_dpb_for_output[index] = newDecodedPic; // 相当于push a frame
-      }
-    }
+      outPic = nullptr;
   }
 
   return 0;
 }
 
 int GOP::flush() {
-  Frame *outPicture = NULL;
+  Frame *outPicture = nullptr;
   while (true) {
     //从gop保存的帧数组中一个个读取输出
-    int ret = getOneOutPicture(NULL, outPicture);
-    RET(ret);
+    outputOneFrame(nullptr, outPicture);
     if (outPicture)
       outPicture->m_is_in_use = false;
-    else // flush完毕，DPB缓存中已无可输出帧
+    else
       break;
   }
   return 0;

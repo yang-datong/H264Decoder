@@ -9,6 +9,10 @@
 class Frame;
 class GOP {
  public:
+  GOP();
+  ~GOP();
+
+ public:
   //7.4.1.2.1 Order of sequence and picture parameter set RBSPs and their activation
   SPS m_spss[MAX_SPS_COUNT]; // sps[32]
   /* 最新得到的SPS ID */
@@ -25,19 +29,14 @@ class GOP {
 
   // DPB: decoded picture buffer
   Frame *m_dpb[MAX_DPB];
-  // 因为含有B帧的视频帧的显示顺序和解码顺序是不一样的，已经解码完的P/B帧不能立即输出给用户，需要先缓存一下
+  // 因为含有B帧的视频帧的显示顺序和解码顺序是不一样的，已经解码完的P/B帧不能立即输出给用户，需要先缓存一下，一般来说大小为2,按照最大申请
   Frame *m_dpb_for_output[MAX_DPB];
-  // dpb[]的真实大小
-  int32_t m_dpb_for_output_length = 0;
-  // dpb[]的最大大小
+  // 最大重排序帧数有B帧一般是2
   int32_t m_max_num_reorder_frames = 0;
+  int32_t m_dpb_for_output_length = 0;
 
  public:
-  GOP();
-  ~GOP();
-
-  int getOneEmptyPicture(Frame *&pic);
-  int getOneOutPicture(Frame *newDecodedPic, Frame *&outPic);
+  int outputOneFrame(Frame *newDecodedPic, Frame *&outPic);
   int flush();
 };
 

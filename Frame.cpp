@@ -16,30 +16,11 @@ void Frame::encode() {
 void Frame::decode() {}
 
 int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop) {
-  static int index = 0;
-  string output_file;
-  const uint32_t slice_type = slice->slice_header->slice_type % 5;
-  //for (auto &slice : slices) {
-  if (slice_type == SLICE_I)
-    output_file = "output_I_" + to_string(index++) + ".bmp";
-  else if (slice_type == SLICE_P)
-    output_file = "output_P_" + to_string(index++) + ".bmp";
-  else if (slice_type == SLICE_B)
-    output_file = "output_B_" + to_string(index++) + ".bmp";
-  else {
-    std::cerr << "Unrecognized slice type:" << slice->slice_header->slice_type
-              << std::endl;
-    return -1;
-  }
   slice->decode(bitStream, dpb, gop.m_spss[gop.curr_sps_id],
                 gop.m_ppss[gop.curr_pps_id], this);
   // 去块滤波器
-  /* TODO YangJing 这里函数要认真看 <24-10-14 05:44:27> */
   DeblockingFilter deblockingFilter;
   deblockingFilter.deblocking_filter_process(&m_picture_frame);
-  Image image;
-  image.saveToBmpFile(m_picture_frame, output_file.c_str());
-  //}
   return 0;
 }
 

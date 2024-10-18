@@ -7,10 +7,14 @@
 
 typedef enum _OUTPUT_FILE_TYPE { NON, BMP, YUV } OUTPUT_FILE_TYPE;
 
+int32_t g_Width = 0;
+int32_t g_Height = 0;
 int32_t g_PicNumCnt = 0;
+//int32_t g_OutputFileType = YUV;
+int32_t g_OutputFileType = BMP;
 
-int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
-               OUTPUT_FILE_TYPE output_file_type = NON);
+int outputFrame(GOP *gop, Frame *frame);
+int flushFrame(GOP *gop, Frame *&frame, bool isFromIDR);
 
 int main(int argc, char *argv[]) {
   /* 关闭io输出同步 */
@@ -99,7 +103,7 @@ int main(int argc, char *argv[]) {
       case 1: /* Slice(non-VCL) */
         /* 11-2. 解码普通帧 */
         cout << "Original Slice -> {" << endl;
-        flushFrame(gop, frame, false, BMP);
+        flushFrame(gop, frame, false);
         /* 初始化bit处理器，填充slice的数据 */
         bitStream = new BitStream(rbsp.buf, rbsp.len);
         /* 此处根据SliceHeader可判断A Frame =? A Slice */
@@ -117,11 +121,10 @@ int main(int argc, char *argv[]) {
         cout << "Not Support DPC!" << endl;
         break;
       case 5: /* IDR Slice(VCL) */
-        //gop->flush();
         /* 11-1. 解码立即刷新帧 GOP[0] */
         cout << "IDR Slice -> {" << endl;
         /* 提供给外层程序一定是Frame，即一帧数据，而不是一个Slice，因为如果存在多个Slice为一帧的情况外层处理就很麻烦 */
-        flushFrame(gop, frame, true, BMP);
+        flushFrame(gop, frame, true);
         /* 初始化bit处理器，填充idr的数据 */
         bitStream = new BitStream(rbsp.buf, rbsp.len);
         /* 这里通过解析SliceHeader后可以知道一个Frame到底是几个Slice，通过直接调用frame->decode，在内部对每个Slice->decode() （如果存在多个Slice的情况，可以通过first_mb_in_slice判断，如果每个Slice都为0,则表示每个Slice都是一帧数据，当first_mb_in_slice>0，则表示与前面的一个或多个Slice共同组成一个Frame） */
@@ -155,39 +158,50 @@ int main(int argc, char *argv[]) {
       case 9: /* 7.3.2.4 Access unit delimiter RBSP syntax */
         /* 该Nalu的优先级很高，如果存在则它会在SPS前出现 */
         //access_unit_delimiter_rbsp();
+        cerr << "access_unit_delimiter_rbsp()" << endl;
         break;
       case 10:
         //end_of_seq_rbsp();
+        cerr << "end_of_seq_rbsp()" << endl;
         break;
       case 11:
         //end_of_stream_rbsp();
+        cerr << "end_of_stream_rbsp()" << endl;
         break;
       case 12:
         //filler_data_rbsp();
+        cerr << "filler_data_rbsp()" << endl;
         break;
       case 13:
         //seq_parameter_set_extension_rbsp();
+        cerr << "seq_parameter_set_extension_rbsp()" << endl;
         break;
       case 14:
         //prefix_nal_unit_rbsp();
+        cerr << "prefix_nal_unit_rbsp()" << endl;
         break;
       case 15:
         //subset_seq_parameter_set_rbsp();
+        cerr << "subset_seq_parameter_set_rbsp()" << endl;
         break;
       case 16:
         //depth_parameter_set_rbsp();
+        cerr << "depth_parameter_set_rbsp()" << endl;
         break;
       case 19:
         //slice_layer_without_partitioning_rbsp();
+        cerr << "slice_layer_without_partitioning_rbsp()" << endl;
         break;
       case 20:
         //slice_layer_extension_rbsp();
+        cerr << "slice_layer_extension_rbsp()" << endl;
         break;
       case 21: /* 3D-AVC texture view */
         //slice_layer_extension_rbsp();
+        cerr << "slice_layer_extension_rbsp()" << endl;
         break;
       default:
-        cout << "Error nal_unit_type:" << nalu.nal_unit_type << endl;
+        cerr << "Error nal_unit_type:" << nalu.nal_unit_type << endl;
       }
 
       /* 已读取完成所有NAL */
@@ -199,6 +213,16 @@ int main(int argc, char *argv[]) {
     cout << endl;
   }
 
+  /* 最后一个解码帧 */
+  flushFrame(gop, frame, true);
+
+  /* 将剩余的缓存帧全部输出 */
+  for (int i = 0; i < gop->m_max_num_reorder_frames; ++i)
+    outputFrame(gop, nullptr);
+
+  if (g_OutputFileType == YUV)
+    cout << "\tffplay -video_size " << g_Width << "x" << g_Height
+         << " output.yuv" << endl;
   /* 读取完所有Nalu，并送入解码后，则将缓存中所有的Frame读取出来，准备退出 */
   reader.close();
   delete gop;
@@ -206,38 +230,55 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-/* TODO：GOP flush还有问题，最后两帧如何处理？ */
 /* 清空单帧，若当IDR解码完成时，则对整个GOP进行flush */
-int flushFrame(GOP *&gop, Frame *&frame, bool isFromIDR,
-               OUTPUT_FILE_TYPE output_file_type) {
+// 输入的frame：表示上一解码完成的帧
+// 输出的frame：表示一个新帧（从缓冲区中重复利用的帧）
+int flushFrame(GOP *gop, Frame *&frame, bool isFromIDR) {
   if (frame != nullptr && frame->m_current_picture_ptr != nullptr) {
     Frame *newEmptyPicture = nullptr;
     frame->m_current_picture_ptr->getEmptyFrameFromDPB(newEmptyPicture);
 
-    //当上一帧完成解码后，且解码帧为IDR帧，则进行GOP -> flush
+    //当上一帧完成解码且为IDR帧，则进行GOP -> flush
     if (isFromIDR == false)
-      if (frame->m_picture_frame.m_slice->slice_header->IdrPicFlag)
+      if (frame->m_picture_frame.m_slice->slice_header->IdrPicFlag) {
+        g_Width = frame->m_picture_frame.PicWidthInSamplesL;
+        g_Height = frame->m_picture_frame.PicHeightInSamplesL;
         gop->flush();
-
-    Frame *outPicture = nullptr;
-    gop->getOneOutPicture(frame, outPicture);
-    if (outPicture != nullptr) {
-      //标记为闲置状态，以便后续回收重复利用
-      outPicture->m_is_in_use = false;
-      if (output_file_type == BMP) {
-
-      } else if (output_file_type == YUV) {
-        Image image;
-        image.writeYUV(outPicture->m_picture_frame, "output.yuv");
-        if (frame->m_picture_frame.m_slice->slice_header->IdrPicFlag)
-          cout << "\tffplay -video_size "
-               << outPicture->m_picture_frame.PicWidthInSamplesL << "x"
-               << outPicture->m_picture_frame.PicHeightInSamplesL
-               << " output.yuv" << endl;
       }
-    }
 
+    outputFrame(gop, frame);
     frame = newEmptyPicture;
+  }
+  return 0;
+}
+
+int outputFrame(GOP *gop, Frame *frame) {
+  Frame *outPicture = nullptr;
+  gop->outputOneFrame(frame, outPicture);
+  // 在含B帧的情况下，解码后的帧还需要排序POC，按照POC顺序进行输出，这里不一定有帧输出
+  if (outPicture != nullptr) {
+    static int index = 0;
+    //标记为闲置状态，以便后续回收重复利用
+    outPicture->m_is_in_use = false;
+    Image image;
+    if (g_OutputFileType == BMP) {
+      string output_file;
+      const uint32_t slice_type =
+          outPicture->slice->slice_header->slice_type % 5;
+      if (slice_type == SLICE_I)
+        output_file = "output_I_" + to_string(index++) + ".bmp";
+      else if (slice_type == SLICE_P)
+        output_file = "output_P_" + to_string(index++) + ".bmp";
+      else if (slice_type == SLICE_B)
+        output_file = "output_B_" + to_string(index++) + ".bmp";
+      else {
+        std::cerr << "Unrecognized slice type:"
+                  << outPicture->slice->slice_header->slice_type << std::endl;
+        return -1;
+      }
+      image.saveToBmpFile(outPicture->m_picture_frame, output_file.c_str());
+    } else if (g_OutputFileType == YUV)
+      image.writeYUV(outPicture->m_picture_frame, "output.yuv");
   }
   return 0;
 }
