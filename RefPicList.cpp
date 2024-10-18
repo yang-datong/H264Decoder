@@ -1249,12 +1249,12 @@ int PictureBase::sliding_window_decoded_reference_picture_marking(
 }
 
 // 8.2.5.4.1 Marking process of a short-term reference picture as "unused for reference"
-int marking_short_term_ref_picture_as_unused_for_ref(Frame *pic,
+int marking_short_term_ref_picture_as_unused_for_ref(Frame *(&dpb)[16],
                                                      int32_t picNumX,
-
                                                      bool field_pic_flag) {
 
   for (int32_t i = 0; i < MAX_DPB; i++) {
+    Frame *pic = dpb[i];
     auto &marked_f = pic->m_picture_frame.reference_marked_type;
     auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
     auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
@@ -1290,10 +1290,11 @@ int marking_short_term_ref_picture_as_unused_for_ref(Frame *pic,
 }
 
 // 8.2.5.4.2 Marking process of a long-term reference picture as "unused for reference"
-int marking_long_term_ref_picture_as_unused_for_ref(Frame *pic,
+int marking_long_term_ref_picture_as_unused_for_ref(Frame *(&dpb)[16],
                                                     int32_t long_term_pic_num_2,
                                                     bool field_pic_flag) {
   for (int32_t i = 0; i < MAX_DPB; i++) {
+    Frame *pic = dpb[i];
     auto &marked_f = pic->m_picture_frame.reference_marked_type;
     auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
     auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
@@ -1330,9 +1331,10 @@ int marking_long_term_ref_picture_as_unused_for_ref(Frame *pic,
 
 // 8.2.5.4.3 Assignment process of a LongTermFrameIdx to a short-term reference picture
 int assignment_longTermFrameIdx_to_short_term_ref_picture(
-    Frame *pic, int32_t picNumX, int32_t long_term_frame_idx,
+    Frame *(&dpb)[16], int32_t picNumX, int32_t long_term_frame_idx,
     bool field_pic_flag, int32_t &LongTermFrameIdx) {
   for (int32_t i = 0; i < MAX_DPB; i++) {
+    Frame *pic = dpb[i];
     auto &marked_f = pic->m_picture_frame.reference_marked_type;
     auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
     auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
@@ -1348,6 +1350,7 @@ int assignment_longTermFrameIdx_to_short_term_ref_picture(
 
   int32_t picNumXIndex = -1;
   for (int32_t i = 0; i < MAX_DPB; i++) {
+    Frame *pic = dpb[i];
     auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
     auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
     if (marked_t == SHORT_REF && pic->m_picture_top_filed.PicNum == picNumX) {
@@ -1361,6 +1364,7 @@ int assignment_longTermFrameIdx_to_short_term_ref_picture(
   }
 
   for (int32_t i = 0; i < MAX_DPB; i++) {
+    Frame *pic = dpb[i];
     auto &marked_f = pic->m_picture_frame.reference_marked_type;
     auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
     auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
@@ -1388,6 +1392,7 @@ int assignment_longTermFrameIdx_to_short_term_ref_picture(
 
   if (field_pic_flag == false) {
     for (int32_t i = 0; i < MAX_DPB; i++) {
+      Frame *pic = dpb[i];
       auto &marked_f = pic->m_picture_frame.reference_marked_type;
       auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
       auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
@@ -1404,6 +1409,7 @@ int assignment_longTermFrameIdx_to_short_term_ref_picture(
     }
   } else {
     for (int32_t i = 0; i < MAX_DPB; i++) {
+      Frame *pic = dpb[i];
       auto &marked_f = pic->m_picture_frame.reference_marked_type;
       auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
       auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
@@ -1449,9 +1455,11 @@ int assignment_longTermFrameIdx_to_short_term_ref_picture(
 }
 
 // 8.2.5.4.4 Decoding process for MaxLongTermFrameIdx
-int decoding_maxLongTermFrameIdx(Frame *pic, int32_t max_long_term_frame_idx,
+int decoding_maxLongTermFrameIdx(Frame *(&dpb)[16],
+                                 int32_t max_long_term_frame_idx,
                                  int32_t &MaxLongTermFrameIdx) {
   for (int32_t i = 0; i < MAX_DPB; i++) {
+    Frame *pic = dpb[i];
     auto &marked_f = pic->m_picture_frame.reference_marked_type;
     auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
     if (pic->m_picture_frame.LongTermFrameIdx > max_long_term_frame_idx &&
@@ -1486,9 +1494,10 @@ int decoding_maxLongTermFrameIdx(Frame *pic, int32_t max_long_term_frame_idx,
 
 // 8.2.5.4.5 Marking process of all reference pictures as "unused for reference" and setting MaxLongTermFrameIdx to "no long-term frame indices"
 int marking_all_ref_pictures_as_unused_for_ref(
-    Frame *pic, int32_t &MaxLongTermFrameIdx,
+    Frame *(&dpb)[16], int32_t &MaxLongTermFrameIdx,
     int32_t &memory_management_control_operation_5_flag) {
   for (int32_t i = 0; i < MAX_DPB; i++) {
+    Frame *pic = dpb[i];
     pic->m_pic_coded_type_marked_as_refrence = UNKNOWN;
     pic->reference_marked_type = UNUSED_REF;
     pic->m_picture_frame.reference_marked_type = UNUSED_REF;
@@ -1503,12 +1512,13 @@ int marking_all_ref_pictures_as_unused_for_ref(
 
 // 8.2.5.4.6 Process for assigning a long-term frame index to the current picture
 int assigning_long_term_frame_index_to_the_current_picture(
-    Frame *pic, H264_PICTURE_CODED_TYPE m_picture_coded_type,
+    Frame *(&dpb)[16], H264_PICTURE_CODED_TYPE m_picture_coded_type,
     bool field_pic_flag, int32_t long_term_frame_idx,
     int32_t max_long_term_frame_idx, Frame *m_parent,
     PICTURE_MARKED_AS &reference_marked_type, int32_t &LongTermFrameIdx,
     int32_t &memory_management_control_operation_6_flag) {
   for (int32_t i = 0; i < MAX_DPB; i++) {
+    Frame *pic = dpb[i];
     auto &marked_f = pic->m_picture_frame.reference_marked_type;
     auto &marked_t = pic->m_picture_top_filed.reference_marked_type;
     auto &marked_b = pic->m_picture_bottom_filed.reference_marked_type;
@@ -1563,7 +1573,6 @@ int assigning_long_term_frame_index_to_the_current_picture(
 }
 
 // 8.2.5.4 Adaptive memory control decoded reference picture marking process
-// TODO 这里要好好看看，睡觉了，头晕死了 <24-10-18 09:32:15, YangJing>
 int PictureBase::adaptive_memory_control_decoded_reference_picture_marking(
     Frame *(&dpb)[16]) {
   const SliceHeader *header = m_slice->slice_header;
@@ -1582,30 +1591,28 @@ int PictureBase::adaptive_memory_control_decoded_reference_picture_marking(
     if (operation == 0) break;
     // 将短期图像标记为“不用于参考”
     if (operation == 1)
-      marking_short_term_ref_picture_as_unused_for_ref(dpb[i], picNumX,
+      marking_short_term_ref_picture_as_unused_for_ref(dpb, picNumX,
                                                        field_pic_flag);
     // 将长期图像标记为“不用于参考”
     else if (operation == 2)
-      marking_long_term_ref_picture_as_unused_for_ref(
-          dpb[i], long_term_pic_num_2, field_pic_flag);
+      marking_long_term_ref_picture_as_unused_for_ref(dpb, long_term_pic_num_2,
+                                                      field_pic_flag);
     // 分配LongTermFrameIdx给一个短期参考图像
     else if (operation == 3)
       assignment_longTermFrameIdx_to_short_term_ref_picture(
-          dpb[i], picNumX, long_term_frame_idx, field_pic_flag,
-          LongTermFrameIdx);
+          dpb, picNumX, long_term_frame_idx, field_pic_flag, LongTermFrameIdx);
     // 基于MaxLongTermFrameIdx的标记过程
     else if (operation == 4)
-      decoding_maxLongTermFrameIdx(dpb[i], max_long_term_frame_idx,
+      decoding_maxLongTermFrameIdx(dpb, max_long_term_frame_idx,
                                    MaxLongTermFrameIdx);
     // 所有参考图像标记为“不用于参考”
     else if (operation == 5)
       marking_all_ref_pictures_as_unused_for_ref(
-          dpb[i], MaxLongTermFrameIdx,
-          memory_management_control_operation_5_flag);
+          dpb, MaxLongTermFrameIdx, memory_management_control_operation_5_flag);
     // 分配一个长期帧索引给当前图像
     else if (operation == 6) {
       assigning_long_term_frame_index_to_the_current_picture(
-          dpb[i], m_picture_coded_type, field_pic_flag, long_term_frame_idx,
+          dpb, m_picture_coded_type, field_pic_flag, long_term_frame_idx,
           MaxLongTermFrameIdx, m_parent, reference_marked_type,
           LongTermFrameIdx, memory_management_control_operation_6_flag);
     }
