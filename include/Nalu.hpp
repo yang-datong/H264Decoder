@@ -17,7 +17,6 @@
 // 用于存放264中每一个单个Nalu数据
 class Nalu {
  public:
-  Nalu();
   /* 拷贝构造函数 */
   // Nalu(const Nalu &nalu);
   ~Nalu();
@@ -30,21 +29,21 @@ class Nalu {
  public:
   class EBSP {
    public:
-    EBSP();
     ~EBSP();
     uint8_t *buf = nullptr;
     int len = 0;
   };
   class RBSP {
    public:
-    RBSP();
     ~RBSP();
     uint8_t *buf = nullptr;
     int len = 0;
   };
 
  private:
+  [[deprecated]]
   int parseNALHeader(EBSP &rbsp);
+  int parseNALHeader(EBSP &rbsp, BitStream *bs);
 
  public:
   uint8_t forbidden_zero_bit = 0;
