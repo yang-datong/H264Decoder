@@ -1,9 +1,44 @@
 #include "SPS.hpp"
+#include "BitStream.hpp"
 #include <cstdint>
 #include <iostream>
 #include <ostream>
 
-/* TODO YangJing 这个函数后续好好看一下 <24-09-13 10:16:29> */
+int SPS::st_ref_pic_set(BitStream &bs, int32_t stRpsIdx) {
+  int32_t inter_ref_pic_set_prediction_flag = false;
+  if (stRpsIdx != 0) inter_ref_pic_set_prediction_flag = bs.readUn(1);
+  if (inter_ref_pic_set_prediction_flag) {
+    if (stRpsIdx == num_short_term_ref_pic_sets)
+      int32_t delta_idx_minus1 = bs.readUE();
+    int32_t delta_rps_sign = bs.readUn(1);
+    int32_t abs_delta_rps_minus1 = bs.readUE();
+
+    int32_t used_by_curr_pic_flag[32] = {0};
+    int32_t use_delta_flag[32] = {0};
+    std::cout << "Into -> " << __FUNCTION__ << "():" << __LINE__ << std::endl;
+    //for (int32_t j = 0; j <= NumDeltaPocs[RefRpsIdx]; j++) {
+    //used_by_curr_pic_flag[j] = bs.readUn(1);
+    //if (!used_by_curr_pic_flag[j]) use_delta_flag[j] = bs.readUn(1);
+    //}
+  } else {
+    int32_t num_negative_pics = bs.readUE();
+    int32_t num_positive_pics = bs.readUE();
+    int32_t delta_poc_s0_minus1[32] = {0};
+    int32_t delta_poc_s1_minus1[32] = {0};
+    int32_t used_by_curr_pic_s0_flag[32] = {0};
+    int32_t used_by_curr_pic_s1_flag[32] = {0};
+    for (int32_t i = 0; i < num_negative_pics; i++) {
+      delta_poc_s0_minus1[i] = bs.readUE();
+      used_by_curr_pic_s0_flag[i] = bs.readUn(1);
+    }
+    for (int32_t i = 0; i < num_positive_pics; i++) {
+      delta_poc_s1_minus1[i] = bs.readUE();
+      used_by_curr_pic_s1_flag[i] = bs.readUn(1);
+    }
+  }
+  return 0;
+}
+
 void SPS::vui_parameters(BitStream &bitStream) {
   cout << "\tVUI -> {" << endl;
   aspect_ratio_info_present_flag = bitStream.readU1();
@@ -54,6 +89,9 @@ void SPS::vui_parameters(BitStream &bitStream) {
          << endl;
   }
 
+  // --- H.264
+
+  /*
   timing_info_present_flag = bitStream.readU1();
   if (timing_info_present_flag) {
     num_units_in_tick = bitStream.readUn(32);
@@ -101,29 +139,48 @@ void SPS::vui_parameters(BitStream &bitStream) {
     max_dec_frame_buffering = bitStream.readUE();
     cout << "\t\t最大解码帧缓冲区大小:" << max_dec_frame_buffering << endl;
   }
+  */
 
-  if (max_num_reorder_frames == -1) {
-    if ((profile_idc == 44 || profile_idc == 86 || profile_idc == 100 ||
-         profile_idc == 110 || profile_idc == 122 || profile_idc == 244) &&
-        constraint_set3_flag)
-      max_num_reorder_frames = 0;
-    else {
-      int32_t MaxDpbFrames = 0;
-      for (int i = 0; i < 19; ++i) {
-        if (level_idc == LevelNumber_MaxDpbMbs[i][0])
-          MaxDpbFrames = MIN(LevelNumber_MaxDpbMbs[i][1] /
-                                 (PicWidthInMbs * FrameHeightInMbs),
-                             16);
-        break;
-      }
-      max_num_reorder_frames = MaxDpbFrames;
+  // --- H.265
+  neutral_chroma_indication_flag = bitStream.readUn(1);
+  field_seq_flag = bitStream.readUn(1);
+  frame_field_info_present_flag = bitStream.readUn(1);
+  default_display_window_flag = bitStream.readUn(1);
+  if (default_display_window_flag) {
+    def_disp_win_left_offset = bitStream.readUE();
+    def_disp_win_right_offset = bitStream.readUE();
+    def_disp_win_top_offset = bitStream.readUE();
+    def_disp_win_bottom_offset = bitStream.readUE();
+  }
+  vui_timing_info_present_flag = bitStream.readUn(1);
+  if (vui_timing_info_present_flag) {
+    vui_num_units_in_tick = bitStream.readUn(32);
+    vui_time_scale = bitStream.readUn(32);
+    vui_poc_proportional_to_timing_flag = bitStream.readUn(1);
+    if (vui_poc_proportional_to_timing_flag)
+      vui_num_ticks_poc_diff_one_minus1 = bitStream.readUE();
+    vui_hrd_parameters_present_flag = bitStream.readUn(1);
+    if (vui_hrd_parameters_present_flag){
+      std::cout << "hi~" << std::endl;
+      //hrd_parameters(bitStream,1, sps_max_sub_layers_minus1);
     }
   }
+  bitstream_restriction_flag = bitStream.readUn(1);
+  if (bitstream_restriction_flag) {
+    tiles_fixed_structure_flag = bitStream.readUn(1);
+    motion_vectors_over_pic_boundaries_flag = bitStream.readUn(1);
+    restricted_ref_pic_lists_flag = bitStream.readUn(1);
+    min_spatial_segmentation_idc = bitStream.readUE();
+    max_bytes_per_pic_denom = bitStream.readUE();
+    max_bits_per_min_cu_denom = bitStream.readUE();
+    log2_max_mv_length_horizontal = bitStream.readUE();
+    log2_max_mv_length_vertical = bitStream.readUE();
+  }
 
-  int32_t fps = 0;
-  if (vui_parameters_present_flag && timing_info_present_flag)
-    fps = time_scale / num_units_in_tick / 2;
-  cout << "\t\tfps:" << fps << endl;
+  //int32_t fps = 0;
+  //if (vui_parameters_present_flag && timing_info_present_flag)
+    //fps = time_scale / num_units_in_tick / 2;
+  //cout << "\t\tfps:" << fps << endl;
   cout << "\t }" << endl;
 }
 
@@ -148,202 +205,173 @@ void SPS::hrd_parameters(BitStream &bitStream) {
 }
 
 int SPS::extractParameters(BitStream &bs) {
-  /* 读取profile_idc等等(4 bytes) */
-  profile_idc = bs.readUn(8); // 0x64
-  constraint_set0_flag = bs.readUn(1);
-  constraint_set1_flag = bs.readUn(1);
-  constraint_set2_flag = bs.readUn(1);
-  constraint_set3_flag = bs.readUn(1);
-  constraint_set4_flag = bs.readUn(1);
-  constraint_set5_flag = bs.readUn(1);
-  reserved_zero_2bits = bs.readUn(2);
-  level_idc = bs.readUn(8); // 0
-  seq_parameter_set_id = bs.readUE();
-  cout << "\tSPS ID:" << seq_parameter_set_id << endl;
-  cout << "\tlevel_idc:" << (int)level_idc << endl;
-  // 通过gdb断点到这里然后 "p /t {ssp._buf[1],profile_idc}"即可判断是否读取正确
-
-  switch (profile_idc) {
-  case 66:
-    cout << "\tprofile_idc:Baseline" << endl;
-    break;
-  case 77:
-    cout << "\tprofile_idc:Main" << endl;
-    break;
-  case 100:
-    cout << "\tprofile_idc:High" << endl;
-    break;
-  default:
-    break;
-  }
-
-  //constraint_set5_flag is specified as follows -> page 74
-  if ((profile_idc == 77 || profile_idc == 88 || profile_idc == 100) &&
-      constraint_set5_flag)
-    cout << "\t当前含有B Slice" << endl;
-
-  if (profile_idc == 100 || profile_idc == 110 || profile_idc == 122 ||
-      profile_idc == 244 || profile_idc == 44 || profile_idc == 83 ||
-      profile_idc == 86 || profile_idc == 118 || profile_idc == 128 ||
-      profile_idc == 138 || profile_idc == 139 || profile_idc == 134 ||
-      profile_idc == 135) {
-    chroma_format_idc = bs.readUE();
-    switch (chroma_format_idc) {
-    case 0:
-      cout << "\tchroma_format_idc:YUV400" << endl;
-      break;
-    case 1:
-      cout << "\tchroma_format_idc:YUV420" << endl;
-      break;
-    case 2:
-      cout << "\tchroma_format_idc:YUV422" << endl;
-      break;
-    case 3:
-      cout << "\tchroma_format_idc:YUB444" << endl;
-      separate_colour_plane_flag = bs.readU1();
-      break;
-    }
-
-    bit_depth_luma_minus8 = bs.readUE();
-    bit_depth_chroma_minus8 = bs.readUE();
-
-    qpprime_y_zero_transform_bypass_flag = bs.readU1();
-    seq_scaling_matrix_present_flag = bs.readU1();
-    cout << "\t编码器是否提供量化矩阵:" << seq_scaling_matrix_present_flag
-         << endl;
-
-    if (seq_scaling_matrix_present_flag) {
-      /* 读取编码器提供的特定量化矩阵 */
-      for (int i = 0; i < ((chroma_format_idc != 3) ? 8 : 12); i++) {
-        seq_scaling_list_present_flag[i] = bs.readU1();
-        if (seq_scaling_list_present_flag[i]) {
-          if (i <= 5)
-            scaling_list(bs, ScalingList4x4[i], 16,
-                         UseDefaultScalingMatrix4x4Flag[i]);
-          else
-            scaling_list(bs, ScalingList8x8[i - 6], 64,
-                         UseDefaultScalingMatrix8x8Flag[i - 6]);
-        }
-      }
-    }
-  }
-
-  /* 确定色度数组类型,YUV400,YUV420,YUV422,YUV444... 74 page */
-  ChromaArrayType = (separate_colour_plane_flag) ? 0 : chroma_format_idc;
-  /* 7.4.2.1.1 Sequence parameter set data semantics -> (7-3) */
-  BitDepthY = bit_depth_luma_minus8 + 8;
-  QpBdOffsetY = bit_depth_luma_minus8 * 6;
-  BitDepthC = bit_depth_chroma_minus8 + 8;
-  QpBdOffsetC = bit_depth_chroma_minus8 * 6;
-  cout << "\t亮度分量位深:" << BitDepthY << ",色度分量位深:" << BitDepthC
+  sps_video_parameter_set_id = bs.readUn(4);
+  cout << "\tVPS ID:" << sps_video_parameter_set_id << endl;
+  sps_max_sub_layers_minus1 = bs.readUn(3);
+  cout << "\t表示SPS适用的最大子层级数减1:" << sps_max_sub_layers_minus1
        << endl;
-  cout << "\t亮度分量Qp:" << QpBdOffsetY << ",色度分量Qp:" << QpBdOffsetC
+  sps_temporal_id_nesting_flag = bs.readUn(1);
+  cout << "\t指示在SPS的有效范围内，所有的NAL单元是否遵循时间ID嵌套的规则:"
+       << sps_temporal_id_nesting_flag << endl;
+  profile_tier_level(bs, 1, sps_max_sub_layers_minus1);
+
+  sps_seq_parameter_set_id = bs.readUE();
+  cout << "\tSPS ID:" << sps_seq_parameter_set_id << endl;
+  chroma_format_idc = bs.readUE();
+  //cout << "\t色度格式的指示器，如4:2:0，4:2:2等:" << chroma_format_idc << endl;
+  switch (chroma_format_idc) {
+  case 0:
+    cout << "\tchroma_format_idc:YUV400" << endl;
+    break;
+  case 1:
+    cout << "\tchroma_format_idc:YUV420" << endl;
+    break;
+  case 2:
+    cout << "\tchroma_format_idc:YUV422" << endl;
+    break;
+  case 3:
+    cout << "\tchroma_format_idc:YUB444" << endl;
+    separate_colour_plane_flag = bs.readU1();
+    cout << "\t若为1，则亮度和色度样本被分别处理和编码:"
+         << separate_colour_plane_flag << endl;
+    break;
+  }
+  pic_width_in_luma_samples = bs.readUE();
+  pic_height_in_luma_samples = bs.readUE();
+  cout << "\t图像大小，单位为亮度样本:" << pic_width_in_luma_samples << "x"
+       << pic_height_in_luma_samples << endl;
+  conformance_window_flag = bs.readU1();
+  cout << "\t表示是否裁剪图像边缘以符合显示要求:" << conformance_window_flag
+       << endl;
+  if (conformance_window_flag) {
+    conf_win_left_offset = bs.readUE();
+    conf_win_right_offset = bs.readUE();
+    conf_win_top_offset = bs.readUE();
+    conf_win_bottom_offset = bs.readUE();
+  }
+
+  bit_depth_luma_minus8 = bs.readUE();
+  cout << "\t分别表示亮度的位深减8:" << bit_depth_luma_minus8 << endl;
+  bit_depth_chroma_minus8 = bs.readUE();
+  cout << "\t分别表示色度的位深减8:" << bit_depth_chroma_minus8 << endl;
+  log2_max_pic_order_cnt_lsb_minus4 = bs.readUE();
+  cout << "\t表示解码顺序计数器的最大二进制位数减4:"
+       << log2_max_pic_order_cnt_lsb_minus4 << endl;
+  sps_sub_layer_ordering_info_present_flag = bs.readU1();
+  cout << "\t表示SPS是否为每个子层指定解码和输出缓冲需求:"
+       << sps_sub_layer_ordering_info_present_flag << endl;
+
+  int32_t n =
+      sps_sub_layer_ordering_info_present_flag ? 0 : sps_max_sub_layers_minus1;
+  for (int32_t i = n; i <= sps_max_sub_layers_minus1; i++) {
+    sps_max_dec_pic_buffering_minus1[i] = bs.readUE();
+    sps_max_num_reorder_pics[i] = bs.readUE();
+    sps_max_latency_increase_plus1[i] = bs.readUE();
+    cout << "\t分别定义解码缓冲需求、重排序需求和最大允许的延迟增加:"
+         << sps_max_dec_pic_buffering_minus1[i] << ","
+         << sps_max_num_reorder_pics[i] << ","
+         << sps_max_latency_increase_plus1[i] << endl;
+  }
+  log2_min_luma_coding_block_size_minus3 = bs.readUE();
+  cout << "\t编码的块大小:" << log2_min_luma_coding_block_size_minus3 << endl;
+  log2_diff_max_min_luma_coding_block_size = bs.readUE();
+  cout << "\t编码变换块大小:" << log2_diff_max_min_luma_coding_block_size
        << endl;
 
-  // 色度分量的采样宽度  (7-7)
-  RawMbBits = 256 * BitDepthY + 2 * MbWidthC * MbHeightC * BitDepthC;
+  int32_t MinCbLog2SizeY = log2_min_luma_coding_block_size_minus3 + 3;
+  int32_t CtbLog2SizeY =
+      MinCbLog2SizeY + log2_diff_max_min_luma_coding_block_size;
+  int32_t CtbSizeY = 1 << CtbLog2SizeY;
+  int32_t PicWidthInCtbsY = CEIL(pic_width_in_luma_samples / CtbSizeY);
+  int32_t PicHeightInCtbsY = CEIL(pic_height_in_luma_samples / CtbSizeY);
+  PicSizeInCtbsY = PicWidthInCtbsY * PicHeightInCtbsY;
 
-  log2_max_frame_num_minus4 = bs.readUE();
-  pic_order_cnt_type = bs.readUE();
-
-  int32_t *offset_for_ref_frame = nullptr;
-  if (pic_order_cnt_type == 0)
-    log2_max_pic_order_cnt_lsb_minus4 = bs.readUE();
-  else if (pic_order_cnt_type == 1) {
-    delta_pic_order_always_zero_flag = bs.readU1();
-    offset_for_non_ref_pic = bs.readSE();
-    offset_for_top_to_bottom_field = bs.readSE();
-    num_ref_frames_in_pic_order_cnt_cycle = bs.readUE();
-    if (num_ref_frames_in_pic_order_cnt_cycle != 0)
-      offset_for_ref_frame = new int32_t[num_ref_frames_in_pic_order_cnt_cycle];
-
-    for (int i = 0; i < (int)num_ref_frames_in_pic_order_cnt_cycle; i++)
-      offset_for_ref_frame[i] = bs.readSE();
+  log2_min_luma_transform_block_size_minus2 = bs.readUE();
+  log2_diff_max_min_luma_transform_block_size = bs.readUE();
+  max_transform_hierarchy_depth_inter = bs.readUE();
+  max_transform_hierarchy_depth_intra = bs.readUE();
+  cout << "\t编码变换的层次深度:" << max_transform_hierarchy_depth_intra
+       << endl;
+  scaling_list_enabled_flag = bs.readUn(1);
+  if (scaling_list_enabled_flag) {
+    sps_scaling_list_data_present_flag = bs.readUn(1);
+    cout << "\t指示是否使用量化缩放列表和是否在SPS中携带缩放列表数据:"
+         << scaling_list_enabled_flag << ","
+         << sps_scaling_list_data_present_flag << endl;
+    if (sps_scaling_list_data_present_flag) {
+      std::cout << "Into -> " << __FUNCTION__ << "():" << __LINE__ << std::endl;
+      //scaling_list_data();
+    }
   }
-
-  /* 计算最大帧号和最大图像顺序计数 低位 (7-10,7-11)*/
-  MaxFrameNum = pow(log2_max_frame_num_minus4 + 4, 2);
-  MaxPicOrderCntLsb = pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
-
-  /* 当 max_num_ref_frames 等于 0 时，slice_type 应等于 I或SI Slice -> page 87 */
-  max_num_ref_frames = bs.readUE();
-  cout << "\t解码器需要支持的最大参考帧数:" << max_num_ref_frames << endl;
-  gaps_in_frame_num_value_allowed_flag = bs.readU1();
-  pic_width_in_mbs_minus1 = bs.readUE();
-  pic_height_in_map_units_minus1 = bs.readUE();
-
-  frame_mbs_only_flag = bs.readU1();
-  if (!frame_mbs_only_flag) {
-    mb_adaptive_frame_field_flag = bs.readU1();
-    cout << "\t宏块自适应帧/场编码(MBAFF):" << mb_adaptive_frame_field_flag
+  amp_enabled_flag = bs.readUn(1);
+  cout << "\t异构模式分割（AMP）的启用标志:" << amp_enabled_flag << endl;
+  sample_adaptive_offset_enabled_flag = bs.readUn(1);
+  cout << "\t样本自适应偏移（SAO）的启用标志，用于改进去块效应:"
+       << sample_adaptive_offset_enabled_flag << endl;
+  pcm_enabled_flag = bs.readUn(1);
+  cout << "\tPCM（脉冲编码调制）的启用标志，用于无损编码块:" << pcm_enabled_flag
+       << endl;
+  if (pcm_enabled_flag) {
+    pcm_sample_bit_depth_luma_minus1 = bs.readUn(4);
+    pcm_sample_bit_depth_chroma_minus1 = bs.readUn(4);
+    cout << "\t定义PCM编码的亮度和色度位深减1:"
+         << pcm_sample_bit_depth_luma_minus1 << ","
+         << pcm_sample_bit_depth_chroma_minus1 << endl;
+    log2_min_pcm_luma_coding_block_size_minus3 = bs.readUE();
+    log2_diff_max_min_pcm_luma_coding_block_size = bs.readUE();
+    pcm_loop_filter_disabled_flag = bs.readUn(1);
+    cout << "\t指示是否禁用循环滤波器:" << pcm_loop_filter_disabled_flag
          << endl;
   }
-  cout << "\t当前存在场宏块:" << !frame_mbs_only_flag << endl;
-
-  direct_8x8_inference_flag = bs.readU1();
-  frame_cropping_flag = bs.readU1();
-  if (frame_cropping_flag) {
-    frame_crop_left_offset = bs.readUE();
-    cout << "\t";
-    cout << "帧裁剪左偏移量:" << frame_crop_left_offset;
-    frame_crop_right_offset = bs.readUE();
-    cout << ",帧裁剪右偏移量:" << frame_crop_left_offset;
-    frame_crop_top_offset = bs.readUE();
-    cout << ",帧裁剪顶偏移量:" << frame_crop_left_offset;
-    frame_crop_bottom_offset = bs.readUE();
-    cout << ",帧裁剪底偏移量:" << frame_crop_left_offset;
-    cout << endl;
+  num_short_term_ref_pic_sets = bs.readUE();
+  cout << "\t短期参考图片集的数量:" << num_short_term_ref_pic_sets << endl;
+  for (int32_t i = 0; i < num_short_term_ref_pic_sets; i++)
+    st_ref_pic_set(bs, i);
+  long_term_ref_pics_present_flag = bs.readUn(1);
+  cout << "\t指示是否使用长期参考图像:" << long_term_ref_pics_present_flag
+       << endl;
+  if (long_term_ref_pics_present_flag) {
+    num_long_term_ref_pics_sps = bs.readUE();
+    cout << "\t长期参考图像的数量:" << num_long_term_ref_pics_sps << endl;
+    for (int32_t i = 0; i < num_long_term_ref_pics_sps; i++) {
+      lt_ref_pic_poc_lsb_sps[i] =
+          bs.readUn(log2_max_pic_order_cnt_lsb_minus4 + 4);
+      used_by_curr_pic_lt_sps_flag[i] = bs.readUn(1);
+      cout << "\t分别定义长期参考图像的POC LSB和其使用状态:"
+           << lt_ref_pic_poc_lsb_sps << "," << used_by_curr_pic_lt_sps_flag
+           << endl;
+    }
   }
+  sps_temporal_mvp_enabled_flag = bs.readUn(1);
+  cout << "\t时间多视点预测的启用标志:" << sps_temporal_mvp_enabled_flag
+       << endl;
+  strong_intra_smoothing_enabled_flag = bs.readUn(1);
+  cout << "\t强内部平滑的启用标志:" << strong_intra_smoothing_enabled_flag
+       << endl;
 
-  vui_parameters_present_flag = bs.readU1();
-  cout << "\t存在视频用户界面(VUI)参数:" << vui_parameters_present_flag << endl;
-
+  vui_parameters_present_flag = bs.readUn(1);
+  cout << "\t指示视频可用性信息（VUI）是否存在:" << vui_parameters_present_flag
+       << endl;
   if (vui_parameters_present_flag) vui_parameters(bs);
-
-  // 宏块单位的图像宽度 = pic_width_in_mbs_minus1 + 1 (7-13)
-  PicWidthInMbs = pic_width_in_mbs_minus1 + 1;
-  // 宏块单位的图像高度 = pic_height_in_map_units_minus1 + 1
-  PicHeightInMapUnits = pic_height_in_map_units_minus1 + 1;
-  // 宏块单位的图像大小 = 宽 * 高
-  PicSizeInMapUnits = PicWidthInMbs * PicHeightInMapUnits;
-
-  //(7-18)
-  FrameHeightInMbs = (2 - frame_mbs_only_flag) * PicHeightInMapUnits;
-
-  /* 6.2 Source, decoded, and output picture formats */
-  derived_SubWidthC_and_SubHeightC();
-  return 0;
-}
-
-// 6.2 Source, decoded, and output picture formats
-int SPS::derived_SubWidthC_and_SubHeightC() {
-  int32_t _chroma_format_idc = chroma_format_idc;
-  //Table 6-1 – SubWidthC, and SubHeightC values derived from chroma_format_idc and separate_colour_plane_flag
-  /* 均无子宽高 */
-  if (chroma_format_idc == 0 || separate_colour_plane_flag)
-    MbWidthC = MbHeightC = 0;
-  else {
-    if (chroma_format_idc == 3 && separate_colour_plane_flag)
-      /* YUV444 且每个分量都单独编码 */
-      _chroma_format_idc = 4;
-    //不单独编码分量，YUV420,YUV422,YUV444的情况
-    Chroma_Format = chroma_format_idcs[_chroma_format_idc].Chroma_Format;
-    SubWidthC = chroma_format_idcs[_chroma_format_idc].SubWidthC;
-    SubHeightC = chroma_format_idcs[_chroma_format_idc].SubHeightC;
-    MbWidthC = 16 / SubWidthC;   //(6-1)
-    MbHeightC = 16 / SubHeightC; //(6-2)
+  sps_extension_present_flag = bs.readUn(1);
+  cout << "\t各种SPS扩展的启用标志:" << sps_extension_present_flag << endl;
+  if (sps_extension_present_flag) {
+    sps_range_extension_flag = bs.readUn(1);
+    sps_multilayer_extension_flag = bs.readUn(1);
+    sps_3d_extension_flag = bs.readUn(1);
+    sps_scc_extension_flag = bs.readUn(1);
+    sps_extension_4bits = bs.readUn(4);
   }
-  return 0;
-}
+  //if (sps_range_extension_flag) sps_range_extension();
+  //if (sps_multilayer_extension_flag) sps_multilayer_extension();
+  //if (sps_3d_extension_flag) sps_3d_extension();
+  //if (sps_scc_extension_flag) sps_scc_extension();
+  if (sps_extension_4bits)
+    while (bs.more_rbsp_data())
+      int32_t sps_extension_data_flag = bs.readUn(1);
+  cout << "\tSPS扩展和扩展数据的存在标志:" << sps_extension_4bits << ","
+       << sps_extension_data_flag << endl;
+  bs.rbsp_trailing_bits();
 
-// 7.3.2.1.2 Sequence parameter set extension RBSP syntax
-int SPS::seq_parameter_set_extension_rbsp() {
-  /* TODO YangJing  <24-09-08 23:19:32> */
-  return 0;
-}
-
-// 7.3.2.1.3 Subset sequence parameter set RBSP syntax
-int subset_seq_parameter_set_rbsp() {
-  /* TODO YangJing  <24-09-08 23:20:38> */
   return 0;
 }

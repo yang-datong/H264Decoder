@@ -37,3 +37,6 @@ int inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
     const int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag);
 int inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
     int32_t values[64], int32_t (&c)[8][8], int32_t field_scan_flag);
+
+int profile_tier_level(BitStream &bs, bool profilePresentFlag,
+                       int32_t maxNumSubLayersMinus1);

@@ -118,3 +118,6 @@ ffmpeg -i input.mp4 -c:v libx264 -x264opts keyint=50:scenecut=0 -force_key_frame
 
 
 帧、场：逐行扫描与隔行扫描
+
+
+有个地方我记得写了很多else if ，其实就是else ，后面找一下在哪里 TODO  <24-10-18 08:50:45, YangJing> (相邻地址推导处）

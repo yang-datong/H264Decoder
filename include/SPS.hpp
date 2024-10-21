@@ -7,6 +7,7 @@
 #include <cstdint>
 
 #define Extended_SAR 255
+#define MAX_VPS_COUNT 32
 #define MAX_SPS_COUNT 32
 #define MAX_OFFSET_REF_FRAME_COUNT 256
 
@@ -14,6 +15,100 @@ class SPS {
  public:
   int extractParameters(BitStream &bitStream);
 
+ public:
+  // 引用的视频参数集（VPS）的ID，确保SPS能够与正确的VPS关联。
+  int32_t sps_video_parameter_set_id = 0;
+  // 表示SPS适用的最大子层级数减1。
+  int32_t sps_max_sub_layers_minus1 = 0;
+  // 指示在SPS的有效范围内，所有的NAL单元是否遵循时间ID嵌套的规则。
+  int32_t sps_temporal_id_nesting_flag = 0;
+  int32_t sps_seq_parameter_set_id = 0;
+  // chroma_format_idc: 色度格式的指示器，如4:2:0，4:2:2等。
+  int32_t chroma_format_idc = 0;
+  // 若为1，则亮度和色度样本被分别处理和编码。
+  int32_t separate_colour_plane_flag = 0;
+
+  // 分别表示图像的宽度和高度，单位为亮度样本。
+  int32_t pic_width_in_luma_samples = 0;
+  int32_t pic_height_in_luma_samples = 0;
+  // 表示是否裁剪图像边缘以符合显示要求。
+  int32_t conformance_window_flag = 0;
+
+  int32_t conf_win_left_offset = 0;
+  int32_t conf_win_right_offset = 0;
+  int32_t conf_win_top_offset = 0;
+  int32_t conf_win_bottom_offset = 0;
+
+  // 分别表示亮度和色度的位深减8。
+  int32_t bit_depth_luma_minus8 = 0;
+  int32_t bit_depth_chroma_minus8 = 0;
+  // 表示解码顺序计数器的最大二进制位数减4。
+  int32_t log2_max_pic_order_cnt_lsb_minus4 = 0;
+  // 表示SPS是否为每个子层指定解码和输出缓冲需求。
+  int32_t sps_sub_layer_ordering_info_present_flag = 0;
+
+  // 分别定义解码缓冲需求、重排序需求和最大允许的延迟增加。
+  int32_t sps_max_dec_pic_buffering_minus1[32] = {0};
+  int32_t sps_max_num_reorder_pics[32] = {0};
+  int32_t sps_max_latency_increase_plus1[32] = {0};
+
+  // 这些参数定义了编码的块大小、变换块大小和变换的层次深度。
+  int32_t log2_min_luma_coding_block_size_minus3 = 0;
+  int32_t log2_diff_max_min_luma_coding_block_size = 0;
+  int32_t log2_min_luma_transform_block_size_minus2 = 0;
+  int32_t log2_diff_max_min_luma_transform_block_size = 0;
+  int32_t max_transform_hierarchy_depth_inter = 0;
+  int32_t max_transform_hierarchy_depth_intra = 0;
+
+  int32_t PicSizeInCtbsY = 0;
+
+  // 指示是否使用量化缩放列表和是否在SPS中携带缩放列表数据。
+  int32_t scaling_list_enabled_flag = 0;
+  int32_t sps_scaling_list_data_present_flag = 0;
+
+  // 异构模式分割（AMP）的启用标志。
+  int32_t amp_enabled_flag = 0;
+  // 样本自适应偏移（SAO）的启用标志，用于改进去块效应。
+  int32_t sample_adaptive_offset_enabled_flag = 0;
+  // PCM（脉冲编码调制）的启用标志，用于无损编码块。
+  int32_t pcm_enabled_flag = 0;
+  // 定义PCM编码的亮度和色度位深减1。
+  int32_t pcm_sample_bit_depth_luma_minus1 = 0;
+  int32_t pcm_sample_bit_depth_chroma_minus1 = 0;
+  int32_t log2_min_pcm_luma_coding_block_size_minus3 = 0;
+  int32_t log2_diff_max_min_pcm_luma_coding_block_size = 0;
+  // 指示是否禁用循环滤波器。
+  int32_t pcm_loop_filter_disabled_flag = 0;
+  // 短期参考图片集的数量。
+  int32_t num_short_term_ref_pic_sets = 0;
+  // 指示是否使用长期参考图像。
+  int32_t long_term_ref_pics_present_flag = 0;
+  // 长期参考图像的数量。
+  int32_t num_long_term_ref_pics_sps = 0;
+
+  // 分别定义长期参考图像的POC LSB和其使用状态。
+  int32_t lt_ref_pic_poc_lsb_sps[32] = {0};
+  int32_t used_by_curr_pic_lt_sps_flag[32] = {0};
+
+  // 时间多视点预测的启用标志。
+  int32_t sps_temporal_mvp_enabled_flag = 0;
+  int32_t strong_intra_smoothing_enabled_flag = 0;
+
+  // 强内部平滑的启用标志。
+  int32_t vui_parameters_present_flag = 0;
+
+  // 指示视频可用性信息（VUI）是否存在。
+  int32_t sps_extension_present_flag = 0;
+
+  // SPS扩展和扩展数据的存在标志。
+  int32_t sps_range_extension_flag = 0;
+  int32_t sps_multilayer_extension_flag = 0;
+  int32_t sps_3d_extension_flag = 0;
+  int32_t sps_scc_extension_flag = 0;
+  int32_t sps_extension_4bits = 0;
+  int32_t sps_extension_data_flag = 0;
+
+  //--------------------- Old ------------------
  public:
   /* 表示编码配置文件 */
   uint8_t profile_idc = 0; // 0x64
@@ -25,8 +120,6 @@ class SPS {
 
   /*色度格式[0-3]。指定了亮度和色度分量的采样方式,0:none,1:420,2:422,3:444*/
   /* 当 chroma_format_idc 不存在时，应推断其等于 1（4:2:0 色度格式）。page 74 */
-  uint32_t chroma_format_idc = 1;
-
   uint8_t constraint_set0_flag = 0;
   uint8_t constraint_set1_flag = 0;
   uint8_t constraint_set2_flag = 0;
@@ -34,8 +127,6 @@ class SPS {
   uint8_t constraint_set4_flag = 0;
   uint8_t constraint_set5_flag = 0;
   uint8_t reserved_zero_2bits = 0;
-  /* 用于计算帧号的最大值 */
-  uint32_t log2_max_pic_order_cnt_lsb_minus4 = 0;
   /* 最大帧号减去 4 的对数 */
   uint32_t log2_max_frame_num_minus4 = 0;
   /* 用于指定图像顺序计数(POC)的方法：
@@ -61,12 +152,6 @@ class SPS {
    * 等于 0 指定颜色分量不单独编码（如果为0,YUV400,YUV420,YUV422,YUB444均有可能）;
    * 当separate_colour_plane_flag不存在时，应推断其等于0。
    * 等于1时，主编码图像由三个单独的分量组成，每个分量由一个颜色平面（Y、Cb或Cr）的编码样本组成。 ），每个都使用单色编码语法。在这种情况下，每个颜色平面都与特定的 color_plane_id 值相关联。 */
-  bool separate_colour_plane_flag = 0;
-
-  /* 亮度分量的比特深度减去 8 */
-  uint32_t bit_depth_luma_minus8 = 0;
-  /* 色度分量的比特深度减去 8 */
-  uint32_t bit_depth_chroma_minus8 = 0;
   /* 图像是否仅包含帧（否则为场编码） */
 
   // 上面bit_depth_luma_minus8.bit_depth_chroma_minus8计算还原的结果
@@ -148,9 +233,6 @@ class SPS {
   uint32_t frame_crop_top_offset = 0;
   uint32_t frame_crop_bottom_offset = 0;
 
-  /* 是否存在视频用户界面 (VUI) 参数 */
-  bool vui_parameters_present_flag = 0;
-
   /* 缩放矩阵 */
   uint32_t ScalingList4x4[6][16];
   uint32_t ScalingList8x8[6][64];
@@ -230,23 +312,49 @@ class SPS {
   /* 指示是否使用低延迟HRD */
   bool low_delay_hrd_flag = 0;
   /* 指示是否存在比特流限制 */
-  bool bitstream_restriction_flag = 0;
+  //bool bitstream_restriction_flag = 0;
   /* 指示是否允许运动矢量跨越图像边界 */
-  bool motion_vectors_over_pic_boundaries_flag = 0;
+  //bool motion_vectors_over_pic_boundaries_flag = 0;
   /* 每帧最大字节数的分母 */
-  uint32_t max_bytes_per_pic_denom = 0;
+  //uint32_t max_bytes_per_pic_denom = 0;
   /* 每个宏块最大比特数的分母 */
   uint32_t max_bits_per_mb_denom = 0;
   /* 水平运动矢量的最大长度的对数值 */
-  uint32_t log2_max_mv_length_horizontal = 0;
+  //uint32_t log2_max_mv_length_horizontal = 0;
   /* 垂直运动矢量的最大长度的对数值 */
-  uint32_t log2_max_mv_length_vertical = 0;
+  //uint32_t log2_max_mv_length_vertical = 0;
   /* 最大解码帧缓冲区大小 */
   uint32_t max_dec_frame_buffering = 0;
+
+  // H.265
+  int32_t neutral_chroma_indication_flag= 0;
+  int32_t field_seq_flag= 0;
+  int32_t frame_field_info_present_flag= 0;
+  int32_t default_display_window_flag= 0;
+  int32_t def_disp_win_left_offset= 0;
+  int32_t def_disp_win_right_offset= 0;
+  int32_t def_disp_win_top_offset= 0;
+  int32_t def_disp_win_bottom_offset= 0;
+  int32_t vui_timing_info_present_flag= 0;
+  int32_t vui_num_units_in_tick= 0;
+  int32_t vui_time_scale= 0;
+  int32_t vui_poc_proportional_to_timing_flag= 0;
+  int32_t vui_num_ticks_poc_diff_one_minus1= 0;
+  int32_t vui_hrd_parameters_present_flag= 0;
+  int32_t bitstream_restriction_flag= 0;
+  int32_t tiles_fixed_structure_flag= 0;
+  int32_t motion_vectors_over_pic_boundaries_flag= 0;
+  int32_t restricted_ref_pic_lists_flag= 0;
+  int32_t min_spatial_segmentation_idc= 0;
+  int32_t max_bytes_per_pic_denom= 0;
+  int32_t max_bits_per_min_cu_denom= 0;
+  int32_t log2_max_mv_length_horizontal= 0;
+  int32_t log2_max_mv_length_vertical= 0;
 
  private:
   void vui_parameters(BitStream &bitStream);
   void hrd_parameters(BitStream &bitStream);
+  int st_ref_pic_set(BitStream &bs, int32_t stRpsIdx);
   int seq_parameter_set_extension_rbsp();
   int derived_SubWidthC_and_SubHeightC();
 };

@@ -5,6 +5,7 @@
 #include "PPS.hpp"
 #include "SPS.hpp"
 #include "Type.hpp"
+#include "VPS.hpp"
 
 class Frame;
 class GOP {
@@ -13,6 +14,8 @@ class GOP {
   ~GOP();
 
  public:
+  VPS m_vpss[MAX_VPS_COUNT]; // sps[32]
+  uint32_t last_vps_id = 0;
   //7.4.1.2.1 Order of sequence and picture parameter set RBSPs and their activation
   SPS m_spss[MAX_SPS_COUNT]; // sps[32]
   /* 最新得到的SPS ID */

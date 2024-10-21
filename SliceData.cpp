@@ -17,7 +17,7 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
   bs = &bitStream;
   m_sps = &sps;
   m_pps = &pps;
-  MbaffFrameFlag = header->MbaffFrameFlag;
+  //MbaffFrameFlag = header->MbaffFrameFlag;
 
   /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
   initCABAC();
@@ -30,72 +30,26 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
       header->first_mb_in_slice * (1 + MbaffFrameFlag);
 
   /* 8.2 Slice decoding process */
-  slice_decoding_process();
+  //slice_decoding_process();
 
   //----------------------- 开始对Slice分割为MacroBlock进行处理 ----------------------------
-  // TODO: 如果是单帧=单Slice属于同一个Slice Gruop的情况，那么这里就是遍历Slice的每个宏块，反之，不清楚，没遇到过这种情况
-  bool moreDataFlag = true;
-  int32_t prevMbSkipped = 0;
   do {
-    /* 1. 对于P,B帧，先解码出mb_skip_flag，判断是否跳过对MacroBlock的处理（P、B帧中存在不需要显式解码类型的宏块） */
-    if (header->slice_type != SLICE_I && header->slice_type != SLICE_SI) {
-      if (m_pps->entropy_coding_mode_flag == 0) {
-        /* CAVLC熵解码：连续跳过的宏块数量，同时在宏块层处理跳过的宏块，这里包括了解码跳过的宏块 */
-        process_mb_skip_run(prevMbSkipped);
-        if (mb_skip_run > 0) moreDataFlag = bs->more_rbsp_data();
-      } else {
-        /* CABAC熵解码：单个宏块是否被跳过，同时在宏块层处理跳过的宏块，这里包括了解码跳过的宏块 */
-        process_mb_skip_flag(prevMbSkipped);
-        moreDataFlag = !mb_skip_flag;
-      }
+    coding_tree_unit();
+    end_of_slice_segment_flag ae(v);
+    CtbAddrInTs++;
+    CtbAddrInRs = CtbAddrTsToRs[CtbAddrInTs];
+    if (!end_of_slice_segment_flag &&
+        ((tiles_enabled_flag &&
+          TileId[CtbAddrInTs] != TileId[CtbAddrInTs - 1]) ||
+         (entropy_coding_sync_enabled_flag &&
+          (CtbAddrInRs % PicWidthInCtbsY == 0 ||
+           TileId[CtbAddrInTs] != TileId[CtbAddrRsToTs[CtbAddrInRs - 1]])))) {
+      end_of_subset_one_bit /* equal to 1 */ ae(v);
+      byte_alignment();
     }
-
-    /* 2. 如果当前宏块未执行跳过处理，则进一步对MacroBlock的处理 */
-    if (moreDataFlag) {
-      /* 1. 在MBAFF下，且当前宏块为宏块对中的首宏块，则读取是否在宏块级别对帧进行场间隔解码;
-         2. 在MBAFF下，且当前宏块为宏块对中的次宏块，且上一个宏块被跳过，则读取是否在宏块级别对帧进行场间隔解码;
-      解释一下2，前宏块（首宏块）被标记为“跳过”，即编码器认为该宏块的内容与之前的宏块或参考帧的相应部分相似，因此不对该宏块进行"显式编码"，次宏块仍需要通过引用首宏块的信息来重构内容。*/
-      if (MbaffFrameFlag &&
-          (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
-        process_mb_field_decoding_flag(m_pps->entropy_coding_mode_flag);
-      //NOTE: 次宏块没有被标记跳过，实际上该次宏块已经在上次迭代中，通过首宏块一并处理过了
-
-      /* 在宏块层解码帧内、帧间所需要的必须信息 */
-      do_macroblock_layer();
-      /* 帧内预测、帧间预测、解码宏块 */
-      decoding_process();
-    }
-
-    //更新和管理循环条件
-    if (!m_pps->entropy_coding_mode_flag)
-      moreDataFlag = bs->more_rbsp_data();
-    else {
-      /* 对于P帧和B帧，更新prevMbSkipped为当前宏块的跳过标志Mb_skip_flag，以便下一个宏块处理时参考 */
-      if (header->slice_type != SLICE_I && header->slice_type != SLICE_SI)
-        prevMbSkipped = mb_skip_flag;
-
-      /* MBAFF模式下，若当前是首宏块，当在奇数Slice中，最后一行作为首宏块处理，即使已经到达了Slice末尾，也需要与一个虚拟的底宏块组成宏块对进行处理 */
-      if (MbaffFrameFlag && CurrMbAddr % 2 == 0)
-        moreDataFlag = true;
-      else {
-        /* 判断是否到达Slice的末尾 */
-        process_end_of_slice_flag(end_of_slice_flag);
-        moreDataFlag = !end_of_slice_flag;
-      }
-    }
-
-    //MacroBlock &mb = pic->m_mbs[pic->CurrMbAddr];
-    //if (IS_INTRA_Prediction_Mode(mb.m_mb_pred_mode)) {
-    //  string mb_type = MacroBlockNmae(mb.m_name_of_mb_type);
-    //  string mb_pred_mode = MacroBlockPredMode(mb.m_mb_pred_mode);
-    //  cout << "CurrMbAddr:[" << (CurrMbAddr / header->PicWidthInMbs) << ","
-    //       << (CurrMbAddr % header->PicWidthInMbs) << "], mb_type:" << mb_type
-    //       << ", pred_mode:" << mb_pred_mode << endl;
-    //}
-
     /* 计算下一个宏块的地址 */
     CurrMbAddr = NextMbAddress(CurrMbAddr, header);
-  } while (moreDataFlag);
+  } while (!end_of_slice_segment_flag);
   slice_number++;
   return 0;
 }
@@ -119,6 +73,564 @@ int SliceData::initCABAC() {
                                    header->cabac_init_idc, header->SliceQPY);
   // CABAC初始化解码引擎
   cabac->init_of_decoding_engine();
+  return 0;
+}
+
+int coding_tree_unit() {
+  int32_t xCtb = (CtbAddrInRs % PicWidthInCtbsY) << CtbLog2SizeY;
+  int32_t yCtb = (CtbAddrInRs / PicWidthInCtbsY) << CtbLog2SizeY;
+  if (slice_sao_luma_flag || slice_sao_chroma_flag)
+    sao(xCtb >> CtbLog2SizeY, yCtb >> CtbLog2SizeY);
+  coding_quadtree(xCtb, yCtb, CtbLog2SizeY, 0);
+  return 0;
+}
+
+int sao(int32_t rx, int32_t ry) {
+  if (rx > 0) {
+    leftCtbInSliceSeg = CtbAddrInRs > SliceAddrRs;
+    leftCtbInTile =
+        (TileId[CtbAddrInTs] == TileId[CtbAddrRsToTs[CtbAddrInRs - 1]]);
+    if (leftCtbInSliceSeg && leftCtbInTile) sao_merge_left_flag = ae(v);
+  }
+  if (ry > 0 && !sao_merge_left_flag) {
+    upCtbInSliceSeg =
+        (CtbAddrInRs - PicWidthInCtbsY) >= SliceAddrRs upCtbInTile =
+            TileId[CtbAddrInTs] ==
+            TileId[CtbAddrRsToTs[CtbAddrInRs - PicWidthInCtbsY]];
+    if (upCtbInSliceSeg && upCtbInTile) sao_merge_up_flag = ae(v);
+  }
+  if (!sao_merge_up_flag && !sao_merge_left_flag)
+    for (cIdx = 0; cIdx < (ChromaArrayType != 0 ? 3 : 1); cIdx++)
+      if ((slice_sao_luma_flag && cIdx == 0) ||
+          (slice_sao_chroma_flag && cIdx > 0)) {
+        if (cIdx == 0)
+          sao_type_idx_luma = ae(v);
+        else if (cIdx == 1)
+          sao_type_idx_chroma = ae(v);
+        if (SaoTypeIdx[cIdx][rx][ry] != 0) {
+          for (i = 0; i < 4; i++)
+            sao_offset_abs[cIdx][rx][ry][i] = ae(v);
+          if (SaoTypeIdx[cIdx][rx][ry] == 1) {
+            for (i = 0; i < 4; i++)
+              if (sao_offset_abs[cIdx][rx][ry][i] != 0)
+                sao_offset_sign[cIdx][rx][ry][i] = ae(v);
+            sao_band_position[cIdx][rx][ry] = ae(v);
+          } else {
+            if (cIdx == 0) sao_eo_class_luma = ae(v);
+            if (cIdx == 1) sao_eo_class_chroma = ae(v);
+          }
+        }
+      }
+  return 0;
+}
+
+int coding_quadtree(x0, y0, log2CbSize, cqtDepth) {
+  if (x0 + (1 << log2CbSize) <= pic_width_in_luma_samples &&
+      y0 + (1 << log2CbSize) <= pic_height_in_luma_samples &&
+      log2CbSize > MinCbLog2SizeY)
+    split_cu_flag[x0][y0] = ae(v);
+  if (cu_qp_delta_enabled_flag && log2CbSize >= Log2MinCuQpDeltaSize) {
+    IsCuQpDeltaCoded = 0, CuQpDeltaVal = 0;
+  }
+  if (cu_chroma_qp_offset_enabled_flag &&
+      log2CbSize >= Log2MinCuChromaQpOffsetSize)
+    IsCuChromaQpOffsetCoded = 0;
+  if (split_cu_flag[x0][y0]) {
+    x1 = x0 + (1 << (log2CbSize - 1));
+    y1 = y0 + (1 << (log2CbSize - 1));
+    coding_quadtree(x0, y0, log2CbSize - 1, cqtDepth + 1);
+    if (x1 < pic_width_in_luma_samples)
+      coding_quadtree(x1, y0, log2CbSize - 1, cqtDepth + 1);
+    if (y1 < pic_height_in_luma_samples)
+      coding_quadtree(x0, y1, log2CbSize - 1, cqtDepth + 1);
+    if (x1 < pic_width_in_luma_samples && y1 < pic_height_in_luma_samples)
+      coding_quadtree(x1, y1, log2CbSize - 1, cqtDepth + 1);
+  } else
+    coding_unit(x0, y0, log2CbSize);
+}
+
+int coding_unit(x0, y0, log2CbSize) {
+  if (transquant_bypass_enabled_flag) cu_transquant_bypass_flag = ae(v);
+  if (slice_type != I) cu_skip_flag[x0][y0] = ae(v);
+  nCbS = (1 << log2CbSize) if (cu_skip_flag[x0][y0])
+      prediction_unit(x0, y0, nCbS, nCbS);
+  else {
+    if (slice_type != I) pred_mode_flag = ae(v);
+    if (palette_mode_enabled_flag && CuPredMode[x0][y0] == MODE_INTRA &&
+        log2CbSize <= MaxTbLog2SizeY)
+      palette_mode_flag[x0][y0] = ae(v);
+    if (palette_mode_flag[x0][y0])
+      palette_coding(x0, y0, nCbS);
+    else {
+      if (CuPredMode[x0][y0] != MODE_INTRA || log2CbSize == MinCbLog2SizeY)
+        part_mode = ae(v);
+      if (CuPredMode[x0][y0] == MODE_INTRA) {
+        if (PartMode == PART_2Nx2N && pcm_enabled_flag &&
+            log2CbSize >= Log2MinIpcmCbSizeY &&
+            log2CbSize <= Log2MaxIpcmCbSizeY)
+          pcm_flag[x0][y0] = ae(v);
+        if (pcm_flag[x0][y0]) {
+          while (!byte_aligned())
+            pcm_alignment_zero_bit f(1);
+          pcm_sample(x0, y0, log2CbSize);
+        } else {
+          pbOffset = (PartMode == PART_NxN) ? (nCbS / 2) : nCbS;
+          for (j = 0; j < nCbS; j = j + pbOffset)
+            for (i = 0; i < nCbS; i = i + pbOffset)
+              prev_intra_luma_pred_flag[x0 + i][y0 + j] = ae(v);
+          for (j = 0; j < nCbS; j = j + pbOffset)
+            for (i = 0; i < nCbS; i = i + pbOffset)
+              if (prev_intra_luma_pred_flag[x0 + i][y0 + j])
+                mpm_idx[x0 + i][y0 + j] = ae(v);
+              else
+                rem_intra_luma_pred_mode[x0 + i][y0 + j] = ae(v);
+          if (ChromaArrayType == 3)
+            for (j = 0; j < nCbS; j = j + pbOffset)
+              for (i = 0; i < nCbS; i = i + pbOffset)
+                intra_chroma_pred_mode[x0 + i][y0 + j] = ae(v);
+          else if (ChromaArrayType != 0)
+            intra_chroma_pred_mode[x0][y0] = ae(v);
+        }
+      } else {
+        if (PartMode == PART_2Nx2N)
+          prediction_unit(x0, y0, nCbS, nCbS);
+        else if (PartMode == PART_2NxN) {
+          prediction_unit(x0, y0, nCbS, nCbS / 2);
+          prediction_unit(x0, y0 + (nCbS / 2), nCbS, nCbS / 2);
+        } else if (PartMode == PART_Nx2N) {
+          prediction_unit(x0, y0, nCbS / 2, nCbS);
+          prediction_unit(x0 + (nCbS / 2), y0, nCbS / 2, nCbS);
+        } else if (PartMode == PART_2NxnU) {
+          prediction_unit(x0, y0, nCbS, nCbS / 4);
+          prediction_unit(x0, y0 + (nCbS / 4), nCbS, nCbS * 3 / 4);
+        } else if (PartMode == PART_2NxnD) {
+          prediction_unit(x0, y0, nCbS, nCbS * 3 / 4);
+          prediction_unit(x0, y0 + (nCbS * 3 / 4), nCbS, nCbS / 4);
+        } else if (PartMode == PART_nLx2N) {
+          prediction_unit(x0, y0, nCbS / 4, nCbS);
+          prediction_unit(x0 + (nCbS / 4), y0, nCbS * 3 / 4, nCbS);
+        } else if (PartMode == PART_nRx2N) {
+          prediction_unit(x0, y0, nCbS * 3 / 4, nCbS);
+          prediction_unit(x0 + (nCbS * 3 / 4), y0, nCbS / 4, nCbS);
+        } else { /* PART_NxN */
+          prediction_unit(x0, y0, nCbS / 2, nCbS / 2);
+          prediction_unit(x0 + (nCbS / 2), y0, nCbS / 2, nCbS / 2);
+          prediction_unit(x0, y0 + (nCbS / 2), nCbS / 2, nCbS / 2);
+          prediction_unit(x0 + (nCbS / 2), y0 + (nCbS / 2), nCbS / 2, nCbS / 2);
+        }
+      }
+      if (!pcm_flag[x0][y0]) {
+        if (CuPredMode[x0][y0] != MODE_INTRA &&
+            !(PartMode == PART_2Nx2N && merge_flag[x0][y0]))
+          rqt_root_cbf = ae(v);
+        if (rqt_root_cbf) {
+          MaxTrafoDepth =
+              (CuPredMode[x0][y0] == MODE_INTRA
+                   ? (max_transform_hierarchy_depth_intra + IntraSplitFlag)
+                   : max_transform_hierarchy_depth_inter);
+          transform_tree(x0, y0, x0, y0, log2CbSize, 0, 0);
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+int prediction_unit(x0, y0, nPbW, nPbH) {
+  if (cu_skip_flag[x0][y0]) {
+    if (MaxNumMergeCand > 1) merge_idx[x0][y0] = ae(v);
+  } else { /* MODE_INTER */
+    merge_flag[x0][y0] = ae(v);
+    if (merge_flag[x0][y0]) {
+      if (MaxNumMergeCand > 1) merge_idx[x0][y0] = ae(v);
+    } else {
+      if (slice_type == B) inter_pred_idc[x0][y0] = ae(v);
+      if (inter_pred_idc[x0][y0] != PRED_L1) {
+        if (num_ref_idx_l0_active_minus1 > 0) ref_idx_l0[x0][y0] = ae(v);
+        mvd_coding(x0, y0, 0);
+        mvp_l0_flag[x0][y0] = ae(v);
+      }
+      if (inter_pred_idc[x0][y0] != PRED_L0) {
+        if (num_ref_idx_l1_active_minus1 > 0) ref_idx_l1[x0][y0] = ae(v);
+        if (mvd_l1_zero_flag && inter_pred_idc[x0][y0] == PRED_BI) {
+          MvdL1[x0][y0][0] = 0, MvdL1[x0][y0][1] = 0;
+        } else
+          mvd_coding(x0, y0, 1);
+        mvp_l1_flag[x0][y0] = ae(v);
+      }
+    }
+  }
+  return 0;
+}
+
+int pcm_sample(x0, y0, log2CbSize) {
+  for (i = 0; i < 1 << (log2CbSize << 1); i++)
+    pcm_sample_luma[i] u(v);
+  if (ChromaArrayType != 0)
+    for (i = 0; i < ((2 << (log2CbSize << 1)) / (SubWidthC * SubHeightC)); i++)
+      pcm_sample_chroma[i] u(v);
+
+  return 0;
+}
+
+int transform_tree(x0, y0, xBase, yBase, log2TrafoSize, trafoDepth, blkIdx) {
+  if (log2TrafoSize <= MaxTbLog2SizeY && log2TrafoSize > MinTbLog2SizeY &&
+      trafoDepth < MaxTrafoDepth && !(IntraSplitFlag && (trafoDepth == 0)))
+    split_transform_flag[x0][y0][trafoDepth] = ae(v);
+  if ((log2TrafoSize > 2 && ChromaArrayType != 0) || ChromaArrayType == 3) {
+    if (trafoDepth == 0 || cbf_cb[xBase][yBase][trafoDepth - 1]) {
+      cbf_cb[x0][y0][trafoDepth] = ae(v);
+      if (ChromaArrayType == 2 &&
+          (!split_transform_flag[x0][y0][trafoDepth] || log2TrafoSize == 3))
+        cbf_cb[x0][y0 + (1 << (log2TrafoSize - 1))][trafoDepth] = ae(v);
+    }
+    if (trafoDepth == 0 || cbf_cr[xBase][yBase][trafoDepth - 1]) {
+      cbf_cr[x0][y0][trafoDepth] = ae(v);
+      if (ChromaArrayType == 2 &&
+          (!split_transform_flag[x0][y0][trafoDepth] || log2TrafoSize == 3))
+        cbf_cr[x0][y0 + (1 << (log2TrafoSize - 1))][trafoDepth] = ae(v);
+    }
+  }
+  if (split_transform_flag[x0][y0][trafoDepth]) {
+    x1 = x0 + (1 << (log2TrafoSize - 1));
+    y1 = y0 + (1 << (log2TrafoSize - 1));
+    transform_tree(x0, y0, x0, y0, log2TrafoSize - 1, trafoDepth + 1, 0);
+    transform_tree(x1, y0, x0, y0, log2TrafoSize - 1, trafoDepth + 1, 1);
+    transform_tree(x0, y1, x0, y0, log2TrafoSize - 1, trafoDepth + 1, 2);
+    transform_tree(x1, y1, x0, y0, log2TrafoSize - 1, trafoDepth + 1, 3);
+  } else {
+    if (CuPredMode[x0][y0] == MODE_INTRA || trafoDepth != 0 ||
+        cbf_cb[x0][y0][trafoDepth] || cbf_cr[x0][y0][trafoDepth] ||
+        (ChromaArrayType == 2 &&
+         (cbf_cb[x0][y0 + (1 << (log2TrafoSize - 1))][trafoDepth] ||
+          cbf_cr[x0][y0 + (1 << (log2TrafoSize - 1))][trafoDepth])))
+      cbf_luma[x0][y0][trafoDepth] = ae(v);
+    transform_unit(x0, y0, xBase, yBase, log2TrafoSize, trafoDepth, blkIdx);
+  }
+  return 0;
+}
+
+int mvd_coding(x0, y0, refList) {
+  abs_mvd_greater0_flag[0] = ae(v);
+  abs_mvd_greater0_flag[1] = ae(v);
+  if (abs_mvd_greater0_flag[0]) abs_mvd_greater1_flag[0] = ae(v);
+  if (abs_mvd_greater0_flag[1]) abs_mvd_greater1_flag[1] = ae(v);
+  if (abs_mvd_greater0_flag[0]) {
+    if (abs_mvd_greater1_flag[0]) abs_mvd_minus2[0] = ae(v);
+    mvd_sign_flag[0] = ae(v);
+  }
+  if (abs_mvd_greater0_flag[1]) {
+    if (abs_mvd_greater1_flag[1]) abs_mvd_minus2[1] = ae(v);
+    mvd_sign_flag[1] = ae(v);
+  }
+  return 0;
+}
+
+int transform_unit(x0, y0, xBase, yBase, log2TrafoSize, trafoDepth, blkIdx) {
+  log2TrafoSizeC = Max(2, log2TrafoSize - (ChromaArrayType == 3 ? 0 : 1));
+  cbfDepthC = trafoDepth - (ChromaArrayType != 3 && log2TrafoSize == 2 ? 1 : 0);
+  xC = (ChromaArrayType != 3 && log2TrafoSize == 2) ? xBase : x0;
+  yC = (ChromaArrayType != 3 && log2TrafoSize == 2) ? yBase : y0;
+  cbfLuma = cbf_luma[x0][y0][trafoDepth];
+  cbfChroma = cbf_cb[xC][yC][cbfDepthC] || cbf_cr[xC][yC][cbfDepthC] ||
+              (ChromaArrayType == 2 &&
+               (cbf_cb[xC][yC + (1 << log2TrafoSizeC)][cbfDepthC] ||
+                cbf_cr[xC][yC + (1 << log2TrafoSizeC)][cbfDepthC]));
+  if (cbfLuma || cbfChroma) {
+    xP = (x0 >> MinCbLog2SizeY) << MinCbLog2SizeY;
+    yP = (y0 >> MinCbLog2SizeY) << MinCbLog2SizeY;
+    nCbS = 1 << MinCbLog2SizeY;
+    if (residual_adaptive_colour_transform_enabled_flag &&
+        (CuPredMode[x0][y0] == MODE_INTER ||
+         (PartMode == PART_2Nx2N && intra_chroma_pred_mode[x0][y0] == 4) ||
+         (intra_chroma_pred_mode[xP][yP] == 4 &&
+          intra_chroma_pred_mode[xP + nCbS / 2][yP] == 4 &&
+          intra_chroma_pred_mode[xP][yP + nCbS / 2] == 4 &&
+          intra_chroma_pred_mode[xP + nCbS / 2][yP + nCbS / 2] == 4)))
+      tu_residual_act_flag[x0][y0] = ae(v);
+    delta_qp();
+    if (cbfChroma && !cu_transquant_bypass_flag) chroma_qp_offset();
+    if (cbfLuma) residual_coding(x0, y0, log2TrafoSize, 0);
+    if (log2TrafoSize > 2 || ChromaArrayType == 3) {
+      if (cross_component_prediction_enabled_flag && cbfLuma &&
+          (CuPredMode[x0][y0] == MODE_INTER ||
+           intra_chroma_pred_mode[x0][y0] == 4))
+        cross_comp_pred(x0, y0, 0);
+      for (tIdx = 0; tIdx < (ChromaArrayType == 2 ? 2 : 1); tIdx++)
+        if (cbf_cb[x0][y0 + (tIdx << log2TrafoSizeC)][trafoDepth])
+          residual_coding(x0, y0 + (tIdx << log2TrafoSizeC), log2TrafoSizeC, 1);
+      if (cross_component_prediction_enabled_flag && cbfLuma &&
+          (CuPredMode[x0][y0] == MODE_INTER ||
+           intra_chroma_pred_mode[x0][y0] == 4))
+        cross_comp_pred(x0, y0, 1);
+      for (tIdx = 0; tIdx < (ChromaArrayType == 2 ? 2 : 1); tIdx++)
+        if (cbf_cr[x0][y0 + (tIdx << log2TrafoSizeC)][trafoDepth])
+          residual_coding(x0, y0 + (tIdx << log2TrafoSizeC), log2TrafoSizeC, 2);
+    } else if (blkIdx == 3) {
+      for (tIdx = 0; tIdx < (ChromaArrayType == 2 ? 2 : 1); tIdx++)
+        if (cbf_cb[xBase][yBase + (tIdx << log2TrafoSizeC)][trafoDepth - 1])
+          residual_coding(xBase, yBase + (tIdx << log2TrafoSizeC),
+                          log2TrafoSize, 1);
+      for (tIdx = 0; tIdx < (ChromaArrayType == 2 ? 2 : 1); tIdx++)
+        if (cbf_cr[xBase][yBase + (tIdx << log2TrafoSizeC)][trafoDepth - 1])
+          residual_coding(xBase, yBase + (tIdx << log2TrafoSizeC),
+                          log2TrafoSize, 2);
+    }
+  }
+  return 0;
+}
+
+int residual_coding(x0, y0, log2TrafoSize, cIdx) {
+  if (transform_skip_enabled_flag && !cu_transquant_bypass_flag &&
+      (log2TrafoSize <= Log2MaxTransformSkipSize))
+    transform_skip_flag[x0][y0][cIdx] = ae(v);
+  if (CuPredMode[x0][y0] == MODE_INTER && explicit_rdpcm_enabled_flag &&
+      (transform_skip_flag[x0][y0][cIdx] || cu_transquant_bypass_flag)) {
+    explicit_rdpcm_flag[x0][y0][cIdx] = ae(v);
+    if (explicit_rdpcm_flag[x0][y0][cIdx])
+      explicit_rdpcm_dir_flag[x0][y0][cIdx] = ae(v);
+  }
+  last_sig_coeff_x_prefix = ae(v);
+  last_sig_coeff_y_prefix = ae(v);
+  if (last_sig_coeff_x_prefix > 3) last_sig_coeff_x_suffix = ae(v);
+  if (last_sig_coeff_y_prefix > 3) last_sig_coeff_y_suffix = ae(v);
+  lastScanPos = 16;
+  lastSubBlock = (1 << (log2TrafoSize - 2)) * (1 << (log2TrafoSize - 2)) - 1;
+  do {
+    if (lastScanPos == 0) {
+      lastScanPos = 16;
+      lastSubBlock--;
+    }
+    lastScanPos--;
+    xS = ScanOrder[log2TrafoSize - 2][scanIdx][lastSubBlock][0];
+    yS = ScanOrder[log2TrafoSize - 2][scanIdx][lastSubBlock][1];
+    xC = (xS << 2) + ScanOrder[2][scanIdx][lastScanPos][0];
+    yC = (yS << 2) + ScanOrder[2][scanIdx][lastScanPos][1];
+  } while ((xC != LastSignificantCoeffX) || (yC != LastSignificantCoeffY));
+  for (i = lastSubBlock; i >= 0; i--) {
+    xS = ScanOrder[log2TrafoSize - 2][scanIdx][i][0];
+    yS = ScanOrder[log2TrafoSize - 2][scanIdx][i][1];
+    escapeDataPresent = 0;
+    inferSbDcSigCoeffFlag = 0;
+    if ((i < lastSubBlock) && (i > 0)) {
+      coded_sub_block_flag[xS][yS] = ae(v);
+      inferSbDcSigCoeffFlag = 1;
+    }
+    for (n = (i == lastSubBlock) ? lastScanPos - 1 : 15; n >= 0; n--) {
+      xC = (xS << 2) + ScanOrder[2][scanIdx][n][0];
+      yC = (yS << 2) + ScanOrder[2][scanIdx][n][1];
+      if (coded_sub_block_flag[xS][yS] && (n > 0 || !inferSbDcSigCoeffFlag)) {
+        sig_coeff_flag[xC][yC] = ae(v);
+        if (sig_coeff_flag[xC][yC]) inferSbDcSigCoeffFlag = 0;
+      }
+    }
+    firstSigScanPos = 16;
+    lastSigScanPos = -1;
+    numGreater1Flag = 0;
+    lastGreater1ScanPos = -1;
+    for (n = 15; n >= 0; n--) {
+      xC = (xS << 2) + ScanOrder[2][scanIdx][n][0];
+      yC = (yS << 2) + ScanOrder[2][scanIdx][n][1];
+      if (sig_coeff_flag[xC][yC]) {
+        if (numGreater1Flag < 8) {
+          coeff_abs_level_greater1_flag[n] = ae(v);
+          numGreater1Flag++;
+          if (coeff_abs_level_greater1_flag[n] && lastGreater1ScanPos == -1)
+            lastGreater1ScanPos = n;
+          else if (coeff_abs_level_greater1_flag[n])
+            escapeDataPresent = 1;
+        } else
+          escapeDataPresent = 1;
+        if (lastSigScanPos == -1) lastSigScanPos = n;
+        firstSigScanPos = n
+      }
+    }
+    if (cu_transquant_bypass_flag ||
+        (CuPredMode[x0][y0] == MODE_INTRA && implicit_rdpcm_enabled_flag &&
+         transform_skip_flag[x0][y0][cIdx] &&
+         (predModeIntra == 10 || predModeIntra == 26)) ||
+        explicit_rdpcm_flag[x0][y0][cIdx])
+      signHidden = 0;
+    else
+      signHidden = lastSigScanPos - firstSigScanPos > 3;
+    if (lastGreater1ScanPos != -1) {
+      coeff_abs_level_greater2_flag[lastGreater1ScanPos] = ae(v);
+      if (coeff_abs_level_greater2_flag[lastGreater1ScanPos])
+        escapeDataPresent = 1;
+    }
+    for (n = 15; n >= 0; n--) {
+      xC = (xS << 2) + ScanOrder[2][scanIdx][n][0];
+      yC = (yS << 2) + ScanOrder[2][scanIdx][n][1];
+      if (sig_coeff_flag[xC][yC] && (!sign_data_hiding_enabled_flag ||
+                                     !signHidden || (n != firstSigScanPos)))
+        coeff_sign_flag[n] = ae(v);
+    }
+    numSigCoeff = 0, sumAbsLevel = 0;
+    for (n = 15; n >= 0; n--) {
+      xC = (xS << 2) + ScanOrder[2][scanIdx][n][0];
+      yC = (yS << 2) + ScanOrder[2][scanIdx][n][1];
+      if (sig_coeff_flag[xC][yC]) {
+        baseLevel = 1 + coeff_abs_level_greater1_flag[n] +
+                    coeff_abs_level_greater2_flag[n];
+        if (baseLevel ==
+            ((numSigCoeff < 8) ? ((n == lastGreater1ScanPos) ? 3 : 2) : 1))
+          coeff_abs_level_remaining[n] = ae(v);
+        TransCoeffLevel[x0][y0][cIdx][xC][yC] =
+            (coeff_abs_level_remaining[n] + baseLevel) *
+            (1 - 2 * coeff_sign_flag[n]);
+        if (sign_data_hiding_enabled_flag && signHidden) {
+          sumAbsLevel += (coeff_abs_level_remaining[n] + baseLevel);
+          if ((n == firstSigScanPos) && ((sumAbsLevel % 2) == 1))
+            TransCoeffLevel[x0][y0][cIdx][xC][yC] =
+                -TransCoeffLevel[x0][y0][cIdx][xC][yC];
+        }
+        numSigCoeff++;
+      }
+    }
+  }
+  return 0;
+}
+
+int cross_comp_pred(x0, y0, c) {
+  log2_res_scale_abs_plus1[c] = ae(v);
+  if (log2_res_scale_abs_plus1[c] != 0) res_scale_sign_flag[c] = ae(v);
+  return 0;
+}
+
+int palette_coding(x0, y0, nCbS) {
+  palettePredictionFinished = 0;
+  NumPredictedPaletteEntries = 0;
+  for (predictorEntryIdx = 0;
+       predictorEntryIdx < PredictorPaletteSize && !palettePredictionFinished &&
+       NumPredictedPaletteEntries < palette_max_size;
+       predictorEntryIdx++) {
+    palette_predictor_run = ae(v);
+    if (palette_predictor_run != 1) {
+      if (palette_predictor_run > 1)
+        predictorEntryIdx += palette_predictor_run - 1;
+      PalettePredictorEntryReuseFlags[predictorEntryIdx] = 1;
+      NumPredictedPaletteEntries++
+    } else
+      palettePredictionFinished = 1;
+  }
+  if (NumPredictedPaletteEntries < palette_max_size)
+    num_signalled_palette_entries = ae(v);
+  numComps = (ChromaArrayType == 0) ? 1 : 3;
+  for (cIdx = 0; cIdx < numComps; cIdx++)
+    for (i = 0; i < num_signalled_palette_entries; i++)
+      new_palette_entries[cIdx][i] = ae(v);
+  if (CurrentPaletteSize != 0) palette_escape_val_present_flag = ae(v);
+  if (MaxPaletteIndex > 0) {
+    num_palette_indices_minus1 = ae(v);
+    adjust = 0;
+    for (i = 0; i <= num_palette_indices_minus1; i++) {
+      if (MaxPaletteIndex - adjust > 0) {
+        palette_idx_idc = ae(v);
+        PaletteIndexIdc[i] = palette_idx_idc;
+      }
+      adjust = 1;
+    }
+    copy_above_indices_for_final_run_flag = ae(v);
+    palette_transpose_flag = ae(v);
+  }
+  if (palette_escape_val_present_flag) {
+    delta_qp();
+    if (!cu_transquant_bypass_flag) chroma_qp_offset();
+  }
+  remainingNumIndices = num_palette_indices_minus1 + 1;
+  PaletteScanPos = 0;
+  log2BlockSize = Log2(nCbS);
+  while (PaletteScanPos < nCbS * nCbS) {
+    xC = x0 + ScanOrder[log2BlockSize][3][PaletteScanPos][0];
+    yC = y0 + ScanOrder[log2BlockSize][3][PaletteScanPos][1];
+    if (PaletteScanPos > 0) {
+      xcPrev = x0 + ScanOrder[log2BlockSize][3][PaletteScanPos - 1][0];
+      ycPrev = y0 + ScanOrder[log2BlockSize][3][PaletteScanPos - 1][1]
+    }
+    PaletteRunMinus1 = nCbS * nCbS - PaletteScanPos - 1;
+    RunToEnd = 1 CopyAboveIndicesFlag[xC][yC] = 0;
+    if (MaxPaletteIndex > 0)
+      if (PaletteScanPos >= nCbS && CopyAboveIndicesFlag[xcPrev][ycPrev] == 0)
+        if (remainingNumIndices > 0 && PaletteScanPos < nCbS * nCbS - 1) {
+          copy_above_palette_indices_flag = ae(v);
+          CopyAboveIndicesFlag[xC][yC] = copy_above_palette_indices_flag
+        } else if (PaletteScanPos == nCbS * nCbS - 1 && remainingNumIndices > 0)
+          CopyAboveIndicesFlag[xC][yC] = 0;
+        else
+          CopyAboveIndicesFlag[xC][yC] = 1;
+    if (CopyAboveIndicesFlag[xC][yC] == 0) {
+      currNumIndices = num_palette_indices_minus1 + 1 - remainingNumIndices;
+      CurrPaletteIndex = PaletteIndexIdc[currNumIndices];
+    }
+    if (MaxPaletteIndex > 0) {
+      if (CopyAboveIndicesFlag[xC][yC] == 0) remainingNumIndices - = 1;
+      if (remainingNumIndices > 0 ||
+          CopyAboveIndicesFlag[xC][yC] !=
+              copy_above_indices_for_final_run_flag) {
+        PaletteMaxRunMinus1 = nCbS * nCbS - PaletteScanPos - 1 -
+                              remainingNumIndices -
+                              copy_above_indices_for_final_run_flag;
+        RunToEnd = 0;
+        if (PaletteMaxRunMinus1 > 0) {
+          palette_run_prefix = ae(v);
+          if ((palette_run_prefix > 1) &&
+              (PaletteMaxRunMinus1 != (1 << (palette_run_prefix - 1))))
+            palette_run_suffix = ae(v);
+        }
+      }
+    }
+    runPos = 0 while (runPos <= PaletteRunMinus1) {
+      xR = x0 + ScanOrder[log2BlockSize][3][PaletteScanPos][0];
+      yR = y0 + ScanOrder[log2BlockSize][3][PaletteScanPos][1];
+      if (CopyAboveIndicesFlag[xC][yC] == 0) {
+        CopyAboveIndicesFlag[xR][yR] = 0;
+        PaletteIndexMap[xR][yR] = CurrPaletteIndex;
+      } else {
+        CopyAboveIndicesFlag[xR][yR] = 1;
+        PaletteIndexMap[xR][yR] = PaletteIndexMap[xR][yR - 1];
+      }
+      runPos++;
+      PaletteScanPos++;
+    }
+  }
+  if (palette_escape_val_present_flag) {
+    for (cIdx = 0; cIdx < numComps; cIdx++)
+      for (sPos = 0; sPos < nCbS * nCbS; sPos++) {
+        xC = x0 + ScanOrder[log2BlockSize][3][sPos][0];
+        yC = y0 + ScanOrder[log2BlockSize][3][sPos][1];
+        if (PaletteIndexMap[xC][yC] == MaxPaletteIndex)
+          if (cIdx == 0 | |
+                  (xC % 2 == 0 && yC % 2 == 0 && ChromaArrayType == 1) ||
+              (xC % 2 == 0 && !palette_transpose_flag &&
+               ChromaArrayType == 2) ||
+              (yC % 2 == 0 && palette_transpose_flag && ChromaArrayType == 2) ||
+              ChromaArrayType == 3) {
+            palette_escape_val = ae(v);
+            PaletteEscapeVal[cIdx][xC][yC] = palette_escape_val;
+          }
+      }
+  }
+  return 0;
+}
+
+int delta_qp() {
+  if (cu_qp_delta_enabled_flag && !IsCuQpDeltaCoded) {
+    IsCuQpDeltaCoded = 1;
+    cu_qp_delta_abs = ae(v);
+    if (cu_qp_delta_abs) {
+      cu_qp_delta_sign_flag = ae(v);
+      CuQpDeltaVal = cu_qp_delta_abs * (1 − 2 * cu_qp_delta_sign_flag);
+    }
+  }
+  return 0;
+}
+
+int chroma_qp_offset() {
+  if (cu_chroma_qp_offset_enabled_flag && !IsCuChromaQpOffsetCoded) {
+    cu_chroma_qp_offset_flag = ae(v);
+    if (cu_chroma_qp_offset_flag && chroma_qp_offset_list_len_minus1 > 0)
+      cu_chroma_qp_offset_idx = ae(v);
+  }
   return 0;
 }
 
@@ -173,7 +685,7 @@ inline int SliceData::mapUnitToSliceGroupMap() {
   int32_t *&mapUnitToSliceGroupMap = header->mapUnitToSliceGroupMap;
 
   /* mapUnitToSliceGroupMap 数组的推导如下：
-   * – 如果 num_slice_groups_minus1 等于 0，则为范围从 0 到 PicSizeInMapUnits − 1（含）的所有 i 生成Slice Group映射的映射单元，如 mapUnitToSliceGroupMap[ i ] = 0 */
+   * – 如果 num_slice_groups_minus1 等于 0，则为范围从 0 到 PicSizeInMapUnits - 1（含）的所有 i 生成Slice Group映射的映射单元，如 mapUnitToSliceGroupMap[ i ] = 0 */
   /* 整个图像只被分为一个 slice group */
   if (m_pps->num_slice_groups_minus1 == 0) {
     /* 这里按照一个宏块或宏块对（当为MBAFF时，遍历大小减小一半）处理 */

@@ -415,3 +415,187 @@ int inverse_scanning_for_8x8_transform_coeff_and_scaling_lists(
 
   return 0;
 }
+
+int profile_tier_level(BitStream &bs, bool profilePresentFlag,
+                       int32_t maxNumSubLayersMinus1) {
+  if (profilePresentFlag) {
+    int32_t general_profile_space = bs.readUn(2);
+    int32_t general_tier_flag = bs.readUn(1);
+    int32_t general_profile_idc = bs.readUn(5);
+    int32_t general_profile_compatibility_flag[32] = {0};
+    for (int32_t j = 0; j < 32; j++)
+      general_profile_compatibility_flag[j] = bs.readUn(1);
+    int32_t general_progressive_source_flag = bs.readUn(1);
+    int32_t general_interlaced_source_flag = bs.readUn(1);
+    int32_t general_non_packed_constraint_flag = bs.readUn(1);
+    int32_t general_frame_only_constraint_flag = bs.readUn(1);
+    if (general_profile_idc == 4 || general_profile_compatibility_flag[4] ||
+        general_profile_idc == 5 || general_profile_compatibility_flag[5] ||
+        general_profile_idc == 6 || general_profile_compatibility_flag[6] ||
+        general_profile_idc == 7 || general_profile_compatibility_flag[7] ||
+        general_profile_idc == 8 || general_profile_compatibility_flag[8] ||
+        general_profile_idc == 9 || general_profile_compatibility_flag[9] ||
+        general_profile_idc == 10 || general_profile_compatibility_flag[10] ||
+        general_profile_idc == 11 || general_profile_compatibility_flag[11]) {
+      /* The number of bits in this syntax structure is not affected by this condition */
+      int32_t general_max_12bit_constraint_flag = bs.readUn(1);
+      int32_t general_max_10bit_constraint_flag = bs.readUn(1);
+      int32_t general_max_8bit_constraint_flag = bs.readUn(1);
+      int32_t general_max_422chroma_constraint_flag = bs.readUn(1);
+      int32_t general_max_420chroma_constraint_flag = bs.readUn(1);
+      int32_t general_max_monochrome_constraint_flag = bs.readUn(1);
+      int32_t general_intra_constraint_flag = bs.readUn(1);
+      int32_t general_one_picture_only_constraint_flag = bs.readUn(1);
+      int32_t general_lower_bit_rate_constraint_flag = bs.readUn(1);
+      if (general_profile_idc == 5 || general_profile_compatibility_flag[5] ||
+          general_profile_idc == 9 || general_profile_compatibility_flag[9] ||
+          general_profile_idc == 10 || general_profile_compatibility_flag[10] ||
+          general_profile_idc == 11 || general_profile_compatibility_flag[11]) {
+        int32_t general_max_14bit_constraint_flag = bs.readUn(1);
+        int32_t general_reserved_zero_33bits = bs.readUn(33);
+      } else
+        int32_t general_reserved_zero_34bits = bs.readUn(34);
+    } else if (general_profile_idc == 2 ||
+               general_profile_compatibility_flag[2]) {
+      int32_t general_reserved_zero_7bits = bs.readUn(7);
+      int32_t general_one_picture_only_constraint_flag = bs.readUn(1);
+      int32_t general_reserved_zero_35bits = bs.readUn(35);
+    } else
+      int32_t general_reserved_zero_43bits = bs.readUn(43);
+    if (general_profile_idc == 1 || general_profile_compatibility_flag[1] ||
+        general_profile_idc == 2 || general_profile_compatibility_flag[2] ||
+        general_profile_idc == 3 || general_profile_compatibility_flag[3] ||
+        general_profile_idc == 4 || general_profile_compatibility_flag[4] ||
+        general_profile_idc == 5 || general_profile_compatibility_flag[5] ||
+        general_profile_idc == 9 || general_profile_compatibility_flag[9] ||
+        general_profile_idc == 11 || general_profile_compatibility_flag[11])
+      /* The number of bits in this syntax structure is not affected by this condition */
+      int32_t general_inbld_flag = bs.readUn(1);
+    else
+      int32_t general_reserved_zero_bit = bs.readUn(1);
+  }
+  int32_t general_level_idc = bs.readUn(8);
+  int32_t sub_layer_profile_present_flag[32] = {0};
+  int32_t sub_layer_level_present_flag[32] = {0};
+  for (int32_t i = 0; i < maxNumSubLayersMinus1; i++) {
+    sub_layer_profile_present_flag[i] = bs.readUn(1);
+    sub_layer_level_present_flag[i] = bs.readUn(1);
+  }
+
+  int32_t reserved_zero_2bits[32] = {0};
+  if (maxNumSubLayersMinus1 > 0)
+    for (int32_t i = maxNumSubLayersMinus1; i < 8; i++)
+      reserved_zero_2bits[i] = bs.readUn(2);
+
+  int32_t sub_layer_profile_space[32] = {0};
+  int32_t sub_layer_tier_flag[32] = {0};
+  int32_t sub_layer_profile_idc[32] = {0};
+  for (int32_t i = 0; i < maxNumSubLayersMinus1; i++) {
+    if (sub_layer_profile_present_flag[i]) {
+      sub_layer_profile_space[i] = bs.readUn(2);
+      sub_layer_tier_flag[i] = bs.readUn(1);
+      sub_layer_profile_idc[i] = bs.readUn(5);
+
+      int32_t sub_layer_profile_compatibility_flag[32][32] = {{0}};
+      int32_t sub_layer_progressive_source_flag[32] = {0};
+      int32_t sub_layer_interlaced_source_flag[32] = {0};
+      int32_t sub_layer_non_packed_constraint_flag[32] = {0};
+      int32_t sub_layer_frame_only_constraint_flag[32] = {0};
+      for (int32_t j = 0; j < 32; j++)
+        sub_layer_profile_compatibility_flag[i][j] = bs.readUn(1);
+      sub_layer_progressive_source_flag[i] = bs.readUn(1);
+      sub_layer_interlaced_source_flag[i] = bs.readUn(1);
+      sub_layer_non_packed_constraint_flag[i] = bs.readUn(1);
+      sub_layer_frame_only_constraint_flag[i] = bs.readUn(1);
+
+      int32_t sub_layer_max_12bit_constraint_flag[32] = {0};
+      int32_t sub_layer_max_10bit_constraint_flag[32] = {0};
+      int32_t sub_layer_max_8bit_constraint_flag[32] = {0};
+      int32_t sub_layer_max_422chroma_constraint_flag[32] = {0};
+      int32_t sub_layer_max_420chroma_constraint_flag[32] = {0};
+      int32_t sub_layer_max_monochrome_constraint_flag[32] = {0};
+      int32_t sub_layer_intra_constraint_flag[32] = {0};
+      int32_t sub_layer_one_picture_only_constraint_flag[32] = {0};
+      int32_t sub_layer_lower_bit_rate_constraint_flag[32] = {0};
+
+      int32_t sub_layer_reserved_zero_7bits[32] = {0};
+      int32_t sub_layer_reserved_zero_35bits[32] = {0};
+      int32_t sub_layer_reserved_zero_43bits[32] = {0};
+
+      if (sub_layer_profile_idc[i] == 4 ||
+          sub_layer_profile_compatibility_flag[i][4] ||
+          sub_layer_profile_idc[i] == 5 ||
+          sub_layer_profile_compatibility_flag[i][5] ||
+          sub_layer_profile_idc[i] == 6 ||
+          sub_layer_profile_compatibility_flag[i][6] ||
+          sub_layer_profile_idc[i] == 7 ||
+          sub_layer_profile_compatibility_flag[i][7] ||
+          sub_layer_profile_idc[i] == 8 ||
+          sub_layer_profile_compatibility_flag[i][8] ||
+          sub_layer_profile_idc[i] == 9 ||
+          sub_layer_profile_compatibility_flag[i][9] ||
+          sub_layer_profile_idc[i] == 10 ||
+          sub_layer_profile_compatibility_flag[i][10] ||
+          sub_layer_profile_idc[i] == 11 ||
+          sub_layer_profile_compatibility_flag[i][11]) {
+        /* The number of bits in this syntax structure is not affected by this condition */
+        sub_layer_max_12bit_constraint_flag[i] = bs.readUn(1);
+        sub_layer_max_10bit_constraint_flag[i] = bs.readUn(1);
+        sub_layer_max_8bit_constraint_flag[i] = bs.readUn(1);
+        sub_layer_max_422chroma_constraint_flag[i] = bs.readUn(1);
+        sub_layer_max_420chroma_constraint_flag[i] = bs.readUn(1);
+        sub_layer_max_monochrome_constraint_flag[i] = bs.readUn(1);
+        sub_layer_intra_constraint_flag[i] = bs.readUn(1);
+        sub_layer_one_picture_only_constraint_flag[i] = bs.readUn(1);
+        sub_layer_lower_bit_rate_constraint_flag[i] = bs.readUn(1);
+
+        int32_t sub_layer_max_14bit_constraint_flag[32] = {0};
+        int32_t sub_layer_reserved_zero_33bits[32] = {0};
+        int32_t sub_layer_reserved_zero_34bits[32] = {0};
+
+        if (sub_layer_profile_idc[i] == 5 ||
+            sub_layer_profile_compatibility_flag[i][5] ||
+            sub_layer_profile_idc[i] == 9 ||
+            sub_layer_profile_compatibility_flag[i][9] ||
+            sub_layer_profile_idc[i] == 10 ||
+            sub_layer_profile_compatibility_flag[i][10] ||
+            sub_layer_profile_idc[i] == 11 ||
+            sub_layer_profile_compatibility_flag[i][11]) {
+          sub_layer_max_14bit_constraint_flag[i] = bs.readUn(1);
+          sub_layer_reserved_zero_33bits[i] = bs.readUn(33);
+        } else
+          sub_layer_reserved_zero_34bits[i] = bs.readUn(34);
+      } else if (sub_layer_profile_idc[i] == 2 ||
+                 sub_layer_profile_compatibility_flag[i][2]) {
+        sub_layer_reserved_zero_7bits[i] = bs.readUn(7);
+        sub_layer_one_picture_only_constraint_flag[i] = bs.readUn(1);
+        sub_layer_reserved_zero_35bits[i] = bs.readUn(35);
+      } else
+        sub_layer_reserved_zero_43bits[i] = bs.readUn(43);
+
+      int32_t sub_layer_inbld_flag[32] = {0};
+      int32_t sub_layer_reserved_zero_bit[32] = {0};
+      if (sub_layer_profile_idc[i] == 1 ||
+          sub_layer_profile_compatibility_flag[i][1] ||
+          sub_layer_profile_idc[i] == 2 ||
+          sub_layer_profile_compatibility_flag[i][2] ||
+          sub_layer_profile_idc[i] == 3 ||
+          sub_layer_profile_compatibility_flag[i][3] ||
+          sub_layer_profile_idc[i] == 4 ||
+          sub_layer_profile_compatibility_flag[i][4] ||
+          sub_layer_profile_idc[i] == 5 ||
+          sub_layer_profile_compatibility_flag[i][5] ||
+          sub_layer_profile_idc[i] == 9 ||
+          sub_layer_profile_compatibility_flag[i][9] ||
+          sub_layer_profile_idc[i] == 11 ||
+          sub_layer_profile_compatibility_flag[i][11])
+        /* The number of bits in this syntax structure is not affected by this condition */
+        sub_layer_inbld_flag[i] = bs.readUn(1);
+      else
+        sub_layer_reserved_zero_bit[i] = bs.readUn(1);
+    }
+    int32_t sub_layer_level_idc[32] = {0};
+    if (sub_layer_level_present_flag[i]) sub_layer_level_idc[i] = bs.readUn(8);
+  }
+  return 0;
+}

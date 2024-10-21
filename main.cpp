@@ -24,34 +24,7 @@ int main(int argc, char *argv[]) {
   if (argc > 1 && argv[1] != nullptr)
     filePath = argv[1];
   else {
-    /* 1920x1080 */
-    //filePath = "./test/source_cut_10_frames.h264";
-    /* 1920x1080 无B帧*/
-    //filePath = "./test/source_cut_10_frames_no_B.h264";
-    /* 714x624 帧编码 */
-    filePath = "./test/demo_10_frames.h264";
-    /* 714x624 场编码(IDR帧解码出来的图片部分绿屏，找到原因了，宏块数量不对，会是slice_skip_flag的问题吗？） */
-    //filePath = "./test/demo_10_frames_interlace.h264";
-    /* 714x624 场编码(隔行扫描，顶场优先)*/
-    //filePath = "./test/demo_10_frames_TFF.h264";
-    /* 714x624 帧编码(CAVLC 熵编码模式,即profile=baseline) */
-    //filePath = "./test/demo_10_frames_cavlc.h264";
-    /* 714x624 场编码(CAVLC 熵编码模式，有一点点绿色宏块)*/
-    //filePath = "./test/demo_10_frames_cavlc_and_interlace.h264";
-    /* 714x624 帧编码(CABAC 熵编码模式 + 无损编码(lossless=1) + TransformBypassMode + YUV444 ,段错误。。) */
-    //filePath = "./test/demo_10_frames_TransformBypassModeFlag.h264";
-    //ok
-    //filePath = "./test/1280x720_60_fps.h264";
-    //用于测试GOP, IDR的处理（ok，其中NAL[3527], GOP[3204], 161个IDR帧
-    //filePath = "./test/854x480_60_fps_20_gop.h264";
-    //filePath = "./test/854x480_60_fps_20_gop_and_I_Slice.h264";
-    /* 全I帧 */
-    //filePath = "./test/demo_10_frames_All_I_Slice.h264";
-    //filePath = "./tmp.h264";
-    //TODO 造一个单帧多Slice的文件，用于测试 "宏块映射到Slice Group" <24-09-16 00:48:27, YangJing>
-
-    // ffmpeg -i ./test/demo_10_frames.h264 -c:v libx264 -x264-params direct=temporal -c:a copy demo_10_frames_temporal_direct.h264
-    //filePath = "./test/demo_10_frames_temporal_direct.h264";
+    filePath = "./test/demo_10_frames.h265";
   }
 
   /* 1. 打开文件、读取NUL、存储NUL的操作 */
@@ -97,111 +70,77 @@ int main(int argc, char *argv[]) {
       // nalu.parseSODB(rbsp, SODB);
 
       /* 见T-REC-H.264-202108-I!!PDF-E.pdf 87页 */
-      if (nalu.nal_unit_type > 21) cout << "Unknown Nalu Type !!!" << endl;
+      if (nalu.nal_unit_type > 40) cout << "Unknown Nalu Type !!!" << endl;
 
       switch (nalu.nal_unit_type) {
-      case 1: /* Slice(non-VCL) */
-        /* 11-2. 解码普通帧 */
-        cout << "Original Slice -> {" << endl;
-        flushFrame(gop, frame, false);
-        /* 初始化bit处理器，填充slice的数据 */
-        bitStream = new BitStream(rbsp.buf, rbsp.len);
-        /* 此处根据SliceHeader可判断A Frame =? A Slice */
-        nalu.extractSliceparameters(*bitStream, *gop, *frame);
-        frame->decode(*bitStream, gop->m_dpb, *gop);
+      case HEVC_NAL_VPS:
+        cout << "VPS -> {" << endl;
+        nalu.extractVPSparameters(rbsp, gop->m_vpss, gop->last_vps_id);
         cout << " }" << endl;
         break;
-      case 2: /* DPA(non-VCL) */
-        cout << "Not Support DPA!" << endl;
-        break;
-      case 3: /* DPB(non-VCL) */
-        cout << "Not Support DPB!" << endl;
-        break;
-      case 4: /* DPC(non-VCL) */
-        cout << "Not Support DPC!" << endl;
-        break;
-      case 5: /* IDR Slice(VCL) */
-        /* 11-1. 解码立即刷新帧 GOP[0] */
-        cout << "IDR Slice -> {" << endl;
-        /* 提供给外层程序一定是Frame，即一帧数据，而不是一个Slice，因为如果存在多个Slice为一帧的情况外层处理就很麻烦 */
-        flushFrame(gop, frame, true);
-        /* 初始化bit处理器，填充idr的数据 */
-        bitStream = new BitStream(rbsp.buf, rbsp.len);
-        /* 这里通过解析SliceHeader后可以知道一个Frame到底是几个Slice，通过直接调用frame->decode，在内部对每个Slice->decode() （如果存在多个Slice的情况，可以通过first_mb_in_slice判断，如果每个Slice都为0,则表示每个Slice都是一帧数据，当first_mb_in_slice>0，则表示与前面的一个或多个Slice共同组成一个Frame） */
-        nalu.extractIDRparameters(*bitStream, *gop, *frame);
-        frame->decode(*bitStream, gop->m_dpb, *gop);
-        cout << " }" << endl;
-        break;
-      case 6: /* SEI（补充信息）(VCL) */
-        /* 10. 解码SEI补充增强信息：
-         * 场编码的图像在每个Slice前出现SEI以提供必要的解码辅助信息 */
-        cout << "SEI -> {" << endl;
-        nalu.extractSEIparameters(rbsp, sei, gop->m_spss[gop->last_pps_id]);
-        cout << " }" << endl;
-        break;
-      case 7: /* SPS(VCL) */
+      case HEVC_NAL_SPS:
         /* 8. 解码SPS中信息 */
         cout << "SPS -> {" << endl;
         nalu.extractSPSparameters(rbsp, gop->m_spss, gop->last_sps_id);
-        gop->m_max_num_reorder_frames =
-            gop->m_spss[gop->last_sps_id].max_num_reorder_frames;
+        //gop->m_max_num_reorder_frames =
+        //gop->m_spss[gop->last_sps_id].max_num_reorder_frames;
         cout << " }" << endl;
+
         break;
-      case 8: /* PPS(VCL) */
+      case HEVC_NAL_PPS:
         /* 9. 解码PPS中信息 */
         cout << "PPS -> {" << endl;
         nalu.extractPPSparameters(
             rbsp, gop->m_ppss, gop->last_pps_id,
             gop->m_spss[gop->last_sps_id].chroma_format_idc);
         cout << " }" << endl;
+
         break;
-      case 9: /* 7.3.2.4 Access unit delimiter RBSP syntax */
-        /* 该Nalu的优先级很高，如果存在则它会在SPS前出现 */
-        //access_unit_delimiter_rbsp();
-        cerr << "access_unit_delimiter_rbsp()" << endl;
+      case HEVC_NAL_SEI_PREFIX:
+      case HEVC_NAL_SEI_SUFFIX:
+        /* 10. 解码SEI补充增强信息：场编码的图像在每个Slice前出现SEI以提供必要的解码辅助信息 */
+        cout << "SEI -> {" << endl;
+        nalu.extractSEIparameters(rbsp, sei, gop->m_spss[gop->last_pps_id]);
+        cout << " }" << endl;
         break;
-      case 10:
-        //end_of_seq_rbsp();
-        cerr << "end_of_seq_rbsp()" << endl;
+      case HEVC_NAL_TRAIL_R:
+      case HEVC_NAL_TRAIL_N:
+      case HEVC_NAL_TSA_N:
+      case HEVC_NAL_TSA_R:
+      case HEVC_NAL_STSA_N:
+      case HEVC_NAL_STSA_R:
+      case HEVC_NAL_BLA_W_LP:
+      case HEVC_NAL_BLA_W_RADL:
+      case HEVC_NAL_BLA_N_LP:
+      case HEVC_NAL_IDR_W_RADL:
+      case HEVC_NAL_IDR_N_LP:
+      case HEVC_NAL_CRA_NUT:
+      case HEVC_NAL_RADL_N:
+      case HEVC_NAL_RADL_R:
+      case HEVC_NAL_RASL_N:
+      case HEVC_NAL_RASL_R:
+        /* 11-2. 解码普通帧 */
+        cout << "Original Slice -> {" << endl;
+        std::cout << (int)nalu.nal_unit_type << std::endl;
+        //flushFrame(gop, frame, false);
+        /* 初始化bit处理器，填充slice的数据 */
+        bitStream = new BitStream(rbsp.buf, rbsp.len);
+        /* 此处根据SliceHeader可判断A Frame =? A Slice */
+        // slice_segment_layer_rbsp()
+        // slice_segment_header()
+        nalu.extractSliceparameters(*bitStream, *gop, *frame);
+        // slice_segment_data()
+        frame->decode(*bitStream, gop->m_dpb, *gop);
+        cout << " }" << endl;
         break;
-      case 11:
-        //end_of_stream_rbsp();
-        cerr << "end_of_stream_rbsp()" << endl;
-        break;
-      case 12:
-        //filler_data_rbsp();
-        cerr << "filler_data_rbsp()" << endl;
-        break;
-      case 13:
-        //seq_parameter_set_extension_rbsp();
-        cerr << "seq_parameter_set_extension_rbsp()" << endl;
-        break;
-      case 14:
-        //prefix_nal_unit_rbsp();
-        cerr << "prefix_nal_unit_rbsp()" << endl;
-        break;
-      case 15:
-        //subset_seq_parameter_set_rbsp();
-        cerr << "subset_seq_parameter_set_rbsp()" << endl;
-        break;
-      case 16:
-        //depth_parameter_set_rbsp();
-        cerr << "depth_parameter_set_rbsp()" << endl;
-        break;
-      case 19:
-        //slice_layer_without_partitioning_rbsp();
-        cerr << "slice_layer_without_partitioning_rbsp()" << endl;
-        break;
-      case 20:
-        //slice_layer_extension_rbsp();
-        cerr << "slice_layer_extension_rbsp()" << endl;
-        break;
-      case 21: /* 3D-AVC texture view */
-        //slice_layer_extension_rbsp();
-        cerr << "slice_layer_extension_rbsp()" << endl;
+      case HEVC_NAL_EOS_NUT:
+      case HEVC_NAL_EOB_NUT:
+      case HEVC_NAL_AUD:
+      case HEVC_NAL_FD_NUT:
+        std::cout << "HEVC_NAL_EOS_NUT" << std::endl;
         break;
       default:
-        cerr << "Error nal_unit_type:" << nalu.nal_unit_type << endl;
+        cerr << "Skip nal_unit_type:" << (int)nalu.nal_unit_type << endl;
       }
 
       /* 已读取完成所有NAL */

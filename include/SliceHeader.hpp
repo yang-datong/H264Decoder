@@ -33,6 +33,76 @@ class SliceHeader {
       : nal_unit_type(nal_type), nal_ref_idc(nal_ref_idc){};
   ~SliceHeader();
 
+  // ------------ NEW -------------
+ public:
+  int32_t slice_pic_parameter_set_id = {0};
+  int32_t dependent_slice_segment_flag = false;
+  int32_t CuQpDeltaVal = 0;
+  int32_t pic_output_flag = {0};
+  int32_t colour_plane_id = {0};
+  int32_t slice_pic_order_cnt_lsb = 0;
+  int32_t short_term_ref_pic_set_sps_flag = {0};
+  int32_t short_term_ref_pic_set_idx = 0;
+  int32_t num_long_term_sps = {0};
+  int32_t num_long_term_pics = {0};
+  int32_t delta_poc_msb_present_flag[32] = {0};
+  int32_t delta_poc_msb_cycle_lt[32] = {0};
+  int32_t slice_temporal_mvp_enabled_flag = {0};
+  int32_t lt_idx_sps[32] = {0};
+  int32_t poc_lsb_lt[32] = {0};
+  int32_t used_by_curr_pic_lt_flag[32] = {0};
+
+  int32_t slice_sao_luma_flag = 0;
+  int32_t slice_sao_chroma_flag = 0;
+
+  int32_t mvd_l1_zero_flag = 0;
+  int32_t cabac_init_flag = 0;
+  int32_t collocated_from_l0_flag = 0;
+  int32_t collocated_ref_idx = 0;
+  int32_t weighted_pred_flag = 0;
+  int32_t weighted_bipred_flag = 0;
+  int32_t five_minus_max_num_merge_cand = 0;
+  int32_t motion_vector_resolution_control_idc = 0;
+  int32_t use_integer_mv_flag = 0;
+
+  int32_t slice_cb_qp_offset = 0;
+  int32_t slice_cr_qp_offset = 0;
+  int32_t slice_act_y_qp_offset = 0;
+  int32_t slice_act_cb_qp_offset = 0;
+  int32_t slice_act_cr_qp_offset = 0;
+
+  int32_t cu_chroma_qp_offset_enabled_flag = 0;
+  int32_t deblocking_filter_override_flag = 0;
+  int32_t slice_deblocking_filter_disabled_flag = 0;
+  int32_t slice_beta_offset_div2 = 0;
+  int32_t slice_tc_offset_div2 = 0;
+
+  int32_t slice_loop_filter_across_slices_enabled_flag = 0;
+
+  int32_t num_entry_point_offsets = 0;
+  int32_t offset_len_minus1 = 0;
+  int32_t entry_point_offset_minus1[32] = {0};
+  int32_t slice_segment_header_extension_length = 0;
+  int32_t slice_segment_header_extension_data_byte[32] = {0};
+
+  int32_t list_entry_lx[2][32] = {{0}};
+
+  void ref_pic_lists_modification(BitStream *bs, int32_t nb_refs);
+
+  int st_ref_pic_set(BitStream *bs, int32_t stRpsIdx);
+  int32_t inter_ref_pic_set_prediction_flag = 0;
+  int32_t delta_idx_minus1 = 0;
+  int32_t delta_rps_sign = 0;
+  int32_t abs_delta_rps_minus1 = 0;
+  int32_t used_by_curr_pic_flag[32] = {0};
+  int32_t use_delta_flag[32] = {0};
+  int32_t num_negative_pics = 0;
+  int32_t num_positive_pics = 0;
+  int32_t delta_poc_s0_minus1[32] = {0};
+  int32_t used_by_curr_pic_s0_flag[32] = {0};
+  int32_t delta_poc_s1_minus1[32] = {0};
+  int32_t used_by_curr_pic_s1_flag[32] = {0};
+
  public:
   /* Slice中第一个宏块的索引。 （可判断一帧图像是否由多个Slice组成）
   如果first_mb_in_slice == 0，则表示这是该帧的第一个Slice（可以独立解码）。
@@ -48,7 +118,7 @@ class SliceHeader {
 
  public:
   /* 颜色平面ID：当存在色度子采样时，两个相应的色度采样阵列，颜色分量的每个宏块恰好包含在一个切片中（即，图片的每个宏块的信息恰好存在于三个切片中，并且这三个切片具有不同的colour_plane_id值）。*/
-  uint8_t colour_plane_id = 0;
+  //uint8_t colour_plane_id = 0;
   /* 当前帧的编号 */
   uint32_t frame_num = 0;
   /* 场图像标志 */
@@ -113,7 +183,7 @@ class SliceHeader {
   /* 去块效应滤波器的Alpha偏移值：控制着去块滤波器是否启动的阈值 */
   int32_t slice_alpha_c0_offset_div2 = 0;
   /* 去块效应滤波器的Beta偏移值：决定滤波器强度的阈值 */
-  int32_t slice_beta_offset_div2 = 0;
+  //int32_t slice_beta_offset_div2 = 0;
   /* 前一个Slice的量化参数（这里的Y表示亮度块，一般来说QP也以QPY为准） */
   int32_t QPY_prev = 0;
   /* Slice的量化参数（色度） */
@@ -234,7 +304,7 @@ class SliceHeader {
   void printf_scaling_lists_values();
 
   void ref_pic_list_mvc_modification();
-  void ref_pic_list_modification();
+  void ref_pic_lists_modification();
   void pred_weight_table();
   void dec_ref_pic_marking();
 

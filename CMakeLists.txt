@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD 14)
 
 IF (LINUX)
 	#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g3 -O0 -Wno-class-memaccess -D SHOW_MB_BORDER")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g3 -O0 -Wno-class-memaccess")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w -g3 -O0 -Wno-class-memaccess")
 ELSEIF (APPLE)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-system-headers -Wall -g3 -O0 -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 -isystem /Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include")
 ENDIF()
