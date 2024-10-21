@@ -21,6 +21,40 @@ class SliceData {
     m_pps = nullptr;
   }
 
+  int coding_tree_unit();
+  int sao(int32_t rx, int32_t ry);
+  int coding_quadtree(int x0, int y0, int log2CbSize, int cqtDepth);
+  int coding_unit(int x0, int y0, int log2CbSize);
+  int prediction_unit(int x0, int y0, int nPbW, int nPbH);
+  int pcm_sample(int x0, int y0, int log2CbSize);
+  int transform_tree(int x0, int y0, int xBase, int yBase, int log2TrafoSize,
+                     int trafoDepth, int blkIdx);
+  int mvd_coding(int x0, int y0, int refList);
+  int transform_unit(int x0, int y0, int xBase, int yBase, int log2TrafoSize,
+                     int trafoDepth, int blkIdx);
+  int residual_coding(int x0, int y0, int log2TrafoSize, int cIdx);
+  int cross_comp_pred(int x0, int y0, int c);
+  int palette_coding(int x0, int y0, int nCbS);
+  int delta_qp();
+  int chroma_qp_offset();
+  int CtbAddrInTs = 0;
+  int CtbAddrInRs = 0;
+
+  int tab_slice_address[32] = {0};
+  int first_qp_group = 0;
+  int end_of_tiles_x = 0;
+  void hls_decode_neighbour(int x_ctb, int y_ctb, int ctb_addr_ts);
+
+  int ff_hevc_cabac_init(int ctb_addr_ts);
+
+  int cabac_init_decoder();
+  int ff_init_cabac_decoder();
+  int cabac_init_state();
+  int load_states();
+
+  int cabac_state[HEVC_CONTEXTS] = {0};
+  int stat_coeff[4] = {0};
+
  public:
   /* 这个编号是解码器自己维护的，每次解码一帧则++ */
   uint32_t slice_number = 0;

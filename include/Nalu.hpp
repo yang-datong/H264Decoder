@@ -64,7 +64,7 @@ class Nalu {
   int extractSPSparameters(RBSP &rbsp, SPS spss[MAX_SPS_COUNT],
                            uint32_t &curr_sps_id,VPS vpss[MAX_SPS_COUNT]);
   int extractPPSparameters(RBSP &rbsp, PPS ppss[MAX_PPS_COUNT],
-                           uint32_t &curr_pps_id, uint32_t chroma_format_idc);
+                           uint32_t &curr_pps_id, uint32_t chroma_format_idc,SPS spss[MAX_SPS_COUNT]);
   int extractSEIparameters(RBSP &rbsp, SEI &sei, SPS &sps);
 
   /* VCL */

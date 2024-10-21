@@ -4,9 +4,8 @@
 #include "BitStream.hpp"
 #include "Common.hpp"
 #include "Type.hpp"
-#include <cstdint>
 #include "VPS.hpp"
-
+#include <cstdint>
 
 #define Extended_SAR 255
 #define MAX_VPS_COUNT 32
@@ -15,7 +14,7 @@
 
 class SPS {
  public:
-  int extractParameters(BitStream &bitStream,VPS vpss[MAX_SPS_COUNT]);
+  int extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]);
 
  private:
   BitStream *bs = nullptr;
@@ -36,6 +35,13 @@ class SPS {
   // 分别表示图像的宽度和高度，单位为亮度样本。
   int32_t pic_width_in_luma_samples = 0;
   int32_t pic_height_in_luma_samples = 0;
+  int32_t width = 0;
+  int32_t height = 0;
+
+  int ctb_width = 0;
+  int ctb_height = 0;
+  int ctb_size = 0;
+
   // 表示是否裁剪图像边缘以符合显示要求。
   int32_t conformance_window_flag = 0;
 
@@ -65,6 +71,12 @@ class SPS {
   int32_t max_transform_hierarchy_depth_inter = 0;
   int32_t max_transform_hierarchy_depth_intra = 0;
 
+  int32_t CtbLog2SizeY = 0;
+
+  int32_t MinCbLog2SizeY = 0;
+  int32_t PicWidthInCtbsY = 0;
+  int32_t CtbSizeY = 0;
+  int32_t PicHeightInCtbsY = 0;
   int32_t PicSizeInCtbsY = 0;
 
   // 指示是否使用量化缩放列表和是否在SPS中携带缩放列表数据。

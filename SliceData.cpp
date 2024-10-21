@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <cstdlib>
 
+#define GET_CABAC(ctx) get_cabac(&s->HEVClc->cc, &s->HEVClc->cabac_state[ctx])
+
 /* 7.3.4 Slice data syntax */
 int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
                               SPS &sps, PPS &pps) {
@@ -32,23 +34,25 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
   /* 8.2 Slice decoding process */
   //slice_decoding_process();
 
+  //----
   //----------------------- 开始对Slice分割为MacroBlock进行处理 ----------------------------
+  bool end_of_slice_segment_flag = false;
   //do {
-//    coding_tree_unit();
-//    end_of_slice_segment_flag ae(v);
-//    CtbAddrInTs++;
-//    CtbAddrInRs = CtbAddrTsToRs[CtbAddrInTs];
-//    if (!end_of_slice_segment_flag &&
-//        ((tiles_enabled_flag &&
-//          TileId[CtbAddrInTs] != TileId[CtbAddrInTs - 1]) ||
-//         (entropy_coding_sync_enabled_flag &&
-//          (CtbAddrInRs % PicWidthInCtbsY == 0 ||
-//           TileId[CtbAddrInTs] != TileId[CtbAddrRsToTs[CtbAddrInRs - 1]])))) {
-//      end_of_subset_one_bit /* equal to 1 */ ae(v);
-//      byte_alignment();
-    //}
-    /* 计算下一个宏块的地址 */
-    //CurrMbAddr = NextMbAddress(CurrMbAddr, header);
+  coding_tree_unit();
+  //    end_of_slice_segment_flag ae(v);
+  CtbAddrInTs++;
+  CtbAddrInRs = m_pps->CtbAddrTsToRs[CtbAddrInTs];
+  //    if (!end_of_slice_segment_flag &&
+  //        ((tiles_enabled_flag &&
+  //          TileId[CtbAddrInTs] != TileId[CtbAddrInTs - 1]) ||
+  //         (entropy_coding_sync_enabled_flag &&
+  //          (CtbAddrInRs % PicWidthInCtbsY == 0 ||
+  //           TileId[CtbAddrInTs] != TileId[CtbAddrRsToTs[CtbAddrInRs - 1]])))) {
+  //      end_of_subset_one_bit /* equal to 1 */ ae(v);
+  //      byte_alignment();
+  //}
+  /* 计算下一个宏块的地址 */
+  //CurrMbAddr = NextMbAddress(CurrMbAddr, header);
   //} while (!end_of_slice_segment_flag);
   slice_number++;
   return 0;
@@ -76,563 +80,725 @@ int SliceData::initCABAC() {
   return 0;
 }
 
-//int coding_tree_unit() {
-//  int32_t xCtb = (CtbAddrInRs % PicWidthInCtbsY) << CtbLog2SizeY;
-//  int32_t yCtb = (CtbAddrInRs / PicWidthInCtbsY) << CtbLog2SizeY;
-//  if (slice_sao_luma_flag || slice_sao_chroma_flag)
-//    sao(xCtb >> CtbLog2SizeY, yCtb >> CtbLog2SizeY);
-//  coding_quadtree(xCtb, yCtb, CtbLog2SizeY, 0);
-//  return 0;
-//}
+#define BOUNDARY_LEFT_SLICE (1 << 0)
+#define BOUNDARY_LEFT_TILE (1 << 1)
+#define BOUNDARY_UPPER_SLICE (1 << 2)
+#define BOUNDARY_UPPER_TILE (1 << 3)
+
+void SliceData::hls_decode_neighbour(int x_ctb, int y_ctb, int ctb_addr_ts) {
+  int ctb_size = 1 << m_sps->CtbLog2SizeY;
+  int ctb_addr_rs = m_pps->CtbAddrTsToRs[ctb_addr_ts];
+  int ctb_addr_in_slice = ctb_addr_rs - header->SliceAddrRs;
+  tab_slice_address[ctb_addr_rs] = header->SliceAddrRs;
+
+  if (m_pps->entropy_coding_sync_enabled_flag) {
+    if (x_ctb == 0 && (y_ctb & (ctb_size - 1)) == 0) first_qp_group = 1;
+    end_of_tiles_x = m_sps->width;
+  } else if (m_pps->tiles_enabled_flag) {
+    if (ctb_addr_ts &&
+        m_pps->TileId[ctb_addr_ts] != m_pps->TileId[ctb_addr_ts - 1]) {
+      int idxX = m_pps->col_idxX[x_ctb >> m_sps->CtbLog2SizeY];
+      end_of_tiles_x = x_ctb + (m_pps->colWidth[idxX] << m_sps->CtbLog2SizeY);
+      first_qp_group = 1;
+    }
+  } else {
+    end_of_tiles_x = m_sps->width;
+  }
+
+  int end_of_tiles_y = MIN(y_ctb + ctb_size, m_sps->height);
+
+  int boundary_flags = 0;
+  if (m_pps->tiles_enabled_flag) {
+    if (x_ctb > 0 && m_pps->TileId[ctb_addr_ts] !=
+                         m_pps->TileId[m_pps->CtbAddrRsToTs[ctb_addr_rs - 1]])
+      boundary_flags |= BOUNDARY_LEFT_TILE;
+    if (x_ctb > 0 &&
+        tab_slice_address[ctb_addr_rs] != tab_slice_address[ctb_addr_rs - 1])
+      boundary_flags |= BOUNDARY_LEFT_SLICE;
+    if (y_ctb > 0 &&
+        m_pps->TileId[ctb_addr_ts] !=
+            m_pps->TileId[m_pps->CtbAddrRsToTs[ctb_addr_rs - m_sps->ctb_width]])
+      boundary_flags |= BOUNDARY_UPPER_TILE;
+    if (y_ctb > 0 && tab_slice_address[ctb_addr_rs] !=
+                         tab_slice_address[ctb_addr_rs - m_sps->ctb_width])
+      boundary_flags |= BOUNDARY_UPPER_SLICE;
+  } else {
+    if (ctb_addr_in_slice <= 0) boundary_flags |= BOUNDARY_LEFT_SLICE;
+    if (ctb_addr_in_slice < m_sps->ctb_width)
+      boundary_flags |= BOUNDARY_UPPER_SLICE;
+  }
+
+  int ctb_left_flag = ((x_ctb > 0) && (ctb_addr_in_slice > 0) &&
+                       !(boundary_flags & BOUNDARY_LEFT_TILE));
+  int ctb_up_flag = ((y_ctb > 0) && (ctb_addr_in_slice >= m_sps->ctb_width) &&
+                     !(boundary_flags & BOUNDARY_UPPER_TILE));
+  int ctb_up_right_flag =
+      ((y_ctb > 0) && (ctb_addr_in_slice + 1 >= m_sps->ctb_width) &&
+       (m_pps->TileId[ctb_addr_ts] ==
+        m_pps->TileId[m_pps->CtbAddrRsToTs[ctb_addr_rs + 1 -
+                                           m_sps->ctb_width]]));
+  int ctb_up_left_flag =
+      ((x_ctb > 0) && (y_ctb > 0) &&
+       (ctb_addr_in_slice - 1 >= m_sps->ctb_width) &&
+       (m_pps->TileId[ctb_addr_ts] ==
+        m_pps->TileId[m_pps->CtbAddrRsToTs[ctb_addr_rs - 1 -
+                                           m_sps->ctb_width]]));
+}
+
+int SliceData::cabac_init_decoder() {
+  //skip_bits(gb, 1);
+  //align_get_bits(gb);
+  return ff_init_cabac_decoder();
+}
+
+int SliceData::ff_init_cabac_decoder() {
+  //  c->bytestream_start = c->bytestream = buf;
+  //  c->bytestream_end = buf + buf_size;
+  //
+  //  c->low = (*c->bytestream++) << 18;
+  //  c->low += (*c->bytestream++) << 10;
+  //  if (((uintptr_t)c->bytestream & 1) == 0) {
+  //    c->low += (1 << 9);
+  //  } else {
+  //    c->low += ((*c->bytestream++) << 2) + 2;
+  //  }
+  //  c->range = 0x1FE;
+  return 0;
+}
+
+int SliceData::cabac_init_state() {
+  int init_type = 2 - header->slice_type;
+  int i;
+
+  if (header->cabac_init_flag && header->slice_type != HEVC_SLICE_I)
+    init_type ^= 3;
+
+  for (i = 0; i < HEVC_CONTEXTS; i++) {
+    int init_value = init_values[init_type][i];
+    int m = (init_value >> 4) * 5 - 45;
+    int n = ((init_value & 15) << 3) - 16;
+    int preCtxState =
+        2 * (((m * CLIP(header->slice_qp, 0, 51)) >> 4) + n) - 127;
+    preCtxState ^= preCtxState >> 31;
+    if (preCtxState > 124) preCtxState = 124 + (preCtxState & 1);
+    cabac_state[i] = preCtxState;
+  }
+  for (i = 0; i < 4; i++)
+    stat_coeff[i] = 0;
+  return 0;
+}
+
+int SliceData::load_states() { return 0; }
+
+int SliceData::ff_hevc_cabac_init(int ctb_addr_ts) {
+  if (ctb_addr_ts == m_pps->CtbAddrRsToTs[header->slice_ctb_addr_rs]) {
+    int ret = cabac_init_decoder();
+    if (ret < 0) return ret;
+    if (header->dependent_slice_segment_flag == 0 ||
+        (m_pps->tiles_enabled_flag &&
+         m_pps->TileId[ctb_addr_ts] != m_pps->TileId[ctb_addr_ts - 1]))
+      cabac_init_state();
+
+    if (!header->first_mb_in_slice && m_pps->entropy_coding_sync_enabled_flag) {
+      if (ctb_addr_ts % m_sps->ctb_width == 0) {
+        if (m_sps->ctb_width == 1)
+          cabac_init_state();
+        else if (header->dependent_slice_segment_flag == 1)
+          load_states();
+      }
+    }
+  } else {
+    std::cout << "Into -> " << __FUNCTION__ << "():" << __LINE__ << std::endl;
+    exit(0);
+  }
+  return 0;
+}
+
+int SliceData::coding_tree_unit() {
+  int32_t xCtb = (CtbAddrInRs % m_sps->PicWidthInCtbsY) << m_sps->CtbLog2SizeY;
+  int32_t yCtb = (CtbAddrInRs / m_sps->PicWidthInCtbsY) << m_sps->CtbLog2SizeY;
+  int ctb_addr_ts = m_pps->CtbAddrRsToTs[header->slice_ctb_addr_rs];
+  hls_decode_neighbour(xCtb, yCtb, ctb_addr_ts);
+  ff_hevc_cabac_init(ctb_addr_ts);
+  if (header->slice_sao_luma_flag || header->slice_sao_chroma_flag)
+    sao(xCtb >> m_sps->CtbLog2SizeY, yCtb >> m_sps->CtbLog2SizeY);
+  coding_quadtree(xCtb, yCtb, m_sps->CtbLog2SizeY, 0);
+  return 0;
+}
+
+int SliceData::sao(int32_t rx, int32_t ry) {
+  if (rx > 0) {
+    int leftCtbInSliceSeg = CtbAddrInRs > header->SliceAddrRs;
+    int leftCtbInTile = (m_pps->TileId[CtbAddrInTs] ==
+                         m_pps->TileId[m_pps->CtbAddrRsToTs[CtbAddrInRs - 1]]);
+    if (leftCtbInSliceSeg && leftCtbInTile)
+      int sao_merge_left_flag = 0; // = ff_hevc_sao_merge_flag_decode();
+  }
+
+  int sao_merge_left_flag = 0;
+  int sao_merge_up_flag = 0;
+  if (ry > 0 && !sao_merge_left_flag) {
+    int upCtbInSliceSeg =
+        (CtbAddrInRs - m_sps->PicWidthInCtbsY) >= header->SliceAddrRs;
+    int upCtbInTile =
+        m_pps->TileId[CtbAddrInTs] ==
+        m_pps->TileId[m_pps->CtbAddrRsToTs[CtbAddrInRs -
+                                           m_sps->PicWidthInCtbsY]];
+    if (upCtbInSliceSeg && upCtbInTile) sao_merge_up_flag = 0; // = ae(v);
+  }
+
+  int SaoTypeIdx[3][32][32] = {{{0}}};
+  int sao_offset_abs[3][32][32][32] = {{{{0}}}};
+  int sao_offset_sign[3][32][32][32] = {{{{0}}}};
+  int sao_band_position[3][32][32] = {{{0}}};
+  if (!sao_merge_up_flag && !sao_merge_left_flag)
+    for (int cIdx = 0; cIdx < (m_sps->ChromaArrayType != 0 ? 3 : 1); cIdx++)
+      if ((header->slice_sao_luma_flag && cIdx == 0) ||
+          (header->slice_sao_chroma_flag && cIdx > 0)) {
+        if (cIdx == 0) {
+          int sao_type_idx_luma = 0; // = ae(v);
+          if (sao_type_idx_luma) {
+            SaoTypeIdx[0][rx][ry] = sao_type_idx_luma;
+          } else {
+            if (sao_merge_left_flag == 1) {
+              SaoTypeIdx[0][rx][ry] = SaoTypeIdx[0][rx - 1][ry];
+            } else if (sao_merge_up_flag == 1) {
+              SaoTypeIdx[0][rx][ry] = SaoTypeIdx[0][rx][ry - 1];
+            } else {
+              SaoTypeIdx[0][rx][ry] = 0;
+            }
+          }
+        } else if (cIdx == 1)
+          int sao_type_idx_chroma = 0; // = ae(v);
+        if (SaoTypeIdx[cIdx][rx][ry] != 0) {
+          for (int i = 0; i < 4; i++)
+            sao_offset_abs[cIdx][rx][ry][i] = 0; // = ae(v);
+          if (SaoTypeIdx[cIdx][rx][ry] == 1) {
+            for (int i = 0; i < 4; i++)
+              if (sao_offset_abs[cIdx][rx][ry][i] != 0)
+                sao_offset_sign[cIdx][rx][ry][i] = 0; // = ae(v);
+            sao_band_position[cIdx][rx][ry] = 0;      // = ae(v);
+          } else {
+            if (cIdx == 0) int sao_eo_class_luma = 0;   // = ae(v);
+            if (cIdx == 1) int sao_eo_class_chroma = 0; // = ae(v);
+          }
+        }
+      }
+  return 0;
+}
 //
-//int sao(int32_t rx, int32_t ry) {
-//  if (rx > 0) {
-//    leftCtbInSliceSeg = CtbAddrInRs > SliceAddrRs;
-//    leftCtbInTile =
-//        (TileId[CtbAddrInTs] == TileId[CtbAddrRsToTs[CtbAddrInRs - 1]]);
-//    if (leftCtbInSliceSeg && leftCtbInTile) sao_merge_left_flag = ae(v);
-//  }
-//  if (ry > 0 && !sao_merge_left_flag) {
-//    upCtbInSliceSeg =
-//        (CtbAddrInRs - PicWidthInCtbsY) >= SliceAddrRs upCtbInTile =
-//            TileId[CtbAddrInTs] ==
-//            TileId[CtbAddrRsToTs[CtbAddrInRs - PicWidthInCtbsY]];
-//    if (upCtbInSliceSeg && upCtbInTile) sao_merge_up_flag = ae(v);
-//  }
-//  if (!sao_merge_up_flag && !sao_merge_left_flag)
-//    for (cIdx = 0; cIdx < (ChromaArrayType != 0 ? 3 : 1); cIdx++)
-//      if ((slice_sao_luma_flag && cIdx == 0) ||
-//          (slice_sao_chroma_flag && cIdx > 0)) {
-//        if (cIdx == 0)
-//          sao_type_idx_luma = ae(v);
-//        else if (cIdx == 1)
-//          sao_type_idx_chroma = ae(v);
-//        if (SaoTypeIdx[cIdx][rx][ry] != 0) {
-//          for (i = 0; i < 4; i++)
-//            sao_offset_abs[cIdx][rx][ry][i] = ae(v);
-//          if (SaoTypeIdx[cIdx][rx][ry] == 1) {
-//            for (i = 0; i < 4; i++)
-//              if (sao_offset_abs[cIdx][rx][ry][i] != 0)
-//                sao_offset_sign[cIdx][rx][ry][i] = ae(v);
-//            sao_band_position[cIdx][rx][ry] = ae(v);
-//          } else {
-//            if (cIdx == 0) sao_eo_class_luma = ae(v);
-//            if (cIdx == 1) sao_eo_class_chroma = ae(v);
-//          }
-//        }
-//      }
-//  return 0;
-//}
+int SliceData::coding_quadtree(int x0, int y0, int log2CbSize, int cqtDepth) {
+  //  if (x0 + (1 << log2CbSize) <= pic_width_in_luma_samples &&
+  //      y0 + (1 << log2CbSize) <= pic_height_in_luma_samples &&
+  //      log2CbSize > MinCbLog2SizeY)
+  //    split_cu_flag[x0][y0] = ae(v);
+  //  if (cu_qp_delta_enabled_flag && log2CbSize >= Log2MinCuQpDeltaSize) {
+  //    IsCuQpDeltaCoded = 0, CuQpDeltaVal = 0;
+  //  }
+  //  if (cu_chroma_qp_offset_enabled_flag &&
+  //      log2CbSize >= Log2MinCuChromaQpOffsetSize)
+  //    IsCuChromaQpOffsetCoded = 0;
+  //  if (split_cu_flag[x0][y0]) {
+  //    x1 = x0 + (1 << (log2CbSize - 1));
+  //    y1 = y0 + (1 << (log2CbSize - 1));
+  //    coding_quadtree(x0, y0, log2CbSize - 1, cqtDepth + 1);
+  //    if (x1 < pic_width_in_luma_samples)
+  //      coding_quadtree(x1, y0, log2CbSize - 1, cqtDepth + 1);
+  //    if (y1 < pic_height_in_luma_samples)
+  //      coding_quadtree(x0, y1, log2CbSize - 1, cqtDepth + 1);
+  //    if (x1 < pic_width_in_luma_samples && y1 < pic_height_in_luma_samples)
+  //      coding_quadtree(x1, y1, log2CbSize - 1, cqtDepth + 1);
+  //  } else
+  //    coding_unit(x0, y0, log2CbSize);
+  return 0;
+}
+
+int SliceData::coding_unit(int x0, int y0, int log2CbSize) {
+  //  if (transquant_bypass_enabled_flag) cu_transquant_bypass_flag = ae(v);
+  //  if (slice_type != I) cu_skip_flag[x0][y0] = ae(v);
+  //  nCbS = (1 << log2CbSize) if (cu_skip_flag[x0][y0])
+  //      prediction_unit(x0, y0, nCbS, nCbS);
+  //  else {
+  //    if (slice_type != I) pred_mode_flag = ae(v);
+  //    if (palette_mode_enabled_flag && CuPredMode[x0][y0] == MODE_INTRA &&
+  //        log2CbSize <= MaxTbLog2SizeY)
+  //      palette_mode_flag[x0][y0] = ae(v);
+  //    if (palette_mode_flag[x0][y0])
+  //      palette_coding(x0, y0, nCbS);
+  //    else {
+  //      if (CuPredMode[x0][y0] != MODE_INTRA || log2CbSize == MinCbLog2SizeY)
+  //        part_mode = ae(v);
+  //      if (CuPredMode[x0][y0] == MODE_INTRA) {
+  //        if (PartMode == PART_2Nx2N && pcm_enabled_flag &&
+  //            log2CbSize >= Log2MinIpcmCbSizeY &&
+  //            log2CbSize <= Log2MaxIpcmCbSizeY)
+  //          pcm_flag[x0][y0] = ae(v);
+  //        if (pcm_flag[x0][y0]) {
+  //          while (!byte_aligned())
+  //            pcm_alignment_zero_bit f(1);
+  //          pcm_sample(x0, y0, log2CbSize);
+  //        } else {
+  //          pbOffset = (PartMode == PART_NxN) ? (nCbS / 2) : nCbS;
+  //          for (j = 0; j < nCbS; j = j + pbOffset)
+  //            for (i = 0; i < nCbS; i = i + pbOffset)
+  //              prev_intra_luma_pred_flag[x0 + i][y0 + j] = ae(v);
+  //          for (j = 0; j < nCbS; j = j + pbOffset)
+  //            for (i = 0; i < nCbS; i = i + pbOffset)
+  //              if (prev_intra_luma_pred_flag[x0 + i][y0 + j])
+  //                mpm_idx[x0 + i][y0 + j] = ae(v);
+  //              else
+  //                rem_intra_luma_pred_mode[x0 + i][y0 + j] = ae(v);
+  //          if (ChromaArrayType == 3)
+  //            for (j = 0; j < nCbS; j = j + pbOffset)
+  //              for (i = 0; i < nCbS; i = i + pbOffset)
+  //                intra_chroma_pred_mode[x0 + i][y0 + j] = ae(v);
+  //          else if (ChromaArrayType != 0)
+  //            intra_chroma_pred_mode[x0][y0] = ae(v);
+  //        }
+  //      } else {
+  //        if (PartMode == PART_2Nx2N)
+  //          prediction_unit(x0, y0, nCbS, nCbS);
+  //        else if (PartMode == PART_2NxN) {
+  //          prediction_unit(x0, y0, nCbS, nCbS / 2);
+  //          prediction_unit(x0, y0 + (nCbS / 2), nCbS, nCbS / 2);
+  //        } else if (PartMode == PART_Nx2N) {
+  //          prediction_unit(x0, y0, nCbS / 2, nCbS);
+  //          prediction_unit(x0 + (nCbS / 2), y0, nCbS / 2, nCbS);
+  //        } else if (PartMode == PART_2NxnU) {
+  //          prediction_unit(x0, y0, nCbS, nCbS / 4);
+  //          prediction_unit(x0, y0 + (nCbS / 4), nCbS, nCbS * 3 / 4);
+  //        } else if (PartMode == PART_2NxnD) {
+  //          prediction_unit(x0, y0, nCbS, nCbS * 3 / 4);
+  //          prediction_unit(x0, y0 + (nCbS * 3 / 4), nCbS, nCbS / 4);
+  //        } else if (PartMode == PART_nLx2N) {
+  //          prediction_unit(x0, y0, nCbS / 4, nCbS);
+  //          prediction_unit(x0 + (nCbS / 4), y0, nCbS * 3 / 4, nCbS);
+  //        } else if (PartMode == PART_nRx2N) {
+  //          prediction_unit(x0, y0, nCbS * 3 / 4, nCbS);
+  //          prediction_unit(x0 + (nCbS * 3 / 4), y0, nCbS / 4, nCbS);
+  //        } else { /* PART_NxN */
+  //          prediction_unit(x0, y0, nCbS / 2, nCbS / 2);
+  //          prediction_unit(x0 + (nCbS / 2), y0, nCbS / 2, nCbS / 2);
+  //          prediction_unit(x0, y0 + (nCbS / 2), nCbS / 2, nCbS / 2);
+  //          prediction_unit(x0 + (nCbS / 2), y0 + (nCbS / 2), nCbS / 2, nCbS / 2);
+  //        }
+  //      }
+  //      if (!pcm_flag[x0][y0]) {
+  //        if (CuPredMode[x0][y0] != MODE_INTRA &&
+  //            !(PartMode == PART_2Nx2N && merge_flag[x0][y0]))
+  //          rqt_root_cbf = ae(v);
+  //        if (rqt_root_cbf) {
+  //          MaxTrafoDepth =
+  //              (CuPredMode[x0][y0] == MODE_INTRA
+  //                   ? (max_transform_hierarchy_depth_intra + IntraSplitFlag)
+  //                   : max_transform_hierarchy_depth_inter);
+  //          transform_tree(x0, y0, x0, y0, log2CbSize, 0, 0);
+  //        }
+  //      }
+  //    }
+  //  }
+  return 0;
+}
 //
-//int coding_quadtree(x0, y0, log2CbSize, cqtDepth) {
-//  if (x0 + (1 << log2CbSize) <= pic_width_in_luma_samples &&
-//      y0 + (1 << log2CbSize) <= pic_height_in_luma_samples &&
-//      log2CbSize > MinCbLog2SizeY)
-//    split_cu_flag[x0][y0] = ae(v);
-//  if (cu_qp_delta_enabled_flag && log2CbSize >= Log2MinCuQpDeltaSize) {
-//    IsCuQpDeltaCoded = 0, CuQpDeltaVal = 0;
-//  }
-//  if (cu_chroma_qp_offset_enabled_flag &&
-//      log2CbSize >= Log2MinCuChromaQpOffsetSize)
-//    IsCuChromaQpOffsetCoded = 0;
-//  if (split_cu_flag[x0][y0]) {
-//    x1 = x0 + (1 << (log2CbSize - 1));
-//    y1 = y0 + (1 << (log2CbSize - 1));
-//    coding_quadtree(x0, y0, log2CbSize - 1, cqtDepth + 1);
-//    if (x1 < pic_width_in_luma_samples)
-//      coding_quadtree(x1, y0, log2CbSize - 1, cqtDepth + 1);
-//    if (y1 < pic_height_in_luma_samples)
-//      coding_quadtree(x0, y1, log2CbSize - 1, cqtDepth + 1);
-//    if (x1 < pic_width_in_luma_samples && y1 < pic_height_in_luma_samples)
-//      coding_quadtree(x1, y1, log2CbSize - 1, cqtDepth + 1);
-//  } else
-//    coding_unit(x0, y0, log2CbSize);
-//}
+int SliceData::prediction_unit(int x0, int y0, int nPbW, int nPbH) {
+  //  if (cu_skip_flag[x0][y0]) {
+  //    if (MaxNumMergeCand > 1) merge_idx[x0][y0] = ae(v);
+  //  } else { /* MODE_INTER */
+  //    merge_flag[x0][y0] = ae(v);
+  //    if (merge_flag[x0][y0]) {
+  //      if (MaxNumMergeCand > 1) merge_idx[x0][y0] = ae(v);
+  //    } else {
+  //      if (slice_type == B) inter_pred_idc[x0][y0] = ae(v);
+  //      if (inter_pred_idc[x0][y0] != PRED_L1) {
+  //        if (num_ref_idx_l0_active_minus1 > 0) ref_idx_l0[x0][y0] = ae(v);
+  //        mvd_coding(x0, y0, 0);
+  //        mvp_l0_flag[x0][y0] = ae(v);
+  //      }
+  //      if (inter_pred_idc[x0][y0] != PRED_L0) {
+  //        if (num_ref_idx_l1_active_minus1 > 0) ref_idx_l1[x0][y0] = ae(v);
+  //        if (mvd_l1_zero_flag && inter_pred_idc[x0][y0] == PRED_BI) {
+  //          MvdL1[x0][y0][0] = 0, MvdL1[x0][y0][1] = 0;
+  //        } else
+  //          mvd_coding(x0, y0, 1);
+  //        mvp_l1_flag[x0][y0] = ae(v);
+  //      }
+  //    }
+  //  }
+  return 0;
+}
 //
-//int coding_unit(x0, y0, log2CbSize) {
-//  if (transquant_bypass_enabled_flag) cu_transquant_bypass_flag = ae(v);
-//  if (slice_type != I) cu_skip_flag[x0][y0] = ae(v);
-//  nCbS = (1 << log2CbSize) if (cu_skip_flag[x0][y0])
-//      prediction_unit(x0, y0, nCbS, nCbS);
-//  else {
-//    if (slice_type != I) pred_mode_flag = ae(v);
-//    if (palette_mode_enabled_flag && CuPredMode[x0][y0] == MODE_INTRA &&
-//        log2CbSize <= MaxTbLog2SizeY)
-//      palette_mode_flag[x0][y0] = ae(v);
-//    if (palette_mode_flag[x0][y0])
-//      palette_coding(x0, y0, nCbS);
-//    else {
-//      if (CuPredMode[x0][y0] != MODE_INTRA || log2CbSize == MinCbLog2SizeY)
-//        part_mode = ae(v);
-//      if (CuPredMode[x0][y0] == MODE_INTRA) {
-//        if (PartMode == PART_2Nx2N && pcm_enabled_flag &&
-//            log2CbSize >= Log2MinIpcmCbSizeY &&
-//            log2CbSize <= Log2MaxIpcmCbSizeY)
-//          pcm_flag[x0][y0] = ae(v);
-//        if (pcm_flag[x0][y0]) {
-//          while (!byte_aligned())
-//            pcm_alignment_zero_bit f(1);
-//          pcm_sample(x0, y0, log2CbSize);
-//        } else {
-//          pbOffset = (PartMode == PART_NxN) ? (nCbS / 2) : nCbS;
-//          for (j = 0; j < nCbS; j = j + pbOffset)
-//            for (i = 0; i < nCbS; i = i + pbOffset)
-//              prev_intra_luma_pred_flag[x0 + i][y0 + j] = ae(v);
-//          for (j = 0; j < nCbS; j = j + pbOffset)
-//            for (i = 0; i < nCbS; i = i + pbOffset)
-//              if (prev_intra_luma_pred_flag[x0 + i][y0 + j])
-//                mpm_idx[x0 + i][y0 + j] = ae(v);
-//              else
-//                rem_intra_luma_pred_mode[x0 + i][y0 + j] = ae(v);
-//          if (ChromaArrayType == 3)
-//            for (j = 0; j < nCbS; j = j + pbOffset)
-//              for (i = 0; i < nCbS; i = i + pbOffset)
-//                intra_chroma_pred_mode[x0 + i][y0 + j] = ae(v);
-//          else if (ChromaArrayType != 0)
-//            intra_chroma_pred_mode[x0][y0] = ae(v);
-//        }
-//      } else {
-//        if (PartMode == PART_2Nx2N)
-//          prediction_unit(x0, y0, nCbS, nCbS);
-//        else if (PartMode == PART_2NxN) {
-//          prediction_unit(x0, y0, nCbS, nCbS / 2);
-//          prediction_unit(x0, y0 + (nCbS / 2), nCbS, nCbS / 2);
-//        } else if (PartMode == PART_Nx2N) {
-//          prediction_unit(x0, y0, nCbS / 2, nCbS);
-//          prediction_unit(x0 + (nCbS / 2), y0, nCbS / 2, nCbS);
-//        } else if (PartMode == PART_2NxnU) {
-//          prediction_unit(x0, y0, nCbS, nCbS / 4);
-//          prediction_unit(x0, y0 + (nCbS / 4), nCbS, nCbS * 3 / 4);
-//        } else if (PartMode == PART_2NxnD) {
-//          prediction_unit(x0, y0, nCbS, nCbS * 3 / 4);
-//          prediction_unit(x0, y0 + (nCbS * 3 / 4), nCbS, nCbS / 4);
-//        } else if (PartMode == PART_nLx2N) {
-//          prediction_unit(x0, y0, nCbS / 4, nCbS);
-//          prediction_unit(x0 + (nCbS / 4), y0, nCbS * 3 / 4, nCbS);
-//        } else if (PartMode == PART_nRx2N) {
-//          prediction_unit(x0, y0, nCbS * 3 / 4, nCbS);
-//          prediction_unit(x0 + (nCbS * 3 / 4), y0, nCbS / 4, nCbS);
-//        } else { /* PART_NxN */
-//          prediction_unit(x0, y0, nCbS / 2, nCbS / 2);
-//          prediction_unit(x0 + (nCbS / 2), y0, nCbS / 2, nCbS / 2);
-//          prediction_unit(x0, y0 + (nCbS / 2), nCbS / 2, nCbS / 2);
-//          prediction_unit(x0 + (nCbS / 2), y0 + (nCbS / 2), nCbS / 2, nCbS / 2);
-//        }
-//      }
-//      if (!pcm_flag[x0][y0]) {
-//        if (CuPredMode[x0][y0] != MODE_INTRA &&
-//            !(PartMode == PART_2Nx2N && merge_flag[x0][y0]))
-//          rqt_root_cbf = ae(v);
-//        if (rqt_root_cbf) {
-//          MaxTrafoDepth =
-//              (CuPredMode[x0][y0] == MODE_INTRA
-//                   ? (max_transform_hierarchy_depth_intra + IntraSplitFlag)
-//                   : max_transform_hierarchy_depth_inter);
-//          transform_tree(x0, y0, x0, y0, log2CbSize, 0, 0);
-//        }
-//      }
-//    }
-//  }
-//  return 0;
-//}
+int SliceData::pcm_sample(int x0, int y0, int log2CbSize) {
+  //  for (i = 0; i < 1 << (log2CbSize << 1); i++)
+  //    pcm_sample_luma[i] u(v);
+  //  if (ChromaArrayType != 0)
+  //    for (i = 0; i < ((2 << (log2CbSize << 1)) / (SubWidthC * SubHeightC)); i++)
+  //      pcm_sample_chroma[i] u(v);
+  //
+  return 0;
+}
 //
-//int prediction_unit(x0, y0, nPbW, nPbH) {
-//  if (cu_skip_flag[x0][y0]) {
-//    if (MaxNumMergeCand > 1) merge_idx[x0][y0] = ae(v);
-//  } else { /* MODE_INTER */
-//    merge_flag[x0][y0] = ae(v);
-//    if (merge_flag[x0][y0]) {
-//      if (MaxNumMergeCand > 1) merge_idx[x0][y0] = ae(v);
-//    } else {
-//      if (slice_type == B) inter_pred_idc[x0][y0] = ae(v);
-//      if (inter_pred_idc[x0][y0] != PRED_L1) {
-//        if (num_ref_idx_l0_active_minus1 > 0) ref_idx_l0[x0][y0] = ae(v);
-//        mvd_coding(x0, y0, 0);
-//        mvp_l0_flag[x0][y0] = ae(v);
-//      }
-//      if (inter_pred_idc[x0][y0] != PRED_L0) {
-//        if (num_ref_idx_l1_active_minus1 > 0) ref_idx_l1[x0][y0] = ae(v);
-//        if (mvd_l1_zero_flag && inter_pred_idc[x0][y0] == PRED_BI) {
-//          MvdL1[x0][y0][0] = 0, MvdL1[x0][y0][1] = 0;
-//        } else
-//          mvd_coding(x0, y0, 1);
-//        mvp_l1_flag[x0][y0] = ae(v);
-//      }
-//    }
-//  }
-//  return 0;
-//}
+int SliceData::transform_tree(int x0, int y0, int xBase, int yBase,
+                              int log2TrafoSize, int trafoDepth, int blkIdx) {
+  //  if (log2TrafoSize <= MaxTbLog2SizeY && log2TrafoSize > MinTbLog2SizeY &&
+  //      trafoDepth < MaxTrafoDepth && !(IntraSplitFlag && (trafoDepth == 0)))
+  //    split_transform_flag[x0][y0][trafoDepth] = ae(v);
+  //  if ((log2TrafoSize > 2 && ChromaArrayType != 0) || ChromaArrayType == 3) {
+  //    if (trafoDepth == 0 || cbf_cb[xBase][yBase][trafoDepth - 1]) {
+  //      cbf_cb[x0][y0][trafoDepth] = ae(v);
+  //      if (ChromaArrayType == 2 &&
+  //          (!split_transform_flag[x0][y0][trafoDepth] || log2TrafoSize == 3))
+  //        cbf_cb[x0][y0 + (1 << (log2TrafoSize - 1))][trafoDepth] = ae(v);
+  //    }
+  //    if (trafoDepth == 0 || cbf_cr[xBase][yBase][trafoDepth - 1]) {
+  //      cbf_cr[x0][y0][trafoDepth] = ae(v);
+  //      if (ChromaArrayType == 2 &&
+  //          (!split_transform_flag[x0][y0][trafoDepth] || log2TrafoSize == 3))
+  //        cbf_cr[x0][y0 + (1 << (log2TrafoSize - 1))][trafoDepth] = ae(v);
+  //    }
+  //  }
+  //  if (split_transform_flag[x0][y0][trafoDepth]) {
+  //    x1 = x0 + (1 << (log2TrafoSize - 1));
+  //    y1 = y0 + (1 << (log2TrafoSize - 1));
+  //    transform_tree(x0, y0, x0, y0, log2TrafoSize - 1, trafoDepth + 1, 0);
+  //    transform_tree(x1, y0, x0, y0, log2TrafoSize - 1, trafoDepth + 1, 1);
+  //    transform_tree(x0, y1, x0, y0, log2TrafoSize - 1, trafoDepth + 1, 2);
+  //    transform_tree(x1, y1, x0, y0, log2TrafoSize - 1, trafoDepth + 1, 3);
+  //  } else {
+  //    if (CuPredMode[x0][y0] == MODE_INTRA || trafoDepth != 0 ||
+  //        cbf_cb[x0][y0][trafoDepth] || cbf_cr[x0][y0][trafoDepth] ||
+  //        (ChromaArrayType == 2 &&
+  //         (cbf_cb[x0][y0 + (1 << (log2TrafoSize - 1))][trafoDepth] ||
+  //          cbf_cr[x0][y0 + (1 << (log2TrafoSize - 1))][trafoDepth])))
+  //      cbf_luma[x0][y0][trafoDepth] = ae(v);
+  //    transform_unit(x0, y0, xBase, yBase, log2TrafoSize, trafoDepth, blkIdx);
+  //  }
+  return 0;
+}
 //
-//int pcm_sample(x0, y0, log2CbSize) {
-//  for (i = 0; i < 1 << (log2CbSize << 1); i++)
-//    pcm_sample_luma[i] u(v);
-//  if (ChromaArrayType != 0)
-//    for (i = 0; i < ((2 << (log2CbSize << 1)) / (SubWidthC * SubHeightC)); i++)
-//      pcm_sample_chroma[i] u(v);
+int SliceData::mvd_coding(int x0, int y0, int refList) {
+  //  abs_mvd_greater0_flag[0] = ae(v);
+  //  abs_mvd_greater0_flag[1] = ae(v);
+  //  if (abs_mvd_greater0_flag[0]) abs_mvd_greater1_flag[0] = ae(v);
+  //  if (abs_mvd_greater0_flag[1]) abs_mvd_greater1_flag[1] = ae(v);
+  //  if (abs_mvd_greater0_flag[0]) {
+  //    if (abs_mvd_greater1_flag[0]) abs_mvd_minus2[0] = ae(v);
+  //    mvd_sign_flag[0] = ae(v);
+  //  }
+  //  if (abs_mvd_greater0_flag[1]) {
+  //    if (abs_mvd_greater1_flag[1]) abs_mvd_minus2[1] = ae(v);
+  //    mvd_sign_flag[1] = ae(v);
+  //  }
+  return 0;
+}
 //
-//  return 0;
-//}
+int SliceData::transform_unit(int x0, int y0, int xBase, int yBase,
+                              int log2TrafoSize, int trafoDepth, int blkIdx) {
+  //  log2TrafoSizeC = Max(2, log2TrafoSize - (ChromaArrayType == 3 ? 0 : 1));
+  //  cbfDepthC = trafoDepth - (ChromaArrayType != 3 && log2TrafoSize == 2 ? 1 : 0);
+  //  xC = (ChromaArrayType != 3 && log2TrafoSize == 2) ? xBase : x0;
+  //  yC = (ChromaArrayType != 3 && log2TrafoSize == 2) ? yBase : y0;
+  //  cbfLuma = cbf_luma[x0][y0][trafoDepth];
+  //  cbfChroma = cbf_cb[xC][yC][cbfDepthC] || cbf_cr[xC][yC][cbfDepthC] ||
+  //              (ChromaArrayType == 2 &&
+  //               (cbf_cb[xC][yC + (1 << log2TrafoSizeC)][cbfDepthC] ||
+  //                cbf_cr[xC][yC + (1 << log2TrafoSizeC)][cbfDepthC]));
+  //  if (cbfLuma || cbfChroma) {
+  //    xP = (x0 >> MinCbLog2SizeY) << MinCbLog2SizeY;
+  //    yP = (y0 >> MinCbLog2SizeY) << MinCbLog2SizeY;
+  //    nCbS = 1 << MinCbLog2SizeY;
+  //    if (residual_adaptive_colour_transform_enabled_flag &&
+  //        (CuPredMode[x0][y0] == MODE_INTER ||
+  //         (PartMode == PART_2Nx2N && intra_chroma_pred_mode[x0][y0] == 4) ||
+  //         (intra_chroma_pred_mode[xP][yP] == 4 &&
+  //          intra_chroma_pred_mode[xP + nCbS / 2][yP] == 4 &&
+  //          intra_chroma_pred_mode[xP][yP + nCbS / 2] == 4 &&
+  //          intra_chroma_pred_mode[xP + nCbS / 2][yP + nCbS / 2] == 4)))
+  //      tu_residual_act_flag[x0][y0] = ae(v);
+  //    delta_qp();
+  //    if (cbfChroma && !cu_transquant_bypass_flag) chroma_qp_offset();
+  //    if (cbfLuma) residual_coding(x0, y0, log2TrafoSize, 0);
+  //    if (log2TrafoSize > 2 || ChromaArrayType == 3) {
+  //      if (cross_component_prediction_enabled_flag && cbfLuma &&
+  //          (CuPredMode[x0][y0] == MODE_INTER ||
+  //           intra_chroma_pred_mode[x0][y0] == 4))
+  //        cross_comp_pred(x0, y0, 0);
+  //      for (tIdx = 0; tIdx < (ChromaArrayType == 2 ? 2 : 1); tIdx++)
+  //        if (cbf_cb[x0][y0 + (tIdx << log2TrafoSizeC)][trafoDepth])
+  //          residual_coding(x0, y0 + (tIdx << log2TrafoSizeC), log2TrafoSizeC, 1);
+  //      if (cross_component_prediction_enabled_flag && cbfLuma &&
+  //          (CuPredMode[x0][y0] == MODE_INTER ||
+  //           intra_chroma_pred_mode[x0][y0] == 4))
+  //        cross_comp_pred(x0, y0, 1);
+  //      for (tIdx = 0; tIdx < (ChromaArrayType == 2 ? 2 : 1); tIdx++)
+  //        if (cbf_cr[x0][y0 + (tIdx << log2TrafoSizeC)][trafoDepth])
+  //          residual_coding(x0, y0 + (tIdx << log2TrafoSizeC), log2TrafoSizeC, 2);
+  //    } else if (blkIdx == 3) {
+  //      for (tIdx = 0; tIdx < (ChromaArrayType == 2 ? 2 : 1); tIdx++)
+  //        if (cbf_cb[xBase][yBase + (tIdx << log2TrafoSizeC)][trafoDepth - 1])
+  //          residual_coding(xBase, yBase + (tIdx << log2TrafoSizeC),
+  //                          log2TrafoSize, 1);
+  //      for (tIdx = 0; tIdx < (ChromaArrayType == 2 ? 2 : 1); tIdx++)
+  //        if (cbf_cr[xBase][yBase + (tIdx << log2TrafoSizeC)][trafoDepth - 1])
+  //          residual_coding(xBase, yBase + (tIdx << log2TrafoSizeC),
+  //                          log2TrafoSize, 2);
+  //    }
+  //  }
+  return 0;
+}
 //
-//int transform_tree(x0, y0, xBase, yBase, log2TrafoSize, trafoDepth, blkIdx) {
-//  if (log2TrafoSize <= MaxTbLog2SizeY && log2TrafoSize > MinTbLog2SizeY &&
-//      trafoDepth < MaxTrafoDepth && !(IntraSplitFlag && (trafoDepth == 0)))
-//    split_transform_flag[x0][y0][trafoDepth] = ae(v);
-//  if ((log2TrafoSize > 2 && ChromaArrayType != 0) || ChromaArrayType == 3) {
-//    if (trafoDepth == 0 || cbf_cb[xBase][yBase][trafoDepth - 1]) {
-//      cbf_cb[x0][y0][trafoDepth] = ae(v);
-//      if (ChromaArrayType == 2 &&
-//          (!split_transform_flag[x0][y0][trafoDepth] || log2TrafoSize == 3))
-//        cbf_cb[x0][y0 + (1 << (log2TrafoSize - 1))][trafoDepth] = ae(v);
-//    }
-//    if (trafoDepth == 0 || cbf_cr[xBase][yBase][trafoDepth - 1]) {
-//      cbf_cr[x0][y0][trafoDepth] = ae(v);
-//      if (ChromaArrayType == 2 &&
-//          (!split_transform_flag[x0][y0][trafoDepth] || log2TrafoSize == 3))
-//        cbf_cr[x0][y0 + (1 << (log2TrafoSize - 1))][trafoDepth] = ae(v);
-//    }
-//  }
-//  if (split_transform_flag[x0][y0][trafoDepth]) {
-//    x1 = x0 + (1 << (log2TrafoSize - 1));
-//    y1 = y0 + (1 << (log2TrafoSize - 1));
-//    transform_tree(x0, y0, x0, y0, log2TrafoSize - 1, trafoDepth + 1, 0);
-//    transform_tree(x1, y0, x0, y0, log2TrafoSize - 1, trafoDepth + 1, 1);
-//    transform_tree(x0, y1, x0, y0, log2TrafoSize - 1, trafoDepth + 1, 2);
-//    transform_tree(x1, y1, x0, y0, log2TrafoSize - 1, trafoDepth + 1, 3);
-//  } else {
-//    if (CuPredMode[x0][y0] == MODE_INTRA || trafoDepth != 0 ||
-//        cbf_cb[x0][y0][trafoDepth] || cbf_cr[x0][y0][trafoDepth] ||
-//        (ChromaArrayType == 2 &&
-//         (cbf_cb[x0][y0 + (1 << (log2TrafoSize - 1))][trafoDepth] ||
-//          cbf_cr[x0][y0 + (1 << (log2TrafoSize - 1))][trafoDepth])))
-//      cbf_luma[x0][y0][trafoDepth] = ae(v);
-//    transform_unit(x0, y0, xBase, yBase, log2TrafoSize, trafoDepth, blkIdx);
-//  }
-//  return 0;
-//}
+int SliceData::residual_coding(int x0, int y0, int log2TrafoSize, int cIdx) {
+  //  if (transform_skip_enabled_flag && !cu_transquant_bypass_flag &&
+  //      (log2TrafoSize <= Log2MaxTransformSkipSize))
+  //    transform_skip_flag[x0][y0][cIdx] = ae(v);
+  //  if (CuPredMode[x0][y0] == MODE_INTER && explicit_rdpcm_enabled_flag &&
+  //      (transform_skip_flag[x0][y0][cIdx] || cu_transquant_bypass_flag)) {
+  //    explicit_rdpcm_flag[x0][y0][cIdx] = ae(v);
+  //    if (explicit_rdpcm_flag[x0][y0][cIdx])
+  //      explicit_rdpcm_dir_flag[x0][y0][cIdx] = ae(v);
+  //  }
+  //  last_sig_coeff_x_prefix = ae(v);
+  //  last_sig_coeff_y_prefix = ae(v);
+  //  if (last_sig_coeff_x_prefix > 3) last_sig_coeff_x_suffix = ae(v);
+  //  if (last_sig_coeff_y_prefix > 3) last_sig_coeff_y_suffix = ae(v);
+  //  lastScanPos = 16;
+  //  lastSubBlock = (1 << (log2TrafoSize - 2)) * (1 << (log2TrafoSize - 2)) - 1;
+  //  do {
+  //    if (lastScanPos == 0) {
+  //      lastScanPos = 16;
+  //      lastSubBlock--;
+  //    }
+  //    lastScanPos--;
+  //    xS = ScanOrder[log2TrafoSize - 2][scanIdx][lastSubBlock][0];
+  //    yS = ScanOrder[log2TrafoSize - 2][scanIdx][lastSubBlock][1];
+  //    xC = (xS << 2) + ScanOrder[2][scanIdx][lastScanPos][0];
+  //    yC = (yS << 2) + ScanOrder[2][scanIdx][lastScanPos][1];
+  //  } while ((xC != LastSignificantCoeffX) || (yC != LastSignificantCoeffY));
+  //  for (i = lastSubBlock; i >= 0; i--) {
+  //    xS = ScanOrder[log2TrafoSize - 2][scanIdx][i][0];
+  //    yS = ScanOrder[log2TrafoSize - 2][scanIdx][i][1];
+  //    escapeDataPresent = 0;
+  //    inferSbDcSigCoeffFlag = 0;
+  //    if ((i < lastSubBlock) && (i > 0)) {
+  //      coded_sub_block_flag[xS][yS] = ae(v);
+  //      inferSbDcSigCoeffFlag = 1;
+  //    }
+  //    for (n = (i == lastSubBlock) ? lastScanPos - 1 : 15; n >= 0; n--) {
+  //      xC = (xS << 2) + ScanOrder[2][scanIdx][n][0];
+  //      yC = (yS << 2) + ScanOrder[2][scanIdx][n][1];
+  //      if (coded_sub_block_flag[xS][yS] && (n > 0 || !inferSbDcSigCoeffFlag)) {
+  //        sig_coeff_flag[xC][yC] = ae(v);
+  //        if (sig_coeff_flag[xC][yC]) inferSbDcSigCoeffFlag = 0;
+  //      }
+  //    }
+  //    firstSigScanPos = 16;
+  //    lastSigScanPos = -1;
+  //    numGreater1Flag = 0;
+  //    lastGreater1ScanPos = -1;
+  //    for (n = 15; n >= 0; n--) {
+  //      xC = (xS << 2) + ScanOrder[2][scanIdx][n][0];
+  //      yC = (yS << 2) + ScanOrder[2][scanIdx][n][1];
+  //      if (sig_coeff_flag[xC][yC]) {
+  //        if (numGreater1Flag < 8) {
+  //          coeff_abs_level_greater1_flag[n] = ae(v);
+  //          numGreater1Flag++;
+  //          if (coeff_abs_level_greater1_flag[n] && lastGreater1ScanPos == -1)
+  //            lastGreater1ScanPos = n;
+  //          else if (coeff_abs_level_greater1_flag[n])
+  //            escapeDataPresent = 1;
+  //        } else
+  //          escapeDataPresent = 1;
+  //        if (lastSigScanPos == -1) lastSigScanPos = n;
+  //        firstSigScanPos = n
+  //      }
+  //    }
+  //    if (cu_transquant_bypass_flag ||
+  //        (CuPredMode[x0][y0] == MODE_INTRA && implicit_rdpcm_enabled_flag &&
+  //         transform_skip_flag[x0][y0][cIdx] &&
+  //         (predModeIntra == 10 || predModeIntra == 26)) ||
+  //        explicit_rdpcm_flag[x0][y0][cIdx])
+  //      signHidden = 0;
+  //    else
+  //      signHidden = lastSigScanPos - firstSigScanPos > 3;
+  //    if (lastGreater1ScanPos != -1) {
+  //      coeff_abs_level_greater2_flag[lastGreater1ScanPos] = ae(v);
+  //      if (coeff_abs_level_greater2_flag[lastGreater1ScanPos])
+  //        escapeDataPresent = 1;
+  //    }
+  //    for (n = 15; n >= 0; n--) {
+  //      xC = (xS << 2) + ScanOrder[2][scanIdx][n][0];
+  //      yC = (yS << 2) + ScanOrder[2][scanIdx][n][1];
+  //      if (sig_coeff_flag[xC][yC] && (!sign_data_hiding_enabled_flag ||
+  //                                     !signHidden || (n != firstSigScanPos)))
+  //        coeff_sign_flag[n] = ae(v);
+  //    }
+  //    numSigCoeff = 0, sumAbsLevel = 0;
+  //    for (n = 15; n >= 0; n--) {
+  //      xC = (xS << 2) + ScanOrder[2][scanIdx][n][0];
+  //      yC = (yS << 2) + ScanOrder[2][scanIdx][n][1];
+  //      if (sig_coeff_flag[xC][yC]) {
+  //        baseLevel = 1 + coeff_abs_level_greater1_flag[n] +
+  //                    coeff_abs_level_greater2_flag[n];
+  //        if (baseLevel ==
+  //            ((numSigCoeff < 8) ? ((n == lastGreater1ScanPos) ? 3 : 2) : 1))
+  //          coeff_abs_level_remaining[n] = ae(v);
+  //        TransCoeffLevel[x0][y0][cIdx][xC][yC] =
+  //            (coeff_abs_level_remaining[n] + baseLevel) *
+  //            (1 - 2 * coeff_sign_flag[n]);
+  //        if (sign_data_hiding_enabled_flag && signHidden) {
+  //          sumAbsLevel += (coeff_abs_level_remaining[n] + baseLevel);
+  //          if ((n == firstSigScanPos) && ((sumAbsLevel % 2) == 1))
+  //            TransCoeffLevel[x0][y0][cIdx][xC][yC] =
+  //                -TransCoeffLevel[x0][y0][cIdx][xC][yC];
+  //        }
+  //        numSigCoeff++;
+  //      }
+  //    }
+  //  }
+  return 0;
+}
 //
-//int mvd_coding(x0, y0, refList) {
-//  abs_mvd_greater0_flag[0] = ae(v);
-//  abs_mvd_greater0_flag[1] = ae(v);
-//  if (abs_mvd_greater0_flag[0]) abs_mvd_greater1_flag[0] = ae(v);
-//  if (abs_mvd_greater0_flag[1]) abs_mvd_greater1_flag[1] = ae(v);
-//  if (abs_mvd_greater0_flag[0]) {
-//    if (abs_mvd_greater1_flag[0]) abs_mvd_minus2[0] = ae(v);
-//    mvd_sign_flag[0] = ae(v);
-//  }
-//  if (abs_mvd_greater0_flag[1]) {
-//    if (abs_mvd_greater1_flag[1]) abs_mvd_minus2[1] = ae(v);
-//    mvd_sign_flag[1] = ae(v);
-//  }
-//  return 0;
-//}
+int SliceData::cross_comp_pred(int x0, int y0, int c) {
+  //  log2_res_scale_abs_plus1[c] = ae(v);
+  //  if (log2_res_scale_abs_plus1[c] != 0) res_scale_sign_flag[c] = ae(v);
+  return 0;
+}
 //
-//int transform_unit(x0, y0, xBase, yBase, log2TrafoSize, trafoDepth, blkIdx) {
-//  log2TrafoSizeC = Max(2, log2TrafoSize - (ChromaArrayType == 3 ? 0 : 1));
-//  cbfDepthC = trafoDepth - (ChromaArrayType != 3 && log2TrafoSize == 2 ? 1 : 0);
-//  xC = (ChromaArrayType != 3 && log2TrafoSize == 2) ? xBase : x0;
-//  yC = (ChromaArrayType != 3 && log2TrafoSize == 2) ? yBase : y0;
-//  cbfLuma = cbf_luma[x0][y0][trafoDepth];
-//  cbfChroma = cbf_cb[xC][yC][cbfDepthC] || cbf_cr[xC][yC][cbfDepthC] ||
-//              (ChromaArrayType == 2 &&
-//               (cbf_cb[xC][yC + (1 << log2TrafoSizeC)][cbfDepthC] ||
-//                cbf_cr[xC][yC + (1 << log2TrafoSizeC)][cbfDepthC]));
-//  if (cbfLuma || cbfChroma) {
-//    xP = (x0 >> MinCbLog2SizeY) << MinCbLog2SizeY;
-//    yP = (y0 >> MinCbLog2SizeY) << MinCbLog2SizeY;
-//    nCbS = 1 << MinCbLog2SizeY;
-//    if (residual_adaptive_colour_transform_enabled_flag &&
-//        (CuPredMode[x0][y0] == MODE_INTER ||
-//         (PartMode == PART_2Nx2N && intra_chroma_pred_mode[x0][y0] == 4) ||
-//         (intra_chroma_pred_mode[xP][yP] == 4 &&
-//          intra_chroma_pred_mode[xP + nCbS / 2][yP] == 4 &&
-//          intra_chroma_pred_mode[xP][yP + nCbS / 2] == 4 &&
-//          intra_chroma_pred_mode[xP + nCbS / 2][yP + nCbS / 2] == 4)))
-//      tu_residual_act_flag[x0][y0] = ae(v);
-//    delta_qp();
-//    if (cbfChroma && !cu_transquant_bypass_flag) chroma_qp_offset();
-//    if (cbfLuma) residual_coding(x0, y0, log2TrafoSize, 0);
-//    if (log2TrafoSize > 2 || ChromaArrayType == 3) {
-//      if (cross_component_prediction_enabled_flag && cbfLuma &&
-//          (CuPredMode[x0][y0] == MODE_INTER ||
-//           intra_chroma_pred_mode[x0][y0] == 4))
-//        cross_comp_pred(x0, y0, 0);
-//      for (tIdx = 0; tIdx < (ChromaArrayType == 2 ? 2 : 1); tIdx++)
-//        if (cbf_cb[x0][y0 + (tIdx << log2TrafoSizeC)][trafoDepth])
-//          residual_coding(x0, y0 + (tIdx << log2TrafoSizeC), log2TrafoSizeC, 1);
-//      if (cross_component_prediction_enabled_flag && cbfLuma &&
-//          (CuPredMode[x0][y0] == MODE_INTER ||
-//           intra_chroma_pred_mode[x0][y0] == 4))
-//        cross_comp_pred(x0, y0, 1);
-//      for (tIdx = 0; tIdx < (ChromaArrayType == 2 ? 2 : 1); tIdx++)
-//        if (cbf_cr[x0][y0 + (tIdx << log2TrafoSizeC)][trafoDepth])
-//          residual_coding(x0, y0 + (tIdx << log2TrafoSizeC), log2TrafoSizeC, 2);
-//    } else if (blkIdx == 3) {
-//      for (tIdx = 0; tIdx < (ChromaArrayType == 2 ? 2 : 1); tIdx++)
-//        if (cbf_cb[xBase][yBase + (tIdx << log2TrafoSizeC)][trafoDepth - 1])
-//          residual_coding(xBase, yBase + (tIdx << log2TrafoSizeC),
-//                          log2TrafoSize, 1);
-//      for (tIdx = 0; tIdx < (ChromaArrayType == 2 ? 2 : 1); tIdx++)
-//        if (cbf_cr[xBase][yBase + (tIdx << log2TrafoSizeC)][trafoDepth - 1])
-//          residual_coding(xBase, yBase + (tIdx << log2TrafoSizeC),
-//                          log2TrafoSize, 2);
-//    }
-//  }
-//  return 0;
-//}
+int SliceData::palette_coding(int x0, int y0, int nCbS) {
+  //  palettePredictionFinished = 0;
+  //  NumPredictedPaletteEntries = 0;
+  //  for (predictorEntryIdx = 0;
+  //       predictorEntryIdx < PredictorPaletteSize && !palettePredictionFinished &&
+  //       NumPredictedPaletteEntries < palette_max_size;
+  //       predictorEntryIdx++) {
+  //    palette_predictor_run = ae(v);
+  //    if (palette_predictor_run != 1) {
+  //      if (palette_predictor_run > 1)
+  //        predictorEntryIdx += palette_predictor_run - 1;
+  //      PalettePredictorEntryReuseFlags[predictorEntryIdx] = 1;
+  //      NumPredictedPaletteEntries++
+  //    } else
+  //      palettePredictionFinished = 1;
+  //  }
+  //  if (NumPredictedPaletteEntries < palette_max_size)
+  //    num_signalled_palette_entries = ae(v);
+  //  numComps = (ChromaArrayType == 0) ? 1 : 3;
+  //  for (cIdx = 0; cIdx < numComps; cIdx++)
+  //    for (i = 0; i < num_signalled_palette_entries; i++)
+  //      new_palette_entries[cIdx][i] = ae(v);
+  //  if (CurrentPaletteSize != 0) palette_escape_val_present_flag = ae(v);
+  //  if (MaxPaletteIndex > 0) {
+  //    num_palette_indices_minus1 = ae(v);
+  //    adjust = 0;
+  //    for (i = 0; i <= num_palette_indices_minus1; i++) {
+  //      if (MaxPaletteIndex - adjust > 0) {
+  //        palette_idx_idc = ae(v);
+  //        PaletteIndexIdc[i] = palette_idx_idc;
+  //      }
+  //      adjust = 1;
+  //    }
+  //    copy_above_indices_for_final_run_flag = ae(v);
+  //    palette_transpose_flag = ae(v);
+  //  }
+  //  if (palette_escape_val_present_flag) {
+  //    delta_qp();
+  //    if (!cu_transquant_bypass_flag) chroma_qp_offset();
+  //  }
+  //  remainingNumIndices = num_palette_indices_minus1 + 1;
+  //  PaletteScanPos = 0;
+  //  log2BlockSize = Log2(nCbS);
+  //  while (PaletteScanPos < nCbS * nCbS) {
+  //    xC = x0 + ScanOrder[log2BlockSize][3][PaletteScanPos][0];
+  //    yC = y0 + ScanOrder[log2BlockSize][3][PaletteScanPos][1];
+  //    if (PaletteScanPos > 0) {
+  //      xcPrev = x0 + ScanOrder[log2BlockSize][3][PaletteScanPos - 1][0];
+  //      ycPrev = y0 + ScanOrder[log2BlockSize][3][PaletteScanPos - 1][1]
+  //    }
+  //    PaletteRunMinus1 = nCbS * nCbS - PaletteScanPos - 1;
+  //    RunToEnd = 1 CopyAboveIndicesFlag[xC][yC] = 0;
+  //    if (MaxPaletteIndex > 0)
+  //      if (PaletteScanPos >= nCbS && CopyAboveIndicesFlag[xcPrev][ycPrev] == 0)
+  //        if (remainingNumIndices > 0 && PaletteScanPos < nCbS * nCbS - 1) {
+  //          copy_above_palette_indices_flag = ae(v);
+  //          CopyAboveIndicesFlag[xC][yC] = copy_above_palette_indices_flag
+  //        } else if (PaletteScanPos == nCbS * nCbS - 1 && remainingNumIndices > 0)
+  //          CopyAboveIndicesFlag[xC][yC] = 0;
+  //        else
+  //          CopyAboveIndicesFlag[xC][yC] = 1;
+  //    if (CopyAboveIndicesFlag[xC][yC] == 0) {
+  //      currNumIndices = num_palette_indices_minus1 + 1 - remainingNumIndices;
+  //      CurrPaletteIndex = PaletteIndexIdc[currNumIndices];
+  //    }
+  //    if (MaxPaletteIndex > 0) {
+  //      if (CopyAboveIndicesFlag[xC][yC] == 0) remainingNumIndices - = 1;
+  //      if (remainingNumIndices > 0 ||
+  //          CopyAboveIndicesFlag[xC][yC] !=
+  //              copy_above_indices_for_final_run_flag) {
+  //        PaletteMaxRunMinus1 = nCbS * nCbS - PaletteScanPos - 1 -
+  //                              remainingNumIndices -
+  //                              copy_above_indices_for_final_run_flag;
+  //        RunToEnd = 0;
+  //        if (PaletteMaxRunMinus1 > 0) {
+  //          palette_run_prefix = ae(v);
+  //          if ((palette_run_prefix > 1) &&
+  //              (PaletteMaxRunMinus1 != (1 << (palette_run_prefix - 1))))
+  //            palette_run_suffix = ae(v);
+  //        }
+  //      }
+  //    }
+  //    runPos = 0 while (runPos <= PaletteRunMinus1) {
+  //      xR = x0 + ScanOrder[log2BlockSize][3][PaletteScanPos][0];
+  //      yR = y0 + ScanOrder[log2BlockSize][3][PaletteScanPos][1];
+  //      if (CopyAboveIndicesFlag[xC][yC] == 0) {
+  //        CopyAboveIndicesFlag[xR][yR] = 0;
+  //        PaletteIndexMap[xR][yR] = CurrPaletteIndex;
+  //      } else {
+  //        CopyAboveIndicesFlag[xR][yR] = 1;
+  //        PaletteIndexMap[xR][yR] = PaletteIndexMap[xR][yR - 1];
+  //      }
+  //      runPos++;
+  //      PaletteScanPos++;
+  //    }
+  //  }
+  //  if (palette_escape_val_present_flag) {
+  //    for (cIdx = 0; cIdx < numComps; cIdx++)
+  //      for (sPos = 0; sPos < nCbS * nCbS; sPos++) {
+  //        xC = x0 + ScanOrder[log2BlockSize][3][sPos][0];
+  //        yC = y0 + ScanOrder[log2BlockSize][3][sPos][1];
+  //        if (PaletteIndexMap[xC][yC] == MaxPaletteIndex)
+  //          if (cIdx == 0 | |
+  //                  (xC % 2 == 0 && yC % 2 == 0 && ChromaArrayType == 1) ||
+  //              (xC % 2 == 0 && !palette_transpose_flag &&
+  //               ChromaArrayType == 2) ||
+  //              (yC % 2 == 0 && palette_transpose_flag && ChromaArrayType == 2) ||
+  //              ChromaArrayType == 3) {
+  //            palette_escape_val = ae(v);
+  //            PaletteEscapeVal[cIdx][xC][yC] = palette_escape_val;
+  //          }
+  //      }
+  //  }
+  return 0;
+}
 //
-//int residual_coding(x0, y0, log2TrafoSize, cIdx) {
-//  if (transform_skip_enabled_flag && !cu_transquant_bypass_flag &&
-//      (log2TrafoSize <= Log2MaxTransformSkipSize))
-//    transform_skip_flag[x0][y0][cIdx] = ae(v);
-//  if (CuPredMode[x0][y0] == MODE_INTER && explicit_rdpcm_enabled_flag &&
-//      (transform_skip_flag[x0][y0][cIdx] || cu_transquant_bypass_flag)) {
-//    explicit_rdpcm_flag[x0][y0][cIdx] = ae(v);
-//    if (explicit_rdpcm_flag[x0][y0][cIdx])
-//      explicit_rdpcm_dir_flag[x0][y0][cIdx] = ae(v);
-//  }
-//  last_sig_coeff_x_prefix = ae(v);
-//  last_sig_coeff_y_prefix = ae(v);
-//  if (last_sig_coeff_x_prefix > 3) last_sig_coeff_x_suffix = ae(v);
-//  if (last_sig_coeff_y_prefix > 3) last_sig_coeff_y_suffix = ae(v);
-//  lastScanPos = 16;
-//  lastSubBlock = (1 << (log2TrafoSize - 2)) * (1 << (log2TrafoSize - 2)) - 1;
-//  do {
-//    if (lastScanPos == 0) {
-//      lastScanPos = 16;
-//      lastSubBlock--;
-//    }
-//    lastScanPos--;
-//    xS = ScanOrder[log2TrafoSize - 2][scanIdx][lastSubBlock][0];
-//    yS = ScanOrder[log2TrafoSize - 2][scanIdx][lastSubBlock][1];
-//    xC = (xS << 2) + ScanOrder[2][scanIdx][lastScanPos][0];
-//    yC = (yS << 2) + ScanOrder[2][scanIdx][lastScanPos][1];
-//  } while ((xC != LastSignificantCoeffX) || (yC != LastSignificantCoeffY));
-//  for (i = lastSubBlock; i >= 0; i--) {
-//    xS = ScanOrder[log2TrafoSize - 2][scanIdx][i][0];
-//    yS = ScanOrder[log2TrafoSize - 2][scanIdx][i][1];
-//    escapeDataPresent = 0;
-//    inferSbDcSigCoeffFlag = 0;
-//    if ((i < lastSubBlock) && (i > 0)) {
-//      coded_sub_block_flag[xS][yS] = ae(v);
-//      inferSbDcSigCoeffFlag = 1;
-//    }
-//    for (n = (i == lastSubBlock) ? lastScanPos - 1 : 15; n >= 0; n--) {
-//      xC = (xS << 2) + ScanOrder[2][scanIdx][n][0];
-//      yC = (yS << 2) + ScanOrder[2][scanIdx][n][1];
-//      if (coded_sub_block_flag[xS][yS] && (n > 0 || !inferSbDcSigCoeffFlag)) {
-//        sig_coeff_flag[xC][yC] = ae(v);
-//        if (sig_coeff_flag[xC][yC]) inferSbDcSigCoeffFlag = 0;
-//      }
-//    }
-//    firstSigScanPos = 16;
-//    lastSigScanPos = -1;
-//    numGreater1Flag = 0;
-//    lastGreater1ScanPos = -1;
-//    for (n = 15; n >= 0; n--) {
-//      xC = (xS << 2) + ScanOrder[2][scanIdx][n][0];
-//      yC = (yS << 2) + ScanOrder[2][scanIdx][n][1];
-//      if (sig_coeff_flag[xC][yC]) {
-//        if (numGreater1Flag < 8) {
-//          coeff_abs_level_greater1_flag[n] = ae(v);
-//          numGreater1Flag++;
-//          if (coeff_abs_level_greater1_flag[n] && lastGreater1ScanPos == -1)
-//            lastGreater1ScanPos = n;
-//          else if (coeff_abs_level_greater1_flag[n])
-//            escapeDataPresent = 1;
-//        } else
-//          escapeDataPresent = 1;
-//        if (lastSigScanPos == -1) lastSigScanPos = n;
-//        firstSigScanPos = n
-//      }
-//    }
-//    if (cu_transquant_bypass_flag ||
-//        (CuPredMode[x0][y0] == MODE_INTRA && implicit_rdpcm_enabled_flag &&
-//         transform_skip_flag[x0][y0][cIdx] &&
-//         (predModeIntra == 10 || predModeIntra == 26)) ||
-//        explicit_rdpcm_flag[x0][y0][cIdx])
-//      signHidden = 0;
-//    else
-//      signHidden = lastSigScanPos - firstSigScanPos > 3;
-//    if (lastGreater1ScanPos != -1) {
-//      coeff_abs_level_greater2_flag[lastGreater1ScanPos] = ae(v);
-//      if (coeff_abs_level_greater2_flag[lastGreater1ScanPos])
-//        escapeDataPresent = 1;
-//    }
-//    for (n = 15; n >= 0; n--) {
-//      xC = (xS << 2) + ScanOrder[2][scanIdx][n][0];
-//      yC = (yS << 2) + ScanOrder[2][scanIdx][n][1];
-//      if (sig_coeff_flag[xC][yC] && (!sign_data_hiding_enabled_flag ||
-//                                     !signHidden || (n != firstSigScanPos)))
-//        coeff_sign_flag[n] = ae(v);
-//    }
-//    numSigCoeff = 0, sumAbsLevel = 0;
-//    for (n = 15; n >= 0; n--) {
-//      xC = (xS << 2) + ScanOrder[2][scanIdx][n][0];
-//      yC = (yS << 2) + ScanOrder[2][scanIdx][n][1];
-//      if (sig_coeff_flag[xC][yC]) {
-//        baseLevel = 1 + coeff_abs_level_greater1_flag[n] +
-//                    coeff_abs_level_greater2_flag[n];
-//        if (baseLevel ==
-//            ((numSigCoeff < 8) ? ((n == lastGreater1ScanPos) ? 3 : 2) : 1))
-//          coeff_abs_level_remaining[n] = ae(v);
-//        TransCoeffLevel[x0][y0][cIdx][xC][yC] =
-//            (coeff_abs_level_remaining[n] + baseLevel) *
-//            (1 - 2 * coeff_sign_flag[n]);
-//        if (sign_data_hiding_enabled_flag && signHidden) {
-//          sumAbsLevel += (coeff_abs_level_remaining[n] + baseLevel);
-//          if ((n == firstSigScanPos) && ((sumAbsLevel % 2) == 1))
-//            TransCoeffLevel[x0][y0][cIdx][xC][yC] =
-//                -TransCoeffLevel[x0][y0][cIdx][xC][yC];
-//        }
-//        numSigCoeff++;
-//      }
-//    }
-//  }
-//  return 0;
-//}
+int SliceData::delta_qp() {
+  //  if (cu_qp_delta_enabled_flag && !IsCuQpDeltaCoded) {
+  //    IsCuQpDeltaCoded = 1;
+  //    cu_qp_delta_abs = ae(v);
+  //    if (cu_qp_delta_abs) {
+  //      cu_qp_delta_sign_flag = ae(v);
+  //      CuQpDeltaVal = cu_qp_delta_abs * (1 − 2 * cu_qp_delta_sign_flag);
+  //    }
+  //  }
+  return 0;
+}
 //
-//int cross_comp_pred(x0, y0, c) {
-//  log2_res_scale_abs_plus1[c] = ae(v);
-//  if (log2_res_scale_abs_plus1[c] != 0) res_scale_sign_flag[c] = ae(v);
-//  return 0;
-//}
-//
-//int palette_coding(x0, y0, nCbS) {
-//  palettePredictionFinished = 0;
-//  NumPredictedPaletteEntries = 0;
-//  for (predictorEntryIdx = 0;
-//       predictorEntryIdx < PredictorPaletteSize && !palettePredictionFinished &&
-//       NumPredictedPaletteEntries < palette_max_size;
-//       predictorEntryIdx++) {
-//    palette_predictor_run = ae(v);
-//    if (palette_predictor_run != 1) {
-//      if (palette_predictor_run > 1)
-//        predictorEntryIdx += palette_predictor_run - 1;
-//      PalettePredictorEntryReuseFlags[predictorEntryIdx] = 1;
-//      NumPredictedPaletteEntries++
-//    } else
-//      palettePredictionFinished = 1;
-//  }
-//  if (NumPredictedPaletteEntries < palette_max_size)
-//    num_signalled_palette_entries = ae(v);
-//  numComps = (ChromaArrayType == 0) ? 1 : 3;
-//  for (cIdx = 0; cIdx < numComps; cIdx++)
-//    for (i = 0; i < num_signalled_palette_entries; i++)
-//      new_palette_entries[cIdx][i] = ae(v);
-//  if (CurrentPaletteSize != 0) palette_escape_val_present_flag = ae(v);
-//  if (MaxPaletteIndex > 0) {
-//    num_palette_indices_minus1 = ae(v);
-//    adjust = 0;
-//    for (i = 0; i <= num_palette_indices_minus1; i++) {
-//      if (MaxPaletteIndex - adjust > 0) {
-//        palette_idx_idc = ae(v);
-//        PaletteIndexIdc[i] = palette_idx_idc;
-//      }
-//      adjust = 1;
-//    }
-//    copy_above_indices_for_final_run_flag = ae(v);
-//    palette_transpose_flag = ae(v);
-//  }
-//  if (palette_escape_val_present_flag) {
-//    delta_qp();
-//    if (!cu_transquant_bypass_flag) chroma_qp_offset();
-//  }
-//  remainingNumIndices = num_palette_indices_minus1 + 1;
-//  PaletteScanPos = 0;
-//  log2BlockSize = Log2(nCbS);
-//  while (PaletteScanPos < nCbS * nCbS) {
-//    xC = x0 + ScanOrder[log2BlockSize][3][PaletteScanPos][0];
-//    yC = y0 + ScanOrder[log2BlockSize][3][PaletteScanPos][1];
-//    if (PaletteScanPos > 0) {
-//      xcPrev = x0 + ScanOrder[log2BlockSize][3][PaletteScanPos - 1][0];
-//      ycPrev = y0 + ScanOrder[log2BlockSize][3][PaletteScanPos - 1][1]
-//    }
-//    PaletteRunMinus1 = nCbS * nCbS - PaletteScanPos - 1;
-//    RunToEnd = 1 CopyAboveIndicesFlag[xC][yC] = 0;
-//    if (MaxPaletteIndex > 0)
-//      if (PaletteScanPos >= nCbS && CopyAboveIndicesFlag[xcPrev][ycPrev] == 0)
-//        if (remainingNumIndices > 0 && PaletteScanPos < nCbS * nCbS - 1) {
-//          copy_above_palette_indices_flag = ae(v);
-//          CopyAboveIndicesFlag[xC][yC] = copy_above_palette_indices_flag
-//        } else if (PaletteScanPos == nCbS * nCbS - 1 && remainingNumIndices > 0)
-//          CopyAboveIndicesFlag[xC][yC] = 0;
-//        else
-//          CopyAboveIndicesFlag[xC][yC] = 1;
-//    if (CopyAboveIndicesFlag[xC][yC] == 0) {
-//      currNumIndices = num_palette_indices_minus1 + 1 - remainingNumIndices;
-//      CurrPaletteIndex = PaletteIndexIdc[currNumIndices];
-//    }
-//    if (MaxPaletteIndex > 0) {
-//      if (CopyAboveIndicesFlag[xC][yC] == 0) remainingNumIndices - = 1;
-//      if (remainingNumIndices > 0 ||
-//          CopyAboveIndicesFlag[xC][yC] !=
-//              copy_above_indices_for_final_run_flag) {
-//        PaletteMaxRunMinus1 = nCbS * nCbS - PaletteScanPos - 1 -
-//                              remainingNumIndices -
-//                              copy_above_indices_for_final_run_flag;
-//        RunToEnd = 0;
-//        if (PaletteMaxRunMinus1 > 0) {
-//          palette_run_prefix = ae(v);
-//          if ((palette_run_prefix > 1) &&
-//              (PaletteMaxRunMinus1 != (1 << (palette_run_prefix - 1))))
-//            palette_run_suffix = ae(v);
-//        }
-//      }
-//    }
-//    runPos = 0 while (runPos <= PaletteRunMinus1) {
-//      xR = x0 + ScanOrder[log2BlockSize][3][PaletteScanPos][0];
-//      yR = y0 + ScanOrder[log2BlockSize][3][PaletteScanPos][1];
-//      if (CopyAboveIndicesFlag[xC][yC] == 0) {
-//        CopyAboveIndicesFlag[xR][yR] = 0;
-//        PaletteIndexMap[xR][yR] = CurrPaletteIndex;
-//      } else {
-//        CopyAboveIndicesFlag[xR][yR] = 1;
-//        PaletteIndexMap[xR][yR] = PaletteIndexMap[xR][yR - 1];
-//      }
-//      runPos++;
-//      PaletteScanPos++;
-//    }
-//  }
-//  if (palette_escape_val_present_flag) {
-//    for (cIdx = 0; cIdx < numComps; cIdx++)
-//      for (sPos = 0; sPos < nCbS * nCbS; sPos++) {
-//        xC = x0 + ScanOrder[log2BlockSize][3][sPos][0];
-//        yC = y0 + ScanOrder[log2BlockSize][3][sPos][1];
-//        if (PaletteIndexMap[xC][yC] == MaxPaletteIndex)
-//          if (cIdx == 0 | |
-//                  (xC % 2 == 0 && yC % 2 == 0 && ChromaArrayType == 1) ||
-//              (xC % 2 == 0 && !palette_transpose_flag &&
-//               ChromaArrayType == 2) ||
-//              (yC % 2 == 0 && palette_transpose_flag && ChromaArrayType == 2) ||
-//              ChromaArrayType == 3) {
-//            palette_escape_val = ae(v);
-//            PaletteEscapeVal[cIdx][xC][yC] = palette_escape_val;
-//          }
-//      }
-//  }
-//  return 0;
-//}
-//
-//int delta_qp() {
-//  if (cu_qp_delta_enabled_flag && !IsCuQpDeltaCoded) {
-//    IsCuQpDeltaCoded = 1;
-//    cu_qp_delta_abs = ae(v);
-//    if (cu_qp_delta_abs) {
-//      cu_qp_delta_sign_flag = ae(v);
-//      CuQpDeltaVal = cu_qp_delta_abs * (1 − 2 * cu_qp_delta_sign_flag);
-//    }
-//  }
-//  return 0;
-//}
-//
-//int chroma_qp_offset() {
-//  if (cu_chroma_qp_offset_enabled_flag && !IsCuChromaQpOffsetCoded) {
-//    cu_chroma_qp_offset_flag = ae(v);
-//    if (cu_chroma_qp_offset_flag && chroma_qp_offset_list_len_minus1 > 0)
-//      cu_chroma_qp_offset_idx = ae(v);
-//  }
-//  return 0;
-//}
+int SliceData::chroma_qp_offset() {
+  //  if (cu_chroma_qp_offset_enabled_flag && !IsCuChromaQpOffsetCoded) {
+  //    cu_chroma_qp_offset_flag = ae(v);
+  //    if (cu_chroma_qp_offset_flag && chroma_qp_offset_list_len_minus1 > 0)
+  //      cu_chroma_qp_offset_idx = ae(v);
+  //  }
+  return 0;
+}
 
 int SliceData::slice_decoding_process() {
   /* 在场编码时可能存在多个slice data，只需要对首个slice data进行定位，同时在下面的操作中，只需要在首次进入Slice时才需要执行的 */

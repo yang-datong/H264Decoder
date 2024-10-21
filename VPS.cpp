@@ -11,7 +11,7 @@ int VPS::extractParameters(BitStream &bs) {
   cout << "\t基础层是否可用于解码:" << vps_base_layer_available_flag << endl;
   vps_max_layers = bs.readUn(6) + 1;
   cout << "\t表示编码视频中使用的最大层数:" << vps_max_layers << endl;
-  vps_max_sub_layers = bs.readUn(3);
+  vps_max_sub_layers = bs.readUn(3) + 1;
   cout << "\t每个层最多有多少个子层:" << vps_max_sub_layers << endl;
   vps_temporal_id_nesting_flag = bs.readUn(1);
   cout << "\t是否所有的VCL（视频编码层）NAL单元都具有相同或增加的时间层ID:"
@@ -46,7 +46,8 @@ int VPS::extractParameters(BitStream &bs) {
   for (int32_t i = 1; i <= vps_num_layer_sets - 1; i++)
     for (int32_t j = 0; j <= vps_max_layer_id; j++)
       layer_id_included_flag[i][j] = bs.readUn(1);
-  cout << "\t在每个层集合中哪些层被包括:" << layer_id_included_flag[0] << endl;
+  cout << "\t在每个层集合中哪些层被包括:" << layer_id_included_flag[0][0]
+       << endl;
 
   vps_timing_info_present_flag = bs.readUn(1);
   cout << "\t是否在VPS中存在定时信息:" << vps_timing_info_present_flag << endl;
@@ -99,97 +100,97 @@ int VPS::extractParameters(BitStream &bs) {
 }
 
 int VPS::vps_extension() {
-//  int i, j;
-//  if (vps_max_layers - 1 > 0 && vps_base_layer_internal_flag)
-//    profile_tier_level(0, vps_max_sub_layers - 1);
-//  splitting_flag = bs.readUn(1);
-//  for (i = 0, NumScalabilityTypes = 0; i < 16; i++) {
-//    scalability_mask_flag[i] = bs.readUn(1);
-//    NumScalabilityTypes += scalability_mask_flag[i]
-//  }
-//  for (j = 0; j < (NumScalabilityTypes - splitting_flag); j++)
-//    dimension_id_len_minus1[j] = bs.readUn(3);
-//  vps_nuh_layer_id_present_flag = bs.readUn(1);
-//  for (i = 1; i <= MaxLayersMinus1; i++) {
-//    if (vps_nuh_layer_id_present_flag) layer_id_in_nuh[i] = bs.readUn(6);
-//    if (!splitting_flag)
-//      for (j = 0; j < NumScalabilityTypes; j++)
-//        dimension_id[i][j] u(v)
-//  }
-//  view_id_len = bs.readUn(4);
-//  if (view_id_len > 0)
-//    for (i = 0; i < NumViews; i++)
-//      view_id_val[i] u(v) for (i = 1; i <= MaxLayersMinus1;
-//                               i++) for (j = 0; j < i; j++)
-//          direct_dependency_flag[i][j] = bs.readUn(1);
-//  if (NumIndependentLayers > 1) num_add_layer_sets = bs.readUE();
-//  for (i = 0; i < num_add_layer_sets; i++)
-//    for (j = 1; j < NumIndependentLayers; j++)
-//      highest_layer_idx_plus1[i][j] u(v)
-//          vps_sub_layers_max_minus1_present_flag = bs.readUn(1);
-//  if (vps_sub_layers_max_minus1_present_flag)
-//    for (i = 0; i <= MaxLayersMinus1; i++)
-//      sub_layers_vps_max_minus1[i] = bs.readUn(3);
-//  max_tid_ref_present_flag = bs.readUn(1);
-//  if (max_tid_ref_present_flag)
-//    for (i = 0; i < MaxLayersMinus1; i++)
-//      for (j = i + 1; j <= MaxLayersMinus1; j++)
-//        if (direct_dependency_flag[j][i])
-//          max_tid_il_ref_pics_plus1[i][j] = bs.readUn(3);
-//  default_ref_layers_active_flag = bs.readUn(1);
-//  vps_num_profile_tier_level_minus1 = bs.readUE();
-//  for (i = vps_base_layer_internal_flag ? 2 : 1;
-//       i <= vps_num_profile_tier_level_minus1; i++) {
-//    vps_profile_present_flag[i] = bs.readUn(1);
-//    profile_tier_level(vps_profile_present_flag[i], vps_max_sub_layers_minus1)
-//  }
-//  if (NumLayerSets > 1) {
-//    num_add_olss = bs.readUE();
-//    default_output_layer_idc = bs.readUn(2);
-//  }
-//  NumOutputLayerSets =
-//      num_add_olss + NumLayerSets for (i = 1; i < NumOutputLayerSets; i++) {
-//    if (NumLayerSets > 2 && i >= NumLayerSets)
-//      layer_set_idx_for_ols_minus1[i] u(
-//          v) if (i > vps_num_layer_sets_minus1 ||
-//                 defaultOutputLayerIdc ==
-//                     2) for (j = 0; j < NumLayersInIdList[OlsIdxToLsIdx[i]];
-//                             j++) output_layer_flag[i][j] = bs.readUn(1);
-//    for (j = 0; j < NumLayersInIdList[OlsIdxToLsIdx[i]]; j++)
-//      if (NecessaryLayerFlag[i][j] && vps_num_profile_tier_level_minus1 > 0)
-//        profile_tier_level_idx[i][j] u(
-//            v) if (NumOutputLayersInOutputLayerSet[i] == 1 &&
-//                   NumDirectRefLayers[OlsHighestOutputLayerId[i]] > 0)
-//            alt_output_layer_flag[i] = bs.readUn(1);
-//  }
-//  vps_num_rep_formats_minus1 = bs.readUE();
-//  for (i = 0; i <= vps_num_rep_formats_minus1; i++)
-//    rep_format() if (vps_num_rep_formats_minus1 > 0)
-//        rep_format_idx_present_flag = bs.readUn(1);
-//  if (rep_format_idx_present_flag)
-//    for (i = vps_base_layer_internal_flag ? 1 : 0; i <= MaxLayersMinus1; i++)
-//      vps_rep_format_idx[i] u(v) max_one_active_ref_layer_flag = bs.readUn(1);
-//  vps_poc_lsb_aligned_flag = bs.readUn(1);
-//  for (i = 1; i <= MaxLayersMinus1; i++)
-//    if (NumDirectRefLayers[layer_id_in_nuh[i]] == 0)
-//      poc_lsb_not_present_flag[i] = bs.readUn(1);
-//  dpb_size() direct_dep_type_len_minus2 = bs.readUE();
-//  direct_dependency_all_layers_flag = bs.readUn(1);
-//  if (direct_dependency_all_layers_flag)
-//    direct_dependency_all_layers_type u(v) else {
-//      for (i = vps_base_layer_internal_flag ? 1 : 2; i <= MaxLayersMinus1; i++)
-//        for (j = vps_base_layer_internal_flag ? 0 : 1; j < i; j++)
-//          if (direct_dependency_flag[i][j]) direct_dependency_type[i][j] u(v)
-//    }
-//  vps_non_vui_extension_length = bs.readUE();
-//  for (i = 1; i <= vps_non_vui_extension_length; i++)
-//    vps_non_vui_extension_data_byte = bs.readUn(8);
-//  vps_vui_present_flag = bs.readUn(1);
-//  if (vps_vui_present_flag) {
-//    while (!byte_aligned())
-//      vps_vui_alignment_bit_equal_to_one = bs.readUn(1);
-//    vps_vui()
-//  }
+  //  int i, j;
+  //  if (vps_max_layers - 1 > 0 && vps_base_layer_internal_flag)
+  //    profile_tier_level(0, vps_max_sub_layers - 1);
+  //  splitting_flag = bs.readUn(1);
+  //  for (i = 0, NumScalabilityTypes = 0; i < 16; i++) {
+  //    scalability_mask_flag[i] = bs.readUn(1);
+  //    NumScalabilityTypes += scalability_mask_flag[i]
+  //  }
+  //  for (j = 0; j < (NumScalabilityTypes - splitting_flag); j++)
+  //    dimension_id_len_minus1[j] = bs.readUn(3);
+  //  vps_nuh_layer_id_present_flag = bs.readUn(1);
+  //  for (i = 1; i <= MaxLayersMinus1; i++) {
+  //    if (vps_nuh_layer_id_present_flag) layer_id_in_nuh[i] = bs.readUn(6);
+  //    if (!splitting_flag)
+  //      for (j = 0; j < NumScalabilityTypes; j++)
+  //        dimension_id[i][j] u(v)
+  //  }
+  //  view_id_len = bs.readUn(4);
+  //  if (view_id_len > 0)
+  //    for (i = 0; i < NumViews; i++)
+  //      view_id_val[i] u(v) for (i = 1; i <= MaxLayersMinus1;
+  //                               i++) for (j = 0; j < i; j++)
+  //          direct_dependency_flag[i][j] = bs.readUn(1);
+  //  if (NumIndependentLayers > 1) num_add_layer_sets = bs.readUE();
+  //  for (i = 0; i < num_add_layer_sets; i++)
+  //    for (j = 1; j < NumIndependentLayers; j++)
+  //      highest_layer_idx_plus1[i][j] u(v)
+  //          vps_sub_layers_max_minus1_present_flag = bs.readUn(1);
+  //  if (vps_sub_layers_max_minus1_present_flag)
+  //    for (i = 0; i <= MaxLayersMinus1; i++)
+  //      sub_layers_vps_max_minus1[i] = bs.readUn(3);
+  //  max_tid_ref_present_flag = bs.readUn(1);
+  //  if (max_tid_ref_present_flag)
+  //    for (i = 0; i < MaxLayersMinus1; i++)
+  //      for (j = i + 1; j <= MaxLayersMinus1; j++)
+  //        if (direct_dependency_flag[j][i])
+  //          max_tid_il_ref_pics_plus1[i][j] = bs.readUn(3);
+  //  default_ref_layers_active_flag = bs.readUn(1);
+  //  vps_num_profile_tier_level_minus1 = bs.readUE();
+  //  for (i = vps_base_layer_internal_flag ? 2 : 1;
+  //       i <= vps_num_profile_tier_level_minus1; i++) {
+  //    vps_profile_present_flag[i] = bs.readUn(1);
+  //    profile_tier_level(vps_profile_present_flag[i], vps_max_sub_layers_minus1)
+  //  }
+  //  if (NumLayerSets > 1) {
+  //    num_add_olss = bs.readUE();
+  //    default_output_layer_idc = bs.readUn(2);
+  //  }
+  //  NumOutputLayerSets =
+  //      num_add_olss + NumLayerSets for (i = 1; i < NumOutputLayerSets; i++) {
+  //    if (NumLayerSets > 2 && i >= NumLayerSets)
+  //      layer_set_idx_for_ols_minus1[i] u(
+  //          v) if (i > vps_num_layer_sets_minus1 ||
+  //                 defaultOutputLayerIdc ==
+  //                     2) for (j = 0; j < NumLayersInIdList[OlsIdxToLsIdx[i]];
+  //                             j++) output_layer_flag[i][j] = bs.readUn(1);
+  //    for (j = 0; j < NumLayersInIdList[OlsIdxToLsIdx[i]]; j++)
+  //      if (NecessaryLayerFlag[i][j] && vps_num_profile_tier_level_minus1 > 0)
+  //        profile_tier_level_idx[i][j] u(
+  //            v) if (NumOutputLayersInOutputLayerSet[i] == 1 &&
+  //                   NumDirectRefLayers[OlsHighestOutputLayerId[i]] > 0)
+  //            alt_output_layer_flag[i] = bs.readUn(1);
+  //  }
+  //  vps_num_rep_formats_minus1 = bs.readUE();
+  //  for (i = 0; i <= vps_num_rep_formats_minus1; i++)
+  //    rep_format() if (vps_num_rep_formats_minus1 > 0)
+  //        rep_format_idx_present_flag = bs.readUn(1);
+  //  if (rep_format_idx_present_flag)
+  //    for (i = vps_base_layer_internal_flag ? 1 : 0; i <= MaxLayersMinus1; i++)
+  //      vps_rep_format_idx[i] u(v) max_one_active_ref_layer_flag = bs.readUn(1);
+  //  vps_poc_lsb_aligned_flag = bs.readUn(1);
+  //  for (i = 1; i <= MaxLayersMinus1; i++)
+  //    if (NumDirectRefLayers[layer_id_in_nuh[i]] == 0)
+  //      poc_lsb_not_present_flag[i] = bs.readUn(1);
+  //  dpb_size() direct_dep_type_len_minus2 = bs.readUE();
+  //  direct_dependency_all_layers_flag = bs.readUn(1);
+  //  if (direct_dependency_all_layers_flag)
+  //    direct_dependency_all_layers_type u(v) else {
+  //      for (i = vps_base_layer_internal_flag ? 1 : 2; i <= MaxLayersMinus1; i++)
+  //        for (j = vps_base_layer_internal_flag ? 0 : 1; j < i; j++)
+  //          if (direct_dependency_flag[i][j]) direct_dependency_type[i][j] u(v)
+  //    }
+  //  vps_non_vui_extension_length = bs.readUE();
+  //  for (i = 1; i <= vps_non_vui_extension_length; i++)
+  //    vps_non_vui_extension_data_byte = bs.readUn(8);
+  //  vps_vui_present_flag = bs.readUn(1);
+  //  if (vps_vui_present_flag) {
+  //    while (!byte_aligned())
+  //      vps_vui_alignment_bit_equal_to_one = bs.readUn(1);
+  //    vps_vui()
+  //  }
   return 0;
 }
 

@@ -2,13 +2,15 @@
 #define PPS_CPP_F6QSULFM
 
 #include "Common.hpp"
+#include "SPS.hpp"
 #include <cstdint>
 
 #define MAX_PPS_COUNT 256
 
 class PPS {
  public:
-  int extractParameters(BitStream &bs, uint32_t chroma_format_idc);
+  int extractParameters(BitStream &bs, uint32_t chroma_format_idc,
+                        SPS spss[MAX_SPS_COUNT]);
 
  public:
   // PPS的唯一标识符。
@@ -92,6 +94,16 @@ class PPS {
   int32_t chroma_qp_offset_list_enabled_flag = false;
 
   int32_t pps_curr_pic_ref_enabled_flag = 0;
+
+  uint8_t *CtbAddrTsToRs = nullptr;
+  uint8_t *CtbAddrRsToTs = nullptr;
+  int col_idxX[32] = {0};
+  int rowHeight[32] = {0};
+  int colWidth[32] = {0};
+
+  SPS *m_sps = nullptr;
+  int TileId[32] = {0};
+
   // ------------------------------------------- Old -------------------------------------------
   /* PPS 的唯一标识符 */
   //uint32_t pic_parameter_set_id = 0;

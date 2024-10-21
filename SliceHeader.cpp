@@ -76,7 +76,7 @@ int SliceHeader::st_ref_pic_set(BitStream *bs, int32_t stRpsIdx) {
 int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   _bs = &bitStream;
 
-  first_mb_in_slice = _bs->readUE();
+  first_mb_in_slice = _bs->readU1();
   cout << "\tSlice中第一个宏块的索引:" << first_mb_in_slice << endl;
 
   if (IS_IRAP(nal_unit_type)) no_output_of_prior_pics_flag = _bs->readU1();
@@ -89,8 +89,13 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   if (!first_mb_in_slice) {
     if (m_pps->dependent_slice_segments_enabled_flag)
       dependent_slice_segment_flag = _bs->readU1();
-    int32_t slice_segment_address =
-        _bs->readUn(CEIL(LOG2(m_sps->PicSizeInCtbsY)));
+    slice_segment_address = _bs->readUn(CEIL(LOG2(m_sps->PicSizeInCtbsY)));
+  }
+  if (dependent_slice_segment_flag == false) {
+    SliceAddrRs = slice_segment_address;
+  } else {
+    /* TODO YangJing SliceData? <24-10-21 13:52:37> */
+    //SliceAddrRs = CtbAddrTsToRs[CtbAddrRsToTs[slice_segment_address] − 1];
   }
 
   CuQpDeltaVal = 0;
@@ -221,6 +226,15 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   }
   _bs->byte_aligned();
 
+
+  slice_qp = 26U + m_pps->pic_init_qp_minus26 + slice_qp_delta;
+  slice_ctb_addr_rs = slice_segment_address;
+  /* SliceHeader 同时初始化？ 然后需要共享数据？ */
+  //s->HEVClc->first_qp_group = !dependent_slice_segment_flag;
+  //if (!m_pps->cu_qp_delta_enabled_flag) s->HEVClc->qp_y = s->sh.slice_qp;
+  //slice_initialized = 1;
+  //s->HEVClc->tu.cu_qp_offset_cb = 0;
+  //s->HEVClc->tu.cu_qp_offset_cr = 0;
   return 0;
 }
 

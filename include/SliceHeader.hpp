@@ -37,6 +37,11 @@ class SliceHeader {
  public:
   int32_t slice_pic_parameter_set_id = {0};
   int32_t dependent_slice_segment_flag = false;
+  int32_t slice_segment_address = 0;
+  int32_t slice_ctb_addr_rs = 0;
+
+  int32_t SliceAddrRs = 0;
+
   int32_t CuQpDeltaVal = 0;
   int32_t pic_output_flag = {0};
   int32_t colour_plane_id = {0};
@@ -112,10 +117,10 @@ class SliceHeader {
   int32_t DeltaPocS0[32][32] = {0};
   int32_t DeltaPocS1[32][32] = {0};
 
-    int32_t RefRpsIdx = 0;
-
+  int32_t RefRpsIdx = 0;
 
   int getNumPicTotalCurr(int32_t CurrRpsIdx);
+  int slice_qp  = 0;
 
  public:
   /* Slice中第一个宏块的索引。 （可判断一帧图像是否由多个Slice组成）

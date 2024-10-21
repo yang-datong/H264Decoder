@@ -4,9 +4,11 @@
 
 using namespace std;
 
-int PPS::extractParameters(BitStream &bs, uint32_t chroma_format_idc) {
+int PPS::extractParameters(BitStream &bs, uint32_t chroma_format_idc,
+                           SPS spss[MAX_SPS_COUNT]) {
   pic_parameter_set_id = bs.readUE();
   seq_parameter_set_id = bs.readUE();
+  m_sps = &spss[seq_parameter_set_id];
   cout << "\tPPS ID:" << pic_parameter_set_id
        << ",SPS ID:" << seq_parameter_set_id << endl;
   dependent_slice_segments_enabled_flag = bs.readUn(1);
@@ -140,5 +142,61 @@ int PPS::extractParameters(BitStream &bs, uint32_t chroma_format_idc) {
     //pps_extension_data_flag = bs.readUn(1);
   }
   bs.rbsp_trailing_bits();
+
+  //------------
+  //
+  /* ---- */
+
+  CtbAddrTsToRs = new uint8_t[m_sps->PicSizeInCtbsY]{0};
+  CtbAddrRsToTs = new uint8_t[m_sps->PicSizeInCtbsY]{0};
+  for (int ctbAddrRs = 0; ctbAddrRs < m_sps->PicSizeInCtbsY; ctbAddrRs++)
+    CtbAddrTsToRs[CtbAddrRsToTs[ctbAddrRs]] = ctbAddrRs;
+
+  int rowBd[32] = {0};
+  int colBd[32] = {0};
+  int i, j = 0;
+
+  if (uniform_spacing_flag)
+    for (j = 0; j <= num_tile_rows_minus1; j++)
+      rowHeight[j] =
+          ((j + 1) * m_sps->PicHeightInCtbsY) / (num_tile_rows_minus1 + 1) -
+          (j * m_sps->PicHeightInCtbsY) / (num_tile_rows_minus1 + 1);
+  else {
+    rowHeight[num_tile_rows_minus1] = m_sps->PicHeightInCtbsY;
+    for (j = 0; j < num_tile_rows_minus1; j++) {
+      rowHeight[j] = row_height_minus1[j] + 1;
+      rowHeight[num_tile_rows_minus1] -= rowHeight[j];
+    }
+  }
+
+  if (uniform_spacing_flag)
+    for (i = 0; i <= num_tile_columns_minus1; i++)
+      colWidth[i] =
+          ((i + 1) * m_sps->PicWidthInCtbsY) / (num_tile_columns_minus1 + 1) -
+          (i * m_sps->PicWidthInCtbsY) / (num_tile_columns_minus1 + 1);
+  else {
+    colWidth[num_tile_columns_minus1] = m_sps->PicWidthInCtbsY;
+    for (i = 0; i < num_tile_columns_minus1; i++) {
+      colWidth[i] = column_width_minus1[i] + 1;
+      colWidth[num_tile_columns_minus1] -= colWidth[i];
+    }
+  }
+
+  for (rowBd[0] = 0, j = 0; j <= num_tile_rows_minus1; j++)
+    rowBd[j + 1] = rowBd[j] + rowHeight[j];
+  for (colBd[0] = 0, i = 0; i <= num_tile_columns_minus1; i++)
+    colBd[i + 1] = colBd[i] + colWidth[i];
+
+  for (i = 0, j = 0; i < m_sps->ctb_width; i++) {
+    if (i > colBd[j]) j++;
+    col_idxX[i] = j;
+  }
+
+  for (int j = 0, tileIdx = 0; j <= num_tile_rows_minus1; j++)
+    for (int i = 0; i <= num_tile_columns_minus1; i++, tileIdx++)
+      for (int y = rowBd[j]; y < rowBd[j + 1]; y++)
+        for (int x = colBd[i]; x < colBd[i + 1]; x++)
+          TileId[CtbAddrRsToTs[y * m_sps->PicWidthInCtbsY + x]] = tileIdx;
+  /* ------ */
   return 0;
 }

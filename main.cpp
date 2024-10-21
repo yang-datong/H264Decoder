@@ -81,7 +81,8 @@ int main(int argc, char *argv[]) {
       case HEVC_NAL_SPS:
         /* 8. 解码SPS中信息 */
         cout << "SPS -> {" << endl;
-        nalu.extractSPSparameters(rbsp, gop->m_spss, gop->last_sps_id,gop->m_vpss);
+        nalu.extractSPSparameters(rbsp, gop->m_spss, gop->last_sps_id,
+                                  gop->m_vpss);
         //gop->m_max_num_reorder_frames =
         //gop->m_spss[gop->last_sps_id].max_num_reorder_frames;
         cout << " }" << endl;
@@ -92,7 +93,7 @@ int main(int argc, char *argv[]) {
         cout << "PPS -> {" << endl;
         nalu.extractPPSparameters(
             rbsp, gop->m_ppss, gop->last_pps_id,
-            gop->m_spss[gop->last_sps_id].chroma_format_idc);
+            gop->m_spss[gop->last_sps_id].chroma_format_idc,gop->m_spss);
         cout << " }" << endl;
 
         break;

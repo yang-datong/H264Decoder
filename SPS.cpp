@@ -204,6 +204,9 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
   }
   pic_width_in_luma_samples = bs->readUE();
   pic_height_in_luma_samples = bs->readUE();
+  width = pic_width_in_luma_samples;
+  height = pic_height_in_luma_samples;
+
   cout << "\t图像大小，单位为亮度样本:" << pic_width_in_luma_samples << "x"
        << pic_height_in_luma_samples << endl;
   conformance_window_flag = bs->readU1();
@@ -244,13 +247,16 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
   cout << "\t编码变换块大小:" << log2_diff_max_min_luma_coding_block_size
        << endl;
 
-  int32_t MinCbLog2SizeY = log2_min_luma_coding_block_size_minus3 + 3;
-  int32_t CtbLog2SizeY =
-      MinCbLog2SizeY + log2_diff_max_min_luma_coding_block_size;
-  int32_t CtbSizeY = 1 << CtbLog2SizeY;
-  int32_t PicWidthInCtbsY = CEIL(pic_width_in_luma_samples / CtbSizeY);
-  int32_t PicHeightInCtbsY = CEIL(pic_height_in_luma_samples / CtbSizeY);
+  MinCbLog2SizeY = log2_min_luma_coding_block_size_minus3 + 3;
+  CtbLog2SizeY = MinCbLog2SizeY + log2_diff_max_min_luma_coding_block_size;
+  CtbSizeY = 1 << CtbLog2SizeY;
+  PicWidthInCtbsY = CEIL(pic_width_in_luma_samples / CtbSizeY);
+  PicHeightInCtbsY = CEIL(pic_height_in_luma_samples / CtbSizeY);
   PicSizeInCtbsY = PicWidthInCtbsY * PicHeightInCtbsY;
+
+  ctb_width = (width + (1 << CtbLog2SizeY) - 1) >> CtbLog2SizeY;
+  ctb_height = (height + (1 << CtbLog2SizeY) - 1) >> CtbLog2SizeY;
+  ctb_size = ctb_width * ctb_height;
 
   log2_min_luma_transform_block_size_minus2 = bs->readUE();
   log2_diff_max_min_luma_transform_block_size = bs->readUE();

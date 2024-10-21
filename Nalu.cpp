@@ -115,10 +115,11 @@ int Nalu::extractSPSparameters(RBSP &rbsp, SPS spss[MAX_SPS_COUNT],
 /* 在T-REC-H.264-202108-I!!PDF-E.pdf -47页 */
 int Nalu::extractPPSparameters(RBSP &rbsp, PPS ppss[MAX_PPS_COUNT],
                                uint32_t &curr_pps_id,
-                               uint32_t chroma_format_idc) {
+                               uint32_t chroma_format_idc,
+                               SPS spss[MAX_SPS_COUNT]) {
   BitStream bitStream(rbsp.buf, rbsp.len);
   PPS *pps = new PPS();
-  pps->extractParameters(bitStream, chroma_format_idc);
+  pps->extractParameters(bitStream, chroma_format_idc,spss);
   ppss[pps->pic_parameter_set_id] = *pps;
   curr_pps_id = pps->pic_parameter_set_id;
   return 0;
