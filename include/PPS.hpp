@@ -2,6 +2,7 @@
 #define PPS_CPP_F6QSULFM
 
 #include "Common.hpp"
+#include <cstdint>
 
 #define MAX_PPS_COUNT 256
 
@@ -90,6 +91,7 @@ class PPS {
   int32_t pps_slice_act_qp_offsets_present_flag = false;
   int32_t chroma_qp_offset_list_enabled_flag = false;
 
+  int32_t pps_curr_pic_ref_enabled_flag = 0;
   // ------------------------------------------- Old -------------------------------------------
   /* PPS 的唯一标识符 */
   //uint32_t pic_parameter_set_id = 0;

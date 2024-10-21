@@ -103,6 +103,20 @@ class SliceHeader {
   int32_t delta_poc_s1_minus1[32] = {0};
   int32_t used_by_curr_pic_s1_flag[32] = {0};
 
+  int32_t NumNegativePics[32] = {0};
+  int32_t NumPositivePics[32] = {0};
+  int32_t NumDeltaPocs[32] = {0};
+  int32_t UsedByCurrPicS0[32][32] = {0};
+  int32_t UsedByCurrPicS1[32][32] = {0};
+  int32_t UsedByCurrPicLt[32] = {0};
+  int32_t DeltaPocS0[32][32] = {0};
+  int32_t DeltaPocS1[32][32] = {0};
+
+    int32_t RefRpsIdx = 0;
+
+
+  int getNumPicTotalCurr(int32_t CurrRpsIdx);
+
  public:
   /* Slice中第一个宏块的索引。 （可判断一帧图像是否由多个Slice组成）
   如果first_mb_in_slice == 0，则表示这是该帧的第一个Slice（可以独立解码）。

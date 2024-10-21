@@ -11,15 +11,15 @@ SliceHeader::~SliceHeader() {
   FREE(MbToSliceGroupMap);
 }
 
-int getNumPicTotalCurr() {
+int SliceHeader::getNumPicTotalCurr(int32_t CurrRpsIdx) {
   int32_t NumPicTotalCurr = 0;
-  //for (int32_t i = 0; i < NumNegativePics[CurrRpsIdx]; i++)
-  //if (UsedByCurrPicS0[CurrRpsIdx][i]) NumPicTotalCurr++;
-  //for (int32_t i = 0; i < NumPositivePics[CurrRpsIdx]; i++)
-  //if (UsedByCurrPicS1[CurrRpsIdx][i]) NumPicTotalCurr++;
-  //for (int32_t i = 0; i < num_long_term_sps + num_long_term_pics; i++)
-  //if (UsedByCurrPicLt[i]) NumPicTotalCurr++;
-  //if (pps_curr_pic_ref_enabled_flag) NumPicTotalCurr++;
+  for (int32_t i = 0; i < NumNegativePics[CurrRpsIdx]; i++)
+    if (UsedByCurrPicS0[CurrRpsIdx][i]) NumPicTotalCurr++;
+  for (int32_t i = 0; i < NumPositivePics[CurrRpsIdx]; i++)
+    if (UsedByCurrPicS1[CurrRpsIdx][i]) NumPicTotalCurr++;
+  for (int32_t i = 0; i < num_long_term_sps + num_long_term_pics; i++)
+    if (UsedByCurrPicLt[i]) NumPicTotalCurr++;
+  if (m_pps->pps_curr_pic_ref_enabled_flag) NumPicTotalCurr++;
   return NumPicTotalCurr;
 }
 
@@ -30,20 +30,40 @@ int SliceHeader::st_ref_pic_set(BitStream *bs, int32_t stRpsIdx) {
       delta_idx_minus1 = bs->readUE();
     delta_rps_sign = bs->readUn(1);
     abs_delta_rps_minus1 = bs->readUE();
-    //for (int32_t j = 0; j <= NumDeltaPocs[RefRpsIdx]; j++) {
-      //used_by_curr_pic_flag[j] = bs->readUn(1);
-      //if (!used_by_curr_pic_flag[j]) use_delta_flag[j] = bs->readUn(1);
-    //}
+    RefRpsIdx = stRpsIdx - (delta_idx_minus1 + 1);
+    for (int32_t j = 0; j <= NumDeltaPocs[RefRpsIdx]; j++) {
+      used_by_curr_pic_flag[j] = bs->readUn(1);
+      if (!used_by_curr_pic_flag[j]) use_delta_flag[j] = bs->readUn(1);
+    }
   } else {
     num_negative_pics = bs->readUE();
+    NumNegativePics[stRpsIdx] = num_negative_pics;
     num_positive_pics = bs->readUE();
+    NumPositivePics[stRpsIdx] = num_positive_pics;
+    NumDeltaPocs[stRpsIdx] =
+        NumNegativePics[stRpsIdx] + NumPositivePics[stRpsIdx]; //(7-71)
+
     for (int32_t i = 0; i < num_negative_pics; i++) {
       delta_poc_s0_minus1[i] = bs->readUE();
-      used_by_curr_pic_s0_flag[i] = bs->readUn(1);
+      UsedByCurrPicS0[stRpsIdx][i] = used_by_curr_pic_s0_flag[i] =
+          bs->readUn(1);
+      if (i == 0) {
+        DeltaPocS0[stRpsIdx][i] = -(delta_poc_s0_minus1[i] + 1);
+      } else {
+        DeltaPocS0[stRpsIdx][i] =
+            DeltaPocS0[stRpsIdx][i - 1] - (delta_poc_s0_minus1[i] + 1);
+      }
     }
     for (int32_t i = 0; i < num_positive_pics; i++) {
       delta_poc_s1_minus1[i] = bs->readUE();
-      used_by_curr_pic_s1_flag[i] = bs->readUn(1);
+      UsedByCurrPicS1[stRpsIdx][i] = used_by_curr_pic_s1_flag[i] =
+          bs->readUn(1);
+      if (i == 0) {
+        DeltaPocS1[stRpsIdx][i] = delta_poc_s1_minus1[i] + 1;
+      } else {
+        DeltaPocS1[stRpsIdx][i] =
+            DeltaPocS1[stRpsIdx][i - 1] + (delta_poc_s1_minus1[i] + 1);
+      }
     }
   }
   return 0;
@@ -141,7 +161,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
         if (slice_type == HEVC_SLICE_B)
           num_ref_idx_l1_active_minus1 = _bs->readUE();
       }
-      int32_t nb_refs = getNumPicTotalCurr();
+      int32_t nb_refs = getNumPicTotalCurr(m_sps->num_short_term_ref_pic_sets);
       if (m_pps->lists_modification_present_flag && nb_refs > 1)
         ref_pic_lists_modification(_bs, nb_refs);
       if (slice_type == HEVC_SLICE_B) mvd_l1_zero_flag = _bs->readUn(1);

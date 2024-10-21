@@ -60,7 +60,33 @@ class VPS {
 
   // 扩展数据是否存在的标志
   int32_t vps_extension_flag = 0;
+  int32_t vps_extension_alignment_bit_equal_to_one  = 0;
+  int32_t vps_extension2_flag = 0;
   int32_t vps_extension_data_flag = 0;
+  int vps_extension();
+  int32_t layer_id_in_nuh[32] = {0};
+
+int sub_layer_hrd_parameters(BitStream &bs, int subLayerId);
+  int nal_hrd_parameters_present_flag = 0;
+  int vcl_hrd_parameters_present_flag = 0;
+  int sub_pic_hrd_params_present_flag = 0;
+  int tick_divisor_minus2 = 0;
+  int du_cpb_removal_delay_increment_length_minus1 = 0;
+  int sub_pic_cpb_params_in_pic_timing_sei_flag = 0;
+  int dpb_output_delay_du_length_minus1 = 0;
+  int bit_rate_scale = 0;
+  int cpb_size_scale = 0;
+  int cpb_size_du_scale = 0;
+  int initial_cpb_removal_delay_length_minus1 = 0;
+  int au_cpb_removal_delay_length_minus1 = 0;
+  int dpb_output_delay_length_minus1 = 0;
+  int fixed_pic_rate_general_flag[32] = {0};
+  int fixed_pic_rate_within_cvs_flag[32] = {0};
+  int elemental_duration_in_tc_minus1[32] = {0};
+  int low_delay_hrd_flag[32] = {0};
+  int cpb_cnt_minus1[32] = {0};
+int hrd_parameters(BitStream &bs, int commonInfPresentFlag,
+                   int maxNumSubLayersMinus1);
 };
 
 #endif /* end of include guard: VPS_HPP_QLZP3M2R */

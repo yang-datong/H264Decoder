@@ -102,11 +102,11 @@ int Nalu::extractVPSparameters(RBSP &rbsp, VPS vpss[MAX_SPS_COUNT],
 
 /* 在T-REC-H.264-202108-I!!PDF-E.pdf -43页 */
 int Nalu::extractSPSparameters(RBSP &rbsp, SPS spss[MAX_SPS_COUNT],
-                               uint32_t &curr_sps_id) {
+                               uint32_t &curr_sps_id, VPS vpss[MAX_SPS_COUNT]) {
   /* 初始化bit处理器，填充sps的数据 */
   BitStream bitStream(rbsp.buf, rbsp.len);
   SPS *sps = new SPS();
-  sps->extractParameters(bitStream);
+  sps->extractParameters(bitStream, vpss);
   spss[sps->seq_parameter_set_id] = *sps;
   curr_sps_id = sps->seq_parameter_set_id;
   return 0;

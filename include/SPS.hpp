@@ -5,6 +5,8 @@
 #include "Common.hpp"
 #include "Type.hpp"
 #include <cstdint>
+#include "VPS.hpp"
+
 
 #define Extended_SAR 255
 #define MAX_VPS_COUNT 32
@@ -13,7 +15,10 @@
 
 class SPS {
  public:
-  int extractParameters(BitStream &bitStream);
+  int extractParameters(BitStream &bitStream,VPS vpss[MAX_SPS_COUNT]);
+
+ private:
+  BitStream *bs = nullptr;
 
  public:
   // 引用的视频参数集（VPS）的ID，确保SPS能够与正确的VPS关联。
@@ -107,6 +112,13 @@ class SPS {
   int32_t sps_scc_extension_flag = 0;
   int32_t sps_extension_4bits = 0;
   int32_t sps_extension_data_flag = 0;
+  int scaling_list_data();
+
+  VPS *m_vps = nullptr;
+  int sps_range_extension();
+  int sps_multilayer_extension();
+  int sps_3d_extension();
+  int sps_scc_extension();
 
   //--------------------- Old ------------------
  public:
@@ -327,34 +339,34 @@ class SPS {
   uint32_t max_dec_frame_buffering = 0;
 
   // H.265
-  int32_t neutral_chroma_indication_flag= 0;
-  int32_t field_seq_flag= 0;
-  int32_t frame_field_info_present_flag= 0;
-  int32_t default_display_window_flag= 0;
-  int32_t def_disp_win_left_offset= 0;
-  int32_t def_disp_win_right_offset= 0;
-  int32_t def_disp_win_top_offset= 0;
-  int32_t def_disp_win_bottom_offset= 0;
-  int32_t vui_timing_info_present_flag= 0;
-  int32_t vui_num_units_in_tick= 0;
-  int32_t vui_time_scale= 0;
-  int32_t vui_poc_proportional_to_timing_flag= 0;
-  int32_t vui_num_ticks_poc_diff_one_minus1= 0;
-  int32_t vui_hrd_parameters_present_flag= 0;
-  int32_t bitstream_restriction_flag= 0;
-  int32_t tiles_fixed_structure_flag= 0;
-  int32_t motion_vectors_over_pic_boundaries_flag= 0;
-  int32_t restricted_ref_pic_lists_flag= 0;
-  int32_t min_spatial_segmentation_idc= 0;
-  int32_t max_bytes_per_pic_denom= 0;
-  int32_t max_bits_per_min_cu_denom= 0;
-  int32_t log2_max_mv_length_horizontal= 0;
-  int32_t log2_max_mv_length_vertical= 0;
+  int32_t neutral_chroma_indication_flag = 0;
+  int32_t field_seq_flag = 0;
+  int32_t frame_field_info_present_flag = 0;
+  int32_t default_display_window_flag = 0;
+  int32_t def_disp_win_left_offset = 0;
+  int32_t def_disp_win_right_offset = 0;
+  int32_t def_disp_win_top_offset = 0;
+  int32_t def_disp_win_bottom_offset = 0;
+  int32_t vui_timing_info_present_flag = 0;
+  int32_t vui_num_units_in_tick = 0;
+  int32_t vui_time_scale = 0;
+  int32_t vui_poc_proportional_to_timing_flag = 0;
+  int32_t vui_num_ticks_poc_diff_one_minus1 = 0;
+  int32_t vui_hrd_parameters_present_flag = 0;
+  int32_t bitstream_restriction_flag = 0;
+  int32_t tiles_fixed_structure_flag = 0;
+  int32_t motion_vectors_over_pic_boundaries_flag = 0;
+  int32_t restricted_ref_pic_lists_flag = 0;
+  int32_t min_spatial_segmentation_idc = 0;
+  int32_t max_bytes_per_pic_denom = 0;
+  int32_t max_bits_per_min_cu_denom = 0;
+  int32_t log2_max_mv_length_horizontal = 0;
+  int32_t log2_max_mv_length_vertical = 0;
 
  private:
-  void vui_parameters(BitStream &bitStream);
-  void hrd_parameters(BitStream &bitStream);
-  int st_ref_pic_set(BitStream &bs, int32_t stRpsIdx);
+  void vui_parameters();
+  void hrd_parameters();
+  int st_ref_pic_set(int32_t stRpsIdx);
   int seq_parameter_set_extension_rbsp();
   int derived_SubWidthC_and_SubHeightC();
 };
