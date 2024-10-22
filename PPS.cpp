@@ -147,11 +147,6 @@ int PPS::extractParameters(BitStream &bs, uint32_t chroma_format_idc,
   //
   /* ---- */
 
-  CtbAddrTsToRs = new uint8_t[m_sps->PicSizeInCtbsY]{0};
-  CtbAddrRsToTs = new uint8_t[m_sps->PicSizeInCtbsY]{0};
-  for (int ctbAddrRs = 0; ctbAddrRs < m_sps->PicSizeInCtbsY; ctbAddrRs++)
-    CtbAddrTsToRs[CtbAddrRsToTs[ctbAddrRs]] = ctbAddrRs;
-
   int rowBd[32] = {0};
   int colBd[32] = {0};
   int i, j = 0;
@@ -192,11 +187,34 @@ int PPS::extractParameters(BitStream &bs, uint32_t chroma_format_idc,
     col_idxX[i] = j;
   }
 
+  /* ------ */
+  CtbAddrRsToTs = new uint8_t[m_sps->PicSizeInCtbsY]{0};
+  int tbX, tbY, tileX, tileY;
+  for (int ctbAddrRs = 0; ctbAddrRs < m_sps->PicSizeInCtbsY; ctbAddrRs++) {
+    tbX = ctbAddrRs % m_sps->PicWidthInCtbsY;
+    tbY = ctbAddrRs / m_sps->PicWidthInCtbsY;
+    for (int i = 0; i <= num_tile_columns_minus1; i++)
+      if (tbX >= colBd[i]) tileX = i;
+    for (int j = 0; j <= num_tile_rows_minus1; j++)
+      if (tbY >= rowBd[j]) tileY = j;
+    CtbAddrRsToTs[ctbAddrRs] = 0;
+    for (int i = 0; i < tileX; i++)
+      CtbAddrRsToTs[ctbAddrRs] += rowHeight[tileY] * colWidth[i];
+    for (int j = 0; j < tileY; j++)
+      CtbAddrRsToTs[ctbAddrRs] += m_sps->PicWidthInCtbsY * rowHeight[j];
+    CtbAddrRsToTs[ctbAddrRs] +=
+        (tbY - rowBd[tileY]) * colWidth[tileX] + tbX - colBd[tileX];
+  }
+
+  CtbAddrTsToRs = new uint8_t[m_sps->PicSizeInCtbsY]{0};
+  for (int ctbAddrRs = 0; ctbAddrRs < m_sps->PicSizeInCtbsY; ctbAddrRs++)
+    CtbAddrTsToRs[CtbAddrRsToTs[ctbAddrRs]] = ctbAddrRs;
+
   for (int j = 0, tileIdx = 0; j <= num_tile_rows_minus1; j++)
     for (int i = 0; i <= num_tile_columns_minus1; i++, tileIdx++)
       for (int y = rowBd[j]; y < rowBd[j + 1]; y++)
         for (int x = colBd[i]; x < colBd[i + 1]; x++)
           TileId[CtbAddrRsToTs[y * m_sps->PicWidthInCtbsY + x]] = tileIdx;
-  /* ------ */
+
   return 0;
 }

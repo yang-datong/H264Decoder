@@ -22,8 +22,8 @@ class SPS {
  public:
   // 引用的视频参数集（VPS）的ID，确保SPS能够与正确的VPS关联。
   int32_t sps_video_parameter_set_id = 0;
-  // 表示SPS适用的最大子层级数减1。
-  int32_t sps_max_sub_layers_minus1 = 0;
+  // 表示SPS适用的最大子层级数。
+  int32_t sps_max_sub_layers = 0;
   // 指示在SPS的有效范围内，所有的NAL单元是否遵循时间ID嵌套的规则。
   int32_t sps_temporal_id_nesting_flag = 0;
   int32_t sps_seq_parameter_set_id = 0;
@@ -50,23 +50,23 @@ class SPS {
   int32_t conf_win_top_offset = 0;
   int32_t conf_win_bottom_offset = 0;
 
-  // 分别表示亮度和色度的位深减8。
-  int32_t bit_depth_luma_minus8 = 0;
-  int32_t bit_depth_chroma_minus8 = 0;
-  // 表示解码顺序计数器的最大二进制位数减4。
-  int32_t log2_max_pic_order_cnt_lsb_minus4 = 0;
+  // 分别表示亮度和色度的位深。
+  int32_t bit_depth_luma = 0;
+  int32_t bit_depth_chroma = 0;
+  // 表示解码顺序计数器的最大二进制位数。
+  int32_t log2_max_pic_order_cnt_lsb = 0;
   // 表示SPS是否为每个子层指定解码和输出缓冲需求。
   int32_t sps_sub_layer_ordering_info_present_flag = 0;
 
   // 分别定义解码缓冲需求、重排序需求和最大允许的延迟增加。
-  int32_t sps_max_dec_pic_buffering_minus1[32] = {0};
+  int32_t sps_max_dec_pic_buffering[32] = {0};
   int32_t sps_max_num_reorder_pics[32] = {0};
-  int32_t sps_max_latency_increase_plus1[32] = {0};
+  int32_t sps_max_latency_increase[32] = {0};
 
   // 这些参数定义了编码的块大小、变换块大小和变换的层次深度。
-  int32_t log2_min_luma_coding_block_size_minus3 = 0;
+  int32_t log2_min_luma_coding_block_size = 0;
   int32_t log2_diff_max_min_luma_coding_block_size = 0;
-  int32_t log2_min_luma_transform_block_size_minus2 = 0;
+  int32_t log2_min_luma_transform_block_size = 0;
   int32_t log2_diff_max_min_luma_transform_block_size = 0;
   int32_t max_transform_hierarchy_depth_inter = 0;
   int32_t max_transform_hierarchy_depth_intra = 0;
@@ -90,9 +90,9 @@ class SPS {
   // PCM（脉冲编码调制）的启用标志，用于无损编码块。
   int32_t pcm_enabled_flag = 0;
   // 定义PCM编码的亮度和色度位深减1。
-  int32_t pcm_sample_bit_depth_luma_minus1 = 0;
-  int32_t pcm_sample_bit_depth_chroma_minus1 = 0;
-  int32_t log2_min_pcm_luma_coding_block_size_minus3 = 0;
+  int32_t pcm_sample_bit_depth_luma = 0;
+  int32_t pcm_sample_bit_depth_chroma = 0;
+  int32_t log2_min_pcm_luma_coding_block_size = 0;
   int32_t log2_diff_max_min_pcm_luma_coding_block_size = 0;
   // 指示是否禁用循环滤波器。
   int32_t pcm_loop_filter_disabled_flag = 0;

@@ -2,6 +2,7 @@
 #define H264CABAC_HPP_YF2ZLNUA
 
 #include "BitStream.hpp"
+#include "ContextModel3DBuffer.h"
 #include "Type.hpp"
 #include <stdint.h>
 #include <stdlib.h>
@@ -9,6 +10,7 @@
 class PictureBase;
 class Cabac {
  private:
+  ContextModel3DBuffer *m_cSaoMergeSCModel;
   //上下文变量
   uint8_t pStateIdxs[1024] = {0};
   bool valMPSs[1024] = {0};
@@ -57,6 +59,7 @@ class Cabac {
   int derivation_ctxIdxInc_for_transform_size_8x8_flag(int32_t &ctxIdxInc);
 
   int decodeBin(int32_t bypassFlag, int32_t ctxIdx, int32_t &bin);
+  void decodeBin(int &ruiBin, ContextModel &rcCtxModel);
   int decodeDecision(int32_t ctxIdx, int32_t &binVal);
   int decodeBypass(int32_t &binVal);
   int decodeTerminate(int32_t &binVal);
@@ -103,101 +106,103 @@ class Cabac {
                            int32_t endIdx, int32_t maxNumCoeff,
                            MB_RESIDUAL_LEVEL mb_block_level, int32_t BlkIdx,
                            int32_t iCbCr, int32_t &TotalCoeff);
+
+  int deocde_sao_merge_left_flag();
 };
 
-static const int8_t num_bins_in_se[] = {
-     1, // sao_merge_flag
-     1, // sao_type_idx
-     0, // sao_eo_class
-     0, // sao_band_position
-     0, // sao_offset_abs
-     0, // sao_offset_sign
-     0, // end_of_slice_flag
-     3, // split_coding_unit_flag
-     1, // cu_transquant_bypass_flag
-     3, // skip_flag
-     3, // cu_qp_delta
-     1, // pred_mode
-     4, // part_mode
-     0, // pcm_flag
-     1, // prev_intra_luma_pred_mode
-     0, // mpm_idx
-     0, // rem_intra_luma_pred_mode
-     2, // intra_chroma_pred_mode
-     1, // merge_flag
-     1, // merge_idx
-     5, // inter_pred_idc
-     2, // ref_idx_l0
-     2, // ref_idx_l1
-     2, // abs_mvd_greater0_flag
-     2, // abs_mvd_greater1_flag
-     0, // abs_mvd_minus2
-     0, // mvd_sign_flag
-     1, // mvp_lx_flag
-     1, // no_residual_data_flag
-     3, // split_transform_flag
-     2, // cbf_luma
-     5, // cbf_cb, cbf_cr
-     2, // transform_skip_flag[][]
-     2, // explicit_rdpcm_flag[][]
-     2, // explicit_rdpcm_dir_flag[][]
+const int8_t num_bins_in_se[] = {
+    1,  // sao_merge_flag
+    1,  // sao_type_idx
+    0,  // sao_eo_class
+    0,  // sao_band_position
+    0,  // sao_offset_abs
+    0,  // sao_offset_sign
+    0,  // end_of_slice_flag
+    3,  // split_coding_unit_flag
+    1,  // cu_transquant_bypass_flag
+    3,  // skip_flag
+    3,  // cu_qp_delta
+    1,  // pred_mode
+    4,  // part_mode
+    0,  // pcm_flag
+    1,  // prev_intra_luma_pred_mode
+    0,  // mpm_idx
+    0,  // rem_intra_luma_pred_mode
+    2,  // intra_chroma_pred_mode
+    1,  // merge_flag
+    1,  // merge_idx
+    5,  // inter_pred_idc
+    2,  // ref_idx_l0
+    2,  // ref_idx_l1
+    2,  // abs_mvd_greater0_flag
+    2,  // abs_mvd_greater1_flag
+    0,  // abs_mvd_minus2
+    0,  // mvd_sign_flag
+    1,  // mvp_lx_flag
+    1,  // no_residual_data_flag
+    3,  // split_transform_flag
+    2,  // cbf_luma
+    5,  // cbf_cb, cbf_cr
+    2,  // transform_skip_flag[][]
+    2,  // explicit_rdpcm_flag[][]
+    2,  // explicit_rdpcm_dir_flag[][]
     18, // last_significant_coeff_x_prefix
     18, // last_significant_coeff_y_prefix
-     0, // last_significant_coeff_x_suffix
-     0, // last_significant_coeff_y_suffix
-     4, // significant_coeff_group_flag
+    0,  // last_significant_coeff_x_suffix
+    0,  // last_significant_coeff_y_suffix
+    4,  // significant_coeff_group_flag
     44, // significant_coeff_flag
     24, // coeff_abs_level_greater1_flag
-     6, // coeff_abs_level_greater2_flag
-     0, // coeff_abs_level_remaining
-     0, // coeff_sign_flag
-     8, // log2_res_scale_abs
-     2, // res_scale_sign_flag
-     1, // cu_chroma_qp_offset_flag
-     1, // cu_chroma_qp_offset_idx
+    6,  // coeff_abs_level_greater2_flag
+    0,  // coeff_abs_level_remaining
+    0,  // coeff_sign_flag
+    8,  // log2_res_scale_abs
+    2,  // res_scale_sign_flag
+    1,  // cu_chroma_qp_offset_flag
+    1,  // cu_chroma_qp_offset_idx
 };
-static const int elem_offset[sizeof(num_bins_in_se)] = {
-    0, // sao_merge_flag
-    1, // sao_type_idx
-    2, // sao_eo_class
-    2, // sao_band_position
-    2, // sao_offset_abs
-    2, // sao_offset_sign
-    2, // end_of_slice_flag
-    2, // split_coding_unit_flag
-    5, // cu_transquant_bypass_flag
-    6, // skip_flag
-    9, // cu_qp_delta
-    12, // pred_mode
-    13, // part_mode
-    17, // pcm_flag
-    17, // prev_intra_luma_pred_mode
-    18, // mpm_idx
-    18, // rem_intra_luma_pred_mode
-    18, // intra_chroma_pred_mode
-    20, // merge_flag
-    21, // merge_idx
-    22, // inter_pred_idc
-    27, // ref_idx_l0
-    29, // ref_idx_l1
-    31, // abs_mvd_greater0_flag
-    33, // abs_mvd_greater1_flag
-    35, // abs_mvd_minus2
-    35, // mvd_sign_flag
-    35, // mvp_lx_flag
-    36, // no_residual_data_flag
-    37, // split_transform_flag
-    40, // cbf_luma
-    42, // cbf_cb, cbf_cr
-    47, // transform_skip_flag[][]
-    49, // explicit_rdpcm_flag[][]
-    51, // explicit_rdpcm_dir_flag[][]
-    53, // last_significant_coeff_x_prefix
-    71, // last_significant_coeff_y_prefix
-    89, // last_significant_coeff_x_suffix
-    89, // last_significant_coeff_y_suffix
-    89, // significant_coeff_group_flag
-    93, // significant_coeff_flag
+const int elem_offset[sizeof(num_bins_in_se)] = {
+    0,   // sao_merge_flag
+    1,   // sao_type_idx
+    2,   // sao_eo_class
+    2,   // sao_band_position
+    2,   // sao_offset_abs
+    2,   // sao_offset_sign
+    2,   // end_of_slice_flag
+    2,   // split_coding_unit_flag
+    5,   // cu_transquant_bypass_flag
+    6,   // skip_flag
+    9,   // cu_qp_delta
+    12,  // pred_mode
+    13,  // part_mode
+    17,  // pcm_flag
+    17,  // prev_intra_luma_pred_mode
+    18,  // mpm_idx
+    18,  // rem_intra_luma_pred_mode
+    18,  // intra_chroma_pred_mode
+    20,  // merge_flag
+    21,  // merge_idx
+    22,  // inter_pred_idc
+    27,  // ref_idx_l0
+    29,  // ref_idx_l1
+    31,  // abs_mvd_greater0_flag
+    33,  // abs_mvd_greater1_flag
+    35,  // abs_mvd_minus2
+    35,  // mvd_sign_flag
+    35,  // mvp_lx_flag
+    36,  // no_residual_data_flag
+    37,  // split_transform_flag
+    40,  // cbf_luma
+    42,  // cbf_cb, cbf_cr
+    47,  // transform_skip_flag[][]
+    49,  // explicit_rdpcm_flag[][]
+    51,  // explicit_rdpcm_dir_flag[][]
+    53,  // last_significant_coeff_x_prefix
+    71,  // last_significant_coeff_y_prefix
+    89,  // last_significant_coeff_x_suffix
+    89,  // last_significant_coeff_y_suffix
+    89,  // significant_coeff_group_flag
+    93,  // significant_coeff_flag
     137, // coeff_abs_level_greater1_flag
     161, // coeff_abs_level_greater2_flag
     167, // coeff_abs_level_remaining

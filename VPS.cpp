@@ -12,7 +12,7 @@ int VPS::extractParameters(BitStream &bs) {
   vps_max_layers = bs.readUn(6) + 1;
   cout << "\t表示编码视频中使用的最大层数:" << vps_max_layers << endl;
   vps_max_sub_layers = bs.readUn(3) + 1;
-  cout << "\t每个层最多有多少个子层:" << vps_max_sub_layers << endl;
+  cout << "\t最大临时层的数量:" << vps_max_sub_layers << endl;
   vps_temporal_id_nesting_flag = bs.readUn(1);
   cout << "\t是否所有的VCL（视频编码层）NAL单元都具有相同或增加的时间层ID:"
        << vps_temporal_id_nesting_flag << endl;

@@ -55,6 +55,8 @@ class SliceData {
   int cabac_state[HEVC_CONTEXTS] = {0};
   int stat_coeff[4] = {0};
 
+  int parseSaoMerge();
+
  public:
   /* 这个编号是解码器自己维护的，每次解码一帧则++ */
   uint32_t slice_number = 0;

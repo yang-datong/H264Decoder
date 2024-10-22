@@ -172,46 +172,44 @@ void SPS::hrd_parameters() {
 int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
   this->bs = &bitStream;
   sps_video_parameter_set_id = bs->readUn(4);
-  cout << "\tVPS ID:" << sps_video_parameter_set_id << endl;
   m_vps = &vpss[sps_video_parameter_set_id];
-  sps_max_sub_layers_minus1 = bs->readUn(3);
-  cout << "\t表示SPS适用的最大子层级数减1:" << sps_max_sub_layers_minus1
-       << endl;
+  cout << "\tVPS ID:" << sps_video_parameter_set_id << endl;
+
+  sps_max_sub_layers = bs->readUn(3) + 1;
+  cout << "\t表示SPS适用的最大子层级数:" << sps_max_sub_layers << endl;
+
   sps_temporal_id_nesting_flag = bs->readUn(1);
-  cout << "\t指示在SPS的有效范围内，所有的NAL单元是否遵循时间ID嵌套的规则:"
+  cout << "\t所有的NALU是否遵循时间ID嵌套的规则:"
        << sps_temporal_id_nesting_flag << endl;
-  profile_tier_level(*bs, 1, sps_max_sub_layers_minus1);
+
+  profile_tier_level(*bs, 1, sps_max_sub_layers - 1);
 
   sps_seq_parameter_set_id = bs->readUE();
   cout << "\tSPS ID:" << sps_seq_parameter_set_id << endl;
+
   chroma_format_idc = bs->readUE();
-  switch (chroma_format_idc) {
-  case 0:
+  if (chroma_format_idc == 0)
     cout << "\tchroma_format_idc:YUV400" << endl;
-    break;
-  case 1:
+  else if (chroma_format_idc == 1)
     cout << "\tchroma_format_idc:YUV420" << endl;
-    break;
-  case 2:
+  else if (chroma_format_idc == 2)
     cout << "\tchroma_format_idc:YUV422" << endl;
-    break;
-  case 3:
+  else if (chroma_format_idc == 3) {
     cout << "\tchroma_format_idc:YUB444" << endl;
     separate_colour_plane_flag = bs->readU1();
-    cout << "\t若为1，则亮度和色度样本被分别处理和编码:"
-         << separate_colour_plane_flag << endl;
-    break;
+    cout << "\t亮度和色度样本是否被分别处理:" << separate_colour_plane_flag
+         << endl;
   }
+
   pic_width_in_luma_samples = bs->readUE();
   pic_height_in_luma_samples = bs->readUE();
   width = pic_width_in_luma_samples;
   height = pic_height_in_luma_samples;
-
   cout << "\t图像大小，单位为亮度样本:" << pic_width_in_luma_samples << "x"
        << pic_height_in_luma_samples << endl;
+
   conformance_window_flag = bs->readU1();
-  cout << "\t表示是否裁剪图像边缘以符合显示要求:" << conformance_window_flag
-       << endl;
+  cout << "\t是否裁剪图像边缘:" << conformance_window_flag << endl;
   if (conformance_window_flag) {
     conf_win_left_offset = bs->readUE();
     conf_win_right_offset = bs->readUE();
@@ -219,35 +217,38 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
     conf_win_bottom_offset = bs->readUE();
   }
 
-  bit_depth_luma_minus8 = bs->readUE();
-  cout << "\t分别表示亮度的位深减8:" << bit_depth_luma_minus8 << endl;
-  bit_depth_chroma_minus8 = bs->readUE();
-  cout << "\t分别表示色度的位深减8:" << bit_depth_chroma_minus8 << endl;
-  log2_max_pic_order_cnt_lsb_minus4 = bs->readUE();
-  cout << "\t表示解码顺序计数器的最大二进制位数减4:"
-       << log2_max_pic_order_cnt_lsb_minus4 << endl;
+  /* TODO YangJing 去掉别的地方的+,- <24-10-23 00:40:46> */
+  bit_depth_luma = bs->readUE() + 8;
+  bit_depth_chroma = bs->readUE() + 8;
+  cout << "\t分别表示亮、色度的位深:" << bit_depth_luma << ","
+       << bit_depth_chroma << endl;
+
+  log2_max_pic_order_cnt_lsb = bs->readUE() + 4;
+  cout << "\tPOC(低位)的最大二进制位数:" << log2_max_pic_order_cnt_lsb << endl;
+
   sps_sub_layer_ordering_info_present_flag = bs->readU1();
-  cout << "\t表示SPS是否为每个子层指定解码和输出缓冲需求:"
+  cout << "\t是否为每个子层指定解码和输出缓冲需求:"
        << sps_sub_layer_ordering_info_present_flag << endl;
 
-  int32_t n =
-      sps_sub_layer_ordering_info_present_flag ? 0 : sps_max_sub_layers_minus1;
-  for (int32_t i = n; i <= sps_max_sub_layers_minus1; i++) {
-    sps_max_dec_pic_buffering_minus1[i] = bs->readUE();
+  // 解析层次和图像块大小
+  int32_t n = sps_sub_layer_ordering_info_present_flag ? 0 : sps_max_sub_layers;
+  for (int32_t i = n; i < sps_max_sub_layers; i++) {
+    sps_max_dec_pic_buffering[i] = bs->readUE() + 1;
     sps_max_num_reorder_pics[i] = bs->readUE();
-    sps_max_latency_increase_plus1[i] = bs->readUE();
+    sps_max_latency_increase[i] = bs->readUE() - 1;
     cout << "\t分别定义解码缓冲需求、重排序需求和最大允许的延迟增加:"
-         << sps_max_dec_pic_buffering_minus1[i] << ","
-         << sps_max_num_reorder_pics[i] << ","
-         << sps_max_latency_increase_plus1[i] << endl;
+         << sps_max_dec_pic_buffering[i] << "," << sps_max_num_reorder_pics[i]
+         << "," << sps_max_latency_increase[i] << endl;
   }
-  log2_min_luma_coding_block_size_minus3 = bs->readUE();
-  cout << "\t编码的块大小:" << log2_min_luma_coding_block_size_minus3 << endl;
+
+  log2_min_luma_coding_block_size = bs->readUE() + 3;
+  MinCbLog2SizeY = log2_min_luma_coding_block_size;
+  cout << "\t编码的块大小:" << log2_min_luma_coding_block_size << endl;
+
   log2_diff_max_min_luma_coding_block_size = bs->readUE();
   cout << "\t编码变换块大小:" << log2_diff_max_min_luma_coding_block_size
        << endl;
 
-  MinCbLog2SizeY = log2_min_luma_coding_block_size_minus3 + 3;
   CtbLog2SizeY = MinCbLog2SizeY + log2_diff_max_min_luma_coding_block_size;
   CtbSizeY = 1 << CtbLog2SizeY;
   PicWidthInCtbsY = CEIL(pic_width_in_luma_samples / CtbSizeY);
@@ -258,12 +259,16 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
   ctb_height = (height + (1 << CtbLog2SizeY) - 1) >> CtbLog2SizeY;
   ctb_size = ctb_width * ctb_height;
 
-  log2_min_luma_transform_block_size_minus2 = bs->readUE();
+  log2_min_luma_transform_block_size = bs->readUE() + 2;
+
   log2_diff_max_min_luma_transform_block_size = bs->readUE();
+
   max_transform_hierarchy_depth_inter = bs->readUE();
+
   max_transform_hierarchy_depth_intra = bs->readUE();
   cout << "\t编码变换的层次深度:" << max_transform_hierarchy_depth_intra
        << endl;
+
   scaling_list_enabled_flag = bs->readUn(1);
   if (scaling_list_enabled_flag) {
     sps_scaling_list_data_present_flag = bs->readUn(1);
@@ -272,26 +277,28 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
          << sps_scaling_list_data_present_flag << endl;
     if (sps_scaling_list_data_present_flag) scaling_list_data();
   }
+
   amp_enabled_flag = bs->readUn(1);
   cout << "\t异构模式分割（AMP）的启用标志:" << amp_enabled_flag << endl;
+
   sample_adaptive_offset_enabled_flag = bs->readUn(1);
   cout << "\t样本自适应偏移（SAO）的启用标志，用于改进去块效应:"
        << sample_adaptive_offset_enabled_flag << endl;
+
   pcm_enabled_flag = bs->readUn(1);
-  cout << "\tPCM（脉冲编码调制）的启用标志，用于无损编码块:" << pcm_enabled_flag
-       << endl;
+  cout << "\tPCM（脉冲编码调制）的启用标志:" << pcm_enabled_flag << endl;
   if (pcm_enabled_flag) {
-    pcm_sample_bit_depth_luma_minus1 = bs->readUn(4);
-    pcm_sample_bit_depth_chroma_minus1 = bs->readUn(4);
-    cout << "\t定义PCM编码的亮度和色度位深减1:"
-         << pcm_sample_bit_depth_luma_minus1 << ","
-         << pcm_sample_bit_depth_chroma_minus1 << endl;
-    log2_min_pcm_luma_coding_block_size_minus3 = bs->readUE();
+    pcm_sample_bit_depth_luma = bs->readUn(4) + 1;
+    pcm_sample_bit_depth_chroma = bs->readUn(4) + 1;
+    cout << "\t定义PCM编码的亮度和色度位深:" << pcm_sample_bit_depth_luma << ","
+         << pcm_sample_bit_depth_chroma << endl;
+    log2_min_pcm_luma_coding_block_size = bs->readUE() + 3;
     log2_diff_max_min_pcm_luma_coding_block_size = bs->readUE();
     pcm_loop_filter_disabled_flag = bs->readUn(1);
     cout << "\t指示是否禁用循环滤波器:" << pcm_loop_filter_disabled_flag
          << endl;
   }
+
   num_short_term_ref_pic_sets = bs->readUE();
   cout << "\t短期参考图片集的数量:" << num_short_term_ref_pic_sets << endl;
   for (int32_t i = 0; i < num_short_term_ref_pic_sets; i++) {
@@ -299,6 +306,7 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
     return 0;
     //st_ref_pic_set(i);
   }
+
   long_term_ref_pics_present_flag = bs->readUn(1);
   cout << "\t指示是否使用长期参考图像:" << long_term_ref_pics_present_flag
        << endl;
@@ -306,17 +314,18 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
     num_long_term_ref_pics_sps = bs->readUE();
     cout << "\t长期参考图像的数量:" << num_long_term_ref_pics_sps << endl;
     for (int32_t i = 0; i < num_long_term_ref_pics_sps; i++) {
-      lt_ref_pic_poc_lsb_sps[i] =
-          bs->readUn(log2_max_pic_order_cnt_lsb_minus4 + 4);
+      lt_ref_pic_poc_lsb_sps[i] = bs->readUn(log2_max_pic_order_cnt_lsb);
       used_by_curr_pic_lt_sps_flag[i] = bs->readUn(1);
       cout << "\t分别定义长期参考图像的POC LSB和其使用状态:"
            << lt_ref_pic_poc_lsb_sps << "," << used_by_curr_pic_lt_sps_flag
            << endl;
     }
   }
+
   sps_temporal_mvp_enabled_flag = bs->readUn(1);
   cout << "\t时间多视点预测的启用标志:" << sps_temporal_mvp_enabled_flag
        << endl;
+
   strong_intra_smoothing_enabled_flag = bs->readUn(1);
   cout << "\t强内部平滑的启用标志:" << strong_intra_smoothing_enabled_flag
        << endl;
@@ -325,24 +334,26 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
   cout << "\t指示视频可用性信息（VUI）是否存在:" << vui_parameters_present_flag
        << endl;
   if (vui_parameters_present_flag) vui_parameters();
+
   sps_extension_present_flag = bs->readUn(1);
   cout << "\t各种SPS扩展的启用标志:" << sps_extension_present_flag << endl;
   if (sps_extension_present_flag) {
     sps_range_extension_flag = bs->readUn(1);
+    if (sps_range_extension_flag) sps_range_extension();
     sps_multilayer_extension_flag = bs->readUn(1);
+    if (sps_multilayer_extension_flag) sps_multilayer_extension();
     sps_3d_extension_flag = bs->readUn(1);
+    if (sps_3d_extension_flag) sps_3d_extension();
     sps_scc_extension_flag = bs->readUn(1);
+    if (sps_scc_extension_flag) sps_scc_extension();
     sps_extension_4bits = bs->readUn(4);
+    if (sps_extension_4bits)
+      while (bs->more_rbsp_data())
+        int sps_extension_data_flag = bs->readUn(1);
+    cout << "\tSPS扩展和扩展数据的存在标志:" << sps_extension_4bits << ","
+         << sps_extension_data_flag << endl;
   }
-  if (sps_range_extension_flag) sps_range_extension();
-  if (sps_multilayer_extension_flag) sps_multilayer_extension();
-  if (sps_3d_extension_flag) sps_3d_extension();
-  if (sps_scc_extension_flag) sps_scc_extension();
-  if (sps_extension_4bits)
-    while (bs->more_rbsp_data())
-      int32_t sps_extension_data_flag = bs->readUn(1);
-  cout << "\tSPS扩展和扩展数据的存在标志:" << sps_extension_4bits << ","
-       << sps_extension_data_flag << endl;
+
   bs->rbsp_trailing_bits();
 
   return 0;

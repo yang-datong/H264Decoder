@@ -124,7 +124,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
 
     if (IS_IDR(nal_unit_type) == false) {
       slice_pic_order_cnt_lsb =
-          _bs->readUn(m_sps->log2_max_pic_order_cnt_lsb_minus4 + 4);
+          _bs->readUn(m_sps->log2_max_pic_order_cnt_lsb);
       short_term_ref_pic_set_sps_flag = _bs->readUn(1);
       if (!short_term_ref_pic_set_sps_flag)
         st_ref_pic_set(_bs, m_sps->num_short_term_ref_pic_sets);
@@ -143,7 +143,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
             }
           } else {
             poc_lsb_lt[i] =
-                _bs->readUn(m_sps->log2_max_pic_order_cnt_lsb_minus4 + 4);
+                _bs->readUn(m_sps->log2_max_pic_order_cnt_lsb);
             used_by_curr_pic_lt_flag[i] = _bs->readUn(1);
           }
           delta_poc_msb_present_flag[i] = _bs->readUn(1);

@@ -37,23 +37,24 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
   //----
   //----------------------- 开始对Slice分割为MacroBlock进行处理 ----------------------------
   bool end_of_slice_segment_flag = false;
-  //do {
-  coding_tree_unit();
-  //    end_of_slice_segment_flag ae(v);
-  CtbAddrInTs++;
-  CtbAddrInRs = m_pps->CtbAddrTsToRs[CtbAddrInTs];
-  //    if (!end_of_slice_segment_flag &&
-  //        ((tiles_enabled_flag &&
-  //          TileId[CtbAddrInTs] != TileId[CtbAddrInTs - 1]) ||
-  //         (entropy_coding_sync_enabled_flag &&
-  //          (CtbAddrInRs % PicWidthInCtbsY == 0 ||
-  //           TileId[CtbAddrInTs] != TileId[CtbAddrRsToTs[CtbAddrInRs - 1]])))) {
-  //      end_of_subset_one_bit /* equal to 1 */ ae(v);
-  //      byte_alignment();
-  //}
-  /* 计算下一个宏块的地址 */
-  //CurrMbAddr = NextMbAddress(CurrMbAddr, header);
-  //} while (!end_of_slice_segment_flag);
+  do {
+    coding_tree_unit();
+    //    end_of_slice_segment_flag ae(v);
+    CtbAddrInTs++;
+    CtbAddrInRs = m_pps->CtbAddrTsToRs[CtbAddrInTs];
+    //    if (!end_of_slice_segment_flag &&
+    //        ((tiles_enabled_flag &&
+    //          TileId[CtbAddrInTs] != TileId[CtbAddrInTs - 1]) ||
+    //         (entropy_coding_sync_enabled_flag &&
+    //          (CtbAddrInRs % PicWidthInCtbsY == 0 ||
+    //           TileId[CtbAddrInTs] != TileId[CtbAddrRsToTs[CtbAddrInRs - 1]])))) {
+    //      end_of_subset_one_bit /* equal to 1 */ ae(v);
+    //      byte_alignment();
+    //}
+    /* 计算下一个宏块的地址 */
+    //CurrMbAddr = NextMbAddress(CurrMbAddr, header);
+    /* TODO YangJing 9999去掉  <24-10-22 09:11:36> */
+  } while (!end_of_slice_segment_flag && CtbAddrInTs <= 9999);
   slice_number++;
   return 0;
 }
@@ -218,8 +219,8 @@ int SliceData::coding_tree_unit() {
   int32_t xCtb = (CtbAddrInRs % m_sps->PicWidthInCtbsY) << m_sps->CtbLog2SizeY;
   int32_t yCtb = (CtbAddrInRs / m_sps->PicWidthInCtbsY) << m_sps->CtbLog2SizeY;
   int ctb_addr_ts = m_pps->CtbAddrRsToTs[header->slice_ctb_addr_rs];
-  hls_decode_neighbour(xCtb, yCtb, ctb_addr_ts);
-  ff_hevc_cabac_init(ctb_addr_ts);
+  //hls_decode_neighbour(xCtb, yCtb, ctb_addr_ts);
+  //ff_hevc_cabac_init(ctb_addr_ts);
   if (header->slice_sao_luma_flag || header->slice_sao_chroma_flag)
     sao(xCtb >> m_sps->CtbLog2SizeY, yCtb >> m_sps->CtbLog2SizeY);
   coding_quadtree(xCtb, yCtb, m_sps->CtbLog2SizeY, 0);
@@ -227,15 +228,15 @@ int SliceData::coding_tree_unit() {
 }
 
 int SliceData::sao(int32_t rx, int32_t ry) {
+  int sao_merge_left_flag = 0;
   if (rx > 0) {
     int leftCtbInSliceSeg = CtbAddrInRs > header->SliceAddrRs;
     int leftCtbInTile = (m_pps->TileId[CtbAddrInTs] ==
                          m_pps->TileId[m_pps->CtbAddrRsToTs[CtbAddrInRs - 1]]);
     if (leftCtbInSliceSeg && leftCtbInTile)
-      int sao_merge_left_flag = 0; // = ff_hevc_sao_merge_flag_decode();
+      sao_merge_left_flag = cabac->deocde_sao_merge_left_flag();
   }
 
-  int sao_merge_left_flag = 0;
   int sao_merge_up_flag = 0;
   if (ry > 0 && !sao_merge_left_flag) {
     int upCtbInSliceSeg =

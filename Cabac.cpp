@@ -3,6 +3,7 @@
 #include "MacroBlock.hpp"
 #include "PictureBase.hpp"
 #include "SliceHeader.hpp"
+#include "TComCABACTables.h"
 #include "Type.hpp"
 #include <cstdint>
 
@@ -2407,5 +2408,13 @@ int Cabac::decodeDecision(int32_t ctxIdx, int32_t &binVal) {
   return renormD();
 }
 
-
-
+#define GET_CABAC(ctx) get_cabac(&s->HEVClc->cc, &s->HEVClc->cabac_state[ctx])
+int Cabac::deocde_sao_merge_left_flag() {
+  //int32_t ctxIdxOffset = 0, binVal = 0, ctxIdx = 0, bypassFlag = 0;
+  //ctxIdxOffset = 0;
+  //ctxIdx = ctxIdxOffset + 0;
+  //RET(decodeBin(bypassFlag, ctxIdx, binVal));
+  //return binVal;
+  //return GET_CABAC(elem_offset[SAO_MERGE_FLAG]);
+  return 0;
+}
