@@ -95,6 +95,7 @@ class PPS {
   int32_t pps_extension_4bits = false;
   int32_t pps_slice_act_qp_offsets_present_flag = false;
   int32_t chroma_qp_offset_list_enabled_flag = false;
+  int32_t diff_cu_chroma_qp_offset_depth = 0;
 
   int32_t pps_curr_pic_ref_enabled_flag = 0;
 

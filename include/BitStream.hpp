@@ -55,6 +55,7 @@ class BitStream {
   int getBitsLeft() { return _bitsLeft; }
   bool more_rbsp_data();
   int rbsp_trailing_bits();
+  int byte_alignment();
 };
 
 struct maping_exp_golomb_t {

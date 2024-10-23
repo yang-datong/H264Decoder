@@ -136,7 +136,7 @@ int Nalu::extractSEIparameters(RBSP &rbsp, SEI &sei, SPS &sps) {
 
 int Nalu::extractSliceparameters(BitStream &bitStream, GOP &gop, Frame &frame) {
   Slice *slice = new Slice(this);
-  slice->slice_header->parseSliceHeader(bitStream, gop);
+  slice->slice_header->slice_segment_header(bitStream, gop);
   frame.slice = slice;
   return 0;
 }

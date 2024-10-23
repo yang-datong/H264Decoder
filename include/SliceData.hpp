@@ -89,7 +89,7 @@ class SliceData {
   BitStream *bs = nullptr;
   PictureBase *pic = nullptr;
 
-  int parseSliceData(BitStream &bs, PictureBase &pic, SPS &sps, PPS &pps);
+  int slice_segment_data(BitStream &bs, PictureBase &pic, SPS &sps, PPS &pps);
 
   /* process表示处理字段，具体处理手段有推流或解码操作 */
   int process_mb_skip_run(int32_t &prevMbSkipped);

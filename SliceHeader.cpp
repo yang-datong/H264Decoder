@@ -19,11 +19,14 @@ int SliceHeader::st_ref_pic_set(BitStream *bs, int32_t stRpsIdx) {
     delta_rps_sign = bs->readUn(1);
     abs_delta_rps_minus1 = bs->readUE();
     RefRpsIdx = stRpsIdx - (delta_idx_minus1 + 1);
+    deltaRps = (1 - 2 * delta_rps_sign) * (abs_delta_rps_minus1 + 1);
     for (int32_t j = 0; j <= NumDeltaPocs[RefRpsIdx]; j++) {
       used_by_curr_pic_flag[j] = bs->readUn(1);
       if (!used_by_curr_pic_flag[j]) use_delta_flag[j] = bs->readUn(1);
     }
   } else {
+
+    //used_by_curr_pic_s1_flag
     num_negative_pics = bs->readUE();
     NumNegativePics[stRpsIdx] = num_negative_pics;
     num_positive_pics = bs->readUE();
@@ -54,6 +57,53 @@ int SliceHeader::st_ref_pic_set(BitStream *bs, int32_t stRpsIdx) {
       }
     }
   }
+
+  // use_delta_flag
+  int i = 0, j = 0;
+  for (j = NumPositivePics[RefRpsIdx] - 1; j >= 0; j--) {
+    int dPoc = DeltaPocS1[RefRpsIdx][j] + deltaRps;
+    if (dPoc < 0 && use_delta_flag[NumNegativePics[RefRpsIdx] + j]) {
+      DeltaPocS0[stRpsIdx][i] = dPoc;
+      UsedByCurrPicS0[stRpsIdx][i++] =
+          used_by_curr_pic_flag[NumNegativePics[RefRpsIdx] + j];
+    }
+  }
+  if (deltaRps < 0 && use_delta_flag[NumDeltaPocs[RefRpsIdx]]) {
+    DeltaPocS0[stRpsIdx][i] = deltaRps;
+    UsedByCurrPicS0[stRpsIdx][i++] =
+        used_by_curr_pic_flag[NumDeltaPocs[RefRpsIdx]];
+  }
+  for (j = 0; j < NumNegativePics[RefRpsIdx]; j++) {
+    int dPoc = DeltaPocS0[RefRpsIdx][j] + deltaRps;
+    if (dPoc < 0 && use_delta_flag[j]) {
+      DeltaPocS0[stRpsIdx][i] = dPoc;
+      UsedByCurrPicS0[stRpsIdx][i++] = used_by_curr_pic_flag[j];
+    }
+  }
+  NumNegativePics[stRpsIdx] = i;
+  i = 0;
+  for (j = NumNegativePics[RefRpsIdx] - 1; j >= 0; j--) {
+    int dPoc = DeltaPocS0[RefRpsIdx][j] + deltaRps;
+    if (dPoc > 0 && use_delta_flag[j]) {
+      DeltaPocS1[stRpsIdx][i] = dPoc;
+      UsedByCurrPicS1[stRpsIdx][i++] = used_by_curr_pic_flag[j];
+    }
+  }
+  if (deltaRps > 0 && use_delta_flag[NumDeltaPocs[RefRpsIdx]]) {
+    DeltaPocS1[stRpsIdx][i] = deltaRps;
+    UsedByCurrPicS1[stRpsIdx][i++] =
+        used_by_curr_pic_flag[NumDeltaPocs[RefRpsIdx]];
+  }
+  for (j = 0; j < NumPositivePics[RefRpsIdx]; j++) {
+    int dPoc = DeltaPocS1[RefRpsIdx][j] + deltaRps;
+    if (dPoc > 0 && use_delta_flag[NumNegativePics[RefRpsIdx] + j]) {
+      DeltaPocS1[stRpsIdx][i] = dPoc;
+      UsedByCurrPicS1[stRpsIdx][i++] =
+          used_by_curr_pic_flag[NumNegativePics[RefRpsIdx] + j];
+    }
+  }
+  NumPositivePics[stRpsIdx] = i;
+
   return 0;
 }
 
@@ -63,7 +113,7 @@ int SliceHeader::st_ref_pic_set(BitStream *bs, int32_t stRpsIdx) {
 #define IS_IDR(nal_unit_type)                                                  \
   (nal_unit_type == HEVC_NAL_IDR_W_RADL || nal_unit_type == HEVC_NAL_IDR_N_LP)
 /* Slice header syntax -> 51 page */
-int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
+int SliceHeader::slice_segment_header(BitStream &bitStream, GOP &gop) {
   _bs = &bitStream;
 
   first_slice_segment_in_pic_flag = _bs->readU1();
@@ -235,7 +285,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
     for (int32_t i = 0; i < slice_segment_header_extension_length; i++)
       slice_segment_header_extension_data_byte[i] = _bs->readUn(8);
   }
-  _bs->byte_aligned();
+  _bs->byte_alignment();
 
   slice_ctb_addr_rs = slice_segment_address;
   /* SliceHeader 同时初始化？ 然后需要共享数据？ */

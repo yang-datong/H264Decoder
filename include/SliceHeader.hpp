@@ -123,6 +123,7 @@ class SliceHeader {
   int32_t DeltaPocS1[32][32] = {0};
 
   int32_t RefRpsIdx = 0;
+  int deltaRps = 0;
 
   int slice_qp = 0;
   int32_t NumPicTotalCurr = 0;
@@ -335,6 +336,6 @@ class SliceHeader {
   void dec_ref_pic_marking();
 
  public:
-  int parseSliceHeader(BitStream &bitStream, GOP &gop);
+  int slice_segment_header(BitStream &bitStream, GOP &gop);
 };
 #endif /* end of include guard: SLICEHEADER_HPP_JYXLKOEI */

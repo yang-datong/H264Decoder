@@ -11,51 +11,45 @@
 #define GET_CABAC(ctx) get_cabac(&s->HEVClc->cc, &s->HEVClc->cabac_state[ctx])
 
 /* 7.3.4 Slice data syntax */
-int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
-                              SPS &sps, PPS &pps) {
+int SliceData::slice_segment_data(BitStream &bitStream, PictureBase &picture,
+                                  SPS &sps, PPS &pps) {
   /* 初始化类中的指针 */
   pic = &picture;
   header = pic->m_slice->slice_header;
   bs = &bitStream;
   m_sps = &sps;
   m_pps = &pps;
-  //MbaffFrameFlag = header->MbaffFrameFlag;
 
-  /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
-  initCABAC();
-
-  /* 如果当前帧不使用MBAFF编码模式。所有宏块都作为帧/场宏块进行编码，而不需要进行动态切换帧、场编码 */
-  if (MbaffFrameFlag == 0) mb_field_decoding_flag = header->field_pic_flag;
-
-  /* 宏块的初始地址（或宏块索引），在A Frame = A Slice的情况下，初始地址应该为0 */
-  pic->CurrMbAddr = CurrMbAddr =
-      header->first_slice_segment_in_pic_flag * (1 + MbaffFrameFlag);
-
-  /* 8.2 Slice decoding process */
-  //slice_decoding_process();
-
-  //----
   //----------------------- 开始对Slice分割为MacroBlock进行处理 ----------------------------
   bool end_of_slice_segment_flag = false;
   do {
+    // 解析当前CTU（编码树单元）的数据
     coding_tree_unit();
-    //    end_of_slice_segment_flag ae(v);
+    end_of_slice_segment_flag = false; //TODO ae(v);
+    // 编码顺序: 递增当前CTU的地址
     CtbAddrInTs++;
+    // 光栅顺序: 将编码顺序下的CTU地址转换为光栅顺序下的CTU地址
     CtbAddrInRs = m_pps->CtbAddrTsToRs[CtbAddrInTs];
-    //    if (!end_of_slice_segment_flag &&
-    //        ((tiles_enabled_flag &&
-    //          TileId[CtbAddrInTs] != TileId[CtbAddrInTs - 1]) ||
-    //         (entropy_coding_sync_enabled_flag &&
-    //          (CtbAddrInRs % PicWidthInCtbsY == 0 ||
-    //           TileId[CtbAddrInTs] != TileId[CtbAddrRsToTs[CtbAddrInRs - 1]])))) {
-    //      end_of_subset_one_bit /* equal to 1 */ ae(v);
-    //      byte_alignment();
-    //}
-    /* 计算下一个宏块的地址 */
-    //CurrMbAddr = NextMbAddress(CurrMbAddr, header);
+
+    // 当前片段还没有结束
+    if (!end_of_slice_segment_flag) {
+      // 启用了Tile（瓦片）,当前CTU的Tile ID与前一个CTU的Tile ID不同(跨越了Tile边界)
+      if (m_pps->tiles_enabled_flag &&
+          m_pps->TileId[CtbAddrInTs] != m_pps->TileId[CtbAddrInTs - 1])
+        goto check;
+      // 启用了熵编码同步,当前CTU位于图像的最左边，跨越了Tile边界
+      else if (m_pps->entropy_coding_sync_enabled_flag &&
+               (CtbAddrInRs % m_sps->PicWidthInCtbsY == 0 ||
+                m_pps->TileId[CtbAddrInTs] !=
+                    m_pps->TileId[m_pps->CtbAddrRsToTs[CtbAddrInRs - 1]]))
+        goto check;
+
+    check:
+      int end_of_subset_one_bit = 0; // TODO ae(v);
+      bs->byte_alignment();
+    }
     /* TODO YangJing 9999去掉  <24-10-22 09:11:36> */
   } while (!end_of_slice_segment_flag && CtbAddrInTs <= 9999);
-  slice_number++;
   return 0;
 }
 
@@ -200,7 +194,8 @@ int SliceData::ff_hevc_cabac_init(int ctb_addr_ts) {
          m_pps->TileId[ctb_addr_ts] != m_pps->TileId[ctb_addr_ts - 1]))
       cabac_init_state();
 
-    if (!header->first_slice_segment_in_pic_flag && m_pps->entropy_coding_sync_enabled_flag) {
+    if (!header->first_slice_segment_in_pic_flag &&
+        m_pps->entropy_coding_sync_enabled_flag) {
       if (ctb_addr_ts % m_sps->ctb_width == 0) {
         if (m_sps->ctb_width == 1)
           cabac_init_state();
@@ -216,14 +211,21 @@ int SliceData::ff_hevc_cabac_init(int ctb_addr_ts) {
 }
 
 int SliceData::coding_tree_unit() {
+  // CtbAddrInRs 是当前CTU在光栅顺序（Raster Scan）中的地址
+  // CTU在图像中的水平、垂直像素坐标
   int32_t xCtb = (CtbAddrInRs % m_sps->PicWidthInCtbsY) << m_sps->CtbLog2SizeY;
   int32_t yCtb = (CtbAddrInRs / m_sps->PicWidthInCtbsY) << m_sps->CtbLog2SizeY;
-  int ctb_addr_ts = m_pps->CtbAddrRsToTs[header->slice_ctb_addr_rs];
+  //int ctb_addr_ts = m_pps->CtbAddrRsToTs[header->slice_ctb_addr_rs];
   //hls_decode_neighbour(xCtb, yCtb, ctb_addr_ts);
   //ff_hevc_cabac_init(ctb_addr_ts);
+
+  // 样值自适应偏移（SAO，Sample Adaptive Offset）
   if (header->slice_sao_luma_flag || header->slice_sao_chroma_flag)
+    // 将CTU的像素坐标转换为CTU的索引（即CTU在图像中的位置）
     sao(xCtb >> m_sps->CtbLog2SizeY, yCtb >> m_sps->CtbLog2SizeY);
-  coding_quadtree(xCtb, yCtb, m_sps->CtbLog2SizeY, 0);
+
+  // 递归地处理当前CTU的四叉树（QuadTree）结构
+  //coding_quadtree(xCtb, yCtb, m_sps->CtbLog2SizeY, 0);
   return 0;
 }
 
@@ -287,30 +289,41 @@ int SliceData::sao(int32_t rx, int32_t ry) {
       }
   return 0;
 }
-//
+
 int SliceData::coding_quadtree(int x0, int y0, int log2CbSize, int cqtDepth) {
-  //  if (x0 + (1 << log2CbSize) <= pic_width_in_luma_samples &&
-  //      y0 + (1 << log2CbSize) <= pic_height_in_luma_samples &&
-  //      log2CbSize > MinCbLog2SizeY)
-  //    split_cu_flag[x0][y0] = ae(v);
-  //  if (cu_qp_delta_enabled_flag && log2CbSize >= Log2MinCuQpDeltaSize) {
-  //    IsCuQpDeltaCoded = 0, CuQpDeltaVal = 0;
-  //  }
-  //  if (cu_chroma_qp_offset_enabled_flag &&
-  //      log2CbSize >= Log2MinCuChromaQpOffsetSize)
-  //    IsCuChromaQpOffsetCoded = 0;
-  //  if (split_cu_flag[x0][y0]) {
-  //    x1 = x0 + (1 << (log2CbSize - 1));
-  //    y1 = y0 + (1 << (log2CbSize - 1));
-  //    coding_quadtree(x0, y0, log2CbSize - 1, cqtDepth + 1);
-  //    if (x1 < pic_width_in_luma_samples)
-  //      coding_quadtree(x1, y0, log2CbSize - 1, cqtDepth + 1);
-  //    if (y1 < pic_height_in_luma_samples)
-  //      coding_quadtree(x0, y1, log2CbSize - 1, cqtDepth + 1);
-  //    if (x1 < pic_width_in_luma_samples && y1 < pic_height_in_luma_samples)
-  //      coding_quadtree(x1, y1, log2CbSize - 1, cqtDepth + 1);
-  //  } else
-  //    coding_unit(x0, y0, log2CbSize);
+  int32_t pic_width_in_luma_samples = m_sps->pic_width_in_luma_samples;
+  int32_t pic_height_in_luma_samples = m_sps->pic_height_in_luma_samples;
+  int32_t MinCbLog2SizeY = m_sps->MinCbLog2SizeY;
+
+  int split_cu_flag[32][32] = {{0}};
+  int IsCuQpDeltaCoded = 0, CuQpDeltaVal = 0, IsCuChromaQpOffsetCoded = 0;
+
+  int Log2MinCuChromaQpOffsetSize =
+      m_sps->CtbLog2SizeY - m_pps->diff_cu_chroma_qp_offset_depth;
+
+  if (x0 + (1 << log2CbSize) <= pic_width_in_luma_samples &&
+      y0 + (1 << log2CbSize) <= pic_height_in_luma_samples &&
+      log2CbSize > MinCbLog2SizeY)
+    split_cu_flag[x0][y0] = 0; //ae(v);
+  if (m_pps->cu_qp_delta_enabled_flag &&
+      log2CbSize >= m_pps->Log2MinCuQpDeltaSize) {
+    IsCuQpDeltaCoded = 0, CuQpDeltaVal = 0;
+  }
+  if (header->cu_chroma_qp_offset_enabled_flag &&
+      log2CbSize >= Log2MinCuChromaQpOffsetSize)
+    IsCuChromaQpOffsetCoded = 0;
+  if (split_cu_flag[x0][y0]) {
+    int x1 = x0 + (1 << (log2CbSize - 1));
+    int y1 = y0 + (1 << (log2CbSize - 1));
+    coding_quadtree(x0, y0, log2CbSize - 1, cqtDepth + 1);
+    if (x1 < pic_width_in_luma_samples)
+      coding_quadtree(x1, y0, log2CbSize - 1, cqtDepth + 1);
+    if (y1 < pic_height_in_luma_samples)
+      coding_quadtree(x0, y1, log2CbSize - 1, cqtDepth + 1);
+    if (x1 < pic_width_in_luma_samples && y1 < pic_height_in_luma_samples)
+      coding_quadtree(x1, y1, log2CbSize - 1, cqtDepth + 1);
+  } else
+    coding_unit(x0, y0, log2CbSize);
   return 0;
 }
 

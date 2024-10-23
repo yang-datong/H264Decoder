@@ -178,3 +178,10 @@ int BitStream::rbsp_trailing_bits() {
   return 0;
 }
 #pragma GCC diagnostic pop
+
+int BitStream::byte_alignment() {
+  int alignment_bit_equal_to_one = readU1();
+  while (!byte_aligned())
+    readU1();
+  return 0;
+}
