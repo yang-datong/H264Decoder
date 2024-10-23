@@ -29,7 +29,7 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
 
   /* 宏块的初始地址（或宏块索引），在A Frame = A Slice的情况下，初始地址应该为0 */
   pic->CurrMbAddr = CurrMbAddr =
-      header->first_mb_in_slice * (1 + MbaffFrameFlag);
+      header->first_slice_segment_in_pic_flag * (1 + MbaffFrameFlag);
 
   /* 8.2 Slice decoding process */
   //slice_decoding_process();
@@ -200,7 +200,7 @@ int SliceData::ff_hevc_cabac_init(int ctb_addr_ts) {
          m_pps->TileId[ctb_addr_ts] != m_pps->TileId[ctb_addr_ts - 1]))
       cabac_init_state();
 
-    if (!header->first_mb_in_slice && m_pps->entropy_coding_sync_enabled_flag) {
+    if (!header->first_slice_segment_in_pic_flag && m_pps->entropy_coding_sync_enabled_flag) {
       if (ctb_addr_ts % m_sps->ctb_width == 0) {
         if (m_sps->ctb_width == 1)
           cabac_init_state();

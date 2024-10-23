@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
         cout << "PPS -> {" << endl;
         nalu.extractPPSparameters(
             rbsp, gop->m_ppss, gop->last_pps_id,
-            gop->m_spss[gop->last_sps_id].chroma_format_idc,gop->m_spss);
+            gop->m_spss[gop->last_sps_id].chroma_format_idc, gop->m_spss);
         cout << " }" << endl;
 
         break;

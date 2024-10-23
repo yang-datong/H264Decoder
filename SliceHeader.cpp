@@ -11,18 +11,6 @@ SliceHeader::~SliceHeader() {
   FREE(MbToSliceGroupMap);
 }
 
-int SliceHeader::getNumPicTotalCurr(int32_t CurrRpsIdx) {
-  int32_t NumPicTotalCurr = 0;
-  for (int32_t i = 0; i < NumNegativePics[CurrRpsIdx]; i++)
-    if (UsedByCurrPicS0[CurrRpsIdx][i]) NumPicTotalCurr++;
-  for (int32_t i = 0; i < NumPositivePics[CurrRpsIdx]; i++)
-    if (UsedByCurrPicS1[CurrRpsIdx][i]) NumPicTotalCurr++;
-  for (int32_t i = 0; i < num_long_term_sps + num_long_term_pics; i++)
-    if (UsedByCurrPicLt[i]) NumPicTotalCurr++;
-  if (m_pps->pps_curr_pic_ref_enabled_flag) NumPicTotalCurr++;
-  return NumPicTotalCurr;
-}
-
 int SliceHeader::st_ref_pic_set(BitStream *bs, int32_t stRpsIdx) {
   if (stRpsIdx != 0) inter_ref_pic_set_prediction_flag = bs->readUn(1);
   if (inter_ref_pic_set_prediction_flag) {
@@ -69,15 +57,18 @@ int SliceHeader::st_ref_pic_set(BitStream *bs, int32_t stRpsIdx) {
   return 0;
 }
 
-#define IS_IRAP(nal_unit_type) (nal_unit_type >= 16 && nal_unit_type <= 23)
+#define IS_IRAP(nal_unit_type)                                                 \
+  (nal_unit_type >= HEVC_NAL_BLA_W_LP &&                                       \
+   nal_unit_type <= HEVC_NAL_RSV_IRAP_VCL23)
 #define IS_IDR(nal_unit_type)                                                  \
   (nal_unit_type == HEVC_NAL_IDR_W_RADL || nal_unit_type == HEVC_NAL_IDR_N_LP)
 /* Slice header syntax -> 51 page */
 int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   _bs = &bitStream;
 
-  first_mb_in_slice = _bs->readU1();
-  cout << "\tSlice中第一个宏块的索引:" << first_mb_in_slice << endl;
+  first_slice_segment_in_pic_flag = _bs->readU1();
+  cout << "\tSlice中第一个宏块的索引:" << first_slice_segment_in_pic_flag
+       << endl;
 
   if (IS_IRAP(nal_unit_type)) no_output_of_prior_pics_flag = _bs->readU1();
 
@@ -86,7 +77,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   m_sps = &gop.m_spss[m_pps->seq_parameter_set_id];
 
   dependent_slice_segment_flag = false;
-  if (!first_mb_in_slice) {
+  if (!first_slice_segment_in_pic_flag) {
     if (m_pps->dependent_slice_segments_enabled_flag)
       dependent_slice_segment_flag = _bs->readU1();
     slice_segment_address = _bs->readUn(CEIL(LOG2(m_sps->PicSizeInCtbsY)));
@@ -95,7 +86,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
     SliceAddrRs = slice_segment_address;
   } else {
     /* TODO YangJing SliceData? <24-10-21 13:52:37> */
-    //SliceAddrRs = CtbAddrTsToRs[CtbAddrRsToTs[slice_segment_address] − 1];
+    //SliceAddrRs = CtbAddrTsToRs[CtbAddrRsToTs[slice_segment_address] - 1];
   }
 
   CuQpDeltaVal = 0;
@@ -103,12 +94,15 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
     for (int32_t i = 0; i < m_pps->num_extra_slice_header_bits; i++)
       _bs->readUn(1);
     slice_type = _bs->readUE();
+    //if (IS_IRAP(nal_unit_type) && nuh_layer_id == 0 && m_pps->pps_curr_pic_ref_enabled_flag == 0) {
+    //slice_type = HEVC_SLICE_I;
+    //}
     switch (slice_type) {
     case HEVC_SLICE_B:
-      cout << "\tP Slice" << endl;
+      cout << "\tB Slice" << endl;
       break;
     case HEVC_SLICE_P:
-      cout << "\tB Slice" << endl;
+      cout << "\tP Slice" << endl;
       break;
     case HEVC_SLICE_I:
       cout << "\tI Slice" << endl;
@@ -119,12 +113,12 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
       return -1;
     }
     if (m_pps->output_flag_present_flag) pic_output_flag = _bs->readUn(1);
+    // color_plane_id 值 0、1 和 2 分别对应于 Y、Cb 和 Cr 平面
     if (m_sps->separate_colour_plane_flag == 1)
       colour_plane_id = _bs->readUn(2);
 
     if (IS_IDR(nal_unit_type) == false) {
-      slice_pic_order_cnt_lsb =
-          _bs->readUn(m_sps->log2_max_pic_order_cnt_lsb);
+      slice_pic_order_cnt_lsb = _bs->readUn(m_sps->log2_max_pic_order_cnt_lsb);
       short_term_ref_pic_set_sps_flag = _bs->readUn(1);
       if (!short_term_ref_pic_set_sps_flag)
         st_ref_pic_set(_bs, m_sps->num_short_term_ref_pic_sets);
@@ -142,13 +136,30 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
                   _bs->readUn(LOG2(m_sps->num_long_term_ref_pics_sps));
             }
           } else {
-            poc_lsb_lt[i] =
-                _bs->readUn(m_sps->log2_max_pic_order_cnt_lsb);
+            poc_lsb_lt[i] = _bs->readUn(m_sps->log2_max_pic_order_cnt_lsb);
+            // used_by_curr_pic_lt_flag[i]等于0指定当前图片的长期RPS中的第i个条目不被当前图片参考
             used_by_curr_pic_lt_flag[i] = _bs->readUn(1);
+            // NOTE: Add
+            if (i < num_long_term_sps) {
+              PocLsbLt[i] = m_sps->lt_ref_pic_poc_lsb_sps[lt_idx_sps[i]];
+              UsedByCurrPicLt[i] =
+                  m_sps->used_by_curr_pic_lt_sps_flag[lt_idx_sps[i]];
+            } else {
+              PocLsbLt[i] = poc_lsb_lt[lt_idx_sps[i]];
+              UsedByCurrPicLt[i] = used_by_curr_pic_lt_flag[lt_idx_sps[i]];
+            }
           }
+          /* TODO YangJing (Rec. ITU-T H.265 (V10) (07/2024) 97)When there is more than one value in setOfPrevPocVals for which the value modulo MaxPicOrderCntLsb is equal to PocLsbLt[ i ], delta_poc_msb_present_flag[ i ] shall be equal to 1. <24-10-23 08:32:28> */
+
           delta_poc_msb_present_flag[i] = _bs->readUn(1);
           if (delta_poc_msb_present_flag[i])
             delta_poc_msb_cycle_lt[i] = _bs->readUE();
+
+          if (i == 0 || i == num_long_term_sps)
+            DeltaPocMsbCycleLt[i] = delta_poc_msb_cycle_lt[i];
+          else
+            DeltaPocMsbCycleLt[i] =
+                delta_poc_msb_cycle_lt[i] + DeltaPocMsbCycleLt[i - 1];
         }
       }
       if (m_sps->sps_temporal_mvp_enabled_flag)
@@ -166,7 +177,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
         if (slice_type == HEVC_SLICE_B)
           num_ref_idx_l1_active_minus1 = _bs->readUE();
       }
-      int32_t nb_refs = getNumPicTotalCurr(m_sps->num_short_term_ref_pic_sets);
+      int32_t nb_refs = NumPicTotalCurr;
       if (m_pps->lists_modification_present_flag && nb_refs > 1)
         ref_pic_lists_modification(_bs, nb_refs);
       if (slice_type == HEVC_SLICE_B) mvd_l1_zero_flag = _bs->readUn(1);
@@ -226,8 +237,6 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   }
   _bs->byte_aligned();
 
-
-  slice_qp = 26U + m_pps->pic_init_qp_minus26 + slice_qp_delta;
   slice_ctb_addr_rs = slice_segment_address;
   /* SliceHeader 同时初始化？ 然后需要共享数据？ */
   //s->HEVClc->first_qp_group = !dependent_slice_segment_flag;
@@ -235,6 +244,33 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   //slice_initialized = 1;
   //s->HEVClc->tu.cu_qp_offset_cb = 0;
   //s->HEVClc->tu.cu_qp_offset_cr = 0;
+
+  //-- Append
+  //96 Rec. ITU-T H.265 (V10) (07/2024)
+  if (short_term_ref_pic_set_sps_flag == 1) {
+    CurrRpsIdx = short_term_ref_pic_set_idx;
+  } else {
+    CurrRpsIdx = m_sps->num_short_term_ref_pic_sets;
+  }
+
+  int MaxNumMergeCand = 5 - five_minus_max_num_merge_cand;
+  slice_qp = 26 + m_pps->init_qp + slice_qp_delta;
+
+  /* TODO YangJing    firstByte,lastByte (7-55,7-56) -> 100 Rec. ITU-T H.265 (V10) (07/2024) <24-10-23 08:41:38> */
+
+  //7.4.7.2 Reference picture list modification semantics
+
+  NumPicTotalCurr = 0;
+  for (int32_t i = 0; i < NumNegativePics[CurrRpsIdx]; i++)
+    if (UsedByCurrPicS0[CurrRpsIdx][i]) NumPicTotalCurr++;
+  for (int32_t i = 0; i < NumPositivePics[CurrRpsIdx]; i++)
+    if (UsedByCurrPicS1[CurrRpsIdx][i]) NumPicTotalCurr++;
+  for (int32_t i = 0; i < num_long_term_sps + num_long_term_pics; i++)
+    if (UsedByCurrPicLt[i]) NumPicTotalCurr++;
+  if (m_pps->pps_curr_pic_ref_enabled_flag) NumPicTotalCurr++;
+
+  /* TODO YangJing 7.4.7.3 Weighted prediction parameters semantics -> Rec. ITU-T H.265 (V10) (07/2024) 101 <24-10-23 08:44:47> */
+
   return 0;
 }
 

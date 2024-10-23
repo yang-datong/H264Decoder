@@ -53,6 +53,7 @@ class Nalu {
   uint8_t nal_unit_type = 0;
   uint8_t nuh_layer_id = 0;
   uint8_t nuh_temporal_id_plus1 = 0;
+  uint8_t TemporalId = 0;
 
  public:
   int parseEBSP(EBSP &ebsp);
@@ -62,9 +63,10 @@ class Nalu {
   int extractVPSparameters(RBSP &rbsp, VPS vpss[MAX_SPS_COUNT],
                            uint32_t &curr_vps_id);
   int extractSPSparameters(RBSP &rbsp, SPS spss[MAX_SPS_COUNT],
-                           uint32_t &curr_sps_id,VPS vpss[MAX_SPS_COUNT]);
+                           uint32_t &curr_sps_id, VPS vpss[MAX_SPS_COUNT]);
   int extractPPSparameters(RBSP &rbsp, PPS ppss[MAX_PPS_COUNT],
-                           uint32_t &curr_pps_id, uint32_t chroma_format_idc,SPS spss[MAX_SPS_COUNT]);
+                           uint32_t &curr_pps_id, uint32_t chroma_format_idc,
+                           SPS spss[MAX_SPS_COUNT]);
   int extractSEIparameters(RBSP &rbsp, SEI &sei, SPS &sps);
 
   /* VCL */

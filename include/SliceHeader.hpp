@@ -43,26 +43,31 @@ class SliceHeader {
   int32_t SliceAddrRs = 0;
 
   int32_t CuQpDeltaVal = 0;
-  int32_t pic_output_flag = {0};
-  int32_t colour_plane_id = {0};
+  //NOTE: When pic_output_flag is not present, it is inferred to be equal to 1.
+  int32_t pic_output_flag = 1;
+  int32_t colour_plane_id = 0;
   int32_t slice_pic_order_cnt_lsb = 0;
   int32_t short_term_ref_pic_set_sps_flag = {0};
   int32_t short_term_ref_pic_set_idx = 0;
-  int32_t num_long_term_sps = {0};
-  int32_t num_long_term_pics = {0};
+  int32_t num_long_term_sps = 0;
+  int32_t num_long_term_pics = 0;
   int32_t delta_poc_msb_present_flag[32] = {0};
   int32_t delta_poc_msb_cycle_lt[32] = {0};
+  int DeltaPocMsbCycleLt[32] = {0};
+
   int32_t slice_temporal_mvp_enabled_flag = {0};
   int32_t lt_idx_sps[32] = {0};
   int32_t poc_lsb_lt[32] = {0};
   int32_t used_by_curr_pic_lt_flag[32] = {0};
+  int PocLsbLt[32] = {0};
 
   int32_t slice_sao_luma_flag = 0;
   int32_t slice_sao_chroma_flag = 0;
 
   int32_t mvd_l1_zero_flag = 0;
   int32_t cabac_init_flag = 0;
-  int32_t collocated_from_l0_flag = 0;
+  // NOTE: collocated_from_l0_flag equal to 1 specifies that the collocated picture used for temporal motion vector prediction is derived from reference picture list 0. collocated_from_l0_flag equal to 0 specifies that the collocated picture used for temporal motion vector prediction is derived from reference picture list 1. When collocated_from_l0_flag is not present, it is inferred to be equal to 1.
+  int32_t collocated_from_l0_flag = 1;
   int32_t collocated_ref_idx = 0;
   int32_t weighted_pred_flag = 0;
   int32_t weighted_bipred_flag = 0;
@@ -119,15 +124,17 @@ class SliceHeader {
 
   int32_t RefRpsIdx = 0;
 
-  int getNumPicTotalCurr(int32_t CurrRpsIdx);
-  int slice_qp  = 0;
+  int slice_qp = 0;
+  int32_t NumPicTotalCurr = 0;
+
+  int CurrRpsIdx = 0;
 
  public:
   /* Slice中第一个宏块的索引。 （可判断一帧图像是否由多个Slice组成）
   如果first_mb_in_slice == 0，则表示这是该帧的第一个Slice（可以独立解码）。
   如果first_mb_in_slice != 0，则表示该Slice与前面的Slice共同组成一帧数据（需要组合解码）。*/
   /* TODO YangJing 一帧图像多个Slice的情况还没有测试过 <24-09-15 00:00:19> */
-  uint32_t first_mb_in_slice = 0;
+  uint32_t first_slice_segment_in_pic_flag = 0;
   /* Slice的类型（I, P, B等） */
   uint32_t slice_type = 0;
 

@@ -86,6 +86,7 @@ int Nalu::parseNALHeader(EBSP &ebsp, BitStream *bs) {
   nal_unit_type = bs->readUn(6);
   nuh_layer_id = bs->readUn(6);
   nuh_temporal_id_plus1 = bs->readUn(3);
+  TemporalId = nuh_temporal_id_plus1 - 1;
   return 0;
 }
 

@@ -175,13 +175,15 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
   m_vps = &vpss[sps_video_parameter_set_id];
   cout << "\tVPS ID:" << sps_video_parameter_set_id << endl;
 
+  //NOTE: 与VPS中的vps_max_sub_layers区别是
   sps_max_sub_layers = bs->readUn(3) + 1;
-  cout << "\t表示SPS适用的最大子层级数:" << sps_max_sub_layers << endl;
+  cout << "\tSPS适用的最大子层级数:" << sps_max_sub_layers << endl;
 
   sps_temporal_id_nesting_flag = bs->readUn(1);
-  cout << "\t所有的NALU是否遵循时间ID嵌套的规则:"
-       << sps_temporal_id_nesting_flag << endl;
+  cout << "\t是否允许在所有子层中嵌套时间ID:" << sps_temporal_id_nesting_flag
+       << endl;
 
+  // 解析视频的Profile、Tier和Level信息
   profile_tier_level(*bs, 1, sps_max_sub_layers - 1);
 
   sps_seq_parameter_set_id = bs->readUE();
@@ -217,17 +219,20 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
     conf_win_bottom_offset = bs->readUE();
   }
 
-  /* TODO YangJing 去掉别的地方的+,- <24-10-23 00:40:46> */
-  bit_depth_luma = bs->readUE() + 8;
-  bit_depth_chroma = bs->readUE() + 8;
+  BitDepthY = bit_depth_luma = bs->readUE() + 8;
+  QpBdOffsetY = 6 * (bit_depth_luma - 8);
+  BitDepthC = bit_depth_chroma = bs->readUE() + 8;
+  QpBdOffsetC = 6 * (bit_depth_chroma - 8);
   cout << "\t分别表示亮、色度的位深:" << bit_depth_luma << ","
        << bit_depth_chroma << endl;
 
   log2_max_pic_order_cnt_lsb = bs->readUE() + 4;
-  cout << "\tPOC(低位)的最大二进制位数:" << log2_max_pic_order_cnt_lsb << endl;
+  MaxPicOrderCntLsb = LOG2(log2_max_pic_order_cnt_lsb);
+  cout << "\t最大图片顺序计数（POC）的LSB（最低有效位）的对数值:"
+       << log2_max_pic_order_cnt_lsb << endl;
 
   sps_sub_layer_ordering_info_present_flag = bs->readU1();
-  cout << "\t是否为每个子层指定解码和输出缓冲需求:"
+  cout << "\t是否为每个子层提供单独的顺序信息:"
        << sps_sub_layer_ordering_info_present_flag << endl;
 
   // 解析层次和图像块大小
@@ -239,10 +244,14 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
     cout << "\t分别定义解码缓冲需求、重排序需求和最大允许的延迟增加:"
          << sps_max_dec_pic_buffering[i] << "," << sps_max_num_reorder_pics[i]
          << "," << sps_max_latency_increase[i] << endl;
+    if (sps_max_latency_increase[i] != 0) {
+      SpsMaxLatencyPictures[i] =
+          sps_max_num_reorder_pics[i] + sps_max_latency_increase[i];
+    }
   }
 
-  log2_min_luma_coding_block_size = bs->readUE() + 3;
-  MinCbLog2SizeY = log2_min_luma_coding_block_size;
+  // 亮度编码块的最小和最大尺寸
+  MinCbLog2SizeY = log2_min_luma_coding_block_size = bs->readUE() + 3;
   cout << "\t编码的块大小:" << log2_min_luma_coding_block_size << endl;
 
   log2_diff_max_min_luma_coding_block_size = bs->readUE();
@@ -250,30 +259,53 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
        << endl;
 
   CtbLog2SizeY = MinCbLog2SizeY + log2_diff_max_min_luma_coding_block_size;
+  MinCbSizeY = 1 << MinCbLog2SizeY;
   CtbSizeY = 1 << CtbLog2SizeY;
+
+  PicWidthInMinCbsY = pic_width_in_luma_samples / MinCbSizeY;
   PicWidthInCtbsY = CEIL(pic_width_in_luma_samples / CtbSizeY);
+  PicHeightInMinCbsY = pic_height_in_luma_samples / MinCbSizeY;
   PicHeightInCtbsY = CEIL(pic_height_in_luma_samples / CtbSizeY);
+  PicSizeInMinCbsY = PicWidthInMinCbsY * PicHeightInMinCbsY;
   PicSizeInCtbsY = PicWidthInCtbsY * PicHeightInCtbsY;
+  PicSizeInSamplesY = pic_width_in_luma_samples * pic_height_in_luma_samples;
+
+  if (chroma_format_idc == 1 && separate_colour_plane_flag == 0)
+    SubWidthC = SubHeightC = 2;
+  else if (chroma_format_idc == 2 && separate_colour_plane_flag == 0)
+    SubWidthC = 2;
+  else
+    SubWidthC = SubHeightC = 1;
+
+  //7.4.3.10 RBSP slice segment trailing bits semantics
+  RawMinCuBits = MinCbSizeY * MinCbSizeY *
+                 (BitDepthY + 2 * BitDepthC / (SubWidthC * SubHeightC));
+
+  PicWidthInSamplesC = pic_width_in_luma_samples / SubWidthC;
+  PicHeightInSamplesC = pic_height_in_luma_samples / SubHeightC;
 
   ctb_width = (width + (1 << CtbLog2SizeY) - 1) >> CtbLog2SizeY;
   ctb_height = (height + (1 << CtbLog2SizeY) - 1) >> CtbLog2SizeY;
   ctb_size = ctb_width * ctb_height;
 
-  log2_min_luma_transform_block_size = bs->readUE() + 2;
+  if (chroma_format_idc != 0 && separate_colour_plane_flag != 1) {
+    CtbWidthC = CtbSizeY / SubWidthC;
+    CtbHeightC = CtbSizeY / SubHeightC;
+  }
 
+  log2_min_luma_transform_block_size = bs->readUE() + 2;
   log2_diff_max_min_luma_transform_block_size = bs->readUE();
 
+  // 编码变换的层次深度
   max_transform_hierarchy_depth_inter = bs->readUE();
-
   max_transform_hierarchy_depth_intra = bs->readUE();
-  cout << "\t编码变换的层次深度:" << max_transform_hierarchy_depth_intra
-       << endl;
 
+  // 是否启用缩放列表
   scaling_list_enabled_flag = bs->readUn(1);
+  cout << "\t是否使用量化缩放列表:" << scaling_list_enabled_flag << endl;
   if (scaling_list_enabled_flag) {
     sps_scaling_list_data_present_flag = bs->readUn(1);
-    cout << "\t指示是否使用量化缩放列表和是否在SPS中携带缩放列表数据:"
-         << scaling_list_enabled_flag << ","
+    cout << "\t是否在SPS中携带缩放列表数据:"
          << sps_scaling_list_data_present_flag << endl;
     if (sps_scaling_list_data_present_flag) scaling_list_data();
   }
@@ -281,15 +313,16 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
   amp_enabled_flag = bs->readUn(1);
   cout << "\t异构模式分割（AMP）的启用标志:" << amp_enabled_flag << endl;
 
+  // 改进去块效应
   sample_adaptive_offset_enabled_flag = bs->readUn(1);
-  cout << "\t样本自适应偏移（SAO）的启用标志，用于改进去块效应:"
+  cout << "\t样本自适应偏移（SAO）的启用标志:"
        << sample_adaptive_offset_enabled_flag << endl;
 
   pcm_enabled_flag = bs->readUn(1);
-  cout << "\tPCM（脉冲编码调制）的启用标志:" << pcm_enabled_flag << endl;
+  cout << "\tPCM（脉冲编码调制）模式:" << pcm_enabled_flag << endl;
   if (pcm_enabled_flag) {
-    pcm_sample_bit_depth_luma = bs->readUn(4) + 1;
-    pcm_sample_bit_depth_chroma = bs->readUn(4) + 1;
+    PcmBitDepthY = pcm_sample_bit_depth_luma = bs->readUn(4) + 1;
+    PcmBitDepthC = pcm_sample_bit_depth_chroma = bs->readUn(4) + 1;
     cout << "\t定义PCM编码的亮度和色度位深:" << pcm_sample_bit_depth_luma << ","
          << pcm_sample_bit_depth_chroma << endl;
     log2_min_pcm_luma_coding_block_size = bs->readUE() + 3;
@@ -300,7 +333,7 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
   }
 
   num_short_term_ref_pic_sets = bs->readUE();
-  cout << "\t短期参考图片集的数量:" << num_short_term_ref_pic_sets << endl;
+  cout << "\t短期参考帧的数量:" << num_short_term_ref_pic_sets << endl;
   for (int32_t i = 0; i < num_short_term_ref_pic_sets; i++) {
     std::cout << "hi~" << std::endl;
     return 0;
@@ -308,35 +341,31 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
   }
 
   long_term_ref_pics_present_flag = bs->readUn(1);
-  cout << "\t指示是否使用长期参考图像:" << long_term_ref_pics_present_flag
-       << endl;
   if (long_term_ref_pics_present_flag) {
     num_long_term_ref_pics_sps = bs->readUE();
     cout << "\t长期参考图像的数量:" << num_long_term_ref_pics_sps << endl;
     for (int32_t i = 0; i < num_long_term_ref_pics_sps; i++) {
       lt_ref_pic_poc_lsb_sps[i] = bs->readUn(log2_max_pic_order_cnt_lsb);
       used_by_curr_pic_lt_sps_flag[i] = bs->readUn(1);
-      cout << "\t分别定义长期参考图像的POC LSB和其使用状态:"
-           << lt_ref_pic_poc_lsb_sps << "," << used_by_curr_pic_lt_sps_flag
-           << endl;
     }
   }
 
+  // 一种用于帧间预测的技术，它允许从时间上相邻的参考帧中推导出当前帧的运动矢量
   sps_temporal_mvp_enabled_flag = bs->readUn(1);
-  cout << "\t时间多视点预测的启用标志:" << sps_temporal_mvp_enabled_flag
+  cout << "\t是否启用时间运动矢量预测(TMVP):" << sps_temporal_mvp_enabled_flag
        << endl;
 
+  // 强帧内平滑是一种用于帧内预测的技术，主要用于处理大块区域的平滑过渡。它通过对帧内预测块的边界进行平滑处理，减少块效应（block artifacts）
   strong_intra_smoothing_enabled_flag = bs->readUn(1);
-  cout << "\t强内部平滑的启用标志:" << strong_intra_smoothing_enabled_flag
+  cout << "\t示是否启用强帧内平滑:" << strong_intra_smoothing_enabled_flag
        << endl;
 
+  //VUI
   vui_parameters_present_flag = bs->readUn(1);
-  cout << "\t指示视频可用性信息（VUI）是否存在:" << vui_parameters_present_flag
-       << endl;
   if (vui_parameters_present_flag) vui_parameters();
 
+  //各种SPS扩展的启用标志
   sps_extension_present_flag = bs->readUn(1);
-  cout << "\t各种SPS扩展的启用标志:" << sps_extension_present_flag << endl;
   if (sps_extension_present_flag) {
     sps_range_extension_flag = bs->readUn(1);
     if (sps_range_extension_flag) sps_range_extension();
@@ -350,8 +379,6 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
     if (sps_extension_4bits)
       while (bs->more_rbsp_data())
         int sps_extension_data_flag = bs->readUn(1);
-    cout << "\tSPS扩展和扩展数据的存在标志:" << sps_extension_4bits << ","
-         << sps_extension_data_flag << endl;
   }
 
   bs->rbsp_trailing_bits();
@@ -359,6 +386,7 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
   return 0;
 }
 
+// 7.4.5 Scaling list data semantics
 int SPS::scaling_list_data() {
   int scaling_list_pred_mode_flag[32][32] = {{0}};
   int scaling_list_pred_matrix_id_delta[32][32] = {{0}};
@@ -368,9 +396,19 @@ int SPS::scaling_list_data() {
   for (int sizeId = 0; sizeId < 4; sizeId++)
     for (int matrixId = 0; matrixId < 6; matrixId += (sizeId == 3) ? 3 : 1) {
       scaling_list_pred_mode_flag[sizeId][matrixId] = bs->readUn(1);
-      if (!scaling_list_pred_mode_flag[sizeId][matrixId])
+      if (!scaling_list_pred_mode_flag[sizeId][matrixId]) {
         scaling_list_pred_matrix_id_delta[sizeId][matrixId] = bs->readUE();
-      else {
+        // If scaling_list_pred_matrix_id_delta[ sizeId ][ matrixId ] is equal to 0, the scaling list is inferred from the default scaling list ScalingList[ sizeId ][ matrixId ][ i ] as specified in Table 7-5 and Table 7-6 for i = 0..Min( 63, ( 1 << ( 4 + ( sizeId << 1 ) ) ) − 1 )
+        if (scaling_list_pred_matrix_id_delta[sizeId][matrixId] == 0) {
+
+        } else {
+          int efMatrixId =
+              matrixId - scaling_list_pred_matrix_id_delta[sizeId][matrixId] *
+                             (sizeId == 3 ? 3 : 1);
+          for (int i = 0; i < MIN(63, (1 << (4 + (sizeId << 1))) - 1); ++i)
+            ScalingList[sizeId][matrixId][i] = ScalingList[sizeId][matrixId][i];
+        }
+      } else {
         int nextCoef = 8;
         int coefNum = MIN(64, (1 << (4 + (sizeId << 1))));
         if (sizeId > 1) {
@@ -393,8 +431,34 @@ int SPS::sps_range_extension() {
   int implicit_rdpcm_enabled_flag = bs->readUn(1);
   int explicit_rdpcm_enabled_flag = bs->readUn(1);
   int extended_precision_processing_flag = bs->readUn(1);
+  {
+    int CoeffMinY =
+        -(1 << (extended_precision_processing_flag ? MAX(15, BitDepthY + 6)
+                                                   : 15));
+    int CoeffMinC =
+        -(1 << (extended_precision_processing_flag ? MAX(15, BitDepthC + 6)
+                                                   : 15));
+    int CoeffMaxY =
+        (1 << (extended_precision_processing_flag ? MAX(15, BitDepthY + 6)
+                                                  : 15)) -
+        1;
+    int CoeffMaxC =
+        (1 << (extended_precision_processing_flag ? MAX(15, BitDepthC + 6)
+                                                  : 15)) -
+        1;
+  }
   int intra_smoothing_disabled_flag = bs->readUn(1);
   int high_precision_offsets_enabled_flag = bs->readUn(1);
+  {
+    int WpOffsetBdShiftY =
+        high_precision_offsets_enabled_flag ? 0 : (BitDepthY - 8);
+    int WpOffsetBdShiftC =
+        high_precision_offsets_enabled_flag ? 0 : (BitDepthC - 8);
+    int WpOffsetHalfRangeY =
+        1 << (high_precision_offsets_enabled_flag ? (BitDepthY - 1) : 7);
+    int WpOffsetHalfRangeC =
+        1 << (high_precision_offsets_enabled_flag ? (BitDepthC - 1) : 7);
+  }
   int persistent_rice_adaptation_enabled_flag = bs->readUn(1);
   int cabac_bypass_alignment_enabled_flag = bs->readUn(1);
   return 0;

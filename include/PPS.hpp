@@ -28,10 +28,10 @@ class PPS {
   // 指示是否为每个切片指定CABAC初始化参数。
   int32_t cabac_init_present_flag = 0;
   // 默认的L0和L1参考图像索引数量减1。
-  int32_t num_ref_idx_l0_default_active_minus1 = 0;
-  int32_t num_ref_idx_l1_default_active_minus1 = 0;
+  int32_t num_ref_idx_l0_default_active = 0;
+  int32_t num_ref_idx_l1_default_active = 0;
   // 初始量化参数减26，用于计算初始量化值。
-  int32_t init_qp_minus26 = 0;
+  int32_t init_qp = 0;
   // 限制内部预测的启用标志。
   int32_t constrained_intra_pred_flag = 0;
   // 转换跳过的启用标志。
@@ -40,6 +40,7 @@ class PPS {
   int32_t cu_qp_delta_enabled_flag = 0;
   // CU的QP差分深度。
   int32_t diff_cu_qp_delta_depth = 0;
+  int Log2MinCuQpDeltaSize = 0;
   // 色度QP偏移。
   int32_t pps_cb_qp_offset = 0;
   int32_t pps_cr_qp_offset = 0;
@@ -55,15 +56,15 @@ class PPS {
   // 熵编码同步的启用标志。
   int32_t entropy_coding_sync_enabled_flag = 0;
   // 瓦片列数和行数减1。
-  int32_t num_tile_columns_minus1 = 0;
-  int32_t num_tile_rows_minus1 = 0;
+  int32_t num_tile_columns = 0;
+  int32_t num_tile_rows = 0;
   // 指示瓦片是否均匀分布。
   int32_t uniform_spacing_flag = 0;
   // 定义瓦片的列宽和行高减1。
   int32_t column_width_minus1[32] = {0};
   int32_t row_height_minus1[32] = {0};
-  // 指示是否允许循环滤波器跨瓦片工作。
-  int32_t loop_filter_across_tiles_enabled_flag = 0;
+  // 指示是否允许循环滤波器跨瓦片工作。NOTE:When not present, the value of loop_filter_across_tiles_enabled_flag is inferred to be equal to 1
+  int32_t loop_filter_across_tiles_enabled_flag = 1;
   // 指示是否允许循环滤波器跨切片工作。
   int32_t pps_loop_filter_across_slices_enabled_flag = 0;
   // 解块滤波器覆盖的启用标志。
@@ -78,7 +79,9 @@ class PPS {
   // 指示是否允许修改参考列表。
   int32_t lists_modification_present_flag = 0;
   // 并行合并级别的对数值减2。
-  int32_t log2_parallel_merge_level_minus2 = 0;
+  int32_t log2_parallel_merge_level = 0;
+  int Log2ParMrgLevel = 0;
+
   // 切片段头扩展的存在标志。
   int32_t slice_segment_header_extension_present_flag = 0;
   // PPS扩展的存在标志。

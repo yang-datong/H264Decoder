@@ -62,6 +62,7 @@ class SPS {
   int32_t sps_max_dec_pic_buffering[32] = {0};
   int32_t sps_max_num_reorder_pics[32] = {0};
   int32_t sps_max_latency_increase[32] = {0};
+  int SpsMaxLatencyPictures[32] = {0};
 
   // 这些参数定义了编码的块大小、变换块大小和变换的层次深度。
   int32_t log2_min_luma_coding_block_size = 0;
@@ -73,11 +74,22 @@ class SPS {
 
   int32_t CtbLog2SizeY = 0;
 
+  int MinCbSizeY = 0;
   int32_t MinCbLog2SizeY = 0;
-  int32_t PicWidthInCtbsY = 0;
   int32_t CtbSizeY = 0;
-  int32_t PicHeightInCtbsY = 0;
-  int32_t PicSizeInCtbsY = 0;
+  int PicWidthInMinCbsY = 0;
+  int PicWidthInCtbsY = 0;
+  int PicHeightInMinCbsY = 0;
+  int PicHeightInCtbsY = 0;
+  int PicSizeInMinCbsY = 0;
+  int PicSizeInCtbsY = 0;
+  int PicSizeInSamplesY = 0;
+  int PicWidthInSamplesC = 0;
+  int PicHeightInSamplesC = 0;
+  int RawMinCuBits = 0;
+
+  int CtbWidthC = 0;
+  int CtbHeightC = 0;
 
   // 指示是否使用量化缩放列表和是否在SPS中携带缩放列表数据。
   int32_t scaling_list_enabled_flag = 0;
@@ -92,6 +104,9 @@ class SPS {
   // 定义PCM编码的亮度和色度位深减1。
   int32_t pcm_sample_bit_depth_luma = 0;
   int32_t pcm_sample_bit_depth_chroma = 0;
+  int PcmBitDepthY = 0;
+  int PcmBitDepthC = 0;
+
   int32_t log2_min_pcm_luma_coding_block_size = 0;
   int32_t log2_diff_max_min_pcm_luma_coding_block_size = 0;
   // 指示是否禁用循环滤波器。

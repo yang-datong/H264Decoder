@@ -961,7 +961,7 @@ int Cabac::derivation_ctxIdxInc_for_mb_qp_delta(int32_t &ctxIdxInc) {
 – 如果MbaffFrameFlag等于0，则first_mb_in_slice是切片中第一个宏块的宏块地址，并且first_mb_in_slice应在0到PicSizeInMbs - 1的范围内（包括0和PicSizeInMbs - 1）。
 – 否则（MbaffFrameFlag等于1），first_mb_in_slice * 2是第一个宏块的宏块地址*/
   int32_t FirstMbAddrOfSlice =
-      header->first_mb_in_slice * (1 + header->MbaffFrameFlag);
+      header->first_slice_segment_in_pic_flag * (1 + header->MbaffFrameFlag);
 
   if (picture.CurrMbAddr == FirstMbAddrOfSlice) prevMbAddr = -1;
 

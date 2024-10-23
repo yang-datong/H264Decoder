@@ -36,12 +36,16 @@ class VPS {
   // 在给定的临时层（temporal layer）中，相对于理想无延迟解码的情况下，允许的最大延迟增加量。用于控制和管理视频播放的延迟。
   int32_t vps_max_latency_increase[8] = {0};
 
+  int VpsMaxLatencyPictures[8] = {0};
+
   // 最大的层ID，用于指示在该VPS定义的层中可以使用的最大层标识符
   int32_t vps_max_layer_id = 0;
   // 表示层集合的数量减1，用于定义不同层集的组合
   int32_t vps_num_layer_sets = 0;
   // 指示在每个层集合中哪些层被包括
   int32_t layer_id_included_flag[32][32] = {0};
+  int LayerSetLayerIdList[32][32] = {0};
+  int NumLayersInIdList[32] = {0};
 
   // 标志位，指示是否在VPS中存在定时信息
   int32_t vps_timing_info_present_flag = 0;

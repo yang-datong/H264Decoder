@@ -34,6 +34,8 @@ int VPS::extractParameters(BitStream &bs) {
     vps_max_latency_increase[i] = bs.readUE() - 1;
     cout << "\t数组，定义了每个子层的最大延迟增加值:"
          << vps_max_latency_increase[i] << endl;
+    VpsMaxLatencyPictures[i] =
+        vps_max_num_reorder_pics[i] + vps_max_latency_increase[i];
   }
 
   vps_max_layer_id = bs.readUn(6);
@@ -42,10 +44,14 @@ int VPS::extractParameters(BitStream &bs) {
   cout << "\t表示层集合的数量，用于定义不同层集的组合:" << vps_num_layer_sets
        << endl;
 
+  n = 0;
   layer_id_included_flag[32][32] = {0};
   for (int32_t i = 1; i <= vps_num_layer_sets - 1; i++)
-    for (int32_t j = 0; j <= vps_max_layer_id; j++)
+    for (int32_t j = 0; j <= vps_max_layer_id; j++) {
       layer_id_included_flag[i][j] = bs.readUn(1);
+      if (layer_id_included_flag[i][j]) LayerSetLayerIdList[i][n++] = j;
+      NumLayersInIdList[i] = n;
+    }
   cout << "\t在每个层集合中哪些层被包括:" << layer_id_included_flag[0][0]
        << endl;
 
