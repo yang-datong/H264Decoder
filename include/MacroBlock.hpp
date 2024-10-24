@@ -12,7 +12,6 @@ class SliceData;
 
 class MacroBlock {
  public:
-  MacroBlock(){};
   ~MacroBlock();
   /* 宏块类型，指示宏块的编码模式（如帧内、帧间、PCM等），取决于切片类型 */
   /* 对于I Slice: mb_type取值区间为：[0-25]
@@ -149,34 +148,34 @@ class MacroBlock {
 
   /* 这里都是已有的变量，不应该作为一个类成员，后续需要删除 TODO  <24-09-01 01:28:00, YangJing>  */
   /* 场图像标志，指示当前图像是场图像还是帧图像 */
-  int32_t field_pic_flag;
+  int32_t field_pic_flag = 0;
   /* 底场标志，指示当前场是底场还是顶场 */
-  int32_t bottom_field_flag;
+  int32_t bottom_field_flag = 0;
   /* 宏块跳过标志，指示当前宏块是否被跳过 */
-  int32_t mb_skip_flag;
+  int32_t mb_skip_flag = 0;
   /* 宏块场解码标志，指示当前宏块是否使用场解码模式
     Mb_field_decoding_flag:0 -> 帧宏块，宏块对中两个宏块合并处理。
     Mb_field_decoding_flag:1 -> 场宏块，某些部分需要场间隔解码，宏块对中两个宏块单独处理。
    */
-  int32_t mb_field_decoding_flag;
+  int32_t mb_field_decoding_flag = 0;
   /* 宏块自适应帧场编码标志，指示是否使用宏块自适应帧场编码 */
-  int32_t MbaffFrameFlag;
+  int32_t MbaffFrameFlag = 0;
 
   /* 当前正在处理的宏块 */
-  int32_t CurrMbAddr;
+  int32_t CurrMbAddr = 0;
   /* 指示当前宏块所属的片的ID */
-  //int32_t slice_id;
+  //int32_t slice_id = 0;
   /* 指示当前片在序列中的编号 */
-  uint32_t slice_number;
+  uint32_t slice_number = 0;
   /* 当前片的类型（如I片、P片、B片等） */
-  int32_t m_slice_type;
+  int32_t m_slice_type = 0;
 
   /* 滤波器，见Slice Header */
-  int32_t disable_deblocking_filter_idc;
-  int32_t FilterOffsetA;
-  int32_t FilterOffsetB;
+  int32_t disable_deblocking_filter_idc = 0;
+  int32_t FilterOffsetA = 0;
+  int32_t FilterOffsetB = 0;
   //是否允许使用邻近样本作为当前样本预测
-  int32_t constrained_intra_pred_flag;
+  int32_t constrained_intra_pred_flag = 0;
 
   /* 宏块部分宽、高度，指示宏块部分的宽度 */
   int32_t MbPartWidth = 0;

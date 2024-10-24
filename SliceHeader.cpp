@@ -6,8 +6,8 @@
 #include <cstring>
 
 SliceHeader::~SliceHeader() {
-  FREE(mapUnitToSliceGroupMap);
-  FREE(MbToSliceGroupMap);
+  DELETE(mapUnitToSliceGroupMap);
+  DELETE(MbToSliceGroupMap);
 }
 
 /* Slice header syntax -> 51 page */

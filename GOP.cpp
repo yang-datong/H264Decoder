@@ -10,8 +10,8 @@ GOP::GOP() {
 
 GOP::~GOP() {
   for (int i = 0; i < MAX_DPB; i++) {
-    free(m_dpb[i]);
-    m_dpb[i] = nullptr;
+    FREE(m_dpb_for_output[i]);
+    FREE(m_dpb[i]);
   }
 }
 

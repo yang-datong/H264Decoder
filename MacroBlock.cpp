@@ -12,9 +12,9 @@
 
 MacroBlock::~MacroBlock() {
   _is_cabac = 0;
-  FREE(_cabac);
-  FREE(_bs);
-  FREE(_cavlc);
+  DELETE(_cabac);
+  DELETE(_bs);
+  DELETE(_cavlc);
 }
 
 void MacroBlock::initFromSlice(const SliceHeader &header,

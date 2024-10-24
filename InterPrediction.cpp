@@ -1862,7 +1862,7 @@ int PictureBase::MapColToList0(int32_t refIdxCol, PictureBase *colPic,
                                bool field_pic_flag) {
 
   int32_t refIdxL0Frm = NA;
-  for (int i = 0; i < H264_MAX_REF_PIC_LIST_COUNT; i++) {
+  for (int i = 0; i < MAX_REF_PIC_LIST_COUNT; i++) {
     if (m_RefPicList0[i] == nullptr) break;
     if ((m_RefPicList0[i]->m_picture_coded_type == FRAME &&
          (&m_RefPicList0[i]->m_picture_frame == colPic)) ||
