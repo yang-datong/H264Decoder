@@ -100,10 +100,7 @@ int PPS::extractParameters(BitStream &bs, uint32_t chroma_format_idc,
   pps_scaling_list_data_present_flag = bs.readUn(1);
   cout << "\tPPS是否包含量化缩放列表:" << pps_scaling_list_data_present_flag
        << endl;
-  if (pps_scaling_list_data_present_flag) {
-    std::cout << "Into -> " << __FUNCTION__ << "():" << __LINE__ << std::endl;
-    //scaling_list_data();
-  }
+  if (pps_scaling_list_data_present_flag) scaling_list_data(bs);
   lists_modification_present_flag = bs.readUn(1);
   cout << "\t是否允许修改参考列表:" << lists_modification_present_flag << endl;
   Log2ParMrgLevel = log2_parallel_merge_level = bs.readUE() + 2;
@@ -130,14 +127,13 @@ int PPS::extractParameters(BitStream &bs, uint32_t chroma_format_idc,
     pps_extension_4bits = bs.readUn(4);
   }
   // 7.4.3.3.2 Picture parameter set range extension semantics
-  //if (pps_range_extension_flag) pps_range_extension();
+  if (pps_range_extension_flag) pps_range_extension(bs);
   //if (pps_multilayer_extension_flag) pps_multilayer_extension();
   //if (pps_3d_extension_flag) pps_3d_extension();
-  //if (pps_scc_extension_flag) pps_scc_extension();
+  if (pps_scc_extension_flag) pps_scc_extension(bs);
   if (pps_extension_4bits) {
-    std::cout << "Into -> " << __FUNCTION__ << "():" << __LINE__ << std::endl;
-    //while (more_rbsp_data())
-    //pps_extension_data_flag = bs.readUn(1);
+    while (bs.more_rbsp_data())
+      bs.readUn(1);
   }
   bs.rbsp_trailing_bits();
 
@@ -213,5 +209,74 @@ int PPS::extractParameters(BitStream &bs, uint32_t chroma_format_idc,
         for (int x = colBd[i]; x < colBd[i + 1]; x++)
           TileId[CtbAddrRsToTs[y * m_sps->PicWidthInCtbsY + x]] = tileIdx;
 
+  return 0;
+}
+
+int PPS::scaling_list_data(BitStream &bs) {
+  for (int sizeId = 0; sizeId < 4; sizeId++)
+    for (int matrixId = 0; matrixId < 6; matrixId += (sizeId == 3) ? 3 : 1) {
+      scaling_list_pred_mode_flag[sizeId][matrixId] = bs.readUn(1);
+      if (!scaling_list_pred_mode_flag[sizeId][matrixId])
+        scaling_list_pred_matrix_id_delta[sizeId][matrixId] = bs.readUE();
+      else {
+        int nextCoef = 8;
+        int coefNum = MIN(64, (1 << (4 + (sizeId << 1))));
+        if (sizeId > 1) {
+          scaling_list_dc_coef_minus8[sizeId - 2][matrixId] = bs.readSE();
+          nextCoef = scaling_list_dc_coef_minus8[sizeId - 2][matrixId] + 8;
+        }
+        for (int i = 0; i < coefNum; i++) {
+          int scaling_list_delta_coef = bs.readSE();
+          nextCoef = (nextCoef + scaling_list_delta_coef + 256) % 256;
+          ScalingList[sizeId][matrixId][i] = nextCoef;
+        }
+      }
+    }
+  return 0;
+}
+
+int PPS::pps_range_extension(BitStream &bs) {
+  if (transform_skip_enabled_flag)
+    log2_max_transform_skip_block_size_minus2 = bs.readUE();
+  cross_component_prediction_enabled_flag = bs.readUn(1);
+  chroma_qp_offset_list_enabled_flag = bs.readUn(1);
+  if (chroma_qp_offset_list_enabled_flag) {
+    diff_cu_chroma_qp_offset_depth = bs.readUE();
+    int chroma_qp_offset_list_len_minus1 = bs.readUE();
+    for (int i = 0; i <= chroma_qp_offset_list_len_minus1; i++) {
+      cb_qp_offset_list[i] = bs.readSE();
+      cr_qp_offset_list[i] = bs.readSE();
+    }
+  }
+  log2_sao_offset_scale_luma = bs.readUE();
+  log2_sao_offset_scale_chroma = bs.readUE();
+  return 0;
+}
+
+int PPS::pps_scc_extension(BitStream &bs) {
+  pps_curr_pic_ref_enabled_flag = bs.readUn(1);
+  residual_adaptive_colour_transform_enabled_flag = bs.readUn(1);
+  if (residual_adaptive_colour_transform_enabled_flag) {
+    pps_slice_act_qp_offsets_present_flag = bs.readUn(1);
+    pps_act_y_qp_offset_plus5 = bs.readSE();
+    pps_act_cb_qp_offset_plus5 = bs.readSE();
+    pps_act_cr_qp_offset_plus3 = bs.readSE();
+  }
+  pps_palette_predictor_initializers_present_flag = bs.readUn(1);
+  if (pps_palette_predictor_initializers_present_flag) {
+    pps_num_palette_predictor_initializers = bs.readUE();
+    if (pps_num_palette_predictor_initializers > 0) {
+      monochrome_palette_flag = bs.readUn(1);
+      luma_bit_depth_entry_minus8 = bs.readUE();
+      if (!monochrome_palette_flag) chroma_bit_depth_entry_minus8 = bs.readUE();
+      int numComps = monochrome_palette_flag ? 1 : 3;
+      for (int comp = 0; comp < numComps; comp++) {
+        int bit_depth = comp == 0 ? luma_bit_depth_entry_minus8 + 8
+                                  : chroma_bit_depth_entry_minus8 + 8;
+        for (int i = 0; i < pps_num_palette_predictor_initializers; i++)
+          pps_palette_predictor_initializer[comp][i] = bs.readUn(bit_depth);
+      }
+    }
+  }
   return 0;
 }

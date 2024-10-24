@@ -304,7 +304,7 @@ int SliceHeader::slice_segment_header(BitStream &bitStream, GOP &gop) {
   }
 
   int MaxNumMergeCand = 5 - five_minus_max_num_merge_cand;
-  slice_qp = 26 + m_pps->init_qp + slice_qp_delta;
+  SliceQpY = 26 + m_pps->init_qp + slice_qp_delta;
 
   /* TODO YangJing    firstByte,lastByte (7-55,7-56) -> 100 Rec. ITU-T H.265 (V10) (07/2024) <24-10-23 08:41:38> */
 

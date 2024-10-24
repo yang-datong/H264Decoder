@@ -53,7 +53,7 @@ class PPS {
   int32_t transquant_bypass_enabled_flag = 0;
   // 瓦片的启用标志。
   int32_t tiles_enabled_flag = 0;
-  // 熵编码同步的启用标志。
+  // 熵编码同步的启用标志：熵编码同步是一种并行化技术，允许在不同的 CTB 行之间同步 CABAC 状态。
   int32_t entropy_coding_sync_enabled_flag = 0;
   // 瓦片列数和行数减1。
   int32_t num_tile_columns = 0;
@@ -93,11 +93,31 @@ class PPS {
   int32_t pps_scc_extension_flag = false;
   // 指示PPS扩展数据是否存在。
   int32_t pps_extension_4bits = false;
+  int residual_adaptive_colour_transform_enabled_flag = 0;
+
   int32_t pps_slice_act_qp_offsets_present_flag = false;
   int32_t chroma_qp_offset_list_enabled_flag = false;
   int32_t diff_cu_chroma_qp_offset_depth = 0;
 
+  int log2_max_transform_skip_block_size_minus2 = 0;
+  int cross_component_prediction_enabled_flag = 0;
+  int cb_qp_offset_list[32] = {0};
+  int cr_qp_offset_list[32] = {0};
+  int log2_sao_offset_scale_luma = 0;
+  int log2_sao_offset_scale_chroma = 0;
+
   int32_t pps_curr_pic_ref_enabled_flag = 0;
+  int pps_act_y_qp_offset_plus5 = {0};
+
+  int pps_act_cb_qp_offset_plus5 = {0};
+  int pps_act_cr_qp_offset_plus3 = {0};
+  int pps_palette_predictor_initializers_present_flag = 0;
+  int pps_num_palette_predictor_initializers = 0;
+
+  int monochrome_palette_flag = {0};
+  int luma_bit_depth_entry_minus8 = {0};
+  int chroma_bit_depth_entry_minus8 = 0;
+  int pps_palette_predictor_initializer[3][128] = {{0}};
 
   uint8_t *CtbAddrTsToRs = nullptr;
   uint8_t *CtbAddrRsToTs = nullptr;
@@ -107,7 +127,13 @@ class PPS {
 
   SPS *m_sps = nullptr;
   int TileId[32] = {0};
-
+  int scaling_list_data(BitStream &bs);
+  int scaling_list_pred_mode_flag[4][6] = {0};
+  int scaling_list_pred_matrix_id_delta[4][6] = {0};
+  int scaling_list_dc_coef_minus8[4][6] = {0};
+  int ScalingList[4][6][32] = {0};
+  int pps_range_extension(BitStream &bs);
+  int pps_scc_extension(BitStream &bs);
   // ------------------------------------------- Old -------------------------------------------
   /* PPS 的唯一标识符 */
   //uint32_t pic_parameter_set_id = 0;

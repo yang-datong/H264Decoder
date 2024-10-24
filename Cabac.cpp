@@ -3,7 +3,6 @@
 #include "MacroBlock.hpp"
 #include "PictureBase.hpp"
 #include "SliceHeader.hpp"
-#include "TComCABACTables.h"
 #include "Type.hpp"
 #include <cstdint>
 
@@ -2408,13 +2407,134 @@ int Cabac::decodeDecision(int32_t ctxIdx, int32_t &binVal) {
   return renormD();
 }
 
-#define GET_CABAC(ctx) get_cabac(&s->HEVClc->cc, &s->HEVClc->cabac_state[ctx])
-int Cabac::deocde_sao_merge_left_flag() {
-  //int32_t ctxIdxOffset = 0, binVal = 0, ctxIdx = 0, bypassFlag = 0;
-  //ctxIdxOffset = 0;
-  //ctxIdx = ctxIdxOffset + 0;
-  //RET(decodeBin(bypassFlag, ctxIdx, binVal));
-  //return binVal;
-  //return GET_CABAC(elem_offset[SAO_MERGE_FLAG]);
+// 9.3.2.2 Initialization process for context variables
+int Cabac::initialization_context_variables(SliceHeader *header) {
+  //In Table 9-4, the ctxIdx for which initialization is needed for each of the three initialization types, specified by the variable initType, are listed. Also listed is the table number that includes the values of initValue needed for the initialization. For P and B slice types, the derivation of initType depends on the value of the cabac_init_flag syntax element. The variable initType is derived as follows
+  int initType = 0;
+  if (header->slice_type == HEVC_SLICE_I)
+    initType = 0;
+  else if (header->slice_type == HEVC_SLICE_P)
+    initType = header->cabac_init_flag ? 2 : 1;
+  else
+    initType = header->cabac_init_flag ? 1 : 2;
+
+  //Initialization variable  ctxIdx of sao_merge_left_flag and sao_merge_up_flag  01 2  initValue 153 153 153
+  //表9-5到表9-37包含在上下文变量的初始化中使用的8位变量initValue的值，这些变量被分配给第7.3.8.1节到第7.3.8.12节中的所有语法元素，除了end_of_slice_segment_flag、end_of_subset_one_bit和pcm_flag之外。
+  for (int i = 0; i < HEVC_CONTEXTS; i++) {
+    int initValue = init_values[initType][i];
+    int slopeIdx = (initValue >> 4);
+    int offsetIdx = initValue & 15;
+    int m = slopeIdx * 5 - 45;
+    int n = (offsetIdx << 3) - 16;
+    int pre = CLIP3(1, 126, ((m * CLIP3(0, 51, header->SliceQpY)) >> 4) + n);
+    preCtxState[i] = pre;
+    int val = (pre <= 63) ? 0 : 1;
+    valMps[i] = val;
+    int pState_Idx = valMps ? (pre - 64) : (63 - pre);
+    pStateIdx[i] = pState_Idx;
+  }
   return 0;
+}
+
+//9.3.2.3 Initialization process for palette predictor entries
+int Cabac::initialization_palette_predictor_entries(SPS *sps, PPS *pps) {
+  int numComps = (sps->ChromaArrayType == 0) ? 1 : 3;
+  int PredictorPaletteSize = 0;
+  int PredictorPaletteEntries[32][32] = {0};
+  if (pps->pps_palette_predictor_initializers_present_flag == 1) {
+    PredictorPaletteSize = pps->pps_num_palette_predictor_initializers;
+    for (int comp = 0; comp < numComps; comp++)
+      for (int i = 0; i < PredictorPaletteSize; i++)
+        PredictorPaletteEntries[comp][i] =
+            pps->pps_palette_predictor_initializer[comp][i];
+  } else if (pps->pps_palette_predictor_initializers_present_flag == 0 &&
+             sps->sps_palette_predictor_initializers_present_flag == 1) {
+    PredictorPaletteSize =
+        sps->sps_num_palette_predictor_initializers_minus1 + 1;
+    for (int comp = 0; comp < numComps; comp++)
+      for (int i = 0; i < PredictorPaletteSize; i++)
+        PredictorPaletteEntries[comp][i] =
+            sps->sps_palette_predictor_initializer[comp][i];
+  } else
+    PredictorPaletteSize = 0;
+
+  return 0;
+}
+
+int Cabac::deocde_sao_merge_left_flag() {
+  //ff_hevc_sao_merge_flag_decode();
+  return 0;
+}
+
+enum {
+#define OFFSET(NAME, NUM_BINS)                                                 \
+  NAME##_OFFSET, NAME##_END = NAME##_OFFSET + NUM_BINS - 1,
+  CABAC_ELEMS(OFFSET)
+};
+
+#define GET_CABAC(ctx) get_cabac(&cabac_state[ctx])
+int Cabac::ff_hevc_sao_merge_flag_decode() {
+  return GET_CABAC(SAO_MERGE_FLAG_OFFSET);
+}
+
+#define H264_NORM_SHIFT_OFFSET 0
+static const uint8_t *const ff_h264_norm_shift =
+    ff_h264_cabac_tables + H264_NORM_SHIFT_OFFSET;
+
+#define H264_LPS_RANGE_OFFSET 512
+static const uint8_t *const ff_h264_lps_range =
+    ff_h264_cabac_tables + H264_LPS_RANGE_OFFSET;
+
+#define H264_MLPS_STATE_OFFSET 1024
+static const uint8_t *const ff_h264_mlps_state =
+    ff_h264_cabac_tables + H264_MLPS_STATE_OFFSET;
+
+#define CABAC_BITS 16
+#define CABAC_MASK ((1 << CABAC_BITS) - 1)
+
+void Cabac::refill2() {
+  int i;
+  unsigned x;
+#if !HAVE_FAST_CLZ
+  x = c->low ^ (c->low - 1);
+  i = 7 - ff_h264_norm_shift[x >> (CABAC_BITS - 1)];
+#else
+  i = ff_ctz(c->low) - CABAC_BITS;
+#endif
+
+  x = -CABAC_MASK;
+
+#if CABAC_BITS == 16
+  x += (c->bytestream[0] << 9) + (c->bytestream[1] << 1);
+#else
+  x += c->bytestream[0] << 1;
+#endif
+
+  c->low += x << i;
+#if !UNCHECKED_BITSTREAM_READER
+  if (c->bytestream < c->bytestream_end)
+#endif
+    c->bytestream += CABAC_BITS / 8;
+}
+
+int Cabac::get_cabac(uint8_t *const state) {
+  int s = *state;
+  int RangeLPS = ff_h264_lps_range[2 * (c->range & 0xC0) + s];
+  int bit, lps_mask;
+
+  c->range -= RangeLPS;
+  lps_mask = ((c->range << (CABAC_BITS + 1)) - c->low) >> 31;
+
+  c->low -= (c->range << (CABAC_BITS + 1)) & lps_mask;
+  c->range += (RangeLPS - c->range) & lps_mask;
+
+  s ^= lps_mask;
+  *state = (ff_h264_mlps_state + 128)[s];
+  bit = s & 1;
+
+  lps_mask = ff_h264_norm_shift[c->range];
+  c->range <<= lps_mask;
+  c->low <<= lps_mask;
+  if (!(c->low & CABAC_MASK)) refill2();
+  return bit;
 }

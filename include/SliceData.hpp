@@ -47,13 +47,12 @@ class SliceData {
 
   int ff_hevc_cabac_init(int ctb_addr_ts);
 
-  int cabac_init_decoder();
   int ff_init_cabac_decoder();
   int cabac_init_state();
   int load_states();
 
   int cabac_state[HEVC_CONTEXTS] = {0};
-  int stat_coeff[4] = {0};
+  int StatCoeff[4] = {0};
 
   int parseSaoMerge();
 

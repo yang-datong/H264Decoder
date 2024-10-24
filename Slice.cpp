@@ -44,9 +44,6 @@ int Slice::decode(BitStream &bs, Frame *(&dpb)[16], SPS &sps, PPS &pps,
   frame->m_current_picture_ptr = &(frame->m_picture_frame);
   frame->m_picture_frame.init(this);
 
-  if (slice_header->field_pic_flag) // 场编码->顶场，底场
-    std::cerr << "An error occurred on " << __FUNCTION__ << "():" << __LINE__
-              << std::endl;
   slice_data->slice_segment_data(bs, frame->m_picture_frame, sps, pps);
   return 0;
 }

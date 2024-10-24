@@ -370,9 +370,9 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
     sps_range_extension_flag = bs->readUn(1);
     if (sps_range_extension_flag) sps_range_extension();
     sps_multilayer_extension_flag = bs->readUn(1);
-    if (sps_multilayer_extension_flag) sps_multilayer_extension();
+    //if (sps_multilayer_extension_flag) sps_multilayer_extension();
     sps_3d_extension_flag = bs->readUn(1);
-    if (sps_3d_extension_flag) sps_3d_extension();
+    //if (sps_3d_extension_flag) sps_3d_extension();
     sps_scc_extension_flag = bs->readUn(1);
     if (sps_scc_extension_flag) sps_scc_extension();
     sps_extension_4bits = bs->readUn(4);
@@ -463,60 +463,25 @@ int SPS::sps_range_extension() {
   int cabac_bypass_alignment_enabled_flag = bs->readUn(1);
   return 0;
 }
-int SPS::sps_multilayer_extension() {
-  int inter_view_mv_vert_constraint_flag = bs->readU1();
-  return 0;
-}
-int SPS::sps_3d_extension() {
-  int cp_precision = 0;
-  int num_cp[32] = {0};
-  int cp_in_slice_segment_header_flag[32] = {0};
-  int cp_ref_voi[32][32] = {0};
-  int vps_cp_scale[32][32] = {0};
-  int vps_cp_off[32][32] = {0};
-  int vps_cp_inv_scale_plus_scale[32][32] = {0};
-  int vps_cp_inv_off_plus_off[32][32] = {0};
 
-  int NumViews = 1;
-  //  for (int i = 0; i <= m_vps->vps_max_layers - 1; i++) {
-  //    int lId = m_vps->layer_id_in_nuh[i];
-  //    for (int smIdx = 0, j = 0; smIdx < 16; smIdx++) {
-  //      if (scalability_mask_flag[smIdx])
-  //        ScalabilityId[i][smIdx] = dimension_id[i][j++];
-  //      else
-  //        ScalabilityId[i][smIdx] = 0
-  //    }
-  //    DepthLayerFlag[lId] = ScalabilityId[i][0];
-  //    ViewOrderIdx[lId] = ScalabilityId[i][1];
-  //    DependencyId[lId] = ScalabilityId[i][2](F - 3);
-  //    AuxId[lId] = ScalabilityId[i][3];
-  //    if (i > 0) {
-  //      newViewFlag = 1;
-  //      for (int j = 0; j < i; j++)
-  //        if (ViewOrderIdx[lId] == ViewOrderIdx[layer_id_in_nuh[j]])
-  //          newViewFlag = 0;
-  //      NumViews += newViewFlag;
-  //    }
-  //  }
+int SPS::sps_scc_extension() {
+  int sps_curr_pic_ref_enabled_flag = bs->readUn(1);
+  int palette_mode_enabled_flag = bs->readUn(1);
 
-  //  cp_precision = bs->readUE();
-  //  for (int n = 1; n < NumViews; n++) {
-  //    int i = ViewOIdxList[n];
-  //    num_cp[i] = bs->readUn(6);
-  //    if (num_cp[i] > 0) {
-  //      cp_in_slice_segment_header_flag[i] = bs->readUn(1);
-  //      for (int m = 0; m < num_cp[i]; m++) {
-  //        cp_ref_voi[i][m] = bs->readUE();
-  //        if (!cp_in_slice_segment_header_flag[i]) {
-  //          int j = cp_ref_voi[i][m];
-  //          vps_cp_scale[i][j] = bs->readSE();
-  //          vps_cp_off[i][j] = bs->readSE();
-  //          vps_cp_inv_scale_plus_scale[i][j] = bs->readSE();
-  //          vps_cp_inv_off_plus_off[i][j] = bs->readSE();
-  //        }
-  //      }
-  //    }
-  //  }
-  return 0;
+  if (palette_mode_enabled_flag) {
+    int palette_max_size = bs->readUE();
+    int delta_palette_max_predictor_size = bs->readUE();
+    sps_palette_predictor_initializers_present_flag = bs->readUn(1);
+    if (sps_palette_predictor_initializers_present_flag) {
+      sps_num_palette_predictor_initializers_minus1 = bs->readUE();
+      int numComps = (chroma_format_idc == 0) ? 1 : 3;
+      for (int comp = 0; comp < numComps; comp++) {
+        int bit_depth = comp == 0 ? bit_depth_luma : bit_depth_chroma;
+        for (int i = 0; i <= sps_num_palette_predictor_initializers_minus1; i++)
+          sps_palette_predictor_initializer[comp][i] = bs->readUn(bit_depth);
+      }
+    }
+  }
+  int motion_vector_resolution_control_idc = bs->readUn(2);
+  int intra_boundary_filtering_disabled_flag = bs->readUn(1);
 }
-int SPS::sps_scc_extension() {}

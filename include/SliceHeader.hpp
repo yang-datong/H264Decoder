@@ -125,7 +125,7 @@ class SliceHeader {
   int32_t RefRpsIdx = 0;
   int deltaRps = 0;
 
-  int slice_qp = 0;
+  int SliceQpY = 0;
   int32_t NumPicTotalCurr = 0;
 
   int CurrRpsIdx = 0;

@@ -147,6 +147,10 @@ class SPS {
   int sps_3d_extension();
   int sps_scc_extension();
 
+  int sps_palette_predictor_initializers_present_flag = 0;
+  uint16_t sps_palette_predictor_initializer[3][128] = {0};
+  int sps_num_palette_predictor_initializers_minus1 = 0;
+
   //--------------------- Old ------------------
  public:
   /* 表示编码配置文件 */
