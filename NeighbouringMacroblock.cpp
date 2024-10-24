@@ -199,12 +199,10 @@ int PictureBase::derivation_for_neighbouring_8x8_luma_block(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xA, yA, CurrMbAddr, mbAddrA_type,
       mbAddrA, luma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma));
 
-  if (mbAddrA < 0)
-    luma8x8BlkIdxA = -2;
-  else {
-    // 6.4.13.3 Derivation process for 8x8 luma block indices
+  if (mbAddrA < 0) luma8x8BlkIdxA = -2;
+  // 6.4.13.3 Derivation process for 8x8 luma block indices
+  else
     luma8x8BlkIdxA = 2 * (yW / 8) + (xW / 8);
-  }
 
   //---------------mbAddrB---------------------
   MB_ADDR_TYPE mbAddrB_type = MB_ADDR_TYPE_UNKOWN;
@@ -217,12 +215,10 @@ int PictureBase::derivation_for_neighbouring_8x8_luma_block(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xB, yB, CurrMbAddr, mbAddrB_type,
       mbAddrB, luma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, isChroma));
 
-  if (mbAddrB < 0)
-    luma8x8BlkIdxB = -2;
-  else {
-    // 6.4.13.3 Derivation process for 8x8 luma block indices
+  if (mbAddrB < 0) luma8x8BlkIdxB = -2;
+  // 6.4.13.3 Derivation process for 8x8 luma block indices
+  else
     luma8x8BlkIdxB = 2 * (yW / 8) + (xW / 8);
-  }
 
   return 0;
 }
@@ -256,13 +252,11 @@ int PictureBase::derivation_for_neighbouring_4x4_luma_blocks(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xA, yA, CurrMbAddr, mbAddrA_type,
       mbAddrA, luma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, isChroma));
 
-  if (mbAddrA < 0) {
-    luma4x4BlkIdxA = -2;
-  } else {
-    // 6.4.13.1 Derivation process for 4x4 luma block indices
+  if (mbAddrA < 0) luma4x4BlkIdxA = -2;
+  // 6.4.13.1 Derivation process for 4x4 luma block indices
+  else
     luma4x4BlkIdxA =
         8 * (yW / 8) + 4 * (xW / 8) + 2 * ((yW % 8) / 4) + ((xW % 8) / 4);
-  }
 
   //---------------mbAddrB---------------------
   MB_ADDR_TYPE mbAddrB_type = MB_ADDR_TYPE_UNKOWN;
@@ -301,12 +295,10 @@ int PictureBase::derivation_for_neighbouring_4x4_chroma_blocks(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xA, yA, CurrMbAddr, mbAddrA_type,
       mbAddrA, chroma4x4BlkIdxA, luma8x8BlkIdxA, xW, yW, 1));
 
-  if (mbAddrA < 0)
-    chroma4x4BlkIdxA = -2;
-  else {
-    // 6.4.13.2 Derivation process for 4x4 chroma block indices
+  if (mbAddrA < 0) chroma4x4BlkIdxA = -2;
+  // 6.4.13.2 Derivation process for 4x4 chroma block indices
+  else
     chroma4x4BlkIdxA = 2 * (yW / 4) + (xW / 4);
-  }
 
   //---------------mbAddrB---------------------
   MB_ADDR_TYPE mbAddrB_type = MB_ADDR_TYPE_UNKOWN;
@@ -316,10 +308,9 @@ int PictureBase::derivation_for_neighbouring_4x4_chroma_blocks(
       m_mbs[CurrMbAddr].MbaffFrameFlag, xB, yB, CurrMbAddr, mbAddrB_type,
       mbAddrB, chroma4x4BlkIdxB, luma8x8BlkIdxB, xW, yW, 1));
 
-  if (mbAddrB < 0)
-    chroma4x4BlkIdxB = -2;
+  if (mbAddrB < 0) chroma4x4BlkIdxB = -2;
+  // 6.4.13.2 Derivation process for 4x4 chroma block indices
   else
-    // 6.4.13.2 Derivation process for 4x4 chroma block indices
     chroma4x4BlkIdxB = 2 * (yW / 4) + (xW / 4);
 
   return 0;
@@ -375,7 +366,7 @@ int PictureBase::neighbouring_locations_MBAFF(
       if (mbIsTopMbFlag)
         mbAddrX = mbAddrD, mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1,
         mbAddrN = mbAddrD + 1, yM = yN;
-      else if (mbIsTopMbFlag == false) {
+      else {
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) {
           mbAddrXFrameFlag = (m_mbs[mbAddrX].mb_field_decoding_flag) ? 0 : 1;
@@ -386,7 +377,7 @@ int PictureBase::neighbouring_locations_MBAFF(
             yM = (yN + maxH) >> 1;
         }
       }
-    } else if (currMbFrameFlag == false) {
+    } else {
       if (mbIsTopMbFlag) {
         mbAddrX = mbAddrD;
         if (mbAddrX >= 0) {
@@ -397,7 +388,7 @@ int PictureBase::neighbouring_locations_MBAFF(
           else
             mbAddrN_type = MB_ADDR_TYPE_mbAddrD, mbAddrN = mbAddrD, yM = yN;
         }
-      } else if (mbIsTopMbFlag == false) {
+      } else {
         mbAddrX = mbAddrD, mbAddrN_type = MB_ADDR_TYPE_mbAddrD_add_1,
         mbAddrN = mbAddrD + 1, yM = yN;
       }
@@ -414,12 +405,12 @@ int PictureBase::neighbouring_locations_MBAFF(
             if (yN % 2 == 0)
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA,
               yM = yN >> 1;
-            else if (yN % 2 != 0)
+            else
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1, mbAddrN = mbAddrA + 1,
               yM = yN >> 1;
           }
         }
-      } else if (mbIsTopMbFlag == false) {
+      } else {
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) {
           mbAddrXFrameFlag = (m_mbs[mbAddrX].mb_field_decoding_flag) ? 0 : 1;
@@ -430,14 +421,14 @@ int PictureBase::neighbouring_locations_MBAFF(
             if (yN % 2 == 0)
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA,
               yM = (yN + maxH) >> 1;
-            else if (yN % 2 != 0)
+            else
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1, mbAddrN = mbAddrA + 1,
               yM = (yN + maxH) >> 1;
           }
         }
       }
-    } else if (currMbFrameFlag == false) {
-      if (mbIsTopMbFlag == 1) {
+    } else {
+      if (mbIsTopMbFlag == true) {
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) {
           mbAddrXFrameFlag = (m_mbs[mbAddrX].mb_field_decoding_flag) ? 0 : 1;
@@ -445,14 +436,14 @@ int PictureBase::neighbouring_locations_MBAFF(
             if (yN < (maxH / 2)) {
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA,
               yM = yN << 1;
-            } else if (yN >= (maxH / 2)) {
+            } else {
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1, mbAddrN = mbAddrA + 1,
               yM = (yN << 1) - maxH;
             }
           } else
             mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA, yM = yN;
         }
-      } else if (mbIsTopMbFlag == false) {
+      } else {
         mbAddrX = mbAddrA;
         if (mbAddrX >= 0) {
           mbAddrXFrameFlag = (m_mbs[mbAddrX].mb_field_decoding_flag) ? 0 : 1;
@@ -460,7 +451,7 @@ int PictureBase::neighbouring_locations_MBAFF(
             if (yN < (maxH / 2)) {
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA, mbAddrN = mbAddrA,
               yM = (yN << 1) + 1;
-            } else if (yN >= (maxH / 2)) {
+            } else {
               mbAddrN_type = MB_ADDR_TYPE_mbAddrA_add_1, mbAddrN = mbAddrA + 1,
               yM = (yN << 1) + 1 - maxH;
             }
@@ -475,11 +466,11 @@ int PictureBase::neighbouring_locations_MBAFF(
       if (mbIsTopMbFlag) {
         mbAddrX = mbAddrB, mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1,
         mbAddrN = mbAddrB + 1, yM = yN;
-      } else if (mbIsTopMbFlag == false) {
+      } else {
         mbAddrX = CurrMbAddr, mbAddrN_type = MB_ADDR_TYPE_CurrMbAddr_minus_1,
         mbAddrN = CurrMbAddr - 1, yM = yN;
       }
-    } else if (currMbFrameFlag == false) {
+    } else {
       if (mbIsTopMbFlag == 1) {
         mbAddrX = mbAddrB;
         if (mbAddrX >= 0) {
@@ -487,7 +478,7 @@ int PictureBase::neighbouring_locations_MBAFF(
           if (mbAddrXFrameFlag)
             mbAddrN_type = MB_ADDR_TYPE_mbAddrB_add_1, mbAddrN = mbAddrB + 1,
             yM = 2 * yN;
-          else if (mbAddrXFrameFlag == 0)
+          else
             mbAddrN_type = MB_ADDR_TYPE_mbAddrB, mbAddrN = mbAddrB, yM = yN;
         }
       } else
@@ -502,7 +493,7 @@ int PictureBase::neighbouring_locations_MBAFF(
       if (mbIsTopMbFlag)
         mbAddrX = mbAddrC, mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1,
         mbAddrN = mbAddrC + 1, yM = yN;
-      else if (mbIsTopMbFlag == 0)
+      else
         mbAddrX = -2, mbAddrN_type = MB_ADDR_TYPE_UNKOWN, mbAddrN = -2, yM = NA;
     } else {
       if (mbIsTopMbFlag) {
@@ -515,7 +506,7 @@ int PictureBase::neighbouring_locations_MBAFF(
           else
             mbAddrN_type = MB_ADDR_TYPE_mbAddrC, mbAddrN = mbAddrC, yM = yN;
         }
-      } else if (mbIsTopMbFlag == 0) {
+      } else {
         mbAddrX = mbAddrC, mbAddrN_type = MB_ADDR_TYPE_mbAddrC_add_1,
         mbAddrN = mbAddrC + 1, yM = yN;
       }
@@ -559,19 +550,16 @@ int PictureBase::neighbouring_locations_non_MBAFF(
 
   if (mbAddrN_type != MB_ADDR_TYPE_UNKOWN) {
     /* 相对于宏块 mbAddrN 左上角的相邻位置 ( xW, yW )  */
-    xW = (xN + maxW) % maxW;
-    yW = (yN + maxH) % maxH;
+    xW = (xN + maxW) % maxW, yW = (yN + maxH) % maxH;
 
-    /* For 4x4 Block */
     if (!isChroma)
       // 6.4.13.1 Derivation process for 4x4 luma block indices
       b4x4BlkIdx =
           8 * (yW / 8) + 4 * (xW / 8) + 2 * ((yW % 8) / 4) + ((xW % 8) / 4);
+    // 6.4.13.2 Derivation process for 4x4 chroma block indices
     else
-      // 6.4.13.2 Derivation process for 4x4 chroma block indices
       b4x4BlkIdx = 2 * (yW / 4) + (xW / 4);
 
-    /* For 8x8 Block */
     // 6.4.13.3 Derivation process for 8x8 luma block indices
     b8x8BlkIdxN = 2 * (yW / 8) + (xW / 8);
   } else

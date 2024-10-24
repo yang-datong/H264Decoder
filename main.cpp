@@ -7,12 +7,15 @@
 
 typedef enum _OUTPUT_FILE_TYPE { NON, BMP, YUV } OUTPUT_FILE_TYPE;
 
-int32_t g_Width = 0;
-int32_t g_Height = 0;
+int32_t g_Width = 0, g_Height = 0;
 int32_t g_PicNumCnt = 0;
+
 //int32_t g_OutputFileType = YUV;
 int32_t g_OutputFileType = BMP;
 
+void printfNALBytes(int &number, const Nalu &nalu);
+void printfEBSPBytes(int number, const Nalu::EBSP &ebsp);
+void printfRBSPBytes(int number, const Nalu::RBSP &rbsp);
 int outputFrame(GOP *gop, Frame *frame);
 int flushFrame(GOP *gop, Frame *&frame, bool isFromIDR);
 
@@ -64,7 +67,6 @@ int main(int argc, char *argv[]) {
   Frame *frame = gop->m_dpb[0];
 
   BitStream *bitStream = nullptr;
-
   int number = 0;
   /* 这里只对文件进行解码，所以只有AnnesB格式 */
   while (true) {
@@ -75,30 +77,22 @@ int main(int argc, char *argv[]) {
     SEI sei;
     /* 3. 循环读取一个个的Nalu */
     result = reader.readNalu(nalu);
-
     if (result == 1 || result == 0) {
-      cout << "Reading a NAL[" << ++number << "]{" << (int)nalu.buffer[0] << " "
-           << (int)nalu.buffer[1] << " " << (int)nalu.buffer[2] << " "
-           << (int)nalu.buffer[3] << "}, Buffer len[" << nalu.len << "]";
+      printfNALBytes(number, nalu);
 
       /* 4. 从NAL中解析出EBSP */
       nalu.parseEBSP(ebsp);
-      cout << "   --->   EBSP[" << number << "]{" << (int)ebsp.buf[0] << " "
-           << (int)ebsp.buf[1] << " " << (int)ebsp.buf[2] << " "
-           << (int)ebsp.buf[3] << "}, Buffer len[" << ebsp.len << "]";
+      printfEBSPBytes(number, ebsp);
 
       /* 5. 从EBSP中解析出RBSP */
       nalu.parseRBSP(ebsp, rbsp);
-      cout << "  --->   RBSP[" << number << "]{" << (int)rbsp.buf[0] << " "
-           << (int)rbsp.buf[1] << " " << (int)rbsp.buf[2] << " "
-           << (int)rbsp.buf[3] << "}, Buffer len[" << rbsp.len << "]" << endl;
+      printfRBSPBytes(number, rbsp);
 
-      /* 6. 从RBSP中解析出SODB(未实现） */
+      /* 6. 从RBSP中解析出SODB(TODO） */
       // nalu.parseSODB(rbsp, SODB);
 
-      /* 见T-REC-H.264-202108-I!!PDF-E.pdf 87页 */
+      /* T-REC-H.264-202108-I!!PDF-E.pdf -> page 87 */
       if (nalu.nal_unit_type > 21) cout << "Unknown Nalu Type !!!" << endl;
-
       switch (nalu.nal_unit_type) {
       case 1: /* Slice(non-VCL) */
         /* 11-2. 解码普通帧 */
@@ -123,18 +117,16 @@ int main(int argc, char *argv[]) {
       case 5: /* IDR Slice(VCL) */
         /* 11-1. 解码立即刷新帧 GOP[0] */
         cout << "IDR Slice -> {" << endl;
-        /* 提供给外层程序一定是Frame，即一帧数据，而不是一个Slice，因为如果存在多个Slice为一帧的情况外层处理就很麻烦 */
+        /* FIXME:提供给外层程序一定是Frame，即一帧数据，而不是一个Slice，因为如果存在多个Slice为一帧的情况外层处理就很麻烦 */
         flushFrame(gop, frame, true);
         /* 初始化bit处理器，填充idr的数据 */
         bitStream = new BitStream(rbsp.buf, rbsp.len);
-        /* 这里通过解析SliceHeader后可以知道一个Frame到底是几个Slice，通过直接调用frame->decode，在内部对每个Slice->decode() （如果存在多个Slice的情况，可以通过first_mb_in_slice判断，如果每个Slice都为0,则表示每个Slice都是一帧数据，当first_mb_in_slice>0，则表示与前面的一个或多个Slice共同组成一个Frame） */
         nalu.extractIDRparameters(*bitStream, *gop, *frame);
         frame->decode(*bitStream, gop->m_dpb, *gop);
         cout << " }" << endl;
         break;
       case 6: /* SEI（补充信息）(VCL) */
-        /* 10. 解码SEI补充增强信息：
-         * 场编码的图像在每个Slice前出现SEI以提供必要的解码辅助信息 */
+        /* 10. 解码SEI补充增强信息：场编码的图像在每个Slice前出现SEI以提供必要的解码辅助信息 */
         cout << "SEI -> {" << endl;
         nalu.extractSEIparameters(rbsp, sei, gop->m_spss[gop->last_pps_id]);
         cout << " }" << endl;
@@ -281,4 +273,22 @@ int outputFrame(GOP *gop, Frame *frame) {
       image.writeYUV(outPicture->m_picture_frame, "output.yuv");
   }
   return 0;
+}
+
+void printfNALBytes(int &number, const Nalu &nalu) {
+  cout << "Reading a NAL[" << ++number << "]{" << (int)nalu.buffer[0] << " "
+       << (int)nalu.buffer[1] << " " << (int)nalu.buffer[2] << " "
+       << (int)nalu.buffer[3] << "}, Buffer len[" << nalu.len << "]";
+}
+
+void printfEBSPBytes(int number, const Nalu::EBSP &ebsp) {
+  cout << "   --->   EBSP[" << number << "]{" << (int)ebsp.buf[0] << " "
+       << (int)ebsp.buf[1] << " " << (int)ebsp.buf[2] << " " << (int)ebsp.buf[3]
+       << "}, Buffer len[" << ebsp.len << "]";
+}
+
+void printfRBSPBytes(int number, const Nalu::RBSP &rbsp) {
+  cout << "  --->   RBSP[" << number << "]{" << (int)rbsp.buf[0] << " "
+       << (int)rbsp.buf[1] << " " << (int)rbsp.buf[2] << " " << (int)rbsp.buf[3]
+       << "}, Buffer len[" << rbsp.len << "]" << endl;
 }
