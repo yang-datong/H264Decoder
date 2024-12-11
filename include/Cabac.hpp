@@ -32,6 +32,10 @@ class Cabac {
   int init_of_context_variables(H264_SLICE_TYPE slice_type,
                                 int32_t cabac_init_idc, int32_t SliceQPY);
   int init_of_decoding_engine();
+  int get_cabac_inline(uint8_t * const state);
+
+    int ivlCurrRange = 0;
+  int ivlOffset = 0;
 
  private:
   int init_m_n(int32_t ctxIdx, H264_SLICE_TYPE slice_type,
@@ -109,26 +113,27 @@ class Cabac {
                            int32_t iCbCr, int32_t &TotalCoeff);
 
  public:
+int initialization_decoding_engine();
   int initialization_context_variables(SliceHeader *header);
   int initialization_palette_predictor_entries(SPS *sps, PPS *pps);
   int preCtxState[HEVC_CONTEXTS] = {0};
   int valMps[HEVC_CONTEXTS] = {0};
   int pStateIdx[HEVC_CONTEXTS] = {0};
 
-  typedef struct CABACContext {
-    int low;
-    int range;
-    const uint8_t *bytestream_start;
-    const uint8_t *bytestream;
-    const uint8_t *bytestream_end;
-  } CABACContext;
+  //typedef struct CABACContext {
+    //int low;
+    //int range;
+    //const uint8_t *bytestream_start;
+    //const uint8_t *bytestream;
+    //const uint8_t *bytestream_end;
+  //} CABACContext;
 
-  CABACContext *c = nullptr;
+  //CABACContext *c = nullptr;
   int deocde_sao_merge_left_flag();
-  int ff_hevc_sao_merge_flag_decode();
-  int get_cabac(uint8_t *const state);
+  //int ff_hevc_sao_merge_flag_decode();
+  //int get_cabac(uint8_t *const state);
   void refill2();
-  uint8_t cabac_state[HEVC_CONTEXTS];
+  //uint8_t cabac_state[HEVC_CONTEXTS];
 };
 
 const int8_t num_bins_in_se[] = {

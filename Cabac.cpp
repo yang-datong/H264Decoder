@@ -2407,6 +2407,67 @@ int Cabac::decodeDecision(int32_t ctxIdx, int32_t &binVal) {
   return renormD();
 }
 
+int Cabac::initialization_decoding_engine() {
+  // 该过程的输出是初始化的解码引擎寄存器 ivlCurrRange 和 ivlOffset，均为 16 位寄存器精度
+  // 算术解码引擎的状态由变量ivlCurrRange和ivlOffset表示。
+  ivlCurrRange = 510;
+  // 该值解释为无符号整数的 9 位二进制表示形式，最高有效位先写入。TODO: 需要反转bit?
+  ivlOffset = bs.readUn(9);
+  return 0;
+}
+
+#define H264_LPS_RANGE_OFFSET 512
+#define CABAC_BITS 16
+static const uint8_t *const ff_h264_lps_range =
+    ff_h264_cabac_tables + H264_LPS_RANGE_OFFSET;
+
+#define H264_MLPS_STATE_OFFSET 1024
+static const uint8_t *const ff_h264_mlps_state =
+    ff_h264_cabac_tables + H264_MLPS_STATE_OFFSET;
+
+#define H264_NORM_SHIFT_OFFSET 0
+static const uint8_t *const ff_h264_norm_shift =
+    ff_h264_cabac_tables + H264_NORM_SHIFT_OFFSET;
+
+#define CABAC_BITS 16
+#define CABAC_MASK ((1 << CABAC_BITS) - 1)
+
+int Cabac::get_cabac_inline(uint8_t *const state) {
+  int s = *state;
+  int RangeLPS = ff_h264_lps_range[2 * (ivlCurrRange & 0xC0) + s];
+  int bit, lps_mask;
+
+  ivlCurrRange -= RangeLPS;
+  lps_mask = ((ivlCurrRange << (CABAC_BITS + 1)) - ivlOffset) >> 31;
+
+  ivlOffset -= (ivlCurrRange << (CABAC_BITS + 1)) & lps_mask;
+  ivlCurrRange += (RangeLPS - ivlCurrRange) & lps_mask;
+
+  s ^= lps_mask;
+  *state = (ff_h264_mlps_state + 128)[s];
+  bit = s & 1;
+
+  lps_mask = ff_h264_norm_shift[ivlCurrRange];
+  ivlCurrRange <<= lps_mask;
+  ivlOffset <<= lps_mask;
+  if (!(ivlOffset & CABAC_MASK)) refill2();
+  return bit;
+}
+
+void Cabac::refill2() {
+  int i;
+  unsigned x;
+  x = ivlOffset ^ (ivlOffset - 1);
+  i = 7 - ff_h264_norm_shift[x >> (CABAC_BITS - 1)];
+
+  x = -CABAC_MASK;
+
+  //x += (c->bytestream[0] << 9) + (c->bytestream[1] << 1);
+
+  ivlOffset += x << i;
+  //if (c->bytestream < c->bytestream_end) c->bytestream += CABAC_BITS / 8;
+}
+
 // 9.3.2.2 Initialization process for context variables
 int Cabac::initialization_context_variables(SliceHeader *header) {
   //In Table 9-4, the ctxIdx for which initialization is needed for each of the three initialization types, specified by the variable initType, are listed. Also listed is the table number that includes the values of initValue needed for the initialization. For P and B slice types, the derivation of initType depends on the value of the cabac_init_flag syntax element. The variable initType is derived as follows
@@ -2466,75 +2527,13 @@ int Cabac::deocde_sao_merge_left_flag() {
   return 0;
 }
 
-enum {
-#define OFFSET(NAME, NUM_BINS)                                                 \
-  NAME##_OFFSET, NAME##_END = NAME##_OFFSET + NUM_BINS - 1,
-  CABAC_ELEMS(OFFSET)
-};
-
-#define GET_CABAC(ctx) get_cabac(&cabac_state[ctx])
-int Cabac::ff_hevc_sao_merge_flag_decode() {
-  return GET_CABAC(SAO_MERGE_FLAG_OFFSET);
-}
 
 #define H264_NORM_SHIFT_OFFSET 0
-static const uint8_t *const ff_h264_norm_shift =
-    ff_h264_cabac_tables + H264_NORM_SHIFT_OFFSET;
 
 #define H264_LPS_RANGE_OFFSET 512
-static const uint8_t *const ff_h264_lps_range =
-    ff_h264_cabac_tables + H264_LPS_RANGE_OFFSET;
 
 #define H264_MLPS_STATE_OFFSET 1024
-static const uint8_t *const ff_h264_mlps_state =
-    ff_h264_cabac_tables + H264_MLPS_STATE_OFFSET;
 
 #define CABAC_BITS 16
 #define CABAC_MASK ((1 << CABAC_BITS) - 1)
 
-void Cabac::refill2() {
-  int i;
-  unsigned x;
-#if !HAVE_FAST_CLZ
-  x = c->low ^ (c->low - 1);
-  i = 7 - ff_h264_norm_shift[x >> (CABAC_BITS - 1)];
-#else
-  i = ff_ctz(c->low) - CABAC_BITS;
-#endif
-
-  x = -CABAC_MASK;
-
-#if CABAC_BITS == 16
-  x += (c->bytestream[0] << 9) + (c->bytestream[1] << 1);
-#else
-  x += c->bytestream[0] << 1;
-#endif
-
-  c->low += x << i;
-#if !UNCHECKED_BITSTREAM_READER
-  if (c->bytestream < c->bytestream_end)
-#endif
-    c->bytestream += CABAC_BITS / 8;
-}
-
-int Cabac::get_cabac(uint8_t *const state) {
-  int s = *state;
-  int RangeLPS = ff_h264_lps_range[2 * (c->range & 0xC0) + s];
-  int bit, lps_mask;
-
-  c->range -= RangeLPS;
-  lps_mask = ((c->range << (CABAC_BITS + 1)) - c->low) >> 31;
-
-  c->low -= (c->range << (CABAC_BITS + 1)) & lps_mask;
-  c->range += (RangeLPS - c->range) & lps_mask;
-
-  s ^= lps_mask;
-  *state = (ff_h264_mlps_state + 128)[s];
-  bit = s & 1;
-
-  lps_mask = ff_h264_norm_shift[c->range];
-  c->range <<= lps_mask;
-  c->low <<= lps_mask;
-  if (!(c->low & CABAC_MASK)) refill2();
-  return bit;
-}

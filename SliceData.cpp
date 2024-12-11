@@ -9,8 +9,6 @@
 #include <cstdint>
 #include <cstdlib>
 
-#define GET_CABAC(ctx) get_cabac(&s->HEVClc->cc, &s->HEVClc->cabac_state[ctx])
-
 /* 7.3.4 Slice data syntax */
 int SliceData::slice_segment_data(BitStream &bitStream, PictureBase &picture,
                                   SPS &sps, PPS &pps) {
@@ -29,13 +27,29 @@ int SliceData::slice_segment_data(BitStream &bitStream, PictureBase &picture,
   CtbAddrInTs = m_pps->CtbAddrRsToTs[header->slice_ctb_addr_rs];
   bool end_of_slice_segment_flag = false;
   do {
-    end_of_slice_segment_flag = false; //TODO ae(v);
     // 编码顺序: 递增当前CTU的地址
     // 光栅顺序: 将编码顺序下的CTU地址转换为光栅顺序下的CTU地址
-    CtbAddrInRs = m_pps->CtbAddrTsToRs[CtbAddrInTs++];
+    CtbAddrInRs = m_pps->CtbAddrTsToRs[CtbAddrInTs];
 
     // 解析当前CTU（编码树单元）的数据
-    coding_tree_unit();
+    //coding_tree_unit();
+    // CtbAddrInRs 是当前CTU在光栅顺序（Raster Scan）中的地址
+    // CTU在图像中的水平、垂直像素坐标
+    int32_t xCtb = (CtbAddrInRs % m_sps->PicWidthInCtbsY)
+                   << m_sps->CtbLog2SizeY;
+    int32_t yCtb = (CtbAddrInRs / m_sps->PicWidthInCtbsY)
+                   << m_sps->CtbLog2SizeY;
+    hls_decode_neighbour(xCtb, yCtb, CtbAddrInTs);
+    cabac_init(CtbAddrInTs);
+    sao(xCtb >> m_sps->CtbLog2SizeY, yCtb >> m_sps->CtbLog2SizeY);
+
+    //s->deblock[CtbAddrInRs].beta_offset = s->sh.beta_offset;
+    //s->deblock[CtbAddrInRs].tc_offset = s->sh.tc_offset;
+    //s->filter_slice_edges[CtbAddrInRs] =
+    //s->sh.slice_loop_filter_across_slices_enabled_flag;
+    end_of_slice_segment_flag = false; //TODO ae(v);
+    end_of_slice_segment_flag =
+        hls_coding_quadtree(xCtb, yCtb, m_sps->CtbLog2SizeY, 0);
 
     // 当前片段还没有结束
     if (!end_of_slice_segment_flag) {
@@ -55,9 +69,140 @@ int SliceData::slice_segment_data(BitStream &bitStream, PictureBase &picture,
       bs->byte_alignment();
     }
     /* TODO YangJing 9999去掉  <24-10-22 09:11:36> */
+    CtbAddrInTs++;
   } while (!end_of_slice_segment_flag && CtbAddrInTs <= 9999);
   return 0;
 }
+
+static const unsigned av_mod_uintp2_c(unsigned a, unsigned p) {
+  return a & ((1U << p) - 1);
+}
+
+static inline int av_size_mult(size_t a, size_t b, size_t *r) {
+  size_t t = a * b;
+  /* Hack inspired from glibc: don't try the division if nelem and elsize
+     * are both less than sqrt(SIZE_MAX). */
+  if ((a | b) >= ((size_t)1 << (sizeof(size_t) * 4)) && a && t / a != b)
+    return -1;
+  *r = t;
+  return 0;
+}
+
+void *av_malloc(size_t size) {
+  void *ptr = NULL;
+  ptr = malloc(size);
+  if (!ptr && !size) {
+    size = 1;
+    ptr = av_malloc(1);
+  }
+  return ptr;
+}
+void *av_malloc_array(size_t nmemb, size_t size) {
+  size_t result;
+  if (av_size_mult(nmemb, size, &result) < 0) return NULL;
+  return av_malloc(result);
+}
+
+#define av_mod_uintp2 av_mod_uintp2_c
+int SliceData::ff_hevc_split_coding_unit_flag_decode(int ct_depth, int x0,
+                                                     int y0) {
+  int inc = 0, depth_left = 0, depth_top = 0;
+  int x0b = av_mod_uintp2(x0, m_sps->CtbLog2SizeY);
+  int y0b = av_mod_uintp2(y0, m_sps->CtbLog2SizeY);
+  int x_cb = x0 >> m_sps->log2_min_luma_coding_block_size;
+  int y_cb = y0 >> m_sps->log2_min_luma_coding_block_size;
+
+  uint8_t *tab_ct_depth =
+      (uint8_t *)av_malloc_array(m_sps->min_cb_height, m_sps->min_cb_width);
+
+  if (ctb_left_flag || x0b)
+    depth_left = tab_ct_depth[(y_cb)*m_sps->min_cb_width + x_cb - 1];
+  if (ctb_up_flag || y0b)
+    depth_top = tab_ct_depth[(y_cb - 1) * m_sps->min_cb_width + x_cb];
+
+  inc += (depth_left > ct_depth);
+  inc += (depth_top > ct_depth);
+
+  return cabac->get_cabac_inline(&cabac_state[elem_offset[SPLIT_CODING_UNIT_FLAG] + inc]);
+}
+
+int SliceData::hls_coding_quadtree(int x0, int y0, int log2_cb_size,
+                                   int cb_depth) {
+  const int cb_size = 1 << log2_cb_size;
+  int ret;
+  int split_cu;
+
+  //lc->ct_depth = cb_depth;
+  if (x0 + cb_size <= m_sps->width && y0 + cb_size <= m_sps->height &&
+      log2_cb_size > m_sps->log2_min_luma_coding_block_size) {
+    split_cu = ff_hevc_split_coding_unit_flag_decode(cb_depth, x0, y0);
+  } else {
+    split_cu = (log2_cb_size > m_sps->log2_min_luma_coding_block_size);
+  }
+  if (m_pps->cu_qp_delta_enabled_flag &&
+      log2_cb_size >= m_sps->CtbLog2SizeY - m_pps->diff_cu_qp_delta_depth) {
+    int is_cu_qp_delta_coded = 0;
+    int cu_qp_delta = 0;
+  }
+
+  if (header->cu_chroma_qp_offset_enabled_flag &&
+      log2_cb_size >=
+          m_sps->CtbLog2SizeY - m_pps->diff_cu_chroma_qp_offset_depth) {
+    int is_cu_chroma_qp_offset_coded = 0;
+  }
+
+  if (split_cu) {
+    int qp_block_mask =
+        (1 << (m_sps->CtbLog2SizeY - m_pps->diff_cu_qp_delta_depth)) - 1;
+    const int cb_size_split = cb_size >> 1;
+    const int x1 = x0 + cb_size_split;
+    const int y1 = y0 + cb_size_split;
+
+    int more_data = 0;
+
+    more_data = hls_coding_quadtree(x0, y0, log2_cb_size - 1, cb_depth + 1);
+    if (more_data < 0) return more_data;
+
+    if (more_data && x1 < m_sps->width) {
+      more_data = hls_coding_quadtree(x1, y0, log2_cb_size - 1, cb_depth + 1);
+      if (more_data < 0) return more_data;
+    }
+    if (more_data && y1 < m_sps->height) {
+      more_data = hls_coding_quadtree(x0, y1, log2_cb_size - 1, cb_depth + 1);
+      if (more_data < 0) return more_data;
+    }
+    if (more_data && x1 < m_sps->width && y1 < m_sps->height) {
+      more_data = hls_coding_quadtree(x1, y1, log2_cb_size - 1, cb_depth + 1);
+      if (more_data < 0) return more_data;
+    }
+
+    if (((x0 + (1 << log2_cb_size)) & qp_block_mask) == 0 &&
+        ((y0 + (1 << log2_cb_size)) & qp_block_mask) == 0) {
+      //lc->qPy_pred = lc->qp_y;
+    }
+
+    if (more_data)
+      return ((x1 + cb_size_split) < m_sps->width ||
+              (y1 + cb_size_split) < m_sps->height);
+    else
+      return 0;
+  } else {
+    //ret = hls_coding_unit(x0, y0, log2_cb_size);
+    if (ret < 0) return ret;
+    if ((!((x0 + cb_size) % (1 << (m_sps->CtbLog2SizeY))) ||
+         (x0 + cb_size >= m_sps->width)) &&
+        (!((y0 + cb_size) % (1 << (m_sps->CtbLog2SizeY))) ||
+         (y0 + cb_size >= m_sps->height))) {
+      //int end_of_slice_flag = ff_hevc_end_of_slice_flag_decode();
+      return !end_of_slice_flag;
+    } else {
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
 
 #define BOUNDARY_LEFT_SLICE (1 << 0)
 #define BOUNDARY_LEFT_TILE (1 << 1)
@@ -107,23 +252,21 @@ void SliceData::hls_decode_neighbour(int x_ctb, int y_ctb, int ctb_addr_ts) {
       boundary_flags |= BOUNDARY_UPPER_SLICE;
   }
 
-  int ctb_left_flag = ((x_ctb > 0) && (ctb_addr_in_slice > 0) &&
-                       !(boundary_flags & BOUNDARY_LEFT_TILE));
-  int ctb_up_flag = ((y_ctb > 0) && (ctb_addr_in_slice >= m_sps->ctb_width) &&
-                     !(boundary_flags & BOUNDARY_UPPER_TILE));
-  int ctb_up_right_flag =
+  ctb_left_flag = ((x_ctb > 0) && (ctb_addr_in_slice > 0) &&
+                   !(boundary_flags & BOUNDARY_LEFT_TILE));
+  ctb_up_flag = ((y_ctb > 0) && (ctb_addr_in_slice >= m_sps->ctb_width) &&
+                 !(boundary_flags & BOUNDARY_UPPER_TILE));
+  ctb_up_right_flag =
       ((y_ctb > 0) && (ctb_addr_in_slice + 1 >= m_sps->ctb_width) &&
        (m_pps->TileId[ctb_addr_ts] ==
         m_pps->TileId[m_pps->CtbAddrRsToTs[ctb_addr_rs + 1 -
                                            m_sps->ctb_width]]));
-  int ctb_up_left_flag =
-      ((x_ctb > 0) && (y_ctb > 0) &&
-       (ctb_addr_in_slice - 1 >= m_sps->ctb_width) &&
-       (m_pps->TileId[ctb_addr_ts] ==
-        m_pps->TileId[m_pps->CtbAddrRsToTs[ctb_addr_rs - 1 -
-                                           m_sps->ctb_width]]));
+  ctb_up_left_flag = ((x_ctb > 0) && (y_ctb > 0) &&
+                      (ctb_addr_in_slice - 1 >= m_sps->ctb_width) &&
+                      (m_pps->TileId[ctb_addr_ts] ==
+                       m_pps->TileId[m_pps->CtbAddrRsToTs[ctb_addr_rs - 1 -
+                                                          m_sps->ctb_width]]));
 }
-
 
 int SliceData::cabac_init_state() {
   int init_type = 2 - header->slice_type;
@@ -147,12 +290,85 @@ int SliceData::cabac_init_state() {
 
 int SliceData::load_states() { return 0; }
 
+//6.4.1 Derivation process for z-scan order block availability
+int SliceData::derivation_z_scan_order_block_availability(int xCurr, int yCurr,
+                                                          int xNbY, int yNbY) {
+  //int minBlockAddrCurr =
+  //MinTbAddrZs[xCurr >> MinTbLog2SizeY][yCurr >> MinTbLog2SizeY];
+
+  //int minBlockAddrN;
+  //if (xNbY < 0 || yNbY < 0 || xNbY >= m_sps->pic_width_in_luma_samples ||
+  //yNbY >= m_sps->pic_height_in_luma_samples) {
+  //minBlockAddrN = -1;
+  //} else {
+  //minBlockAddrN = MinTbAddrZs[xNbY >> MinTbLog2SizeY][yNbY >> MinTbLog2SizeY];
+  //}
+
+  //bool availableN = true;
+  //if (minBlockAddrN < 0 || minBlockAddrN > minBlockAddrCurr) {
+  //availableN = false;
+  //}
+
+  //#define MIN_TB_ADDR_ZS(x, y)                                                   \
+//  s->ps.pps->min_tb_addr_zs[(y) * (s->ps.sps->tb_mask + 2) + (x)]
+  //
+  //  int xCurr_ctb = xCurr >> s->ps.sps->CtbLog2SizeY;
+  //  int yCurr_ctb = yCurr >> s->ps.sps->CtbLog2SizeY;
+  //  int xN_ctb = xN >> s->ps.sps->CtbLog2SizeY;
+  //  int yN_ctb = yN >> s->ps.sps->CtbLog2SizeY;
+  //  if (yN_ctb < yCurr_ctb || xN_ctb < xCurr_ctb)
+  //    return 1;
+  //  else {
+  //    int Curr = MIN_TB_ADDR_ZS(
+  //        (xCurr >> s->ps.sps->log2_min_tb_size) & s->ps.sps->tb_mask,
+  //        (yCurr >> s->ps.sps->log2_min_tb_size) & s->ps.sps->tb_mask);
+  //    int N = MIN_TB_ADDR_ZS(
+  //        (xN >> s->ps.sps->log2_min_tb_size) & s->ps.sps->tb_mask,
+  //        (yN >> s->ps.sps->log2_min_tb_size) & s->ps.sps->tb_mask);
+  //    return N <= Curr;
+  //  }
+
+  return 0;
+}
+
+//6.5.2 Z-scan order array initialization process
+int SliceData::Z_scan_order_array_initialization() {
+  int MinTbAddrZs[32][32];
+  //for (int y = 0; y < (m_sps->PicHeightInCtbsY
+  //<< (m_sps->CtbLog2SizeY - m_sps->MinTbLog2SizeY));
+  //y++)
+  //for (int x = 0; x < (m_sps->PicWidthInCtbsY
+  //<< (m_sps->CtbLog2SizeY - m_sps->MinTbLog2SizeY));
+  //x++) {
+  //int tbX = (x << m_sps->MinTbLog2SizeY) >> m_sps->CtbLog2SizeY;
+  //int tbY = (y << m_sps->MinTbLog2SizeY) >> m_sps->CtbLog2SizeY;
+  //int ctbAddrRs = PicWidthInCtbsY * tbY + tbX;
+  //MinTbAddrZs[x][y] =
+  //CtbAddrRsToTs[ctbAddrRs]
+  //<< ((m_sps->CtbLog2SizeY - m_sps->MinTbLog2SizeY) * 2);
+  //int p = 0;
+  //for (int i = 0, p = 0; i < (CtbLog2SizeY − MinTbLog2SizeY); i++) {
+  //int m = 1 << i;
+  //p += (m & x ? m * m : 0) + (m & y ? 2 * m * m : 0);
+  //}
+  //MinTbAddrZs[x][y] += p;
+  //}
+  return 0;
+}
+
 // 9.3.2.1 General
-int SliceData::ff_hevc_cabac_init(int ctb_addr_ts) {
+int SliceData::cabac_init(int ctb_addr_ts) {
   // – 如果 CTU 是图块中的第一个 CTU，则以下规则适用：
   if (ctb_addr_ts == m_pps->CtbAddrRsToTs[header->slice_ctb_addr_rs]) {
-    // – 上下文变量的初始化过程按照第 9.3.2.2 节的规定被调用。
-    cabac->initialization_context_variables(header);
+    //9.3.2.6 Initialization process for the arithmetic decoding engine
+    cabac->initialization_decoding_engine();
+
+    // 当前片段不是依赖片段,或者启用了 Tile 并且当前块与前一个块不在同一个 Tile 中，则初始化 CABAC 的状态
+    if (header->dependent_slice_segment_flag == 0 ||
+        (m_pps->tiles_enabled_flag &&
+         m_pps->TileId[ctb_addr_ts] != m_pps->TileId[ctb_addr_ts - 1]))
+      // – 上下文变量的初始化过程按照第 9.3.2.2 节的规定被调用。
+      cabac->initialization_context_variables(header);
 
     // – 变量 StatCoeff[ k ] 设置为等于 0，因为 k 的范围为 0 到 3（含）。
     for (int i = 0; i < 4; i++)
@@ -160,12 +376,6 @@ int SliceData::ff_hevc_cabac_init(int ctb_addr_ts) {
 
     // – 按照第 9.3.2.3 节的规定调用调色板预测变量的初始化过程。
     cabac->initialization_palette_predictor_entries(m_sps, m_pps);
-
-    // 当前片段不是依赖片段,或者启用了 Tile 并且当前块与前一个块不在同一个 Tile 中，则初始化 CABAC 的状态
-    if (header->dependent_slice_segment_flag == 0 ||
-        (m_pps->tiles_enabled_flag &&
-         m_pps->TileId[ctb_addr_ts] != m_pps->TileId[ctb_addr_ts - 1]))
-      cabac_init_state();
 
     // 如果当前片段不是图像中的第一个片段，并且启用了熵编码同步
     if (!header->first_slice_segment_in_pic_flag &&
@@ -182,28 +392,21 @@ int SliceData::ff_hevc_cabac_init(int ctb_addr_ts) {
       //    load_states();
       //}
     }
-  }
-
-  else {
+  } else {
     // – 否则，如果 entropy_coding_sync_enabled_flag 等于 1 并且 CtbAddrInRs % PicWidthInCtbsY 等于0
     if ((m_pps->entropy_coding_sync_enabled_flag) &&
-        (ctb_addr_ts % m_sps->ctb_width == 0)) {
-      /* TODO YangJing  <24-10-24 07:49:28> */
-      // – 空间相邻块 T 的左上角亮度样本的位置 ( xNbT, yNbT )（图 9-2）为当前 CTB 左上角亮度样本的位置 ( x0, y0 ) 导出，如下所示：
-      //get_cabac_terminate();
-      //cabac_reinit();
-      //if (m_sps->ctb_width == 1)
-      //cabac_init_state();
-      //else
-      //load_states();
+            (ctb_addr_ts % m_sps->PicWidthInCtbsY == 0) ||
+        m_pps->tiles_enabled_flag &&
+            m_pps->TileId[ctb_addr_ts] != m_pps->TileId[ctb_addr_ts - 1]) {
+      // – 空间相邻块 T 的左上角亮度样本的位置 ( xNbT, yNbT )（图 9-2）为当前 CTB 左上角亮度样本的位置 ( x0, y0 ) 导出，如下所示： TODO
+
+      //– 调用第 6.4.1 节中指定的 z 扫描顺序的块的可用性推导过程，其中位置（xCurr，yCurr）设置为（x0，y0）并且相邻位置（xNbY，yNbY）设置为等于( xNbT, yNbT ) 作为输入，输出分配给 availableFlagT。 :TODO
+      //derivation_z_scan_order_block_availability();
+
+      //– 上下文变量、Rice 参数初始化状态和调色板预测器的同步过程 :TODO
     }
 
     // 或 TileId[ CtbAddrInTs ] 不等于 TileId[ CtbAddrRsToTs[ CtbAddrInRs − 1 ] ]，则适用以下规则：
-    if (m_pps->tiles_enabled_flag &&
-        m_pps->TileId[ctb_addr_ts] != m_pps->TileId[ctb_addr_ts - 1]) {
-      std::cout << "Into -> " << __FUNCTION__ << "():" << __LINE__ << std::endl;
-      exit(0);
-    }
 
     //– 否则，当 CtbAddrInRs 等于 slice_segment_address 且 dependent_slice_segment_flag 等于 1 时
     if (CtbAddrInRs == header->slice_segment_address &&
@@ -221,9 +424,6 @@ int SliceData::coding_tree_unit() {
   // CTU在图像中的水平、垂直像素坐标
   int32_t xCtb = (CtbAddrInRs % m_sps->PicWidthInCtbsY) << m_sps->CtbLog2SizeY;
   int32_t yCtb = (CtbAddrInRs / m_sps->PicWidthInCtbsY) << m_sps->CtbLog2SizeY;
-  /* TODO YangJing 有问题这里函数调用 <24-10-24 09:07:17> */
-  //hls_decode_neighbour(xCtb, yCtb, CtbAddrInTs);
-  ff_hevc_cabac_init(CtbAddrInTs);
 
   // 样值自适应偏移（SAO，Sample Adaptive Offset）
   if (header->slice_sao_luma_flag || header->slice_sao_chroma_flag)

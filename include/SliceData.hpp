@@ -45,13 +45,16 @@ class SliceData {
   int end_of_tiles_x = 0;
   void hls_decode_neighbour(int x_ctb, int y_ctb, int ctb_addr_ts);
 
-  int ff_hevc_cabac_init(int ctb_addr_ts);
+  int cabac_init(int ctb_addr_ts);
 
   int ff_init_cabac_decoder();
   int cabac_init_state();
   int load_states();
+  int Z_scan_order_array_initialization();
+  int derivation_z_scan_order_block_availability(int xCurr, int yCurr, int xNbY,
+                                                 int yNbY);
 
-  int cabac_state[HEVC_CONTEXTS] = {0};
+  uint8_t cabac_state[HEVC_CONTEXTS] = {0};
   int StatCoeff[4] = {0};
 
   int parseSaoMerge();
@@ -89,6 +92,14 @@ class SliceData {
   PictureBase *pic = nullptr;
 
   int slice_segment_data(BitStream &bs, PictureBase &pic, SPS &sps, PPS &pps);
+
+  int hls_coding_quadtree(int x0, int y0, int log2_cb_size, int cb_depth);
+  int ff_hevc_split_coding_unit_flag_decode(int ct_depth, int x0, int y0);
+
+  int ctb_left_flag = 0;
+  int ctb_up_flag = 0;
+  int ctb_up_right_flag = 0;
+  int ctb_up_left_flag = 0;
 
   /* process表示处理字段，具体处理手段有推流或解码操作 */
   int process_mb_skip_run(int32_t &prevMbSkipped);

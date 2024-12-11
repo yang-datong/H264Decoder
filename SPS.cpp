@@ -252,7 +252,19 @@ int SPS::extractParameters(BitStream &bitStream, VPS vpss[MAX_SPS_COUNT]) {
 
   // 亮度编码块的最小和最大尺寸
   MinCbLog2SizeY = log2_min_luma_coding_block_size = bs->readUE() + 3;
+  min_cb_width = width >> log2_min_luma_coding_block_size;
   cout << "\t编码的块大小:" << log2_min_luma_coding_block_size << endl;
+
+  int log2_min_pu_size = log2_min_luma_coding_block_size - 1;
+
+  min_cb_width = width >> log2_min_luma_coding_block_size;
+  min_cb_height = height >> log2_min_luma_coding_block_size;
+  min_tb_width = width >> log2_min_luma_transform_block_size;
+  min_tb_height = height >> log2_min_luma_transform_block_size;
+  min_pu_width = width >> log2_min_pu_size;
+  min_pu_height = height >> log2_min_pu_size;
+  tb_mask = (1 << (CtbLog2SizeY - log2_min_luma_transform_block_size)) - 1;
+  qp_bd_offset = 6 * (bit_depth_luma - 8);
 
   log2_diff_max_min_luma_coding_block_size = bs->readUE();
   cout << "\t编码变换块大小:" << log2_diff_max_min_luma_coding_block_size

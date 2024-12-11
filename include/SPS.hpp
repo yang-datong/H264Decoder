@@ -76,6 +76,16 @@ class SPS {
 
   int MinCbSizeY = 0;
   int32_t MinCbLog2SizeY = 0;
+  int min_cb_width =0;
+  int min_cb_height = 0;
+  int min_tb_width = 0;
+  int min_tb_height = 0;
+  int min_pu_width = 0;
+  int min_pu_height = 0;
+  int tb_mask = 0;
+  int qp_bd_offset = 0;
+
+
   int32_t CtbSizeY = 0;
   int PicWidthInMinCbsY = 0;
   int PicWidthInCtbsY = 0;
