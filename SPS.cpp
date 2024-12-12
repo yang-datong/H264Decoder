@@ -40,7 +40,7 @@ void SPS::vui_parameters(BitStream &bitStream) {
       cout << "\t\t传输特性（如线性、伽马等）:" << (int)transfer_characteristics
            << endl;
       matrix_coefficients = bitStream.readUn(8);
-      cout << "\t\t矩阵系数，用于颜色空间转换:" << (int)matrix_coefficients
+      cout << "\t\tRGB->YUV转换系数:" << (int)matrix_coefficients
            << endl;
     }
   }
@@ -120,10 +120,10 @@ void SPS::vui_parameters(BitStream &bitStream) {
     }
   }
 
-  int32_t fps = 0;
+  int32_t max_fps = 0;
   if (vui_parameters_present_flag && timing_info_present_flag)
-    fps = time_scale / num_units_in_tick / 2;
-  cout << "\t\tfps:" << fps << endl;
+    max_fps = ceil( time_scale / ( 2 * num_units_in_tick ) ); //MaxFPS (D-2)
+  cout << "\t\tmax_fps:" << max_fps << endl;
   cout << "\t }" << endl;
 }
 
