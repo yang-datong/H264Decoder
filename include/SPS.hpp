@@ -85,7 +85,6 @@ class SPS {
   int tb_mask = 0;
   int qp_bd_offset = 0;
 
-
   int32_t CtbSizeY = 0;
   int PicWidthInMinCbsY = 0;
   int PicWidthInCtbsY = 0;
@@ -334,11 +333,45 @@ class SPS {
   bool video_full_range_flag = 0;
   /* 指示是否存在颜色描述信息 */
   bool colour_description_present_flag = 0;
-  /* 指示颜色原色的类型（如BT.709、BT.601等） */
+  /* 指示颜色原色的类型（如BT.709、BT.601,取值和含义是根据ITU-T H.273,范围为[0,255]）:
+1.  BT.709
+2.  未指定（图像特性和颜色空间未定义）
+4.  BT.470 System M (NTSC)
+5.  BT.470 System B, G (PAL & SECAM)
+6.  BT.601-6 625
+7.  BT.601-6 525
+8.  SMPTE 240M
+9.  Generic film (色彩处理用于电影)
+10. BT.2020 Non-constant luminance
+11. BT.2020 Constant luminance
+12. SMPTE ST 2085
+13. Chromaticity-derived non-constant luminance
+14. Chromaticity-derived constant luminance
+15. BT.2100
+16. SMPTE ST 428
+17. Adobe RGB
+18. SMPTE RP 431
+19. SMPTE EG 432
+20. EBU Tech. 3213-E
+21. SMPTE ST 431-2
+22. SMPTE ST 432-1
+23. EOTF SMPTE ST 2084 for 10, 12, 14, and 16 bit systems
+24. EOTF ARIB STD-B67 (HLG) * */
   uint8_t colour_primaries = 0;
   /* 指示传输特性（如线性、伽马等） */
   uint8_t transfer_characteristics = 0;
-  /* 指示矩阵系数，用于颜色空间转换 */
+  /* 指示矩阵系数，指定了颜色空间转换(RGB->YCbCr)的具体矩阵系数: 
+0. 矩阵系数是根据色彩原色和白点的特性推导的（Identity matrix，适用于RGB）
+1. BT.709
+2. 未指定
+4. FCC
+5. BT.470 System B, G
+6. BT.601
+7. SMPTE 240M
+8. YCgCo
+9. BT.2020 非恒定亮度
+10. BT.2020 恒定亮度
+14. BT.2100 ICtCp*/
   uint8_t matrix_coefficients = 0;
   /* 指示是否存在色度样本位置的信息 */
   bool chroma_loc_info_present_flag = 0;

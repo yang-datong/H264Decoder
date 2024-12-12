@@ -62,6 +62,7 @@ class SEI {
   void pic_timing();
 
   void user_data_unregistered();
+  void time_code();
 };
 
 #endif /* end of include guard: SEI_HPP_TGZDOMB3 */

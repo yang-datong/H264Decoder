@@ -146,6 +146,16 @@ void SPS::vui_parameters() {
   //if (vui_parameters_present_flag && timing_info_present_flag)
   //fps = time_scale / num_units_in_tick / 2;
   //cout << "\t\tfps:" << fps << endl;
+  /* TODO YangJing 要移动到其他地方去,暂时放在这里(还有问题) <24-12-02 17:17:35> */
+  int MaxFPS = 0;
+  //if ((field_seq_flag == 1 || frame_field_info_present_flag == 1) &&
+  //(1 <= pic_struct <= 6 || 9 < pic_struct < 12)) {
+  //MaxFPS =
+  //ceil(vui_time_scale / ((1 + 1) * vui_num_units_in_tick));
+  //}else{
+  MaxFPS = ceil(vui_time_scale / ((1 + 0) * vui_num_units_in_tick));
+  //}
+  cout << "\t\tfps:" << MaxFPS << endl;
   cout << "\t }" << endl;
 }
 

@@ -118,6 +118,22 @@ void SEI::pic_timing() {
     case 8:
       pic_struct_str = "frame tripling";
       break;
+    case 9:
+      pic_struct_str =
+          "Top field paired with previous bottom field in output order";
+      break;
+    case 10:
+      pic_struct_str =
+          "Bottom field paired with previous top field in output order";
+      break;
+    case 11:
+      pic_struct_str =
+          "Top field paired with next bottom field in output order";
+      break;
+    case 12:
+      pic_struct_str =
+          "Bottom field paired with next top field in output order";
+      break;
     }
     std::cout << "\t当前图片的结构类型:" << pic_struct_str << std::endl;
 
@@ -181,6 +197,55 @@ void SEI::user_data_unregistered() {
   if (!_text.empty()) std::cout << "\tuser_data:" << _text << std::endl;
 }
 
+void SEI::time_code() {
+  BitStream &bs = *_bs;
+  int num_clock_ts = bs.readUn(2);
+  int *clock_timestamp_flag = new int[num_clock_ts]{0};
+  int *units_field_based_flag = new int[num_clock_ts]{0};
+  int *counting_type = new int[num_clock_ts]{0};
+  int *full_timestamp_flag = new int[num_clock_ts]{0};
+  int *discontinuity_flag = new int[num_clock_ts]{0};
+  int *cnt_dropped_flag = new int[num_clock_ts]{0};
+  int *n_frames = new int[num_clock_ts]{0};
+  int *seconds_value = new int[num_clock_ts]{0};
+  int *minutes_value = new int[num_clock_ts]{0};
+  int *hours_value = new int[num_clock_ts]{0};
+  int *seconds_flag = new int[num_clock_ts]{0};
+  int *minutes_flag = new int[num_clock_ts]{0};
+  int *hours_flag = new int[num_clock_ts]{0};
+  int *time_offset_length = new int[num_clock_ts]{0};
+  /* TODO YangJing dele mem <24-12-02 17:02:34> */
+  for (int i = 0; i < num_clock_ts; i++) {
+    clock_timestamp_flag[i] = bs.readUn(1);
+    if (clock_timestamp_flag[i]) {
+      units_field_based_flag[i] = bs.readUn(1);
+      counting_type[i] = bs.readUn(5);
+      full_timestamp_flag[i] = bs.readUn(1);
+      discontinuity_flag[i] = bs.readUn(1);
+      cnt_dropped_flag[i] = bs.readUn(1);
+      n_frames[i] = bs.readUn(9);
+      if (full_timestamp_flag[i]) {
+        seconds_value[i] /* 0..59 */ = bs.readUn(6);
+        minutes_value[i] /* 0..59 */ = bs.readUn(6);
+        hours_value[i] /* 0..23 */ = bs.readUn(5);
+      } else {
+        seconds_flag[i] = bs.readUn(1);
+        if (seconds_flag[i]) {
+          seconds_value[i] /* 0..59 */ = bs.readUn(6);
+          minutes_flag[i] = bs.readUn(1);
+          if (minutes_flag[i]) {
+            minutes_value[i] /* 0..59 */ = bs.readUn(6);
+            hours_flag[i] = bs.readUn(1);
+            if (hours_flag[i]) hours_value[i] /* 0..23 */ = bs.readUn(5);
+          }
+        }
+      }
+      time_offset_length[i] = bs.readUn(5);
+      //if (time_offset_length[i] > 0) time_offset_value[i] i(v)
+    }
+  }
+}
+
 void SEI::sei_payload() {
   /* TODO YangJing sei_payload <24-09-11 17:15:28> */
   if (payloadType == 0)
@@ -221,8 +286,11 @@ void SEI::sei_payload() {
   //    progressive_refinement_segment_end(payloadSize);
   //  else if (payloadType == 18)
   //    motion_constrained_slice_group_set(payloadSize);
+  else if (payloadType == 136)
+    time_code();
   else
-    std::cerr << "Unrecognized type:" << payloadType << std::endl;
+    std::cerr << "Unrecognized type:" << payloadType << std::endl; 
+
   //reserved_sei_message();
   if (!_bs->byte_aligned()) {
     _bs->readU1();
