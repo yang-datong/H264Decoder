@@ -25,7 +25,7 @@ int PictureBase::decoding_picture_order_count(uint32_t pic_order_cnt_type) {
     //1:使用增量计数来计算POC(复杂，如B帧和P帧混合的情况)
     ret = decoding_picture_order_count_type_1(m_parent->m_picture_previous);
   else if (pic_order_cnt_type == 2)
-    //2:使用帧号来计算POC(简单，如仅有I帧和P帧的情况)
+    //2:使用帧号来计算POC(简单，如仅有I帧和P帧的情况，或baseline配置)
     ret = decoding_picture_order_count_type_2(m_parent->m_picture_previous);
   RET(ret);
 
@@ -209,6 +209,7 @@ int PictureBase::decoding_picture_order_count_type_2(
 
   int32_t prevFrameNumOffset = 0;
   if (header->IdrPicFlag == 0) {
+    // 前一个参考帧是否执行了 MMCO (Memory Management Control Operation) 命令。它会将长期参考帧移除，并将短期参考帧标记为非参考帧。
     if (picture_previous->mmco_5_flag)
       prevFrameNumOffset = 0;
     else
@@ -229,10 +230,12 @@ int PictureBase::decoding_picture_order_count_type_2(
   int32_t tempPicOrderCnt = 0;
   /* IDR 帧是解码参考点，通常在视频序列的开始重置POC计数 */
   if (header->IdrPicFlag) tempPicOrderCnt = 0;
-  /* 非参考帧的 POC 值总是比它的 frame_num 的两倍稍微小一点，使得非参考帧（比如 B 帧）可以插入其中（NOTE:实际上一般含有B帧的GOP不会在这里处理）*/
+
+  /* 非参考帧的 POC 值设置为奇数，可以插入到参考帧的 POC 值之间(偶数)，为了构建出正确的显示顺序 */
   else if (m_slice->slice_header->nal_ref_idc == 0)
     tempPicOrderCnt = 2 * (FrameNumOffset + frame_num) - 1;
-  /* 参考帧，POC 值为2倍帧号，这样做是为了给B帧插入留下空间 */
+
+  /* 参考帧可能会被后续帧用于预测，因此它们的 POC 值需要按照一定的规律排列，设为偶数，方便非参考帧插入 */
   else
     tempPicOrderCnt = 2 * (FrameNumOffset + frame_num);
 
