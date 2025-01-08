@@ -264,6 +264,7 @@ int SPS::extractParameters(BitStream &bs) {
   /* 计算最大帧号和最大图像顺序计数 低位 (7-10,7-11)*/
   MaxFrameNum = pow(log2_max_frame_num_minus4 + 4, 2);
   MaxPicOrderCntLsb = pow(log2_max_pic_order_cnt_lsb_minus4 + 4, 2);
+  cout << "\t最大帧号:" << MaxFrameNum << endl;
 
   /* 当 max_num_ref_frames 等于 0 时，slice_type 应等于 I或SI Slice -> page 87 */
   max_num_ref_frames = bs.readUE();

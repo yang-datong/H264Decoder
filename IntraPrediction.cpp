@@ -669,6 +669,8 @@ int PictureBase::transform_decoding_for_residual_8x8_blocks(
     int32_t d[8][8], int32_t (&r)[8][8]) {
   int32_t g[8][8] = {{0}}, m[8][8] = {{0}};
 
+  // NOTE: 二维IDCT变换: 先进行行变换，然后进行列变换(先列再行也可以,但先行后列是为了内存寻址考虑, 这样CPU处理会更加快,属于一种性能优化策略)
+
   /* 行变换 */
   for (int32_t i = 0; i < 8; i++) {
     int32_t ei0 = d[i][0] + d[i][4];
