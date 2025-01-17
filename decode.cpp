@@ -1,5 +1,9 @@
 #include "decode.hpp"
+#include "BitStream.hpp"
+#include "Frame.hpp"
+#include "GOP.hpp"
 #include "Image.hpp"
+#include "Nalu.hpp"
 #include <ostream>
 
 #ifdef DISABLE_COUT
@@ -7,38 +11,26 @@
   if (false) std::cout
 #endif
 
+int decode(Nalu &nalu, int &number);
+
+void printfNALBytes(int &number, const Nalu &nalu);
+void printfEBSPBytes(int number, const Nalu::EBSP &ebsp);
+void printfRBSPBytes(int number, const Nalu::RBSP &rbsp);
+int outputFrame(GOP *gop, Frame *frame);
+int flushFrame(GOP *gop, Frame *&frame, bool isFromIDR);
+
 int32_t g_Width = 0, g_Height = 0;
 int32_t g_PicNumCnt = 0;
 
 //NOTE: 由外部控制
 OUTPUT_FILE_TYPE g_OutputFileType = NON;
 
-AnnexBReader *reader = nullptr;
+AnnexBReader *g_reader = nullptr;
 GOP *gop = nullptr;
 Frame *frame = nullptr;
 BitStream *bitStream = nullptr;
 
-int decode_start() {
-  int result;
-  int number = 0;
-  /* 这里只对文件进行解码，所以只有AnnesB格式 */
-  while (true) {
-    /* 3. 一个NUL类，用于存储NUL数据，它与NUL具有同样的数据结构 */
-    Nalu nalu;
-    /* 3. 循环读取一个个的Nalu */
-    result = reader->readNalu(nalu);
-    if (result == 1 || result == 0) {
-      decode(nalu, number);
-
-      /* 已读取完成所有NAL */
-      if (result == 0) break;
-    } else {
-      RET(-1);
-      break;
-    }
-    cout << endl;
-  }
-
+int decode_flush() {
   /* 最后一个解码帧 */
   flushFrame(gop, frame, true);
 
@@ -54,7 +46,6 @@ int decode_start() {
   return 0;
 }
 
-//NOTE: 外部导出函数
 int decode(uint8_t *buffer, int buffer_len) {
   AnnexBReader reader;
 
@@ -197,12 +188,23 @@ int decode(Nalu &nalu, int &number) {
   return 0;
 }
 
-int decode_init(string &filePath, OUTPUT_FILE_TYPE outputFileType) {
+int decode_init() {
+  g_OutputFileType = NON;
+  /* 2. 创建一个GOP用于存放解码后的I、P、B帧序列 */
+  gop = new GOP();
+  frame = gop->m_dpb[0];
+  return 0;
+}
+
+int decode_init(AnnexBReader *&reader, string &filePath,
+                OUTPUT_FILE_TYPE outputFileType) {
   g_OutputFileType = outputFileType;
   /* 1. 打开文件、读取NUL、存储NUL的操作 */
-  reader = new AnnexBReader(filePath);
+  g_reader = new AnnexBReader(filePath);
+  if (g_reader == nullptr) return -1;
+  if (g_reader->open()) return -1;
 
-  RET(reader->open());
+  reader = g_reader;
 
   /* 2. 创建一个GOP用于存放解码后的I、P、B帧序列 */
   gop = new GOP();
@@ -211,10 +213,10 @@ int decode_init(string &filePath, OUTPUT_FILE_TYPE outputFileType) {
 }
 
 void decode_relase() {
-  reader->close();
-  delete gop;
-  delete bitStream;
-  delete reader;
+  g_reader->close();
+  if (gop) delete gop;
+  if (bitStream) delete bitStream;
+  if (g_reader) delete g_reader;
 }
 
 /* 清空单帧，若当IDR解码完成时，则对整个GOP进行flush */

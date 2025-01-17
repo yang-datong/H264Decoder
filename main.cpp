@@ -1,4 +1,6 @@
+#include "Nalu.hpp"
 #include "decode.hpp"
+#include <iostream>
 
 int main(int argc, char *argv[]) {
   std::string filePath;
@@ -35,10 +37,30 @@ int main(int argc, char *argv[]) {
     //filePath = "./test/demo_10_frames_temporal_direct.h264";
   }
 
+  int result;
   //OUTPUT_FILE_TYPE g_OutputFileType = YUV;
   OUTPUT_FILE_TYPE g_OutputFileType = BMP;
-  decode_init(filePath, g_OutputFileType);
-  decode_start();
+  AnnexBReader *reader = nullptr;
+  RET(decode_init(reader, filePath, g_OutputFileType));
+  int number = 0;
+  /* 这里只对文件进行解码，所以只有AnnesB格式 */
+  while (true) {
+    /* 3. 一个NUL类，用于存储NUL数据，它与NUL具有同样的数据结构 */
+    Nalu nalu;
+    /* 3. 循环读取一个个的Nalu */
+    result = reader->readNalu(nalu);
+    if (result == 1 || result == 0) {
+      decode(nalu, number);
+
+      /* 已读取完成所有NAL */
+      if (result == 0) break;
+    } else {
+      RET(-1);
+      break;
+    }
+    cout << endl;
+  }
+  decode_flush();
   decode_relase();
   return 0;
 }
