@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
       RET(-1);
       break;
     }
-    cout << endl;
+    //cout << endl;
   }
   decode_flush();
   decode_relase();
