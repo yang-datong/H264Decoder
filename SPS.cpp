@@ -3,6 +3,11 @@
 #include <iostream>
 #include <ostream>
 
+#ifdef DISABLE_COUT
+#define cout                                                                   \
+  if (false) std::cout
+#endif
+
 /* TODO YangJing 这个函数后续好好看一下 <24-09-13 10:16:29> */
 void SPS::vui_parameters(BitStream &bitStream) {
   cout << "\tVUI -> {" << endl;
@@ -40,8 +45,7 @@ void SPS::vui_parameters(BitStream &bitStream) {
       cout << "\t\t传输特性（如线性、伽马等）:" << (int)transfer_characteristics
            << endl;
       matrix_coefficients = bitStream.readUn(8);
-      cout << "\t\tRGB->YUV转换系数:" << (int)matrix_coefficients
-           << endl;
+      cout << "\t\tRGB->YUV转换系数:" << (int)matrix_coefficients << endl;
     }
   }
 
@@ -122,7 +126,7 @@ void SPS::vui_parameters(BitStream &bitStream) {
 
   int32_t max_fps = 0;
   if (vui_parameters_present_flag && timing_info_present_flag)
-    max_fps = ceil( time_scale / ( 2 * num_units_in_tick ) ); //MaxFPS (D-2)
+    max_fps = ceil(time_scale / (2 * num_units_in_tick)); //MaxFPS (D-2)
   cout << "\t\tmax_fps:" << max_fps << endl;
   cout << "\t }" << endl;
 }

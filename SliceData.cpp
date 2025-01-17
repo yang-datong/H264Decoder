@@ -8,6 +8,11 @@
 #include <cstdint>
 #include <cstdlib>
 
+#ifdef DISABLE_COUT
+#define cout                                                                   \
+  if (false) std::cout
+#endif
+
 /* 7.3.4 Slice data syntax */
 int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
                               SPS &sps, PPS &pps) {
@@ -19,6 +24,7 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
   m_pps = &pps;
   MbaffFrameFlag = header->MbaffFrameFlag;
 
+#ifndef SKIP_MB_DECODE
   /* 1. 对于Slice的首个熵解码，则需要初始化CABAC模型 */
   initCABAC();
 
@@ -28,10 +34,12 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
   /* 宏块的初始地址（或宏块索引），在A Frame = A Slice的情况下，初始地址应该为0 */
   pic->CurrMbAddr = CurrMbAddr =
       header->first_mb_in_slice * (1 + MbaffFrameFlag);
+#endif
 
   /* 8.2 Slice decoding process */
   slice_decoding_process();
 
+#ifndef SKIP_MB_DECODE
   //----------------------- 开始对Slice分割为MacroBlock进行处理 ----------------------------
   // TODO: 如果是单帧=单Slice属于同一个Slice Gruop的情况，那么这里就是遍历Slice的每个宏块，反之，不清楚，没遇到过这种情况
   bool moreDataFlag = true;
@@ -96,6 +104,7 @@ int SliceData::parseSliceData(BitStream &bitStream, PictureBase &picture,
     /* 计算下一个宏块的地址 */
     CurrMbAddr = NextMbAddress(CurrMbAddr, header);
   } while (moreDataFlag);
+#endif
   slice_number++;
   return 0;
 }

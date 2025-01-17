@@ -4,6 +4,7 @@
 #include <cstring>
 #include <ios>
 
+AnnexBReader::AnnexBReader() {}
 AnnexBReader::~AnnexBReader() { close(); }
 
 int AnnexBReader::open() {

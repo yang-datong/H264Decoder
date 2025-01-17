@@ -19,11 +19,13 @@ class AnnexBReader {
 
   bool checkStartLen(int &startCodeLen, uint8_t *buffer, int bufferLen);
 
+ public:
   bool findStartcode(int &startcodeLen, uint8_t *buffer, int bufferLen);
 
  public:
-  AnnexBReader(std::string &filePath) : _filePath(filePath) {}
+  AnnexBReader();
   ~AnnexBReader();
+  AnnexBReader(std::string &filePath) : _filePath(filePath) {}
 
   /* 只是打开文件 */
   int open();

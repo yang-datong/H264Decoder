@@ -18,9 +18,12 @@ void Frame::decode() {}
 int Frame::decode(BitStream &bitStream, Frame *(&dpb)[16], GOP &gop) {
   slice->decode(bitStream, dpb, gop.m_spss[gop.curr_sps_id],
                 gop.m_ppss[gop.curr_pps_id], this);
+
+#ifndef SKIP_MB_DECODE
   // 去块滤波器
   DeblockingFilter deblockingFilter;
   deblockingFilter.deblocking_filter_process(&m_picture_frame);
+#endif
   return 0;
 }
 

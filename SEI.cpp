@@ -5,6 +5,11 @@
 #include <ostream>
 #include <string>
 
+#ifdef DISABLE_COUT
+#define cout                                                                   \
+  if (false) cout
+#endif
+
 void SEI::sei_message() {
   payloadType = 0;
 
@@ -66,13 +71,13 @@ void SEI::pic_timing() {
 
   if (CpbDpbDelaysPresentFlag) {
     cpb_removal_delay = _bs->readUn(log2(sps->MaxFrameNum));
-    std::cout << "\t当前图片从 Coded Picture Buffer (CPB) "
-                 "移除的延迟时间，以时钟计数为单位:"
-              << cpb_removal_delay << std::endl;
+    cout << "\t当前图片从 Coded Picture Buffer (CPB) "
+            "移除的延迟时间，以时钟计数为单位:"
+         << cpb_removal_delay << std::endl;
     dpb_output_delay = _bs->readUn(log2(sps->MaxFrameNum));
-    std::cout << "\t当前图片从 Decoded Picture Buffer (DPB) "
-                 "输出的延迟时间，以时钟计数为单位:"
-              << dpb_output_delay << std::endl;
+    cout << "\t当前图片从 Decoded Picture Buffer (DPB) "
+            "输出的延迟时间，以时钟计数为单位:"
+         << dpb_output_delay << std::endl;
   }
 
   /* clock_timestamp_flag[i]等于1指示存在并且紧随其后的多个时钟时间戳语法元素。 
@@ -119,36 +124,34 @@ void SEI::pic_timing() {
       pic_struct_str = "frame tripling";
       break;
     }
-    std::cout << "\t当前图片的结构类型:" << pic_struct_str << std::endl;
+    cout << "\t当前图片的结构类型:" << pic_struct_str << std::endl;
 
     for (int i = 0; i < NumClockTS[pic_struct]; i++) {
       clock_timestamp_flag[i] = _bs->readU1();
       if (clock_timestamp_flag[i]) {
         ct_type = _bs->readUn(2);
-        std::cout << "\t当前图片的时钟类型:" << ct_type << std::endl;
+        cout << "\t当前图片的时钟类型:" << ct_type << std::endl;
         nuit_field_based_flag = _bs->readU1();
-        std::cout << "\t当前图片是否基于场:" << nuit_field_based_flag
-                  << std::endl;
+        cout << "\t当前图片是否基于场:" << nuit_field_based_flag << std::endl;
         counting_type = _bs->readUn(5);
-        std::cout << "\t时间戳的计数方法，取值范围：0 到 7:" << counting_type
-                  << std::endl;
+        cout << "\t时间戳的计数方法，取值范围：0 到 7:" << counting_type
+             << std::endl;
         full_timestamp_flag = _bs->readU1();
-        std::cout << "\t是否提供完整的时间戳信息，如果为真，则提供完整的时间戳"
-                     "（包括秒、分钟和小时）:"
-                  << full_timestamp_flag << std::endl;
+        cout << "\t是否提供完整的时间戳信息，如果为真，则提供完整的时间戳"
+                "（包括秒、分钟和小时）:"
+             << full_timestamp_flag << std::endl;
         discontinuity_flag = _bs->readU1();
-        std::cout << "\t时间戳是否存在不连续性:" << discontinuity_flag
-                  << std::endl;
+        cout << "\t时间戳是否存在不连续性:" << discontinuity_flag << std::endl;
         cnt_dropped_flag = _bs->readU1();
-        std::cout << "\t指示是否存在丢帧现象:" << cnt_dropped_flag << std::endl;
+        cout << "\t指示是否存在丢帧现象:" << cnt_dropped_flag << std::endl;
         n_frames = _bs->readUn(8);
-        std::cout << "\t当前时间戳周期内的帧数:" << n_frames << std::endl;
+        cout << "\t当前时间戳周期内的帧数:" << n_frames << std::endl;
         if (full_timestamp_flag) {
           seconds_value = _bs->readUn(6) /* 0..59 */;
           minutes_value = _bs->readUn(6) /* 0..59 */;
           hours_value = _bs->readUn(5) /* 0..23 */;
-          std::cout << "\t当前时间戳:" << hours_value << ":" << minutes_value
-                    << ":" << seconds_value << std::endl;
+          cout << "\t当前时间戳:" << hours_value << ":" << minutes_value << ":"
+               << seconds_value << std::endl;
         } else {
           seconds_flag = _bs->readU1();
           if (seconds_flag) {
@@ -163,8 +166,7 @@ void SEI::pic_timing() {
         }
         if (sps->time_offset_length > 0) {
           time_offset = _bs->readUn(sps->time_offset_length);
-          std::cout << "\t时间偏移量，用于调整时间戳:" << time_offset
-                    << std::endl;
+          cout << "\t时间偏移量，用于调整时间戳:" << time_offset << std::endl;
         }
       }
     }
@@ -178,7 +180,7 @@ void SEI::user_data_unregistered() {
     char user_data_payload_byte = _bs->readUn(8);
     _text += user_data_payload_byte;
   }
-  if (!_text.empty()) std::cout << "\tuser_data:" << _text << std::endl;
+  if (!_text.empty()) cout << "\tuser_data:" << _text << std::endl;
 }
 
 void SEI::sei_payload() {
@@ -240,5 +242,6 @@ int SEI::extractParameters(SPS &sps) {
     sei_message();
   while (_bs->more_rbsp_data());
   _bs->rbsp_trailing_bits();
+  delete _bs;
   return 0;
 }

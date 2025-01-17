@@ -2,6 +2,11 @@
 #include "BitStream.hpp"
 #include <iostream>
 
+#ifdef DISABLE_COUT
+#define cout                                                                   \
+  if (false) std::cout
+#endif
+
 using namespace std;
 
 int PPS::extractParameters(BitStream &bs, uint32_t chroma_format_idc) {

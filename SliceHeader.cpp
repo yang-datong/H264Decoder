@@ -5,6 +5,11 @@
 #include <cstdint>
 #include <cstring>
 
+#ifdef DISABLE_COUT
+#define cout                                                                   \
+  if (false) std::cout
+#endif
+
 SliceHeader::~SliceHeader() {
   DELETE(mapUnitToSliceGroupMap);
   DELETE(MbToSliceGroupMap);

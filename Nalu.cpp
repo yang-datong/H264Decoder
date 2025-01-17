@@ -88,6 +88,7 @@ int Nalu::parseRBSP(EBSP &ebsp, RBSP &rbsp) {
     // 如果不是防竞争字节序就依次放入到rbspbuff
   }
   rbsp.buf = rbspBuffer;
+  delete bs;
   return 0;
 }
 

@@ -30,7 +30,7 @@ int PictureBase::decoding_picture_order_count(uint32_t pic_order_cnt_type) {
   RET(ret);
 
   /* 对于不同编码类型，需要进一步取舍当前图像的最终 POC */
-  cout << "\tPOC:" << picOrderCntFunc(this) << endl;
+  //cout << "\tPOC:" << picOrderCntFunc(this) << endl;
   return 0;
 }
 
