@@ -1,4 +1,5 @@
 #include "AnnexBReader.hpp"
+#include "BitStream.hpp"
 #include "Frame.hpp"
 #include "GOP.hpp"
 #include "Image.hpp"
@@ -18,6 +19,8 @@ void printfEBSPBytes(int number, const Nalu::EBSP &ebsp);
 void printfRBSPBytes(int number, const Nalu::RBSP &rbsp);
 int outputFrame(GOP *gop, Frame *frame);
 int flushFrame(GOP *gop, Frame *&frame, bool isFromIDR);
+int decode(Nalu &nalu, GOP *gop, BitStream *bitStream, Frame *&frame,
+           int &number);
 
 int main(int argc, char *argv[]) {
   /* 关闭io输出同步 */
@@ -72,129 +75,10 @@ int main(int argc, char *argv[]) {
   while (true) {
     /* 3. 一个NUL类，用于存储NUL数据，它与NUL具有同样的数据结构 */
     Nalu nalu;
-    Nalu::EBSP ebsp;
-    Nalu::RBSP rbsp;
-    SEI sei;
     /* 3. 循环读取一个个的Nalu */
     result = reader.readNalu(nalu);
     if (result == 1 || result == 0) {
-      printfNALBytes(number, nalu);
-
-      /* 4. 从NAL中解析出EBSP */
-      nalu.parseEBSP(ebsp);
-      printfEBSPBytes(number, ebsp);
-
-      /* 5. 从EBSP中解析出RBSP */
-      nalu.parseRBSP(ebsp, rbsp);
-      printfRBSPBytes(number, rbsp);
-
-      /* 6. 从RBSP中解析出SODB(TODO） */
-      // nalu.parseSODB(rbsp, SODB);
-
-      /* T-REC-H.264-202108-I!!PDF-E.pdf -> page 87 */
-      if (nalu.nal_unit_type > 21) cout << "Unknown Nalu Type !!!" << endl;
-      switch (nalu.nal_unit_type) {
-      case 1: /* Slice(non-VCL) */
-        /* 11-2. 解码普通帧 */
-        cout << "Original Slice -> {" << endl;
-        flushFrame(gop, frame, false);
-        /* 初始化bit处理器，填充slice的数据 */
-        bitStream = new BitStream(rbsp.buf, rbsp.len);
-        /* 此处根据SliceHeader可判断A Frame =? A Slice */
-        nalu.extractSliceparameters(*bitStream, *gop, *frame);
-        frame->decode(*bitStream, gop->m_dpb, *gop);
-        cout << " }" << endl;
-        break;
-      case 2: /* DPA(non-VCL) */
-        cout << "Not Support DPA!" << endl;
-        break;
-      case 3: /* DPB(non-VCL) */
-        cout << "Not Support DPB!" << endl;
-        break;
-      case 4: /* DPC(non-VCL) */
-        cout << "Not Support DPC!" << endl;
-        break;
-      case 5: /* IDR Slice(VCL) */
-        /* 11-1. 解码立即刷新帧 GOP[0] */
-        cout << "IDR Slice -> {" << endl;
-        /* FIXME:提供给外层程序一定是Frame，即一帧数据，而不是一个Slice，因为如果存在多个Slice为一帧的情况外层处理就很麻烦 */
-        flushFrame(gop, frame, true);
-        /* 初始化bit处理器，填充idr的数据 */
-        bitStream = new BitStream(rbsp.buf, rbsp.len);
-        nalu.extractIDRparameters(*bitStream, *gop, *frame);
-        frame->decode(*bitStream, gop->m_dpb, *gop);
-        cout << " }" << endl;
-        break;
-      case 6: /* SEI（补充信息）(VCL) */
-        /* 10. 解码SEI补充增强信息：场编码的图像在每个Slice前出现SEI以提供必要的解码辅助信息 */
-        cout << "SEI -> {" << endl;
-        nalu.extractSEIparameters(rbsp, sei, gop->m_spss[gop->last_pps_id]);
-        cout << " }" << endl;
-        break;
-      case 7: /* SPS(VCL) */
-        /* 8. 解码SPS中信息 */
-        cout << "SPS -> {" << endl;
-        nalu.extractSPSparameters(rbsp, gop->m_spss, gop->last_sps_id);
-        gop->m_max_num_reorder_frames =
-            gop->m_spss[gop->last_sps_id].max_num_reorder_frames;
-        cout << " }" << endl;
-        break;
-      case 8: /* PPS(VCL) */
-        /* 9. 解码PPS中信息 */
-        cout << "PPS -> {" << endl;
-        nalu.extractPPSparameters(
-            rbsp, gop->m_ppss, gop->last_pps_id,
-            gop->m_spss[gop->last_sps_id].chroma_format_idc);
-        cout << " }" << endl;
-        break;
-      case 9: /* 7.3.2.4 Access unit delimiter RBSP syntax */
-        /* 该Nalu的优先级很高，如果存在则它会在SPS前出现 */
-        //access_unit_delimiter_rbsp();
-        cerr << "access_unit_delimiter_rbsp()" << endl;
-        break;
-      case 10:
-        //end_of_seq_rbsp();
-        cerr << "end_of_seq_rbsp()" << endl;
-        break;
-      case 11:
-        //end_of_stream_rbsp();
-        cerr << "end_of_stream_rbsp()" << endl;
-        break;
-      case 12:
-        //filler_data_rbsp();
-        cerr << "filler_data_rbsp()" << endl;
-        break;
-      case 13:
-        //seq_parameter_set_extension_rbsp();
-        cerr << "seq_parameter_set_extension_rbsp()" << endl;
-        break;
-      case 14:
-        //prefix_nal_unit_rbsp();
-        cerr << "prefix_nal_unit_rbsp()" << endl;
-        break;
-      case 15:
-        //subset_seq_parameter_set_rbsp();
-        cerr << "subset_seq_parameter_set_rbsp()" << endl;
-        break;
-      case 16:
-        //depth_parameter_set_rbsp();
-        cerr << "depth_parameter_set_rbsp()" << endl;
-        break;
-      case 19:
-        //slice_layer_without_partitioning_rbsp();
-        cerr << "slice_layer_without_partitioning_rbsp()" << endl;
-        break;
-      case 20:
-        //slice_layer_extension_rbsp();
-        cerr << "slice_layer_extension_rbsp()" << endl;
-        break;
-      case 21: /* 3D-AVC texture view */
-        //slice_layer_extension_rbsp();
-        cerr << "slice_layer_extension_rbsp()" << endl;
-        break;
-      default:
-        cerr << "Error nal_unit_type:" << nalu.nal_unit_type << endl;
-      }
+      decode(nalu, gop, bitStream, frame, number);
 
       /* 已读取完成所有NAL */
       if (result == 0) break;
@@ -271,6 +155,130 @@ int outputFrame(GOP *gop, Frame *frame) {
       image.saveToBmpFile(outPicture->m_picture_frame, output_file.c_str());
     } else if (g_OutputFileType == YUV)
       image.writeYUV(outPicture->m_picture_frame, "output.yuv");
+  }
+  return 0;
+}
+
+int decode(Nalu &nalu, GOP *gop, BitStream *bitStream, Frame *&frame,
+           int &number) {
+  Nalu::EBSP ebsp;
+  Nalu::RBSP rbsp;
+  SEI sei;
+  printfNALBytes(number, nalu);
+
+  /* 4. 从NAL中解析出EBSP */
+  nalu.parseEBSP(ebsp);
+  printfEBSPBytes(number, ebsp);
+
+  /* 5. 从EBSP中解析出RBSP */
+  nalu.parseRBSP(ebsp, rbsp);
+  printfRBSPBytes(number, rbsp);
+
+  /* 6. 从RBSP中解析出SODB(TODO） */
+  // nalu.parseSODB(rbsp, SODB);
+
+  /* T-REC-H.264-202108-I!!PDF-E.pdf -> page 87 */
+  if (nalu.nal_unit_type > 21) cout << "Unknown Nalu Type !!!" << endl;
+  switch (nalu.nal_unit_type) {
+  case 1: /* Slice(non-VCL) */
+    /* 11-2. 解码普通帧 */
+    cout << "Original Slice -> {" << endl;
+    flushFrame(gop, frame, false);
+    /* 初始化bit处理器，填充slice的数据 */
+    bitStream = new BitStream(rbsp.buf, rbsp.len);
+    /* 此处根据SliceHeader可判断A Frame =? A Slice */
+    nalu.extractSliceparameters(*bitStream, *gop, *frame);
+    frame->decode(*bitStream, gop->m_dpb, *gop);
+    cout << " }" << endl;
+    break;
+  case 2: /* DPA(non-VCL) */
+    cout << "Not Support DPA!" << endl;
+    break;
+  case 3: /* DPB(non-VCL) */
+    cout << "Not Support DPB!" << endl;
+    break;
+  case 4: /* DPC(non-VCL) */
+    cout << "Not Support DPC!" << endl;
+    break;
+  case 5: /* IDR Slice(VCL) */
+    /* 11-1. 解码立即刷新帧 GOP[0] */
+    cout << "IDR Slice -> {" << endl;
+    /* FIXME:提供给外层程序一定是Frame，即一帧数据，而不是一个Slice，因为如果存在多个Slice为一帧的情况外层处理就很麻烦 */
+    flushFrame(gop, frame, true);
+    /* 初始化bit处理器，填充idr的数据 */
+    bitStream = new BitStream(rbsp.buf, rbsp.len);
+    nalu.extractIDRparameters(*bitStream, *gop, *frame);
+    frame->decode(*bitStream, gop->m_dpb, *gop);
+    cout << " }" << endl;
+    break;
+  case 6: /* SEI（补充信息）(VCL) */
+    /* 10. 解码SEI补充增强信息：场编码的图像在每个Slice前出现SEI以提供必要的解码辅助信息 */
+    cout << "SEI -> {" << endl;
+    nalu.extractSEIparameters(rbsp, sei, gop->m_spss[gop->last_pps_id]);
+    cout << " }" << endl;
+    break;
+  case 7: /* SPS(VCL) */
+    /* 8. 解码SPS中信息 */
+    cout << "SPS -> {" << endl;
+    nalu.extractSPSparameters(rbsp, gop->m_spss, gop->last_sps_id);
+    gop->m_max_num_reorder_frames =
+        gop->m_spss[gop->last_sps_id].max_num_reorder_frames;
+    cout << " }" << endl;
+    break;
+  case 8: /* PPS(VCL) */
+    /* 9. 解码PPS中信息 */
+    cout << "PPS -> {" << endl;
+    nalu.extractPPSparameters(rbsp, gop->m_ppss, gop->last_pps_id,
+                              gop->m_spss[gop->last_sps_id].chroma_format_idc);
+    cout << " }" << endl;
+    break;
+  case 9: /* 7.3.2.4 Access unit delimiter RBSP syntax */
+    /* 该Nalu的优先级很高，如果存在则它会在SPS前出现 */
+    //access_unit_delimiter_rbsp();
+    cerr << "access_unit_delimiter_rbsp()" << endl;
+    break;
+  case 10:
+    //end_of_seq_rbsp();
+    cerr << "end_of_seq_rbsp()" << endl;
+    break;
+  case 11:
+    //end_of_stream_rbsp();
+    cerr << "end_of_stream_rbsp()" << endl;
+    break;
+  case 12:
+    //filler_data_rbsp();
+    cerr << "filler_data_rbsp()" << endl;
+    break;
+  case 13:
+    //seq_parameter_set_extension_rbsp();
+    cerr << "seq_parameter_set_extension_rbsp()" << endl;
+    break;
+  case 14:
+    //prefix_nal_unit_rbsp();
+    cerr << "prefix_nal_unit_rbsp()" << endl;
+    break;
+  case 15:
+    //subset_seq_parameter_set_rbsp();
+    cerr << "subset_seq_parameter_set_rbsp()" << endl;
+    break;
+  case 16:
+    //depth_parameter_set_rbsp();
+    cerr << "depth_parameter_set_rbsp()" << endl;
+    break;
+  case 19:
+    //slice_layer_without_partitioning_rbsp();
+    cerr << "slice_layer_without_partitioning_rbsp()" << endl;
+    break;
+  case 20:
+    //slice_layer_extension_rbsp();
+    cerr << "slice_layer_extension_rbsp()" << endl;
+    break;
+  case 21: /* 3D-AVC texture view */
+    //slice_layer_extension_rbsp();
+    cerr << "slice_layer_extension_rbsp()" << endl;
+    break;
+  default:
+    cerr << "Error nal_unit_type:" << nalu.nal_unit_type << endl;
   }
   return 0;
 }
