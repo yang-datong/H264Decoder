@@ -796,7 +796,6 @@ int PictureBase::
   // vertMvScale：垂直运动矢量的缩放因子
   int32_t vertMvScale = 0;
   /* TODO YangJing 是不是这里也应该传入flase???，现在md5值已经定了，后续再改动吧 <24-10-13 05:56:03> */
-  /* TODO YangJing 这里是传入flase，后面需要改动，重新计算md5 <25-01-17 16:13:28> */
   RET(derivation_the_coLocated_4x4_sub_macroblock_partitions(
       mbPartIdx, subMbPartIdx, colPic, mbAddrCol, mvCol, refIdxCol, vertMvScale,
       true));
