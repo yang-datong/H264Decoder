@@ -1,6 +1,5 @@
 #include "Nalu.hpp"
 #include "decode.hpp"
-#include <iostream>
 
 int main(int argc, char *argv[]) {
   std::string filePath;

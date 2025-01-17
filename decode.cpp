@@ -65,6 +65,14 @@ int decode(uint8_t *buffer, int buffer_len) {
   return 0;
 }
 
+int gPicOrderCnt = -1;
+int gResidualPicOrderCnt = -1;
+int gNaluType = -1;
+
+int decode_get_poc_value() { return gPicOrderCnt; }
+int decode_get_poc_residual_value() { return gResidualPicOrderCnt; }
+int decode_get_nal_unit_type() { return gNaluType; }
+
 int decode(Nalu &nalu, int &number) {
   Nalu::EBSP ebsp;
   Nalu::RBSP rbsp;
@@ -84,6 +92,7 @@ int decode(Nalu &nalu, int &number) {
 
   /* T-REC-H.264-202108-I!!PDF-E.pdf -> page 87 */
   if (nalu.nal_unit_type > 21) cout << "Unknown Nalu Type !!!" << endl;
+  gNaluType = nalu.nal_unit_type;
   switch (nalu.nal_unit_type) {
   case 1: /* Slice(non-VCL) */
     /* 11-2. 解码普通帧 */
@@ -94,6 +103,12 @@ int decode(Nalu &nalu, int &number) {
     /* 此处根据SliceHeader可判断A Frame =? A Slice */
     nalu.extractSliceparameters(*bitStream, *gop, *frame);
     frame->decode(*bitStream, gop->m_dpb, *gop);
+    gPicOrderCnt = frame->m_current_picture_ptr->PicOrderCnt;
+    if (frame->m_current_picture_ptr && frame->m_picture_previous)
+      gResidualPicOrderCnt = frame->m_current_picture_ptr->PicOrderCnt -
+                             frame->m_picture_previous->PicOrderCnt;
+    else
+      gResidualPicOrderCnt = 0;
     cout << " }" << endl;
     break;
   case 2: /* DPA(non-VCL) */
@@ -114,6 +129,12 @@ int decode(Nalu &nalu, int &number) {
     bitStream = new BitStream(rbsp.buf, rbsp.len);
     nalu.extractIDRparameters(*bitStream, *gop, *frame);
     frame->decode(*bitStream, gop->m_dpb, *gop);
+    gPicOrderCnt = frame->m_current_picture_ptr->PicOrderCnt;
+    if (frame->m_current_picture_ptr && frame->m_picture_previous)
+      gResidualPicOrderCnt = frame->m_current_picture_ptr->PicOrderCnt -
+                             frame->m_picture_previous->PicOrderCnt;
+    else
+      gResidualPicOrderCnt = 0;
     cout << " }" << endl;
     break;
   case 6: /* SEI（补充信息）(VCL) */
@@ -213,9 +234,9 @@ int decode_init(AnnexBReader *&reader, string &filePath,
 }
 
 void decode_relase() {
-  g_reader->close();
   if (gop) delete gop;
   if (bitStream) delete bitStream;
+  if (g_reader) g_reader->close();
   if (g_reader) delete g_reader;
 }
 
