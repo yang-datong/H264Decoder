@@ -192,9 +192,11 @@ class MacroBlock {
   int32_t SubMbPartHeight[4] = {0};
 
   // 3个bit位表示CABAC残差相应4x4子宏块中的DC直流系数block的coded_block_flag值，(b7,...,b2,b1,b0)=(x,...,cr,cb,luma)
-  uint8_t coded_block_flag_DC_pattern = 7;
+  //uint8_t coded_block_flag_DC_pattern = 7;
+  uint8_t coded_block_flag_DC_pattern = 0; //FIXME: 初始化为7会有问题
   // 16个bit位表示CABAC残差相应4x4子宏块中的AC交流系数block的coded_block_flag值(0或1)(全部默认为1)，[0]-luma,[1]-cb,[2]-cr
-  uint16_t coded_block_flag_AC_pattern[3] = {0xFFFF, 0xFFFF, 0xFFFF};
+  //uint16_t coded_block_flag_AC_pattern[3] = {0xFFFF, 0xFFFF, 0xFFFF};
+  uint16_t coded_block_flag_AC_pattern[3] = {0}; //FIXME: 初始化为0xffff会有问题
 
   // 本宏块的左上角像素，相对于整张图片左上角像素的x坐标
   int32_t m_mb_position_x = -1;
@@ -213,11 +215,11 @@ class MacroBlock {
   int32_t m_mb_type_fixed = -1;
 
   /* 对应宏块类型的名称 */
-  H264_MB_TYPE m_name_of_mb_type;
+  H264_MB_TYPE m_name_of_mb_type = MB_TYPE_NA;
   /* 对应宏块类型所使用的预测模式 */
-  H264_MB_PART_PRED_MODE m_mb_pred_mode;
-  H264_MB_TYPE m_name_of_sub_mb_type[4];
-  H264_MB_PART_PRED_MODE m_sub_mb_pred_mode[4];
+  H264_MB_PART_PRED_MODE m_mb_pred_mode = MB_PRED_MODE_NA;
+  H264_MB_TYPE m_name_of_sub_mb_type[4] = {MB_TYPE_NA};
+  H264_MB_PART_PRED_MODE m_sub_mb_pred_mode[4] = {MB_PRED_MODE_NA};
 
   int32_t m_MvL0[4][4][2] = {{{0}}};
   int32_t m_MvL1[4][4][2] = {{{0}}};

@@ -524,10 +524,11 @@ void SliceData::printFrameReorderPriorityInfo() {
           frame.PicNum == 0 && frame.m_PicNumCnt == 0)
         continue;
       sliceType = H264_SLIECE_TYPE_TO_STR(sliceHeader->slice_type);
-      if (pic->PicOrderCnt == frame.PicOrderCnt)
+      if (pic->PicOrderCnt == frame.PicOrderCnt) {
         cout << "\t\t* DPB[" << i << "]: ";
-      else
+      } else {
         cout << "\t\t  DPB[" << i << "]: ";
+      }
       cout << sliceType << "; POC(显示顺序)=" << frame.PicOrderCnt
            << "; frame_num(帧编号，编码顺序)="
            << frame.m_slice->slice_header->frame_num << ";\n";
@@ -535,10 +536,11 @@ void SliceData::printFrameReorderPriorityInfo() {
   }
   cout << "\t}" << endl;
 
-  if (header->slice_type == SLICE_P || header->slice_type == SLICE_SP)
+  if (header->slice_type == SLICE_P || header->slice_type == SLICE_SP) {
     cout << "\t当前帧所参考帧列表(按frame_num排序) -> {" << endl;
-  else if (header->slice_type == SLICE_B)
+  } else if (header->slice_type == SLICE_B) {
     cout << "\t当前帧所参考帧列表(按POC排序) -> {" << endl;
+  }
 
   for (uint32_t i = 0; i < pic->m_RefPicList0Length; ++i) {
     const auto &refPic = pic->m_RefPicList0[i];

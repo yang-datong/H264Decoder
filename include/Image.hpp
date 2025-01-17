@@ -9,7 +9,7 @@ class Image {
   int writeYUV(PictureBase &pic, const char *filename);
 
  private:
-  int saveBmp(const char *filename, MY_BITMAP *pBitmap);
+  int saveBmp(const char *filename, Bitmap *pBitmap);
 
   // 图像不是上下翻转的，主要用于保存成BMP图片
   int convertYuv420pToBgr24(uint32_t width, uint32_t height,
@@ -21,7 +21,7 @@ class Image {
                                      uint32_t widthBytesBgr24);
 
   // 在内存中创建一幅空白位图
-  int createEmptyImage(MY_BITMAP &bitmap, int32_t width, int32_t height,
+  int createEmptyImage(Bitmap &bitmap, int32_t width, int32_t height,
                        int32_t bmBitsPixel);
 };
 

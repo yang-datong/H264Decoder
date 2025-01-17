@@ -4,7 +4,7 @@
 int Image::saveToBmpFile(PictureBase &pic, const char *filename) {
   int32_t W = pic.PicWidthInSamplesL;
   int32_t H = pic.PicHeightInSamplesL;
-  MY_BITMAP bitmap;
+  Bitmap bitmap;
   createEmptyImage(bitmap, W, H, 24);
   convertYuv420pToBgr24(W, H, pic.m_pic_buff_luma, (uint8_t *)bitmap.bmBits,
                         bitmap.bmWidthBytes);
@@ -16,7 +16,7 @@ int Image::saveToBmpFile(PictureBase &pic, const char *filename) {
   return 0;
 }
 
-int Image::saveBmp(const char *filename, MY_BITMAP *pBitmap) {
+int Image::saveBmp(const char *filename, Bitmap *pBitmap) {
   MY_BitmapFileHeader bmpFileHeader;
   MY_BitmapInfoHeader bmpInfoHeader;
   // unsigned char pixVal = '\0';
@@ -151,7 +151,7 @@ int Image::convertYuv420pToBgr24FlipLines(uint32_t width, uint32_t height,
   return 0;
 }
 
-int Image::createEmptyImage(MY_BITMAP &bitmap, int32_t width, int32_t height,
+int Image::createEmptyImage(Bitmap &bitmap, int32_t width, int32_t height,
                             int32_t bmBitsPixel) {
   bitmap.bmWidth = width;
   bitmap.bmHeight = height;
@@ -162,8 +162,6 @@ int Image::createEmptyImage(MY_BITMAP &bitmap, int32_t width, int32_t height,
   bitmap.bmWidthBytes = (width * bmBitsPixel / 8 + 3) / 4 * 4;
 
   uint8_t *pBits = (uint8_t *)malloc(bitmap.bmHeight * bitmap.bmWidthBytes);
-  if (pBits == nullptr) RET(-1);
-  // 初始化为黑色背景
   memset(pBits, 0, sizeof(uint8_t) * bitmap.bmHeight * bitmap.bmWidthBytes);
   bitmap.bmBits = pBits;
   return 0;

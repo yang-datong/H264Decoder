@@ -37,8 +37,8 @@ int main(int argc, char *argv[]) {
   }
 
   int result;
-  //OUTPUT_FILE_TYPE g_OutputFileType = YUV;
-  OUTPUT_FILE_TYPE g_OutputFileType = BMP;
+  OUTPUT_FILE_TYPE g_OutputFileType = YUV;
+  //OUTPUT_FILE_TYPE g_OutputFileType = BMP;
   AnnexBReader *reader = nullptr;
   RET(decode_init(reader, filePath, g_OutputFileType));
   int number = 0;

@@ -16,10 +16,11 @@ int PPS::extractParameters(BitStream &bs, uint32_t chroma_format_idc) {
        << ",SPS ID:" << seq_parameter_set_id << endl;
 
   entropy_coding_mode_flag = bs.readU1();
-  if (entropy_coding_mode_flag == 0)
+  if (entropy_coding_mode_flag == 0) {
     cout << "\t熵编码模式:CAVLC(上下文可变长度编码)" << endl;
-  else
+  } else {
     cout << "\t熵编码模式:CABAC(上下文自适应二进制算术编码)" << endl;
+  }
 
   bottom_field_pic_order_in_frame_present_flag = bs.readU1();
   cout << "\t存在场序信息:" << bottom_field_pic_order_in_frame_present_flag

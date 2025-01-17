@@ -1,6 +1,5 @@
 #ifndef PICTUREBASE_HPP_ZGHBMJIH
 #define PICTUREBASE_HPP_ZGHBMJIH
-#include "Common.hpp"
 #include "MacroBlock.hpp"
 #include "Slice.hpp"
 #include "SliceData.hpp"

@@ -2,7 +2,6 @@
 #include "BitStream.hpp"
 #include "Cabac.hpp"
 #include "Cavlc.hpp"
-#include "Constants.hpp"
 #include "PictureBase.hpp"
 #include "SliceHeader.hpp"
 #include "Type.hpp"

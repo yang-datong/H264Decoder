@@ -46,8 +46,8 @@ typedef struct _MY_BITMAP_ {
   long bmWidthBytes;
   unsigned short bmPlanes;
   unsigned short bmBitsPixel;
-  void *bmBits;
-} MY_BITMAP;
+  unsigned char *bmBits;
+} Bitmap;
 
 const int MIN_MB_TYPE_FOR_I_SLICE = 1, MAX_MB_TYPE_FOR_I_SLICE = 25;
 

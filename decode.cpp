@@ -39,8 +39,7 @@ int decode_flush() {
     outputFrame(gop, nullptr);
 
   if (g_OutputFileType == YUV)
-    cout << "\tffplay -video_size " << g_Width << "x" << g_Height
-         << " output.yuv" << endl;
+    printf("ffplay -video_size %dx%d output.yuv\n", g_Width, g_Height);
   /* 读取完所有Nalu，并送入解码后，则将缓存中所有的Frame读取出来，准备退出 */
 
   return 0;
