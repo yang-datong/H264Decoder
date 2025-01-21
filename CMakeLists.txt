@@ -3,11 +3,24 @@ cmake_minimum_required(VERSION 3.10)
 # Generate compile_commands.json file
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# NOTE: Arm是为了在qemu中执行，所以编译为静态库、静态链接程序，X86为动态库、动态链接程序
+
 # Project name
 project(project_name)
 
 # C++ version used, added compilation parameters
 set(CMAKE_CXX_STANDARD 14)
+
+#cmake . -B build -D BUILD_FOR_ARM=ON
+if(BUILD_FOR_ARM)
+	message(STATUS "Building for ARM64")
+	set(CMAKE_SYSTEM_NAME Linux)
+	set(CMAKE_SYSTEM_PROCESSOR aarch64)
+	set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
+	set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
+	set(CMAKE_C_FLAGS "-march=armv8-a")
+	set(CMAKE_CXX_FLAGS "-march=armv8-a")
+endif()
 
 IF (LINUX)
 	#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g3 -O0") #Debug
@@ -25,8 +38,19 @@ include_directories(include)
 
 # Find all source files in the current directory
 aux_source_directory(. SOURCES)
+list(REMOVE_ITEM SOURCES main.cpp)
+
+if(BUILD_FOR_ARM)
+	add_library(h264decoder STATIC ${SOURCES})
+else()
+	add_library(h264decoder SHARED ${SOURCES})
+endif()
 
 # Compile all source code together and link it to an executable file 'a.out'
-add_executable(a.out ${SOURCES})
+add_executable(a.out main.cpp)
 
+if(BUILD_FOR_ARM)
+	set_target_properties(a.out PROPERTIES LINK_FLAGS "-static")
+endif()
 
+target_link_libraries(a.out h264decoder)
