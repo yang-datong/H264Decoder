@@ -10,14 +10,14 @@ project(project_name)
 set(CMAKE_CXX_STANDARD 14)
 
 
-option(BUILD_FOR_ARM "Build for ARM64" ON)
+#option(BUILD_FOR_ARM "Build for ARM64" ON)
 
 if(BUILD_FOR_ARM)
 	message(STATUS "Building for ARM64")
 	set(CMAKE_SYSTEM_NAME Linux)
 	set(CMAKE_SYSTEM_PROCESSOR aarch64)
-	set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
-	set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
+	set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc-9)
+	set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++-9)
 	set(CMAKE_C_FLAGS "-march=armv8-a")
 	set(CMAKE_CXX_FLAGS "-march=armv8-a")
 endif()
@@ -29,7 +29,7 @@ IF (LINUX)
 	#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g3 -O3 -Wno-class-memaccess -D SHOW_MB_BORDER") #开启宏块分割线条显示
 	#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g3 -O0 -Wno-class-memaccess -D DISABLE_COUT") #关闭信息输出
 	#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g3 -O0 -Wno-class-memaccess -D SKIP_MB_DECODE") #跳过宏块解码
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O2 -D SKIP_MB_DECODE -D DISABLE_COUT")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3 -D SKIP_MB_DECODE -D DISABLE_COUT")
 ELSEIF (APPLE)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-system-headers -Wall -g3 -O0 -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 -isystem /Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include")
 ENDIF()
@@ -42,7 +42,8 @@ aux_source_directory(. SOURCES)
 list(REMOVE_ITEM SOURCES ./test.cpp ./main.cpp)
 
 # Compile all source code together and link it to an executable file 'a.out'
-add_library(h264decoder SHARED ${SOURCES})
+#add_library(h264decoder SHARED ${SOURCES})
+add_library(h264decoder STATIC ${SOURCES})
 
 add_executable(a.out main.cpp)
 add_executable(test.out test.cpp)

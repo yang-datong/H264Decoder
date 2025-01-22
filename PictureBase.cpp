@@ -13,7 +13,10 @@ extern int32_t g_PicNumCnt;
 PictureBase::~PictureBase() { unInit(); }
 
 int PictureBase::reset() {
-  if (m_mbs) memset(m_mbs, 0, sizeof(MacroBlock) * PicSizeInMbs);
+  if (m_mbs) {
+    for (int i = 0; i < PicSizeInMbs; ++i)
+      m_mbs[i] = MacroBlock();
+  }
 
   if (m_picture_coded_type == FRAME) {
     if (m_pic_buff_luma)
@@ -78,7 +81,8 @@ int PictureBase::init(Slice *slice) {
 
   if (m_picture_coded_type == FRAME) {
     m_mbs = new MacroBlock[PicSizeInMbs];
-    memset(m_mbs, 0, sizeof(MacroBlock) * PicSizeInMbs);
+    for (int i = 0; i < PicSizeInMbs; ++i)
+      m_mbs[i] = MacroBlock();
 
     //-----------YUV420P-----------------
     int sizeY = PicWidthInSamplesL * PicHeightInSamplesL;
