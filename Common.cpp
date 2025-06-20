@@ -222,6 +222,15 @@ void scaling_list(BitStream &bs, uint32_t *scalingList,
 int inverse_scanning_for_4x4_transform_coeff_and_scaling_lists(
     const int32_t values[16], int32_t (&c)[4][4], int32_t field_scan_flag) {
   // Table 8-13 – Specification of mapping of idx to cij for zig-zag and field scan
+  /* +-----+-----+-----+-----+
+     |  0  |  1  |  5  |  6  |
+     +-----+-----+-----+-----+
+     |  2  |  4  |  7  | 12  |
+     +-----+-----+-----+-----+
+     |  3  |  8  | 11  | 13  |
+     +-----+-----+-----+-----+
+     |  9  | 10  | 14  | 15  |
+     +-----+-----+-----+-----+ */
   if (field_scan_flag == 0) {
     // zig-zag scan
     c[0][0] = values[0];

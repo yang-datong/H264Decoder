@@ -12,6 +12,18 @@
 %CABAC 仅在标准的主要和更高配置文件（而不是扩展配置文件）中受支持，因为与称为上下文自适应的更简单方案相比，它需要大量的处理来解码标准的基线配置文件中使用的可变长度编码(CAVLC)。 CABAC 也很难并行化和矢量化，因此可以结合使用其他形式的并行性（例如空间区域并行性）。在 HEVC 中，CABAC 用于该标准的所有配置文件中。
 
 %--------------------------------- Body -------------------------------------
+\begin{serialNumber}
+	\item 宏块划分：将图像划分为16x16的宏块。
+	\item 预测：进行帧内或帧间预测，得到一个预测块。
+	\item 残差计算：原始块减去预测块，得到残差块。
+	\item 变换：对残差块进行4x4或8x8的整数离散余弦变换（DCT）。
+	\item 量化：对变换后的系数进行量化，这一步会产生大量的零。
+	\item 熵编码 (CAVLC / CABAC)：对量化后的变换系数进行无损压缩，生成最终的比特流。
+	\item 比特流生成：将编码后的数据打包成NAL单元，形成最终的H.264码流。
+\end{serialNumber}
+
+
+
 \section{算术编码}
 \subsection{文本算术编码}
 早期的压缩方法（如霍夫曼编码）在处理符号时存在一定的局限性，尤其是在符号频率分布不均的情况下。为了提高数据压缩的效率于是有了算术编码。
@@ -241,12 +253,12 @@ CABAC编码过程主要包括以下几个步骤：
 	\item 算术编码：使用选定的概率模型对二进制符号进行算术编码。
 \end{serialNumber}
 详细来说，如图
-\begin{figure}[H]
-	\centering
-	\includegraphics[width=0.8\textwidth]{1.png}
-	\caption{}
-	\label{fig:}
-\end{figure}
+%\begin{figure}[H]
+%\centering
+%\includegraphics[width=0.8\textwidth]{1.png}
+%\caption{}
+%\label{fig:}
+%\end{figure}
 
 
 
@@ -341,6 +353,107 @@ Bypass (旁路解码)模式：解码不依赖于上下文模型的状态，而�
 决策模式：根据指定的上下文索引 ctxIdx 解码二进制符号。这个方法使用 CABAC 的概率模型来确定符号的值，并可能更新上下文模型以反映已观察到的数据的统计特性。
 
 
+\newpage
+\section{H.264编码}
+%  TODO YangJing https://aistudio.google.com/app/prompts/1KS5H2Rvy4aK7ZqdhEo-CyWUq3Pw9daMe  后面再看看，感觉有点复杂 <25-06-16 11:20:22> % 
+\subsection{二值化}
+算术编码器本身只能处理二进制符号（即 0 或 1），而残差系数可以是 0, 1, 2, ...，H.264 标准为不同的语法元素定义了不同的二值化方案，以匹配它们的统计特性：
+\begin{itemize}
+	\item 一元码 (Unary): 将非负整数 n 编码为 n 个 '1' 加上一个终止 '0'。例如，2 -> 110。适合编码数值较小且概率递减的语法元素。
+	\item 截断一元码 (Truncated Unary): 与一元码类似，但有最大值上限。
+	\item 指数哥伦布码 (Exp-Golomb, k-th order): 一种更通用的编码方式，能有效表示分布更广的数值。
+	\item 定长编码 (Fixed-Length): 当数值在已知范围内均匀分布时，使用固定长度的二进制码。
+\end{itemize}
+\begin{tcolorbox}
+	\small
+	比如，对于残差系数2，采用一元编码则编码为二进制串'110'
+\end{tcolorbox}
+
+\subsection{上下文建模}
+直接对二值化后的 bin串进行算术编码效率不高。因为一个 bin 是 '0' 还是 '1' 的概率不是固定的 50/50。这个概率往往与它周围已经编码过的数据有关。
+
+为每个待编码的 bin 分配一组预先定义好的状态（上下文，大约有460个上下文模型），然后根据某些规则来为当前的bin选择一个上下文索引
+
+每个上下文都关联着一个概率模型，模型不直接存储浮点概率（如 P(0)=0.4, P(1)=0.6），而是维护两个核心状态：
+\begin{itemize}
+	\item 最可能符号 (Most Probable Symbol, MPS): 当前上下文中，'0' 和 '1' 哪个出现的可能性更大。
+	\item 概率状态索引 (pStateIdx): 一个 6-bit 的整数（0-63），它代表了 MPS 的概率有多大。索引越大，MPS 的概率越高。这 64 个状态是预先计算好的，对应着不同的概率估值。
+\end{itemize}
+概率模型是动态更新的。每当一个 bin 被编码完成后，对应的上下文模型就会根据实际编码的 bin 值（是 MPS 还是 LPS - Least Probable Symbol）来更新自己的 pStateIdx 和 MPS。
+如果编码的 bin 是 MPS，pStateIdx 会增加，表示我们对这个预测更自信了。
+如果编码的 bin 是 LPS，pStateIdx 会减小，表示预测错了，需要调整概率。如果 pStateIdx 降到 0，甚至会发生 MPS 和 LPS 的翻转。
+
+\begin{tcolorbox}
+	\small
+	比如，对于二进制串'110'，首先编码第一个bin '1'：
+	\begin{itemize}
+		\item 比如这是这个 block 的第一个非零系数的第一个 bin，则选择一个 ctxIdx，比如 ctxIdx = 100。
+		\item 查询 ctxIdx = 100 这个上下文模型，假设它当前的状态是：MPS = 0, pStateIdx = 5。这意味着模型预测这个 bin 应该是 '0'。
+		\item 但我们要编码的实际值是 1，这是一个 LPS
+		\item 因为我们编码了一个 LPS，所以更新 ctxIdx = 100 的模型，它的 pStateIdx 会减小（比如从 5 变成 4）。
+	\end{itemize}
+
+	编码第二个bin '1'：对于第二个 bin，H.264 的规则可能会选择另一个 ctxIdx，比如 ctxIdx = 101。重复上述查找、编码、更新过程。
+
+	编码第三个bin '0'：同理
+\end{tcolorbox}
+
+
+\subsection{算术编码}
+将 bin 和其对应的概率模型转化为最终的比特流，
+在H.264的CABAC中，通常：
+Low 是一个10位的整数寄存器。
+Range 是一个9位的整数寄存器。
+由于它们是固定位数的，我们必须确保 Range 不会变得太小，否则精度就丢失了。
+再归一化（Renormalization）的目的：在 Range 变得过小之前，通过“放大”区间（并输出已确定的比特）来保持其精度。
+\begin{itemize}
+	\item 初始化: 开始时，区间为 [0, 1)，区间下界 Low = 0，区间范围 Range = 1。
+	\item 迭代编码: 对每一个待编码的 bin：
+	      \begin{itemize}
+		      \item 根据其概率模型（由上一步的 pStateIdx 和 MPS 决定），将当前 Range 分割成两个子区间：一个对应 MPS，一个对应 LPS。MPS 分配较大的子区间，LPS 分配较小的子区间。
+		      \item Range\_LPS = Range * P(LPS)
+		      \item Range\_MPS = Range - Range\_LPS
+		      \item 根据待编码的 bin 是 MPS 还是 LPS，选择对应的子区间作为新的编码区间。
+		      \item 如果编码 MPS，新的 Range 变为 Range\_MPS，Low 值不变。
+		      \item 如果编码 LPS，新的 Range 变为 Range\_LPS，Low 值更新为 Low + Range\_MPS。
+	      \end{itemize}
+	\item 循环: 重复这个过程，每编码一个 bin，区间就会变得越来越窄。
+\end{itemize}
+
+再归一化，编码器在每编码完一个 bin（二进制位）后，都会检查是否需要进行再归一化。主要有两种情况：
+\begin{itemize}
+	\item 最高有效位（MSB）已确定：用整数来模拟 [0, 1) 这个小数区间。例如，一个10位的 Low 寄存器，0 代表 0.0，511 代表 0.99...，而 256 就代表了中点 0.5（最高位用于溢出位）。
+	      \begin{itemize}
+		      \item 如果 Low 和 Low + Range - 1 (代表区间的上下界) 的最高位都是 0，这意味着整个区间 [Low, Low + Range) 都落在 [0, 0.5) 这个半区内。无论后续如何细分，最终选定的那个代表整个码流的数字，其第一位小数必然是 0。我们可以立即输出比特 0。
+		      \item 如果 Low 的最高位是 1这意味着整个区间 [Low, Low + Range) 都落在 [0.5, 1.0) 这个半区内。最终数字的第一位小数必然是 1。我们可以立即输出比特 1。
+	      \end{itemize}
+	\item 潜在的下溢（Underflow）：如果区间变得非常小，但恰好跨越了中点 0.5 呢？例如，区间可能是 [0.49, 0.51)。Low 的最高位是 0。
+	      Low + Range - 1 的最高位是 1。
+	      我们无法确定最高位是 0 还是 1。
+	      同时，Range 已经很小了，如果我们继续编码，精度会很快丢失。
+
+\end{itemize}
+既然我们已经输出了最高位，这个信息就不再需要保留在 Low 和 Range 中了。我们可以把区间“放大两倍”来恢复精度。
+左移一位: Low = Low << 1，Range = Range << 1。
+例如，如果原来的区间是 [0.2, 0.3)，放大后就成了 [0.4, 0.6)。我们已经输出了开头的 0.，所以现在的新问题是在 [0.4, 0.6) 这个新区间里继续编码。
+调整 Low: 如果我们刚才输出的是比特1，说明原区间在 [0.5, 1.0) 内，放大后会超出 [0, 1) 的范围。例如，[0.6, 0.7) 放大后是 [1.2, 1.4)。我们需要减去 1.0，让它回到 [0.2, 0.4)。在整数运算中，这对应于 Low 左移后减去一个代表 1.0 的值（即512）。
+这个“检查-输出-放大”的过程会一直循环，直到 Range 恢复到一个足够大的“归一化”状态（在H.264中，通常是Range >= 128）。
+
+\begin{tcolorbox}
+	\small
+	编码第一个 bin 1。
+	\begin{itemize}
+		\item 初始区间: [0, 1)。Low=0, Range=1。
+		\item 上下文模型说: MPS=0, LPS=1。假设 pStateIdx 对应的概率 P(LPS) ≈ 0.1。
+		\item 分割区间: Range\_LPS = 1 * 0.1 = 0.1。Range\_MPS = 1 - 0.1 = 0.9。
+		\item MPS ('0') 对应区间 [0, 0.9)。
+		\item LPS ('1') 对应区间 [0.9, 1.0)。
+		\item 我们要编码的 bin 是 1 (LPS)，所以我们选择 [0.9, 1.0) 作为新区间。
+		\item 更新状态: Low = 0.9, Range = 0.1。
+	\end{itemize}
+	接下来第二个bin时，同理也会在这个更小的区间进行分割。如[0, 1) -> [0.3, 0.4) -> [0.38, 0.39) -> [0.381, 0.382) ...
+\end{tcolorbox}
+最后我们非得到一个非常小的区间，
 
 \newpage
 \section{CABAC解码}
@@ -362,6 +475,178 @@ CABAC解码在H264一般是用于解码Slice Data的数据，具体来说流程�
 \begin{equation}
 	H(X) = -\left(6 \times \frac{1}{6} \log_2 \frac{1}{6}\right) = -\log_2 \frac{1}{6} = 3 ~ bits
 \end{equation}
+
+
+
+
+
+
+\newpage
+\section{CAVLC编码}
+经过变换和量化后，块中大部分能量集中在左上角的低频区域，而右下角的高频系数绝大多数为零。
+非零系数通常聚集在低频区域。
+非零系数的绝对值（level）通常较小，特别是 +1 和 -1（称为TrailingOnes）出现的概率非常高。
+相邻块的非零系数个数存在一定的相关性。
+
+\subsection{Zig-Zag扫描}
+因为高频系数多为零，Zig-Zag扫描可以将低频的非零系数排在序列前面，将高频的大量零集中在序列末尾，形成一长串连续的零。这样可以方便地用一个结束标记（EOB）来表示所有后续系数都为零，极大地提高了压缩效率。
+
+\begin{lstlisting}[language=c]
+// Zig-zag scan order for a 4x4 block
+/* +-----+-----+-----+-----+
+	 |  0  |  1  |  5  |  6  |
+	 +-----+-----+-----+-----+
+	 |  2  |  4  |  7  | 12  |
+	 +-----+-----+-----+-----+
+	 |  3  |  8  | 11  | 13  |
+	 +-----+-----+-----+-----+
+	 |  9  | 10  | 14  | 15  |
+	 +-----+-----+-----+-----+ */
+const int g_ZigZagScan4x4[16] = {0, 1,  4,  8,  5, 2,  3,  6,
+                                 9, 12, 13, 10, 7, 11, 14, 15};
+
+for (int i = 0; i < 16; ++i) 
+	scanned_coeffs[i] = coeffs[g_ZigZagScan4x4[i]];
+
+/* [[ 3,  2, -1,  0 ],
+		[ 1, -1,  0,  0 ],     ---->     [3,2,1,1,-1,-1,0,0,.....,0]
+		[ 1,  0,  0,  0 ],
+		[ 0,  0,  0,  0 ]] */
+\end{lstlisting}
+
+
+\subsection{编码非零系数数量(TotalCoeffs) 和拖尾“1”的数量 (TrailingOnes)}
+CAVLC编码是非对称的，它以逆序（从最后一个非零系数向前）的方式来编码很多信息。
+%  TODO YangJing 为什么？ <25-06-17 10:02:09> % 
+
+\begin{definition}
+	TotalCoeffs: 序列中非零系数的总个数。
+\end{definition}
+\begin{definition}
+	TrailingOnes (T1s): 在扫描序列的末尾，值为 +1 或 -1 的非零系数的个数。T1s的个数最多为3。如果一个系数是T1，它的绝对值必须是1。
+\end{definition}
+
+
+CAVLC使用一个名为 coeff\_token 的组合VLC表来同时编码 TotalCoeffs 和 TrailingOnes。选择哪个 coeff\_token 表取决于上下文。这个上下文 nC 是根据上方（A）和左侧（B）相邻块的非零系数个数计算出来的。
+\begin{equation}
+	nC = (nC_A + nC_B + 1) / 2
+\end{equation}
+其中，$nC_A, nC_B$是上方和左侧块的非零系数个数，
+根据nC的值，选择一个特定的coeff\_token码表。
+查表得到TotalCoeffs和TrailingOnes组合的码字，并写入比特流。
+
+\begin{lstlisting}[language=c]
+  int total_coeffs = 0;
+  std::vector<int> levels;
+  for (int i = 15; i >= 0; --i) {
+    if (scanned_coeffs[i] != 0) {
+      levels.push_back(scanned_coeffs[i]);
+      total_coeffs++;
+		}
+  }
+
+  int trailing_ones = 0;
+  for (int i = 0; i < total_coeffs && i < 3; ++i) {
+    if (std::abs(levels[i]) == 1)
+      trailing_ones++;
+    else
+      break;
+  }
+/* lists = [3,2,1,1,-1,-1,0,0,.....,0]
+	TotalCoeffs = 6;
+	TrailingOnes = 3;
+	假设为首个宏块，则nC = 1/2 = 0，则查表为'0000 0100'，表示为值为4，长度为8 */
+
+// token[0] = 值，token[1] = 长度
+  const int *token =
+      g_CoeffTokenFinal[total_coeffs][trailing_ones][nC_category];
+  bs.writeBits(token[0], token[1]);
+\end{lstlisting}
+
+
+\subsection{编码拖尾"1"的符号位}
+对于每一个 TrailingOne，它的绝对值已经是1了，我们只需要1个比特来编码它的符号：0 代表 +1，1 代表 -1。
+
+\begin{lstlisting}[language=c]
+// 前面说到有3个T1s，即[-1,-1,1]（倒序），编码后则写入比特流：'110'
+  for (int i = 0; i < trailing_ones; ++i)
+    bs.writeBit(levels[i] < 0);
+\end{lstlisting}
+
+
+\subsection{编码剩余非零系数的幅值 (Levels)}
+现在需要编码除了T1s之外的其他非零系数的幅值（Level）。这个过程是逆序的，从最后一个非T1系数开始，向前编码。
+
+\paragraph{映射幅值和符号}
+首先，将系数的幅值（绝对值）和符号分开。
+level\_magnitude = abs(level)
+level\_sign = (level > 0) ? 0 : 1
+主要编码 level\_magnitude，level\_sign 会在之后用一个比特追加。
+
+\paragraph{选择VLC码表并编码 level\_magnitude}
+初始化上下文: 在编码第一个非T1系数（即逆序的第一个）之前，会根据之前编码的T1s数量和已编码的非零系数总数，初始化一个内部变量 suffixLength。简单来说，如果 TotalCoeffs > 10 并且 TrailingOnes < 3，suffixLength 初始化为1，否则为0。
+
+编码当前系数:
+\begin{itemize}
+	\item 选择VLC表: CAVLC为Level编码定义了多个VLC表（VLC0, VLC1, ... VLC6）。具体使用哪个表，取决于 suffixLength 的值。例如，如果 suffixLength=0，就用VLC0；如果 suffixLength=1，就用VLC1，以此类推。
+	\item 查表与判断: 在选定的VLC表中查找 level\_magnitude。
+	      \begin{itemize}
+		      \item 情况A：幅值在VLC表中 (小幅值)如果 level\_magnitude 能在当前VLC表中找到对应的码字（即它小于该VLC表能表示的最大值），则直接将该码字写入比特流。
+
+		      \item 情况B：幅值超出VLC表范围 (大幅值 - Escape序列)如果 level\_magnitude 太大，表中没有，则执行Escape编码：
+	      \end{itemize}
+	      a. 首先，写入该VLC表的转义码字（Escape Code）。
+
+	      b. 然后，计算需要用指数哥伦布编码表示的剩余值 level\_suffix。这个值等于 level\_magnitude 减去VLC表能表示的基数。
+
+	      c. 对 level\_suffix 进行k阶指数哥伦布编码（Exp-Golomb），并将结果写入比特流。这里的 k 就是 suffixLength。
+\end{itemize}
+
+\paragraph{编码符号}
+在 level\_magnitude 的码字写入比特流之后，立即追加1比特的符号 level\_sign。
+0 代表 +
+1 代表 -
+
+\paragraph{上下文更新}
+编码完一个系数的幅值和符号后，必须更新上下文变量 suffixLength，以便为**下一个系数（逆序中的前一个）**的编码做准备。
+
+更新规则大致如下（简化版）：
+如果刚刚编码的 level\_magnitude 非常大（大于某个预设的阈值，这个阈值本身也与suffixLength有关），那么编码器“预测”下一个系数也可能比较大。因此，它会增加 suffixLength 的值（最大到6）。
+suffixLength 增加后，下一次编码就会使用阶数更高的VLC表（如从VLC1升级到VLC2）。更高阶的VLC表天生适合编码更大的数值。
+这样，编码器就根据已编码系数的统计特性，动态地“适应”了数据流。
+
+
+
+
+
+
+
+\subsection{编码最后一个非零系数前零的个数 (TotalZeros)}
+TotalZeros 指的是在最后一个非零系数出现之前，所有零的总数。
+
+前面可知，查TotalCoeffs=6对应的VLC表，为TotalZeros=10找到码字并写入码流。
+
+
+\subsection{编码每个非零系数前零的个数 (RunBefore)}
+解码器知道了所有非零系数的值，也知道了总共有多少个零。但还不知道这些零是如何分布在非零系数之间的。这一步就是编码每个非零系数前面连续的零的个数 (RunBefore)。
+
+比如，[6, 0, -2, -1, 0, 0, 1, EOB]：
+
+TotalCoeffs = 4
+
+逆序非零系数：1, -1, -2, 6
+
+RunBefore (逆序)：
+
+1 前面有 2 个零。RunBefore = 2。
+
+-1 前面有 0 个零。RunBefore = 0。
+
+-2 前面有 1 个零。RunBefore = 1。
+
+6 前面的零不需要编码。
+
+
 
 \newpage
 \section{代码实现}

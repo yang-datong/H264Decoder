@@ -180,6 +180,7 @@ int SliceHeader::parseSliceHeader(BitStream &bitStream, GOP &gop) {
   }
 
   slice_qp_delta = _bs->readSE();
+  cout << "\tslice_qp_delta:" << slice_qp_delta << endl;
   if (slice_type == SLICE_SP || slice_type == SLICE_SI) {
     if (slice_type == SLICE_SP) {
       sp_for_switch_flag = _bs->readU1();
