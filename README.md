@@ -11,7 +11,7 @@
   ✅ CAVLC（上下文自适应变长编码） 
   ✅ CABAC（上下文自适应二进制算术编码）  
 - **跨平台** 
-  ✅ Linux & macOS & Windows 已测试 （ X86 或 Arm 架构）
+  ✅ Linux & MacOS & Windows 已测试 （ X86 或 Arm 架构）
 
 ## 🛠 编译指南
 
@@ -25,6 +25,7 @@
 # 使用 CMake
 $ cmake -B build . #对于Linux、MacOS 平台
 # $ cmake -G "MinGW Makefiles" -B build . #对于Windows 平台
+
 # 可选的编译选项
 #-DSHOW_MB_BORDER #开启宏块分割线条显示
 #-DDISABLE_COUT  #关闭信息输出
