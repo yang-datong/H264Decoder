@@ -1276,7 +1276,9 @@ int PictureBase::reference_picture_selection(int32_t refIdxLX,
   refPic = nullptr;
   RET(refIdxLX < 0 || refIdxLX >= 32);
 
+  // FIXME: 根据H.264标准，一个以帧模式编码的图像，完全可以引用一个以场模式（TOP_FIELD 或 BOTTOM_FIELD）编码的图像作为参考。
   // RefPicListX的每个条目是参考场或参考帧的场 或者 都是参考帧或互补参考场对，不存在混合情况。
+#if 0
   for (int i = 0; i < RefPicListXLength; i++) {
     // 当前帧是场图像，则参考帧必须是场图像
     if (header->field_pic_flag) {
@@ -1290,6 +1292,7 @@ int PictureBase::reference_picture_selection(int32_t refIdxLX,
            RefPicListX[i]->m_pic_coded_type_marked_as_refrence !=
                COMPLEMENTARY_FIELD_PAIR));
   }
+#endif
 
   if (header->field_pic_flag) { // Field
     // 如果参考帧是顶场（PICTURE_CODED_TYPE_TOP_FIELD），则选择 m_picture_top_filed。
