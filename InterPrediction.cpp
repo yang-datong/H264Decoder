@@ -1182,27 +1182,37 @@ int PictureBase::derivation_prediction_weights(
     // 计算距离缩放因子（同derivation_temporal_direct_luma_motion_vector_and_ref_index_prediction())
     int32_t tb = CLIP3(-128, 127, DiffPicOrderCnt(currPicOrField, pic0));
     int32_t td = CLIP3(-128, 127, DiffPicOrderCnt(pic1, pic0));
-    RET(td == 0);
-    int32_t tx = (16384 + ABS(td / 2)) / td;
-    // 距离当前帧较近的参考帧会有更大的权重，而距离较远的参考帧权重较小
-    int32_t DistScaleFactor = CLIP3(-1024, 1023, (tb * tx + 32) >> 6);
-
-    // 计算亮度和色度分量的加权因子
-    // 1. 不存在POC差，或者参考帧均为是长期参考帧，或者距离缩放因子超出范围，亮度和色度分量的前后参考加权因子被设置为 32
-    if (DiffPicOrderCnt(pic1, pic0) == 0 ||
-        pic0->reference_marked_type == LONG_REF ||
-        pic1->reference_marked_type == LONG_REF ||
-        (DistScaleFactor >> 2) < -0x40 || (DistScaleFactor >> 2) > 0x80) {
+    //RET(td == 0);
+    // FIXME:  如果td为0，则使用默认的等权重
+    if (td == 0) {
       w0L = w1L = 32;
-      if (ChromaArrayType != 0) w0Cb = w1Cb = w0Cr = w1Cr = 0x20;
-      // 2. 存在POC差 且 参考帧均为短期参考帧，距离缩放因子可用，亮度和色度分量的前后参考加权因子被设置为距离缩放因子的1/4
+      if (ChromaArrayType != 0) {
+        w0Cb = w1Cb = 32;
+        w0Cr = w1Cr = 32;
+      }
     } else {
-      // 0x40 是一个基准值，表示满权重（即 100% 的贡献），即w0L + w1L = 0x40
-      w0L = 0x40 - (DistScaleFactor >> 2), w1L = DistScaleFactor >> 2;
-      if (ChromaArrayType != 0)
-        w0Cb = w0Cr = 0x40 - (DistScaleFactor >> 2),
-        w1Cb = w1Cr = DistScaleFactor >> 2;
+      int32_t tx = (16384 + ABS(td / 2)) / td;
+      // 距离当前帧较近的参考帧会有更大的权重，而距离较远的参考帧权重较小
+      int32_t DistScaleFactor = CLIP3(-1024, 1023, (tb * tx + 32) >> 6);
+
+      // 计算亮度和色度分量的加权因子
+      // 1. 不存在POC差，或者参考帧均为是长期参考帧，或者距离缩放因子超出范围，亮度和色度分量的前后参考加权因子被设置为 32
+      if (DiffPicOrderCnt(pic1, pic0) == 0 ||
+          pic0->reference_marked_type == LONG_REF ||
+          pic1->reference_marked_type == LONG_REF ||
+          (DistScaleFactor >> 2) < -0x40 || (DistScaleFactor >> 2) > 0x80) {
+        w0L = w1L = 32;
+        if (ChromaArrayType != 0) w0Cb = w1Cb = w0Cr = w1Cr = 0x20;
+        // 2. 存在POC差 且 参考帧均为短期参考帧，距离缩放因子可用，亮度和色度分量的前后参考加权因子被设置为距离缩放因子的1/4
+      } else {
+        // 0x40 是一个基准值，表示满权重（即 100% 的贡献），即w0L + w1L = 0x40
+        w0L = 0x40 - (DistScaleFactor >> 2), w1L = DistScaleFactor >> 2;
+        if (ChromaArrayType != 0)
+          w0Cb = w0Cr = 0x40 - (DistScaleFactor >> 2),
+          w1Cb = w1Cr = DistScaleFactor >> 2;
+      }
     }
+
   }
   /* 使用显式模式加权预测： */
   else if (explicitModeFlag) {
@@ -1422,7 +1432,7 @@ int PictureBase::luma_sample_interpolation(int32_t xIntL, int32_t yIntL,
   if (header->MbaffFrameFlag && mb_field_decoding_flag)
     refPicHeightEffectiveL /= 2;
 
-    // 从参考帧中获取亮度样本
+  // 从参考帧中获取亮度样本
 #define getLumaSample(xDZL, yDZL)                                              \
   refPic                                                                       \
       ->m_pic_buff_luma[CLIP3(0, refPicHeightEffectiveL - 1, yIntL + (yDZL)) * \
